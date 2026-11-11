@@ -158,6 +158,19 @@ export class Hunter extends Enemy {
     this.baseSpeed = cfg.base + Math.min(deck, 8) * cfg.baseDeck; this.chaseSpeed = Math.min(cfg.chase + deck * cfg.chaseDeck, cfg.chaseMax);
     this.growlT = 3 + Math.random() * 4; this.huntT = 0; this.pulse = 16 + Math.random() * 10;
   }
+  // space madness: hunt the other crew on this deck first; you only matter once they're gone (or if you get too close)
+  stalk(dt, p, dist, game) {
+    const prey = game.preyFor?.(this); if (!prey) return false;
+    if (dist < 3.5 && this.w.los(this.x, this.z, p.x, p.z)) return false;
+    const d = Math.hypot(prey.x - this.x, prey.z - this.z), [tx, ty] = this.w.tile(prey.x, prey.z);
+    this.setTarget(tx, ty); this.state = S.INVESTIGATE; this.timer = 5;
+    if (this.preyId !== prey.id) { this.preyId = prey.id; this.sound.shriek(Math.max(0.04, 0.3 - dist * 0.01)); this.roar = 0.5; }
+    if (this.attacking > 0) this.speed = 0;
+    else this.move(dt, d < 9 ? this.chaseSpeed * 0.9 : this.baseSpeed + 0.7, d < 2.5, prey, (e) => game.onEnemyStep(e, dist));
+    if (d < 1.15 && this.attackCd <= 0) { this.attackCd = 3; this.attacking = 1.2; game.killNpc(prey, this); }
+    this.growlT -= dt; if (this.growlT <= 0) { this.growlT = 3 + Math.random() * 4; if (dist < 30) this.sound.mutter(Math.max(0.03, 0.14 - dist * 0.004)); }
+    return true;
+  }
   pickPatrol(p) {
     const w = this.w, open = w.d.openTiles; this.huntT = 0; let best = null;
     for (let i = 0; i < 12; i++) {
@@ -168,6 +181,7 @@ export class Hunter extends Enemy {
     if (best) this.setTarget(best.t[0], best.t[1]);
   }
   update(dt, p, noiseR, crouch, game) {
+    if (this.dead) return;
     this.t += dt; const cfg = this.cfg;
     if (this.state === S.DORMANT) {
       this.delay -= dt;
@@ -179,7 +193,7 @@ export class Hunter extends Enemy {
     if (this.state === S.STUNNED) {
       this.stun -= dt;
       if (this.stun <= 0) { this.state = S.SEARCH; this.timer = 7; const [tx, ty] = this.w.tile(p.x, p.z); this.setTarget(tx, ty); }
-    } else {
+    } else if (!(this.mad && this.stalk(dt, p, dist, game))) {
       const sees = this.seesPlayer(p, crouch ? cfg.sightCrouch : cfg.sight);
       if (sees) {
         if (this.state !== S.CHASE) { this.roar = cfg.roarOnSpot === true ? 1.1 : 0.5; cfg.roarOnSpot === true ? this.sound.roar(Math.max(0.1, 0.35 - dist * 0.01)) : this.sound.shriek(Math.max(0.1, 0.3 - dist * 0.01)); game.onEnemySpotted(this); }
@@ -353,7 +367,7 @@ export const THREATS = {
   gronk: 'Gronk — reptilian ambusher. Hunts by sight and sound.',
   drone: 'Compliance Drone — slow, relentless, learns from your zapper.',
   phantom: 'Mr. Grinsworth — rogue hologram. Moves when you look away.',
-  crazed: 'Space-Madness Crewmen — fast pack hunters.',
+  crazed: 'Space madness — one crew member at a time loses it, lowest rank first. It hunts the others before you. Two zaps put them down.',
   clinger: 'Clingon Crawlers — they wait on the ceiling.',
   slimeling: 'Slimeling — not who they said they were.',
 };

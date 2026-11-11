@@ -128,6 +128,14 @@ export function makeComplement(ship, seed = 1) {
   return { people, byBillet, heads, ship, seed, uniformOf: (p) => DIVISION[DEPT[p.dept].division].color };
 }
 // survivors/corpses on a deck come from that deck's zone first
+// space madness takes the lowest-ranked crew still standing first, all the way up to the captain
+export const CAN_TURN = new Set(['unknown', 'seen', 'alive']);
+export function nextMadness(roster, rnd = Math.random, preferDivision = null) {
+  const pool = roster.people.filter(p => CAN_TURN.has(p.status)); if (!pool.length) return null;
+  const low = Math.min(...pool.map(p => p.rank)); let tier = pool.filter(p => p.rank === low);
+  if (preferDivision) { const d = tier.filter(p => DEPT[p.dept].division === preferDivision); if (d.length) tier = d; }
+  return tier[Math.floor(rnd() * tier.length)];
+}
 export function pickCrewFor(roster, zoneLabel, rnd = Math.random) {
   const pool = roster.people.filter(p => p.status === 'unknown' && p.billet !== 'co');
   const local = pool.filter(p => DEPT[p.dept].zone === zoneLabel);
@@ -266,4 +274,4 @@ export const STATUS_CSS = `
 .tree,.tree ul{list-style:none;margin:0;padding-left:12px}.tree{padding-left:0}.tree li{position:relative;margin:2px 0}.tree ul li::before{content:'';position:absolute;left:-8px;top:0;bottom:50%;border-left:1px solid #445;border-bottom:1px solid #445;width:6px}
 .pc{display:inline-flex;align-items:baseline;gap:5px;background:rgba(255,255,255,.05);border-left:3px solid var(--u);padding:2px 6px;border-radius:3px;font-size:11px;white-space:nowrap}
 .pc i{color:#e2b23a;font-style:normal;font-size:9px;letter-spacing:-1px;min-width:8px}.pc small{opacity:.55;font-size:9px}
-.pc.dead{opacity:.45;text-decoration:line-through}.pc.alive b{color:#5fd38d}.pc.evacuated b{color:#8fd8ff}`;
+.pc.dead{opacity:.45;text-decoration:line-through}.pc.crazed b{color:#ff6a5a}.pc.crazed b::after{content:' ☣'}.pc.alive b{color:#5fd38d}.pc.evacuated b{color:#8fd8ff}`;

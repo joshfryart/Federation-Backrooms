@@ -9,7 +9,7 @@ import { makeSurvivor, makeCorpse, makeMedHolo, liveFace } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
-import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
+import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon } from './sysview.js';
 import { mulberry32 } from './data.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
@@ -181,14 +181,14 @@ function loadDeck(n) {
   const nt = 3 + Math.floor(rnd() * 4);
   for (let i = 0; i < nt; i++) { const t = data.pickTile(() => true); if (t) add('tribble', t, makeTribble(), { ox: (rnd() - 0.5) * 1.2, oz: (rnd() - 0.5) * 1.2 }); }
   // survivors + bodies
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3 + (n > 2 ? 1 : 0); i++) {
     const t = data.pickTile(() => true); if (!t) continue;
     const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen';
     const m = makeSurvivor(rnd, person) || makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
     if (person) m.userData.rank = person.short;
     add('crew', t, m, { used: false, fake: n >= 2 && rnd() < 0.3, person });
   }
-  for (let i = 0; i < (n >= 3 ? 2 : 1); i++) { const t = data.pickTile(() => true); if (!t) continue; const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen'; add('body', t, makeCorpse(rnd, person) || makeCrew(0xb02a20, true), { used: false, person }); }
+  for (let i = 0; i < (n >= 3 ? 2 : 1); i++) { const t = data.pickTile(() => true); if (!t) continue; const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'corpse'; add('body', t, makeCorpse(rnd, person) || makeCrew(0xb02a20, true), { used: false, person }); }
   { const t = data.rooms.find(r => r.type === 'sickbay'); if (t) {
       const tile = data.pickTile(([x, y]) => data.room[y][x] === 'sickbay');
       if (tile && (!G.fx || G.fx.emh)) add('emh', tile, makeMedHolo() || makeHologram(), { used: false });
@@ -203,6 +203,7 @@ function loadDeck(n) {
   for (const t of data.tubes) if (n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[t.ladder === 1 ? 0 : 1], n, 0, scene, sound));
   placeGore(data, rnd, n);
   placeRepairPoints(data);
+  startDeckMadness(data, n, rnd);
   world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
   G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.lurchT = 20 + Math.random() * 20; G.repairT = 0; G.distT = 20 + Math.random() * 20; G.hints = {};
   showCard(n, ship, data.flooded);
@@ -215,15 +216,14 @@ function loadDeck(n) {
 }
 
 function spawnThreats(data, n, rnd) {
-  const pool = shuffle(['gronk', 'drone', 'phantom', 'crazed']);
-  const chosen = n === 1 ? ['crazed'] :   // the first thing you ever meet is a redshirt who has lost it
+  const pool = shuffle(['gronk', 'drone', 'phantom']);
+  const chosen = n === 1 ? [] :   // deck 1 is only the madness: a redshirt who loses it in front of you
     pool.slice(0, n < 3 ? 1 : n < 6 ? 2 : 3);
-  G.threats = [];
+  G.threats = ['crazed'];
   const far = (f) => data.pickTile(([x, y]) => data.dist[x + y * data.W] >= data.maxD * f) || data.gornSpawn;
   chosen.forEach((type, i) => {
-    const delay = Math.max(10, 28 - n * 2) + i * 22, count = type === 'crazed' ? 1 + (n > 2 ? 1 : 0) + (n > 5 ? 1 : 0) : 1;
-    const redshirt = n === 1 ? { human: { uniform: 0xa3231c, rank: 1, kind: 'crew_m' }, cfg: { name: 'Crazed Redshirt', spawnMsg: 'Somewhere nearby an ensign in red is laughing. It is not a happy laugh.' } } : {};
-    for (let k = 0; k < count; k++) gorns.push(makeEnemy(type, world, i === 0 && k === 0 ? data.gornSpawn : far(0.4), n, delay + k * 7, scene, sound, redshirt));
+    const delay = Math.max(10, 28 - n * 2) + i * 22 + 15;
+    gorns.push(makeEnemy(type, world, i === 0 ? data.gornSpawn : far(0.4), n, delay, scene, sound));
     G.threats.push(type);
   });
   const nc = n >= 2 ? Math.min(4, 1 + Math.floor(rnd() * (1 + n / 3))) : 0; let made = 0;
@@ -399,7 +399,7 @@ function fire() {
   const eye = camera.position;
   let hit = null, hitD = 40;
   for (const g of gorns) {
-    if (!g.active || g.state === S.STUNNED) continue;
+    if (!g.active || (g.state === S.STUNNED && !g.mad)) continue;
     _v.set(g.x - eye.x, g.hitY - eye.y, g.z - eye.z); const d = _v.length(); _v.normalize();
     const ang = Math.acos(Math.max(-1, Math.min(1, _v.dot(_f))));
     if (d < 28 && ang < Math.atan2(g.hitR, d) + 0.04 && world.los(eye.x, eye.z, g.x, g.z) && d < hitD) { hit = g; hitD = d; }
@@ -408,10 +408,11 @@ function fire() {
   const end = hit ? new THREE.Vector3(hit.x, hit.hitY, hit.z) : eye.clone().addScaledVector(_f, 12);
   const start = eye.clone().add(new THREE.Vector3(0.25, -0.22, 0).applyQuaternion(camera.quaternion)).addScaledVector(_f, 0.4);
   beam.geometry.setFromPoints([start, end]); beam.visible = true; beamT = 0.12;
+  if (hit && hit.mad && --hit.hp <= 0) { killMad(hit); return; }
   if (hit) {
     const r = hit.stunFor(4 + perk('overload') * 3); G.stuns++;
     const msg = hit.kind === 'drone' ? (r === 'adapted' ? 'The drone has ADAPTED to your zapper!' : 'Drone stunned — it will adapt. Run.') :
-      hit.kind === 'phantom' ? 'Hologram dissolved… for now.' : hit.kind === 'clinger' ? 'Splat. One less ceiling-dweller.' : `Direct hit! ${hit.name} is stunned — RUN`;
+      hit.kind === 'phantom' ? 'Hologram dissolved… for now.' : hit.kind === 'clinger' ? 'Splat. One less ceiling-dweller.' : hit.mad ? `${hit.person.short} is down — one more shot ends it.` : `Direct hit! ${hit.name} is stunned — RUN`;
     G.say(msg, 'good'); flash('#fa5', 0.25);
   }
 }
@@ -434,7 +435,7 @@ function interact() {
         for (let i = 0; i < 40; i++) sparks.add(near.x + (Math.random() - 0.5) * 0.6, Math.random() * 1.9, near.z + (Math.random() - 0.5) * 0.6, 0, 0.4 + Math.random(), 0, BEAM, 0.9);
         sound.tone(880, 0.9, 'sine', 0.06, 600); setTimeout(() => { scene.remove(near.mesh); const i = ents.indexOf(near); if (i >= 0) ents.splice(i, 1); }, 650); giveLoot();
       } else { G.say(`${who}: ${line}`, 'npc'); if (pr) pr.status = 'alive'; if (Math.random() < 0.6) giveLoot(); }
-    } else if (near.kind === 'body') { const pr = near.person; if (pr) pr.status = 'dead'; G.say(pr ? `${pr.full}, ${pr.title} (${DEPT[pr.dept].name}). Dead. You take what they had.` : 'You search the crewman\'s body…', 'npc'); giveLoot(true); }
+    } else if (near.kind === 'body') { const pr = near.person; if (pr && pr.status !== 'dead') pr.status = 'dead'; G.say(pr ? `${pr.full}, ${pr.title} (${DEPT[pr.dept].name}). Dead. You take what they had.` : 'You search the crewman\'s body…', 'npc'); giveLoot(true); }
     else if (near.kind === 'emh' && !G.fx.emh) { G.say('The emitter crackles. No hologram. (Medical Hologram offline)', 'warn'); near.used = false; }
     else if (near.kind === 'emh') { G.say('Hologram: "Please describe your medical emergency. Or don\'t. I\'m a projection, not a mind-reader." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
     updateHUD(); return;
@@ -552,7 +553,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  updateShipSystems(dt, tension);
+  updateShipSystems(dt, tension); updateMadness(dt);
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -579,6 +580,8 @@ function step(dt, t) {
     } else if (e.kind === 'crew' || e.kind === 'emh') {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       const H = e.mesh.userData.human;
+      if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
+      if (H && e.kind === 'crew' && !e.fake) { const mad = gorns.find(g => g.mad && !g.dead && g.state !== S.DORMANT && Math.hypot(g.x - e.x, g.z - e.z) < 10 && world.los(g.x, g.z, e.x, e.z)); if (mad && !e.cower) { e.cower = true; H.standing = false; H.play('crouch_idle', { fade: 0.2 }); H.face({ JawDrop: 0.7, LeftInnerBrowUp: 1, RightInnerBrowUp: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 }); if (d < 30) { sound.shriek(Math.max(0.05, 0.25 - d * 0.007)); if (d < 18) G.say(`${e.person ? e.person.short : 'A crewman'} screams: "${pick(['It\'s ' + (mad.person ? mad.person.given : 'him') + '! Something\'s wrong with ' + (mad.person ? mad.person.given : 'him') + '!', 'Stay back! STAY BACK!', 'No no no no—'])}"`, 'warn'); } } }
       if (H) {
         if (d > 22) continue;                       // far away: skip skinning updates
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
@@ -848,6 +851,70 @@ function showCompany() {
   showScreen('company');
 }
 
+// ---------------- space madness ----------------
+// One crew member at a time loses their mind, lowest rank first. They hunt the deck's other crew before you. Kill them
+// and, shortly after, someone else on the deck starts screaming.
+function npcFor(person, rnd = Math.random) { person.uniform = person.uniform || G.roster.uniformOf(person); const m = makeSurvivor(rnd, person) || makeCrew(person.uniform); m.userData.rank = person.short; return m; }
+function startDeckMadness(data, n, rnd) {
+  G.mad = { t: n === 1 ? 1e9 : 16 + rnd() * 14, pending: null };
+  if (n !== 1) return;
+  // the opener: the lowest-ranked redshirt, standing a few corridors from where you start, in plain view
+  const person = nextMadness(G.roster, rnd, 'operations'); if (!person) return;
+  const t = data.pickTile(([x, y]) => { const d = data.dist[x + y * data.W]; return d >= 3 && d <= 6 && !world.isTube(x, y); }) || data.pickTile(() => true); if (!t) return;
+  person.status = 'seen'; const [cx, cz] = world.center(t[0], t[1]); const m = npcFor(person, rnd); m.position.set(cx, 0, cz); scene.add(m);
+  const e = { kind: 'crew', mesh: m, x: cx, z: cz, t: 0, used: false, person, opener: true, openT: 16 }; ents.push(e); G.mad.pending = e;
+}
+function nextMadVictim() {
+  const person = nextMadness(G.roster); if (!person) return;
+  let e = ents.find(e => e.kind === 'crew' && e.person === person && !e.fake);
+  if (!e) {   // they are somewhere else on this deck, out of sight
+    const W = world.W, d = world.d, cand = d.openTiles.filter(([x, y]) => d.grid[y][x] === 0 && !world.isTube(x, y) && Math.hypot((x + 0.5) * TS - P.x, (y + 0.5) * TS - P.z) > 16 && !world.los((x + 0.5) * TS, (y + 0.5) * TS, P.x, P.z));
+    const t = cand.length ? cand[Math.floor(Math.random() * cand.length)] : d.gornSpawn; const [cx, cz] = world.center(t[0], t[1]);
+    person.status = 'seen'; const m = npcFor(person); m.position.set(cx, 0, cz); scene.add(m); e = { kind: 'crew', mesh: m, x: cx, z: cz, t: 0, used: true, person }; ents.push(e);
+  }
+  beginTurn(e);
+}
+function beginTurn(e) {
+  e.turning = 2.6; e.used = true; G.mad.pending = e; const H = e.mesh.userData.human, d = Math.hypot(e.x - P.x, e.z - P.z);
+  if (H) { H.standing = false; H.play('hit_head', { loop: false, fade: 0.1 }); H.face({ JawDrop: 1, NoseWrinkler: 1, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 1 }); }
+  sound.shriek(Math.max(0.06, 0.35 - d * 0.008)); if (d < 9) P.shake = Math.max(P.shake, 0.25);
+  const who = `${e.person.short}, ${e.person.title}`;
+  if (d < 14 && world.los(e.x, e.z, P.x, P.z)) G.say(`${who} clutches their head and starts to laugh…`, 'warn');
+  else if (G.fx.comms < 2) G.say(garble(`Computer: Medical emergency — ${who}. Crew are advised to keep clear.`), 'warn');
+  else G.say('Somewhere on this deck, someone starts screaming. Then laughing.', 'warn');
+}
+function turnStep(e, dt, d) {
+  const H = e.mesh.userData.human; e.turning -= dt;
+  e.mesh.rotation.y += (Math.random() - 0.5) * 0.25; if (H) { H.face({ JawDrop: 0.6 + Math.random() * 0.4 }); if (d < 30) H.update(dt); }
+  if (e.turning > 0) return;
+  const p = e.person, en = makeEnemy('crazed', world, world.tile(e.x, e.z), G.deck, 0, scene, sound, { human: { uniform: p.uniform, rank: p.rank, kind: p.body }, cfg: { name: `${p.short} (space madness)`, spawnMsg: '' } });
+  en.mad = true; en.person = p; en.hp = 2; en.x = e.x; en.z = e.z; en.yaw = e.mesh.rotation.y; en.state = S.PATROL; en.mesh.visible = true; en.place(); gorns.push(en);
+  p.status = 'crazed'; scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); G.mad.pending = null;
+}
+function updateMadness(dt) {
+  const M = G.mad; if (!M || !world || G.phase !== 'play') return;
+  const op = M.pending; if (op && op.opener && op.turning === undefined) { op.openT -= dt; if (op.openT <= 0 || Math.hypot(op.x - P.x, op.z - P.z) < 6.5) beginTurn(op); return; }
+  if (M.pending || gorns.some(g => g.mad && !g.dead)) return;
+  M.t -= dt; if (M.t <= 0) { M.t = 1e9; nextMadVictim(); }
+}
+G.preyFor = (h) => { let best = null, bd = 1e9; for (const e of ents) { if (e.kind !== 'crew' || e.fake || e.turning !== undefined || e.dying) continue; const d = Math.hypot(e.x - h.x, e.z - h.z); if (d < bd) { bd = d; best = e; } } if (best && !best.id) best.id = Math.random(); return best; };
+G.killNpc = (e, by) => {
+  e.dying = true; const d = Math.hypot(e.x - P.x, e.z - P.z), p = e.person;
+  bloodBurst(e.x, 1.2, e.z, 70, 3); decals.floor('blood0', e.x, e.z, 1.8, 1); sound.squelch();
+  if (d < 40) sound.shriek(Math.max(0.04, 0.32 - d * 0.008));
+  if (d < 20 && world.los(e.x, e.z, P.x, P.z)) G.say(`${by.person ? by.person.short : 'The madman'} tears into ${p ? p.short : 'a crewman'}!`, 'warn');
+  else if (d < 40) G.say('A scream, somewhere close. Then nothing.', 'warn');
+  scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1);   // game time, not wall time: no timers here
+  const m = p ? makeCorpse(Math.random, p) : makeCrew(0xb02a20, true); if (m) { m.position.set(e.x, 0, e.z); m.rotation.y = Math.random() * 6.28; scene.add(m); ents.push({ kind: 'body', mesh: m, x: e.x, z: e.z, t: 0, used: false, person: p }); } if (p) p.status = 'corpse';
+};
+function killMad(e) {
+  e.dead = true; e.mesh.visible = false; scene.remove(e.mesh); G.kills++; const p = e.person;
+  bloodBurst(e.x, 1.2, e.z, 60, 3); decals.floor('blood1', e.x, e.z, 1.6, 1); sound.squelch(); flash('#fa5', 0.25);
+  const m = makeCorpse(Math.random, p); if (m) { m.position.set(e.x, 0, e.z); scene.add(m); ents.push({ kind: 'body', mesh: m, x: e.x, z: e.z, t: 0, used: false, person: p }); }
+  p.status = 'dead'; G.say(`${p.short} goes still. The madness isn't over — it never stops at one.`, 'good');
+  G.mad.t = 12 + Math.random() * 8;
+}
+
 let slow = 0;
 function dyingStep(dt, t) {
   G.dyingT += dt; world.update(dt, t); blood.update(dt); sparks.update(dt); steam.update(dt);
@@ -873,6 +940,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();
