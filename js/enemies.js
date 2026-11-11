@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TS } from './world.js';
+import { TS, TUBE_UP } from './world.js';
 import { makeGorn, animateGorn, makeCrew, makeSpider, animateSpider } from './actors.js';
 import { makeHuman, humansReady, holoMaterial, CREW_KINDS } from './humans.js';
 
@@ -34,7 +34,9 @@ function humanModel(opts, cfg, fallback) {
         if (f.attacking) { if (!atk) H.play(cfg.attack || 'punch_cross', { loop: false, fade: 0.06, restart: true, speed: cfg.attackSpeed || 1.3 }); atk = true; }
         else {
           atk = false;
-          if (f.crawl && speed > 0.2 && H.has('crouch_fwd')) H.play('crouch_fwd', { speed: Math.max(0.8, speed / 1.2), fade: 0.2 });
+          if (f.climb && speed > 0.1 && H.has('push')) H.play('push', { speed: 1.4, fade: 0.15 });
+          else if (f.vault && H.has('crouch_fwd')) H.play('crouch_fwd', { speed: 1.6, fade: 0.08 });
+          else if (f.crawl && speed > 0.2 && H.has('crouch_fwd')) H.play('crouch_fwd', { speed: Math.max(0.8, speed / 1.2), fade: 0.2 });
           else if (speed > (cfg.runAt ?? 3.4)) H.play(cfg.run || 'sprint', { speed: Math.max(0.7, speed / (cfg.runRef ?? 5.2)), fade: 0.2 });
           else if (speed > (cfg.jogAt ?? 2.4)) H.play(cfg.jog || 'jog', { speed: Math.max(0.7, speed / (cfg.jogRef ?? 3.0)), fade: 0.25 });
           else if (speed > 0.25) H.play(cfg.walk || 'walk', { speed: Math.max(0.6, speed / (cfg.walkRef ?? 1.5)), fade: 0.25 });
@@ -96,19 +98,26 @@ export class Enemy {
     if (this.noCrawl && this.w.isTube(tx, ty)) {   // too big for a Jiffy tube: wait at whichever mouth is nearer the quarry
       const t = this.w.d.tubes.find(t => t.tiles.some(([x, y]) => x === tx && y === ty)); const i = t.tiles.findIndex(([x, y]) => x === tx && y === ty);
       [tx, ty] = i < t.tiles.length / 2 ? t.a : t.b;
-    } else if (this.w.tubeKind(tx, ty) === 'up') {   // quarry is in an upper run: crawl to the foot of the ladder and wait
+    } else if (!this.climber && this.w.tubeKind(tx, ty) === 'up') {   // quarry is in an upper run: crawl to the foot of the ladder and wait
       const t = this.w.d.tubes.find(t => t.tiles.some(([x, y]) => x === tx && y === ty)); [tx, ty] = t.tiles[t.ladder];
     }
-    if (this.w.grid[ty]?.[tx] !== 0) {   // player is on top of a prop (or in a wall tile): aim for the nearest open neighbour instead
+    if (this.w.grid[ty]?.[tx] !== 0 && !(this.climber && isFinite(this.w.topAt(tx, ty)))) {   // player is on top of a prop (or in a wall tile): aim for the nearest open neighbour instead
       let best = null; const [mx, my] = this.w.tile(this.x, this.z);
       for (const [a, b] of DIRS) { if (this.w.grid[ty + b]?.[tx + a] !== 0) continue; const d = Math.abs(tx + a - mx) + Math.abs(ty + b - my); if (!best || d < best.d) best = { x: tx + a, y: ty + b, d }; }
       if (!best) return; tx = best.x; ty = best.y;
     }
     const key = tx + ',' + ty; this.target = [tx, ty];
-    if (key !== this.fieldKey) { this.field = this.w.field(tx, ty, !!this.noCrawl); this.fieldKey = key; }
+    if (key !== this.fieldKey) { this.field = this.w.field(tx, ty, !!this.noCrawl, !!this.climber); this.fieldKey = key; }
   }
   stunFor(sec) { this.state = S.STUNNED; this.stun = sec; this.sound.stunned(); }
-  place() { this.mesh.position.set(this.x, this.mesh.userData.floatY || 0, this.z); this.mesh.rotation.y = this.yaw; }
+  place() { this.mesh.position.set(this.x, (this.mesh.userData.floatY || 0) + (this.y || 0), this.z); this.mesh.rotation.y = this.yaw; }
+  // climbers: feet follow prop tops, ladders and upper tube runs; start the hop a little before the edge
+  stepY(dt) {
+    const w = this.w, here = w.hostileGround(this.x, this.z), ahead = w.hostileGround(this.x + Math.sin(this.yaw) * 0.6, this.z + Math.cos(this.yaw) * 0.6);
+    const gy = this.speed > 0.2 && ahead > here ? ahead : here, y = this.y || 0;
+    this.vaulting = gy > y + 0.05; this.y = y + Math.max(-7 * dt, Math.min(3.2 * dt, gy - y));
+    if (this.vaulting && !this.wasVault && gy - y > 0.3) this.sound.step?.(0.08); this.wasVault = this.vaulting;
+  }
 
   // follow the BFS distance field toward this.target, one tile centre at a time
   move(dt, speed, chaseDirect, p, onStep) {
@@ -116,6 +125,11 @@ export class Enemy {
     const w = this.w; const [mx, my] = w.tile(this.x, this.z); const [tx, ty] = this.target;
     if (this.field[mx + my * w.W] < 0) { this.speed = 0; this.target = null; return; }   // no route (e.g. target only reachable through a tube)
     this.crawl = w.isTube(mx, my); if (this.crawl) speed *= 0.5;
+    if (this.climber) {   // slower over obstacles: vaulting props, climbing ladders
+      this.climbing = w.tubeKind(mx, my) === 'lad'; if (this.climbing) speed *= 0.8;   // ×0.5 crawl ×0.8 = 0.4
+      const yaw = this.yaw, [ax, ay] = w.tile(this.x + Math.sin(yaw) * 0.8, this.z + Math.cos(yaw) * 0.8);
+      if (w.grid[my]?.[mx] === 2 || w.grid[ay]?.[ax] === 2) speed *= 0.55;
+    }
     let wx, wz;
     if (mx === tx && my === ty) { const c = w.center(tx, ty); wx = c[0]; wz = c[1]; if (chaseDirect) { wx = p.x; wz = p.z; } }
     else {
@@ -147,14 +161,14 @@ export class Enemy {
 // ------------------------------------------------------------------
 const HUNTERS = {
   gronk: { name: 'Gronk', model: () => MODELS.gronk(), base: 2.3, baseDeck: 0.12, chase: 4.1, chaseDeck: 0.16, chaseMax: 5.2, sight: 20, sightCrouch: 13, hear: 1, dmg: 34, atkCd: 2.5, atkRange: 1.25, hitY: 1.5, hitR: 0.8, reach: 1.7, noCrawl: true, roarOnSpot: true, spawnMsg: 'The ship shudders. Something heavy is moving on this deck…' },
-  crazed: { name: 'Space-Madness Crewman', model: (o) => MODELS.crazed(o), base: 2.0, baseDeck: 0.06, chase: 4.4, chaseDeck: 0.08, chaseMax: 5.3, sight: 14, sightCrouch: 9, hear: 1.2, dmg: 16, atkCd: 1.0, atkRange: 1.15, hitY: 1.2, hitR: 0.55, roarOnSpot: 'shriek', spawnMsg: 'Somewhere nearby, someone is laughing. It is not a happy laugh.' },
+  crazed: { name: 'Space-Madness Crewman', model: (o) => MODELS.crazed(o), base: 2.0, baseDeck: 0.06, chase: 4.4, chaseDeck: 0.08, chaseMax: 5.3, sight: 14, sightCrouch: 9, hear: 1.2, dmg: 16, atkCd: 1.0, atkRange: 1.15, hitY: 1.2, hitR: 0.55, climber: true, roarOnSpot: 'shriek', spawnMsg: 'Somewhere nearby, someone is laughing. It is not a happy laugh.' },
   slimeling: { name: 'Slimeling Impostor', model: () => MODELS.slimeling(), base: 2.6, baseDeck: 0.05, chase: 4.6, chaseDeck: 0.05, chaseMax: 5.2, sight: 16, sightCrouch: 10, hear: 1.2, dmg: 20, atkCd: 1.4, atkRange: 1.3, hitY: 1.2, hitR: 0.7, roarOnSpot: 'shriek', spawnMsg: '' },
 };
 
 export class Hunter extends Enemy {
   constructor(world, spawnTile, deck, delay, scene, sound, type = 'gronk', opts = {}) {
     const cfg = { ...HUNTERS[type], ...(opts.cfg || {}) }; super(world, spawnTile, deck, delay, scene, sound, cfg.model(opts));
-    this.cfg = cfg; this.kind = type; this.name = cfg.name; this.noCrawl = !!cfg.noCrawl; this.hitY = cfg.hitY; this.hitR = cfg.hitR;
+    this.cfg = cfg; this.kind = type; this.name = cfg.name; this.noCrawl = !!cfg.noCrawl; this.climber = !!cfg.climber; this.y = 0; this.hitY = cfg.hitY; this.hitR = cfg.hitR;
     this.baseSpeed = cfg.base + Math.min(deck, 8) * cfg.baseDeck; this.chaseSpeed = Math.min(cfg.chase + deck * cfg.chaseDeck, cfg.chaseMax);
     this.growlT = 3 + Math.random() * 4; this.huntT = 0; this.pulse = 16 + Math.random() * 10;
   }
@@ -222,7 +236,7 @@ export class Hunter extends Enemy {
       } else if (this.state === S.CHASE) speed = this.chaseSpeed;
       this.move(dt, speed, this.state === S.CHASE, p, (e) => game.onEnemyStep(e, dist));
       if (speed === 0) this.speed = 0;
-      const high = (p.y || 0) > (cfg.reach ?? 1.1);
+      const high = (p.y || 0) - (this.y || 0) > (cfg.reach ?? 1.1);
       if (dist < cfg.atkRange && this.attackCd <= 0 && !high) { this.attackCd = cfg.atkCd; this.attacking = 0.5; this.state = S.SEARCH; this.timer = 4; game.hitPlayer(this, cfg.dmg); }
       // perched out of reach: it claws at your ankles, then hauls you down
       if (high && dist < cfg.atkRange + 1.3) { this.campT = (this.campT || 0) + dt; if (this.campT > 1.8 && this.attackCd <= 0) { this.campT = 0; this.attackCd = cfg.atkCd; this.attacking = 0.5; game.dragDown?.(this); } } else this.campT = 0;
@@ -230,8 +244,9 @@ export class Hunter extends Enemy {
       if (this.growlT <= 0) { this.growlT = 4 + Math.random() * 6; if (dist < 28) (this.kind === 'gronk' ? this.sound.growl(Math.max(0.03, 0.14 - dist * 0.004)) : this.sound.mutter(Math.max(0.03, 0.12 - dist * 0.004))); }
     }
     if (this.roar > 0) this.roar -= dt;
+    if (this.climber) this.stepY(dt);
     this.place();
-    this.model.tick(dt, this.state === S.STUNNED ? 0 : this.speed, { stunned: this.state === S.STUNNED, roaring: this.roar > 0, attacking: this.attacking > 0, crawl: this.crawl });
+    this.model.tick(dt, this.state === S.STUNNED ? 0 : this.speed, { stunned: this.state === S.STUNNED, roaring: this.roar > 0, attacking: this.attacking > 0, crawl: this.crawl, climb: this.climbing, vault: this.vaulting });
   }
 }
 

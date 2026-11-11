@@ -107,6 +107,22 @@ const park = await page.evaluate(async () => {
         for (let i = 0; i < 60 * 30 && !(g.gorns.some(h => h.mad && !h.dead) || g.G.mad.pending); i++) { g.G.phase = 'play'; tick(1); }
         const nxt = g.G.mad.pending?.person || g.gorns.find(h => h.mad && !h.dead)?.person; m.next = !!nxt; m.nextRank = nxt?.rank; m.nextLowest = nxt ? nxt.rank === Math.min(...g.roster.people.filter(p => ['unknown', 'seen', 'alive', 'crazed'].includes(p.status) || p === nxt).map(p => p.rank)) : false; } }
     r.mad = m; }
+  // crazed crew climb: vault onto a prop you are standing on; follow you up a ladder into a tube's upper run
+  { const Sx = g.S, NB = [[1, 0], [-1, 0], [0, 1], [0, -1]], c = {};
+    const wd_up = (w, en) => w.tubeKind(...w.tile(en.x, en.z)) === 'up';
+    const chase = (wd, from, secs, until) => { for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
+      const en = g.makeEnemy('crazed', wd, from, 3, 0, g.scene, g.sound); en.state = Sx.PATROL; en.mesh.visible = true; g.gorns.push(en); g.G.hp = 1e6; const hp0 = g.G.hp; let maxY = 0;
+      let up = false; for (let i = 0; i < 60 * secs && !until(en); i++) { g.G.phase = 'play'; en.state = Sx.CHASE; en.timer = 5; en.setTarget(...wd.tile(P.x, P.z)); tick(1); maxY = Math.max(maxY, en.y); if (wd.tubeKind(...wd.tile(en.x, en.z)) === 'up') up = true; }
+      return { maxY: +maxY.toFixed(2), upperRun: up, dist: +Math.hypot(en.x - P.x, en.z - P.z).toFixed(2), hit: g.G.hp < hp0 }; };
+    for (let d = 1; d < 9 && !(c.prop && c.tube); d++) { g.loadDeck(d); const w = g.world;
+      if (!c.prop) { const pr = w.d.props.find(p => isFinite(w.topAt(p.tx, p.ty)) && w.topAt(p.tx, p.ty) < 1.1 && NB.some(([a, b]) => w.grid[p.ty + b]?.[p.tx + a] === 0));
+        if (pr) { const [a, b] = NB.find(([a, b]) => w.grid[pr.ty + b]?.[pr.tx + a] === 0); const fld = w.field(pr.tx + a, pr.ty + b); const from = w.d.openTiles.find(([x, y]) => fld[x + y * w.W] >= 3 && fld[x + y * w.W] <= 6) || [pr.tx + a, pr.ty + b];
+          reset(); const [px, pz] = w.center(pr.tx, pr.ty); P.x = px; P.z = pz; P.y = w.topAt(pr.tx, pr.ty); P.grounded = true; tick(2);
+          c.prop = { top: +w.topAt(pr.tx, pr.ty).toFixed(2), playerY: +P.y.toFixed(2), ...chase(w, from, 20, en => g.G.hp < 1e6) }; } }
+      if (!c.tube) { const t = w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 1);
+        if (t) { const up = t.tiles[t.tiles.length - 1]; reset(); const [px, pz] = w.center(up[0], up[1]); P.x = px; P.z = pz; P.y = 1.7; P.grounded = true; tick(2);
+          c.tube = { playerY: +P.y.toFixed(2), ...chase(w, t.a, 40, en => en.y > 1.6 && wd_up(w, en)) }; } } }
+    r.climb = c; }
   // ship systems: break life support, walk to its repair point on this deck, hold E until it is fixed
   { const S = g.shipState; for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; reset(); g.G.hp = 100; g.G.phase = 'play';
     S.damage('life', 0.9); tick(2); const fx = g.G.fx; const rp = g.repairPts.find(p => p.sys === 'life');
@@ -116,7 +132,7 @@ const park = await page.evaluate(async () => {
     r.sys.roster = g.roster.people.length; r.sys.ship = g.G.ship.name; }
   return r;
 });
-console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
+console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun)) && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

@@ -400,12 +400,12 @@ function fire() {
   let hit = null, hitD = 40;
   for (const g of gorns) {
     if (!g.active || (g.state === S.STUNNED && !g.mad)) continue;
-    _v.set(g.x - eye.x, g.hitY - eye.y, g.z - eye.z); const d = _v.length(); _v.normalize();
+    _v.set(g.x - eye.x, g.hitY + (g.y || 0) - eye.y, g.z - eye.z); const d = _v.length(); _v.normalize();
     const ang = Math.acos(Math.max(-1, Math.min(1, _v.dot(_f))));
     if (d < 28 && ang < Math.atan2(g.hitR, d) + 0.04 && world.los(eye.x, eye.z, g.x, g.z) && d < hitD) { hit = g; hitD = d; }
   }
   // beam visual
-  const end = hit ? new THREE.Vector3(hit.x, hit.hitY, hit.z) : eye.clone().addScaledVector(_f, 12);
+  const end = hit ? new THREE.Vector3(hit.x, hit.hitY + (hit.y || 0), hit.z) : eye.clone().addScaledVector(_f, 12);
   const start = eye.clone().add(new THREE.Vector3(0.25, -0.22, 0).applyQuaternion(camera.quaternion)).addScaledVector(_f, 0.4);
   beam.geometry.setFromPoints([start, end]); beam.visible = true; beamT = 0.12;
   if (hit && hit.mad && --hit.hp <= 0) { killMad(hit); return; }
@@ -708,13 +708,13 @@ function fireGrapple() {
   let tgt = null, tD = maxD;
   for (const g of gorns) {
     if (g.dead || g.state === S.DORMANT || g.kind === 'phantom') continue;
-    const gy = g.kind === 'clinger' && g.mode === 'lurk' ? g.ceil - 0.2 : g.hitY;
+    const gy = g.kind === 'clinger' && g.mode === 'lurk' ? g.ceil - 0.2 : g.hitY + (g.y || 0);
     _v.set(g.x - eye.x, gy - eye.y, g.z - eye.z); const d = _v.length(); _v.normalize();
     if (d < tD && Math.acos(Math.max(-1, Math.min(1, _v.dot(_f)))) < Math.atan2(g.hitR, d) + 0.03) { tgt = g; tD = d; }
   }
   sound.noise(0.1, 0.16, 3200, 3, 'bandpass'); sound.tone(520, 0.12, 'square', 0.05, 900); noiseNow = Math.max(noiseNow, 9);
   if (tgt) {
-    P.grapCd = MOVE.grapCooldown; ropeFlash = 0.25; ropeEnd.set(tgt.x, tgt.kind === 'clinger' && tgt.mode === 'lurk' ? tgt.ceil - 0.2 : tgt.hitY, tgt.z);
+    P.grapCd = MOVE.grapCooldown; ropeFlash = 0.25; ropeEnd.set(tgt.x, tgt.kind === 'clinger' && tgt.mode === 'lurk' ? tgt.ceil - 0.2 : tgt.hitY + (tgt.y || 0), tgt.z);
     if (tgt.kind === 'clinger') { tgt.kill(); G.kills++; G.say('Hooked it off the ceiling!', 'good'); }
     else if (tgt.kind === 'crazed' || tgt.kind === 'slimeling') { tgt.stunFor(1.4); G.stuns++; const dx = P.x - tgt.x, dz = P.z - tgt.z, d = Math.hypot(dx, dz) || 1, pull = Math.min(2.5, Math.max(0, d - 1.6)); tgt.x += dx / d * pull; tgt.z += dz / d * pull; if (world.solidAt(tgt.x, tgt.z)) { tgt.x -= dx / d * pull; tgt.z -= dz / d * pull; } G.say('Hooked! It stumbles.', 'good'); }
     else G.say('The hook skitters off the ' + tgt.name + '.', 'warn');
@@ -940,6 +940,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

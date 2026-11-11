@@ -592,24 +592,47 @@ export class World {
     return true;
   }
 
-  // distance field (BFS) from a tile, over walkable tiles (grid==0). Tubes are entered end-on only; noTube = too big to crawl.
-  field(tx, ty, noTube = false) {
-    const W = this.W, H = this.H, g = this.grid, T = this.d.tubeAxis;
+  // distance field from a tile (lower = closer), over walkable tiles. Weighted: tubes cost 2, ladders/upper runs 3,
+  // vaulting over a climbable prop 4, so hostiles prefer the floor. Tubes are entered end-on only.
+  // noTube = too big to crawl; climb = can vault props and use ladders / upper runs (crazed crew).
+  field(tx, ty, noTube = false, climb = false) {
+    const W = this.W, H = this.H, g = this.grid, T = this.d.tubeAxis, L = this.d.tubeLevel;
     const d = new Int16Array(W * H).fill(-1);
     if (tx < 0 || ty < 0 || tx >= W || ty >= H) return d;
-    const q = [tx + ty * W]; d[q[0]] = 0;
-    for (let i = 0; i < q.length; i++) {
-      const x = q[i] % W, y = (q[i] / W) | 0, ta = T[q[i]];
-      for (const [dx, dy] of DIRS) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= W || ny >= H || g[ny][nx] !== 0 || d[nx + ny * W] >= 0) continue;
-        const tb = T[nx + ny * W];
-        if ((tb && noTube) || this.d.tubeLevel[nx + ny * W] === 'up') continue;   // nobody but the player uses the upper runs
-        if ((ta === 'x' || tb === 'x') && dy !== 0) continue; if ((ta === 'y' || tb === 'y') && dx !== 0) continue;
-        d[nx + ny * W] = d[q[i]] + 1; q.push(nx + ny * W);
+    const cost = (x, y, i) => {
+      const c = g[y][x];
+      if (c === 0) { const k = L[i]; if (k === 'up' || k === 'lad') return climb ? 3 : -1; return T[i] ? (noTube ? -1 : 2) : 1; }
+      if (c === 2 && climb && isFinite(this.topAt(x, y))) return 4;
+      return -1;
+    };
+    const q0 = tx + ty * W; d[q0] = 0; const buckets = [[q0]];
+    for (let c = 0; c < buckets.length; c++) {
+      const b = buckets[c]; if (!b) continue;
+      for (let j = 0; j < b.length; j++) {
+        const id = b[j]; if (d[id] !== c) continue;
+        const x = id % W, y = (id / W) | 0, ta = T[id];
+        for (const [dx, dy] of DIRS) {
+          const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          const n = nx + ny * W, w = cost(nx, ny, n); if (w < 0) continue;
+          const tb = T[n];
+          if ((ta === 'x' || tb === 'x') && dy !== 0) continue; if ((ta === 'y' || tb === 'y') && dx !== 0) continue;
+          const nd = c + w; if (d[n] < 0 || nd < d[n]) { d[n] = nd; (buckets[nd] || (buckets[nd] = [])).push(n); }
+        }
       }
     }
     return d;
+  }
+  // where a climbing hostile's feet are at (x, z): prop top, upper tube run, or partway up a ladder
+  hostileGround(x, z) {
+    const [tx, ty] = this.tile(x, z), i = tx + ty * this.W, k = this.d.tubeLevel[i];
+    if (this.grid[ty]?.[tx] === 2) { const t = this.topAt(tx, ty); return isFinite(t) ? t : 0; }
+    if (k === 'up') return TUBE_UP;
+    if (k === 'lad') {
+      const t = this.d.tubes.find(t => t.ladder >= 0 && t.tiles[t.ladder][0] === tx && t.tiles[t.ladder][1] === ty); if (!t) return 0;
+      const up = t.tiles[t.ladder + 1], ux = up[0] - tx, uz = up[1] - ty, cx = (tx + 0.5) * TS, cz = (ty + 0.5) * TS;
+      const s = ((x - cx) * ux + (z - cz) * uz) / TS + 0.5; return TUBE_UP * Math.max(0, Math.min(1, s * 1.5 - 0.3));
+    }
+    return 0;
   }
   reveal(x, z, r = 2) {
     const [tx, ty] = this.tile(x, z);
