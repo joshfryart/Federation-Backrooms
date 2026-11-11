@@ -34,6 +34,7 @@
   #faults { top:238px; right:14px; text-align:right; font-size:11px; line-height:1.6; letter-spacing:.08em; }
   #faults .degraded { color:#ffb347; } #faults .offline { color:#ff5a4a; animation: fblink 1s steps(2) infinite; }
   @keyframes fblink { 50% { opacity:.45 } }
+  #dirdbg { left:16px; top:96px; margin:0; font:11px/1.35 monospace; color:#9fe; background:rgba(0,0,0,.55); padding:6px 8px; border-radius:4px; text-transform:none; letter-spacing:0; }
   #repbar { left:50%; top:58%; width:220px; height:6px; margin-left:-110px; background:rgba(255,255,255,.15); border-radius:3px; opacity:0; }
   #repbar i { display:block; height:100%; width:0; background:#ffb347; border-radius:3px; box-shadow:0 0 8px #ffb347; }
   #shipstatus { z-index:8; background:rgba(3,5,10,.86); padding:22px 26px; overflow:hidden; font-size:12px; text-transform:none; }
@@ -103,6 +104,7 @@
 <canvas class="hud" id="minimap" width="85" height="85"></canvas>
 <div class="hud" id="faults"></div>
 <div class="hud" id="repbar"><i></i></div>
+<pre class="hud" id="dirdbg" style="display:none"></pre>
 <div class="layer" id="shipstatus" style="display:none"></div>
 <div class="hud" id="bars"><div id="lbl">HULL INTEGRITY</div><div class="bar"><i id="hpbar"></i></div><div id="lbl2">STAMINA</div><div class="bar"><i id="stbar"></i></div></div>
 <div class="hud" id="perks"></div>

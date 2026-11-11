@@ -103,6 +103,17 @@ export const SYSTEMS = [
   SY('holo', 'services', 'Holo-Playroom Safeties', 'holocube', ['Safety interlocks', 'Holo-grid emitters', 'Program archive'], { deg: 'Mr. Grinsworth moves faster', off: 'Mr. Grinsworth moves much faster' }, { home: 'Habitat' }),
 ];
 export const SYS = Object.fromEntries(SYSTEMS.map(s => [s.id, s]));
+// cascades: leave a system broken long enough and it drags another one down with it
+export const CASCADES = [
+  { from: 'coolant', when: 'offline', after: 40, to: 'reactor', amount: 0.4, why: 'reactor overheating — coolant offline' },
+  { from: 'reactor', when: 'offline', after: 45, to: 'life', amount: 0.35, why: 'atmosphere processors lost reactor power' },
+  { from: 'eps', when: 'offline', after: 30, to: 'lighting', amount: 0.45, why: 'EPS surge blew the lighting controllers' },
+  { from: 'eps', when: 'offline', after: 60, to: 'gravity', amount: 0.35, why: 'graviton generators starved of power' },
+  { from: 'computer', when: 'offline', after: 35, to: 'comms', amount: 0.4, why: 'comm relays lost the computer core' },
+  { from: 'hydro', when: 'offline', after: 60, to: 'life', amount: 0.3, why: 'O₂ reserve exhausted' },
+  { from: 'helm', when: 'offline', after: 50, to: 'dampers', amount: 0.35, why: 'damper field overloaded by the drift' },
+  { from: 'holo', when: 'offline', after: 70, to: 'emh', amount: 0.35, why: 'holo-grid feedback into the medical emitters' },
+];
 export const HOST_LABEL = { 'console@bridge': 'bridge consoles', console: 'consoles', warpcore: 'reactor core', biobed: 'biobeds', pad: 'transporter pad', tree: 'grow beds', replicator: 'replicators', holocube: 'holo-grid', lift: 'tubelift controls', junction: 'maintenance junctions' };
 
 // ---------------------------------------------------------------- crew roster
@@ -156,7 +167,7 @@ export const DEPT_LINES = {
 const LEVEL = { nominal: 0, degraded: 1, offline: 2 };
 export class ShipState {
   constructor(ship, seed = 1) {
-    this.ship = ship; this.rnd = mulberry32((seed * 40503) >>> 0); this.sys = {}; this.log = []; this.nextFault = 45; this.listeners = [];
+    this.ship = ship; this.rnd = mulberry32((seed * 40503) >>> 0); this.sys = {}; this.log = []; this.nextFault = 45; this.listeners = []; this.auto = true; this.since = {};
     for (const s of SYSTEMS) this.sys[s.id] = { hp: 1, faults: [] };
     // the ship is already in trouble when you wake up
     const pre = ['lighting', 'comms', 'coolant', 'eps', 'replicators', 'security', 'armory', 'holo'];
@@ -177,15 +188,31 @@ export class ShipState {
   }
   repair(id) { const s = this.sys[id], was = this.status(id); s.hp = 1; s.faults = []; const ev = { type: 'repair', id, name: SYS[id].name, was }; this.emit(ev); return ev; }
   // call every frame; returns a fault event when something breaks. ctx: { deckTime, tension (0..1), deck }
+  // time each system has spent in its current status; fires cascades. Returns the cascade event, if any.
+  cascade(dt) {
+    let out = null;
+    for (const s of SYSTEMS) { const st = this.status(s.id), k = this.since[s.id]; this.since[s.id] = k && k.st === st ? { st, t: k.t + dt, fired: k.fired } : { st, t: 0, fired: {} }; }
+    for (const c of CASCADES) {
+      const k = this.since[c.from]; if (k.st !== c.when || k.t < c.after || k.fired[c.to] || this.status(c.to) === 'offline') continue;
+      k.fired[c.to] = true; out = this.damage(c.to, c.amount, { part: c.why }); out.cascade = c.from;
+    }
+    return out;
+  }
+  // standalone fault scheduler (crew.html, or when no director drives faults). In the game the Director calls damage().
   tick(dt, ctx) {
-    if (ctx.deckTime < 30) return null;
+    this.cascade(dt);
+    if (!this.auto || ctx.deckTime < 30) return null;
     this.nextFault -= dt * (1 + ctx.tension * 1.5) * (1 + Math.min(ctx.deck, 10) * 0.08);
     if (this.nextFault > 0) return null;
     this.nextFault = 45 + this.rnd() * 55;
+    return this.randomFault(ctx);
+  }
+  randomFault(ctx = { deckTime: 999 }, prefer = null) {
     if (this.faulted().length >= 4) return null;
     const pool = SYSTEMS.filter(s => this.sys[s.id].hp > 0.2 && (s.id !== 'lifts' || ctx.deckTime > 90));
     let tot = pool.reduce((a, s) => a + s.weight, 0), r = this.rnd() * tot, pickS = pool[0];
     for (const s of pool) { r -= s.weight; if (r <= 0) { pickS = s; break; } }
+    if (prefer) { const pf = pool.filter(s => prefer.includes(s.id)); if (pf.length) pickS = pf[Math.floor(this.rnd() * pf.length)]; }
     return this.damage(pickS.id, 0.3 + this.rnd() * 0.45);
   }
   // everything the game needs to know, in gameplay terms
@@ -250,7 +277,7 @@ export function renderLoadout(state, roster, { here = null, buttons = false } = 
       return `<tr class="${st}"><td><b>${esc(s.name)}</b>${s.section ? `<small> · ${s.section}</small>` : ''}<div class="parts">${s.parts.map(esc).join(' · ')}</div></td>
         <td>${statusPill(st)}<div class="sbar"><i style="width:${Math.round(state.hp(s.id) * 100)}%;background:${STATUS_COL[st]}"></i></div>${f.length ? `<div class="flt">⚠ ${esc(f[f.length - 1].part)}</div>` : ''}</td>
         <td>Deck ${String(hd + 1).padStart(2, '0')} · ${esc(s.home)}<br><small>${esc(HOST_LABEL[s.host])}${s.host !== 'junction' ? ' · or any junction' : ''}</small>${loc ? `<div class="here">${esc(loc)}</div>` : ''}</td>
-        <td><small><b>Degraded:</b> ${esc(s.eff.deg)}<br><b>Offline:</b> ${esc(s.eff.off)}</small>${buttons ? `<div class="btns"><button data-break="${s.id}">Break</button><button data-fix="${s.id}">Repair</button></div>` : ''}</td></tr>`;
+        <td><small><b>Degraded:</b> ${esc(s.eff.deg)}<br><b>Offline:</b> ${esc(s.eff.off)}${CASCADES.filter(c => c.from === s.id).map(c => `<br><b>Left offline ${c.after} s:</b> damages ${esc(SYS[c.to].name)}`).join('')}</small>${buttons ? `<div class="btns"><button data-break="${s.id}">Break</button><button data-fix="${s.id}">Repair</button></div>` : ''}</td></tr>`;
     }).join('');
     return `<section class="dept" style="--u:${hex(DIVISION[DEPT[d.id].division].color)}"><header><h3>${esc(d.name)}</h3><span>${esc(DIVISION[d.division].name)} division · ${staff.length} crew · head: ${head ? esc(head.full) : '—'}</span><p>${esc(d.blurb)}</p></header>
       <div class="billets">${Object.entries(counts).map(([t, n]) => `<span>${n}× ${esc(t)}</span>`).join('')}</div>

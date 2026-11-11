@@ -11,6 +11,7 @@ import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon } from './sysview.js';
+import { Director } from './director.js';
 import { mulberry32 } from './data.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
@@ -204,6 +205,7 @@ function loadDeck(n) {
   placeGore(data, rnd, n);
   placeRepairPoints(data);
   startDeckMadness(data, n, rnd);
+  G.director?.reset(n);
   world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
   G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.lurchT = 20 + Math.random() * 20; G.repairT = 0; G.distT = 20 + Math.random() * 20; G.hints = {};
   showCard(n, ship, data.flooded);
@@ -269,7 +271,8 @@ function newRun() {
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.shipOrder[0]];
   G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p);
-  G.shipState = new ShipState(G.ship, G.runSeed); G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
+  G.shipState = new ShipState(G.ship, G.runSeed); G.shipState.auto = false; G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
+  G.director = new Director();
   hideScreens(); fade(0);
   loadDeck(1);
   requestLock();
@@ -341,10 +344,11 @@ G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
 G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
 G.glitch = (sec) => { G.glitchT = sec; };
-G.clingOn = (c) => { P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
-G.dragDown = (e) => { const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9 * G.fx.knockMul; P.kbz = -dz / d * 9 * G.fx.knockMul; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
+G.clingOn = (c) => { G.director?.bump(0.3, 'face-hugged'); P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
+G.dragDown = (e) => { G.director?.bump(0.2, 'dragged down'); const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9 * G.fx.knockMul; P.kbz = -dz / d * 9 * G.fx.knockMul; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
 G.hitPlayer = (gorn, dmg) => {
   if (invuln > 0 || G.phase !== 'play') return;
+  G.director?.bump(0.35, 'hit by ' + gorn.kind);
   if (G.shield) { G.shield = false; G.say('Deflector absorbed the hit!', 'good'); flash('#39f', 0.5); sound.hit(); }
   else { G.hp -= dmg; flash('#c00', 0.7); sound.hit(); G.say(gorn.name + ' attacks!', 'warn'); }
   P.shake = 0.6; invuln = 1.2;
@@ -429,6 +433,7 @@ function interact() {
     }
     if (near.kind === 'crew') {
       const pr = near.person, who = pr ? `${pr.short}, ${pr.title}` : 'Crewman';
+      if (near.repairing) { near.used = false; G.say(`${who}: "Cover me — ${SYS[near.repairing.sys].name} is ${Math.floor(near.repairing.t / near.repairing.need * 100)}% there. Keep that thing off me."`, 'npc'); return; }
       const line = pr && Math.random() < 0.7 ? pick(DEPT_LINES[pr.dept]) : pick(REDSHIRT_LINES);
       if (G.fx.evac) {   // transporters up: beam them to safety
         G.say(`${who}: ${line} — Transporter room, one to beam out!`, 'npc'); if (pr) pr.status = 'evacuated';
@@ -553,7 +558,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  updateShipSystems(dt, tension); updateMadness(dt);
+  updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension);
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -581,7 +586,8 @@ function step(dt, t) {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       const H = e.mesh.userData.human;
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
-      if (H && e.kind === 'crew' && !e.fake) { const mad = gorns.find(g => g.mad && !g.dead && g.state !== S.DORMANT && Math.hypot(g.x - e.x, g.z - e.z) < 10 && world.los(g.x, g.z, e.x, e.z)); if (mad && !e.cower) { e.cower = true; H.standing = false; H.play('crouch_idle', { fade: 0.2 }); H.face({ JawDrop: 0.7, LeftInnerBrowUp: 1, RightInnerBrowUp: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 }); if (d < 30) { sound.shriek(Math.max(0.05, 0.25 - d * 0.007)); if (d < 18) G.say(`${e.person ? e.person.short : 'A crewman'} screams: "${pick(['It\'s ' + (mad.person ? mad.person.given : 'him') + '! Something\'s wrong with ' + (mad.person ? mad.person.given : 'him') + '!', 'Stay back! STAY BACK!', 'No no no no—'])}"`, 'warn'); } } }
+      if (e.repairing) repairerStep(e, dt, d);
+      if (H && e.kind === 'crew' && !e.fake) { const mad = gorns.find(g => g.mad && !g.dead && g.state !== S.DORMANT && Math.hypot(g.x - e.x, g.z - e.z) < 10 && world.los(g.x, g.z, e.x, e.z)); if (mad && !e.cower) { if (e.repairing) { e.repairing = null; G.say(`${e.person.short} drops their tools and hides.`, 'warn'); } e.cower = true; H.standing = false; H.play('crouch_idle', { fade: 0.2 }); H.face({ JawDrop: 0.7, LeftInnerBrowUp: 1, RightInnerBrowUp: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 }); if (d < 30) { sound.shriek(Math.max(0.05, 0.25 - d * 0.007)); if (d < 18) G.say(`${e.person ? e.person.short : 'A crewman'} screams: "${pick(['It\'s ' + (mad.person ? mad.person.given : 'him') + '! Something\'s wrong with ' + (mad.person ? mad.person.given : 'him') + '!', 'Stay back! STAY BACK!', 'No no no no—'])}"`, 'warn'); } } }
       if (H) {
         if (d > 22) continue;                       // far away: skip skinning updates
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
@@ -622,7 +628,7 @@ function step(dt, t) {
   updatePanelLights(dt);
   // rolling blackouts: the hum stops, the lights die, something is still walking
   if (G.blackout > 0) { G.blackout -= dt; if (G.blackout <= 0) { world.setPower(true); sound.setPower(true); sound.powerUp(); } }
-  else { G.blackT -= dt; if (G.blackT <= 0 && G.deckTime > 25) { G.blackout = 5 + Math.random() * 5; G.blackT = (G.fx.blackoutEvery || 170) * (0.7 + Math.random() * 0.6); world.setPower(false); sound.setPower(false); sound.powerDown(); G.say('Computer: Main power failure. Emergency lighting only.', 'comp'); } }
+  else { G.blackT -= dt; if (G.blackT <= 0 && G.deckTime > 25) { G.director?.bump(0.1, 'blackout'); G.blackout = 5 + Math.random() * 5; G.blackT = (G.fx.blackoutEvery || 170) * (0.7 + Math.random() * 0.6); world.setPower(false); sound.setPower(false); sound.powerDown(); G.say('Computer: Main power failure. Emergency lighting only.', 'comp'); } }
   world.powerTarget = G.blackout > 0 ? 0 : G.fx.power; world.lightFault = G.fx.lightFlicker;
   G.distT -= dt; if (G.distT <= 0) { G.distT = 25 + Math.random() * 30; sound.distant(pick(['steps', 'steps', 'scrape', 'door', 'whisper'])); }
   for (const dr of world.drips) if (dr.fire) { dr.fire = false; if (Math.hypot(dr.x - P.x, dr.z - P.z) < 16) { for (let i = 0; i < 4; i++) water.add(dr.x, dr.y - 0.1, dr.z, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3, WATER, 1.2); sound.drip(); } }
@@ -782,6 +788,8 @@ function onShipEvent(ev) {
   G.fx = SHIP().effects();
   const r = repairPts.find(r => r.sys === ev.id);
   if (ev.type === 'fault') {
+    G.director?.bump(ev.cascade ? 0.12 : 0.08, 'fault ' + ev.id);
+    if (!ev.cascade && G.director?.phase !== 'peak' && Math.random() < 0.55) spawnRepairer(ev.id);
     const dist = r ? Math.round(Math.hypot(r.x - P.x, r.z - P.z)) : null;
     if (G.fx.comms < 2 || ev.id === 'comms') G.say(garble(`Computer: ${ev.name} ${ev.status === 'offline' ? 'OFFLINE' : 'failing'} — ${ev.part}.`) + (r ? ` Repair at ${r.where}${dist != null ? ` (${dist} m)` : ''}.` : ''), 'warn');
     sound.zap(); sound.chirp(); P.shake = Math.max(P.shake, 0.15);
@@ -875,6 +883,7 @@ function nextMadVictim() {
   beginTurn(e);
 }
 function beginTurn(e) {
+  G.director?.bump(0.2, 'someone turned');
   e.turning = 2.6; e.used = true; G.mad.pending = e; const H = e.mesh.userData.human, d = Math.hypot(e.x - P.x, e.z - P.z);
   if (H) { H.standing = false; H.play('hit_head', { loop: false, fade: 0.1 }); H.face({ JawDrop: 1, NoseWrinkler: 1, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 1 }); }
   sound.shriek(Math.max(0.06, 0.35 - d * 0.008)); if (d < 9) P.shake = Math.max(P.shake, 0.25);
@@ -895,13 +904,14 @@ function updateMadness(dt) {
   const M = G.mad; if (!M || !world || G.phase !== 'play') return;
   const op = M.pending; if (op && op.opener && op.turning === undefined) { op.openT -= dt; if (op.openT <= 0 || Math.hypot(op.x - P.x, op.z - P.z) < 6.5) beginTurn(op); return; }
   if (M.pending || gorns.some(g => g.mad && !g.dead)) return;
-  M.t -= dt; if (M.t <= 0) { M.t = 1e9; nextMadVictim(); }
+  if (!G.director?.relaxing) M.t -= dt;   // the director's breather holds the next turn back
+  if (M.t <= 0) { M.t = 1e9; nextMadVictim(); }
 }
 G.preyFor = (h) => { let best = null, bd = 1e9; for (const e of ents) { if (e.kind !== 'crew' || e.fake || e.turning !== undefined || e.dying) continue; const d = Math.hypot(e.x - h.x, e.z - h.z); if (d < bd) { bd = d; best = e; } } if (best && !best.id) best.id = Math.random(); return best; };
 G.killNpc = (e, by) => {
   e.dying = true; const d = Math.hypot(e.x - P.x, e.z - P.z), p = e.person;
   bloodBurst(e.x, 1.2, e.z, 70, 3); decals.floor('blood0', e.x, e.z, 1.8, 1); sound.squelch();
-  if (d < 40) sound.shriek(Math.max(0.04, 0.32 - d * 0.008));
+  if (d < 40) { sound.shriek(Math.max(0.04, 0.32 - d * 0.008)); G.director?.bump(d < 20 ? 0.25 : 0.12, 'crew killed'); }
   if (d < 20 && world.los(e.x, e.z, P.x, P.z)) G.say(`${by.person ? by.person.short : 'The madman'} tears into ${p ? p.short : 'a crewman'}!`, 'warn');
   else if (d < 40) G.say('A scream, somewhere close. Then nothing.', 'warn');
   scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1);   // game time, not wall time: no timers here
@@ -913,6 +923,49 @@ function killMad(e) {
   const m = makeCorpse(Math.random, p); if (m) { m.position.set(e.x, 0, e.z); scene.add(m); ents.push({ kind: 'body', mesh: m, x: e.x, z: e.z, t: 0, used: false, person: p }); }
   p.status = 'dead'; G.say(`${p.short} goes still. The madness isn't over — it never stops at one.`, 'good');
   G.mad.t = 12 + Math.random() * 8;
+}
+
+// ---------------- pacing director ----------------
+function updateDirector(dt, tension) {
+  const D = G.director; if (!D || G.phase !== 'play') return;
+  const live = gorns.filter(g => !g.dead);
+  const madAlive = live.some(g => g.mad);
+  const act = D.update(dt, { tension, deckTime: G.deckTime, faults: G.shipState.faulted().length, dormant: live.filter(g => g.state === S.DORMANT && !g.mad && g.kind !== 'clinger').length, active: live.filter(g => g.active && g.kind !== 'clinger').length, madPending: G.mad && !G.mad.pending && !madAlive ? G.mad.t : Infinity });
+  if (act === 'fault') G.shipState.randomFault({ deckTime: G.deckTime }, live.some(g => g.active && g.kind !== 'clinger') ? ['eps', 'lighting', 'reactor', 'comms', 'computer'] : null);
+  else if (act === 'blackout') G.blackT = Math.min(G.blackT, 0.1);
+  else if (act === 'wake') { const g = live.filter(g => g.state === S.DORMANT && !g.mad && g.kind !== 'clinger').sort((a, b) => a.delay - b.delay)[0]; if (g) g.delay = Math.min(g.delay, 2); }
+  else if (act === 'madness') G.mad.t = Math.min(G.mad.t, 2.5);
+  else if (act === 'nudge') {   // something "hears" you: it starts working its way toward your area
+    const g = live.filter(g => g.active && g.kind !== 'clinger').sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0];
+    if (g?.kind === 'phantom') g.relocate(P, 9, 13);
+    else if (g && g.state !== S.CHASE && g.state !== S.STUNNED) { const [tx, ty] = world.tile(P.x + (Math.random() - 0.5) * 8, P.z + (Math.random() - 0.5) * 8); if (world.grid[ty]?.[tx] === 0) g.setTarget(tx, ty); else g.setTarget(...world.tile(P.x, P.z)); g.state = S.INVESTIGATE; g.timer = 12; sound.distant('steps'); }
+  }
+  if (dirDbg) { const el = $('dirdbg'); el.style.display = 'block'; el.textContent = `DIRECTOR ${D.phase.toUpperCase()} ${D.phase !== 'build' ? D.phaseT.toFixed(0) + 's' : 'next ' + D.gap.toFixed(0) + 's'}\nintensity ${'█'.repeat(Math.round(D.intensity * 20)).padEnd(20, '·')} ${D.intensity.toFixed(2)} / target ${D.target.toFixed(2)}\ntension ${tension.toFixed(2)} · faults ${G.shipState.faulted().length} · madness ${madAlive ? 'ACTIVE' : G.mad?.pending ? 'turning' : (G.mad?.t < 1e8 ? G.mad.t.toFixed(0) + 's' : '—')}\n${D.log.join('\n')}`; }
+}
+let dirDbg = false;
+addEventListener('keydown', (e) => { if (e.code === 'F3') { e.preventDefault(); dirDbg = !dirDbg; if (!dirDbg) $('dirdbg').style.display = 'none'; } });
+
+// crew who turn out to fix a fault: slow, and the madman's favourite target
+function spawnRepairer(id) {
+  const pt = repairPts.find(r => r.sys === id); if (!pt || ents.some(e => e.repairing?.sys === id)) return;
+  const pool = G.roster.people.filter(p => p.dept === SYS[id].dept && p.status === 'unknown'); if (!pool.length) return;
+  const person = pool[Math.floor(Math.random() * pool.length)];
+  let x, z, face;
+  if (!pt.main) { x = pt.x; z = pt.z; face = Math.atan2(pt.px - x, pt.pz - z); }
+  else {
+    const tt = pt.tx !== undefined ? [pt.tx, pt.ty] : world.d.exit; const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([a, b]) => world.grid[tt[1] + b]?.[tt[0] + a] === 0); if (!nb) return;
+    [x, z] = world.center(tt[0] + nb[0], tt[1] + nb[1]); const [cx, cz] = world.center(tt[0], tt[1]); x += (cx - x) * 0.25; z += (cz - z) * 0.25; face = Math.atan2(cx - x, cz - z);
+  }
+  person.status = 'seen'; const m = npcFor(person); m.position.set(x, 0, z); m.rotation.y = face; scene.add(m);
+  const H = m.userData.human; if (H) { H.standing = false; H.play(pt.main ? 'interact' : 'fixing_kneeling', { fade: 0 }); }
+  ents.push({ kind: 'crew', mesh: m, x, z, t: 0, used: false, person, repairing: { sys: id, t: 0, need: 35 + Math.random() * 20 } });
+  if (G.fx.comms < 2) G.say(garble(`Computer: ${person.short}, ${person.title}, responding to ${SYS[id].name}.`), 'comp');
+}
+function repairerStep(e, dt, d) {
+  const R = e.repairing, H = e.mesh.userData.human;
+  if (G.shipState.status(R.sys) === 'nominal') { e.repairing = null; if (H) { H.play('idle'); H.standing = true; } return; }
+  R.t += dt; if (Math.random() < dt * 2 && d < 24) { for (let i = 0; i < 5; i++) sparks.add(e.x + Math.sin(e.mesh.rotation.y) * 0.5, 0.6 + Math.random() * 0.6, e.z + Math.cos(e.mesh.rotation.y) * 0.5, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, SPARK, 0.4); }
+  if (R.t >= R.need) { G.shipState.repair(R.sys); G.say(`${e.person.short} got ${SYS[R.sys].name} back online.`, 'good'); e.person.status = 'alive'; e.repairing = null; if (H) { H.play('idle'); H.standing = true; } }
 }
 
 let slow = 0;
@@ -940,6 +993,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

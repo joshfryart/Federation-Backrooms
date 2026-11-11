@@ -133,6 +133,21 @@ const park = await page.evaluate(async () => {
   return r;
 });
 console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun)) && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
+const dir = await page.evaluate(async () => {
+  const { Director } = await import('./js/director.js'); const { ShipState } = await import('./js/crew.js'); const { SHIPS } = await import('./js/ships.js');
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const D = new Director(rnd); D.reset(3); const acts = {}, phases = new Set(); let t = 0;
+  const run = (secs, tension) => { for (let i = 0; i < secs * 10; i++) { t += 0.1; const a = D.update(0.1, { tension, deckTime: t, faults: 1, dormant: 1, active: 1, madPending: 20 }); if (a) acts[a] = (acts[a] || 0) + 1; phases.add(D.phase); } };
+  run(240, 0); const quietActs = Object.values(acts).reduce((a, b) => a + b, 0);
+  run(60, 1); const peaked = phases.has('peak'); run(90, 0);
+  const S = new ShipState(SHIPS[0], 5); S.repair('reactor'); S.damage('coolant', 1); for (let i = 0; i < 450; i++) S.tick(0.1, { deckTime: 0, tension: 0, deck: 1 });
+  const g = __game; g.newRun(); g.setQuality('low'); for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null; for (const e of g.ents.filter(e => e.opener)) { g.scene.remove(e.mesh); g.ents.splice(g.ents.indexOf(e), 1); }
+  g.shipState.damage('lighting', 0.9, { quiet: true }); for (const e of g.ents.filter(e => e.repairing)) e.repairing = null; g.spawnRepairer('lighting');
+  const rep = g.ents.find(e => e.repairing?.sys === 'lighting'); let tt = 500, secs = 0;
+  if (rep) { g.P.x = rep.x + 30; for (let i = 0; i < 60 * 70 && g.shipState.status('lighting') !== 'nominal'; i++) { g.G.phase = 'play'; g.G.hp = 1e6; tt += 1 / 60; g.step(1 / 60, tt); secs = i / 60; } }
+  return { quietActs, acts, peaked, relaxed: phases.has('relax'), backToBuild: D.phase === 'build', cascadeReactor: S.status('reactor'), repairer: !!rep, crewFixed: g.shipState.status('lighting') === 'nominal', secs: +secs.toFixed(0) };
+});
+console.log('director:', JSON.stringify(dir)); if (!(dir.quietActs >= 4 && dir.peaked && dir.relaxed && dir.cascadeReactor !== 'nominal' && dir.repairer && dir.crewFixed)) fail('director');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

@@ -18,7 +18,7 @@ Tab ship status · hold E repair · WASD move · Shift sprint (loud) · Space ju
 
 Sprint and jump along a bulkhead to wall-run. Slide into man-sized hostiles to trip them. The grapple reels you to walls, ceilings and crate tops.
 
-**Ship systems** — every run is one ship with a full named crew. Its departments' systems break down as you go (blackouts, failing life support, gravity, lurching decks, a blind scan-o-matic…). Faults show on the HUD and map; find the yellow maintenance junction or the department's hardware and hold E to fix it — loudly.
+**Ship systems** — every run is one ship with a full named crew. Its departments' systems break down as you go (blackouts, failing life support, gravity, lurching decks, a blind scan-o-matic…). Faults show on the HUD and map; find the yellow maintenance junction or the department's hardware and hold E to fix it — loudly. Left broken, failures cascade (no coolant → reactor trouble → no air). Sometimes a crew member turns up to fix it — if you keep the madman off them. A pacing director decides when things go wrong and when you get a breather (F3 shows it).
 
 **Jiffy tubes** — yellow-framed crawl ducts cut through the bulkheads. Walk in and you duck automatically. They are shortcuts with supplies inside; the Gronk and the Drone are too big to follow, the crazed crew are not. Longer tubes have a ladder shaft up to a second crawlway that comes out high in a wall (W climbs, S or C climbs down, Space lets go).
 
