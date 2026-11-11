@@ -325,7 +325,6 @@ export class World {
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
     this.tops = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
-    this._furnish();
     this._build();
     this._details();
     this._liminal();
@@ -341,21 +340,7 @@ export class World {
     const h = Math.sin((x >> 1) * 12.9898 + (y >> 1) * 78.233 + this.d.deck * 3.1) * 43758.5453; const f = h - Math.floor(h);
     return f < 0.3 ? 2.45 : WH;
   }
-  _furnish() {
-    // lonely furniture in dead ends: chairs facing walls, plants, carts, replicator alcoves
-    const d = this.d, rnd = mulberry32(d.deck * 191 + 7);
-    const DIR = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    for (const [x, y] of d.openTiles) {
-      if (d.grid[y][x] !== 0 || d.room[y][x] || d.used.has(x + ',' + y)) continue;
-      if (Math.abs(x - d.exit[0]) + Math.abs(y - d.exit[1]) < 3 || (x === d.gornSpawn[0] && y === d.gornSpawn[1])) continue;
-      const open = DIR.filter(([a, b]) => d.grid[y + b]?.[x + a] === 0);
-      if (open.length !== 1 || rnd() > 0.55) continue;
-      const [ox, oy] = open[0];
-      const kind = ['lonechair', 'plant', 'cart', 'replicator', 'lonechair'][Math.floor(rnd() * 5)];
-      d.grid[y][x] = 2; d.used.add(x + ',' + y);
-      d.props.push({ kind, tx: x, ty: y, rot: kind === 'lonechair' ? Math.atan2(ox, oy) : Math.atan2(-ox, -oy), liminal: true });
-    }
-  }
+
   tile(x, z) { return [Math.floor(x / TS), Math.floor(z / TS)]; }
   center(tx, ty) { return [(tx + 0.5) * TS, (ty + 0.5) * TS]; }
   solid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.W || ty >= this.H || this.grid[ty][tx] !== 0; }

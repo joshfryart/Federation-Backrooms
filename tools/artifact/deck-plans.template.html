@@ -144,23 +144,11 @@ function deckData(si, d, seed) {
   const k = si + ':' + d + ':' + seed; if (cache[k]) return cache[k];
   const ship = L.SHIPS[si], n = d + 1, opts = L.deckOptions(ship, d);
   const data = L.generate(n - 1, seed + n * 7919, opts);
-  const N0 = Math.min(6 + Math.floor((n - 1) * 0.7), 11), masked = data.W > 2 * N0 + 1;
-  data.inHull = (x, y) => !masked || opts.inside((x - (data.W - 1) / 2) / ((data.W - 3) / 2), (y - (data.H - 1) / 2) / ((data.H - 3) / 2));
-  data.masked = masked; data.f = ship.decks > 1 ? d / (ship.decks - 1) : 0; data.zone = L.zoneOf(data.f).label;
+  data.f = ship.decks > 1 ? d / (ship.decks - 1) : 0; data.zone = L.zoneOf(data.f).label;
   return cache[k] = data;
 }
 // systems whose main hardware sits on a prop present on this deck
-function hardwareOn(data) {
-  const out = [];
-  for (const s of L.SYSTEMS) {
-    if (s.host === 'junction') continue;
-    if (s.host === 'lift') { out.push({ s, x: data.exit[0], y: data.exit[1] }); continue; }
-    const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : [kind];
-    const p = data.props.find(p => kinds.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !out.some(o => o.x === p.tx && o.y === p.ty));
-    if (p) out.push({ s, x: p.tx, y: p.ty });
-  }
-  return out;
-}
+function hardwareOn(data) { return data._hw || (data._hw = L.hardwareSites(data).map(h => ({ s: L.SYS[h.sys], x: h.tx, y: h.ty }))); }   // same helper the game uses
 const SHORT = { alert: 'AL', helm: 'HN', computer: 'CC', transport: 'TR', reactor: 'RX', lifts: 'TL', sensors: 'SN', hydro: 'HY', sickbay: 'SB', emh: 'MH', replicators: 'RP', holo: 'HS' };
 
 // ---------- drawing ----------
@@ -170,6 +158,7 @@ function drawPlan(cv, data, { small = false, hover = null } = {}) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   cv.width = W * px * dpr; cv.height = H * px * dpr; cv.style.aspectRatio = `${W} / ${H}`;
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); cv._px = px;
+  const DIV = { command: css('--cmd'), operations: css('--ops'), sciences: css('--sci') }, divCol = (r) => DIV[divOfRoom(r)];   // resolved once per draw
   const C = { space: css('--space'), hull: css('--hull'), deck: css('--deck'), ink: css('--ink'), muted: css('--muted'), accent: css('--accent'), tube: css('--tube'), chip: css('--chip'), line: css('--line'), panel: css('--panel') };
   g.fillStyle = C.space; g.fillRect(0, 0, W * px, H * px);
   // hull: everything inside the hull outline that isn't open floor is bulkhead
@@ -180,11 +169,11 @@ function drawPlan(cv, data, { small = false, hover = null } = {}) {
     const c = data.grid[y][x], r = data.room[y][x]; if (c === 1) continue;
     if (r === 'jefferies') continue;
     g.fillStyle = C.deck; g.fillRect(x * px, y * px, px, px);
-    if (r && lay.rooms) { g.globalAlpha = r === 'holodeck' ? 0.3 : 0.2; g.fillStyle = css(DIVVAR[divOfRoom(r)]); g.fillRect(x * px, y * px, px, px); g.globalAlpha = 1; }
+    if (r && lay.rooms) { g.globalAlpha = r === 'holodeck' ? 0.3 : 0.2; g.fillStyle = divCol(r); g.fillRect(x * px, y * px, px, px); g.globalAlpha = 1; }
   }
   // room outlines + labels
   if (lay.rooms && !small) for (const rm of data.rooms) {
-    const col = css(DIVVAR[divOfRoom(rm.type)]); g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(rm.x * px + 1, rm.y * px + 1, rm.w * px - 2, rm.h * px - 2);
+    const col = divCol(rm.type); g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(rm.x * px + 1, rm.y * px + 1, rm.w * px - 2, rm.h * px - 2);
     if (rm.w * px > 70) { g.fillStyle = col; g.font = `600 ${Math.min(14, Math.max(10, px * 0.5))}px Antonio, "Arial Narrow", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(L.ROOMS[rm.type].label.toUpperCase() + (rm.big ? ' · LARGE' : ''), (rm.x + rm.w / 2) * px, rm.y * px + 4); }
   }
   // Jiffy tubes
@@ -219,11 +208,9 @@ function drawPlan(cv, data, { small = false, hover = null } = {}) {
   if (lay.hardware && !small) {
     g.font = `500 ${Math.max(8, px * 0.32)}px "IBM Plex Mono", monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const h of hardwareOn(data)) {
-      if (h.s.id === 'lifts') continue; const col = css(DIVVAR[L.DEPT[h.s.dept].division]), tx = (h.x + 0.85) * px, ty = (h.y + 0.15) * px;
-      const off = data._badge = data._badge || {}; const k = h.x + ',' + h.y; const n = off[k] = (off[k] || 0) + 1; const bx = tx, by = ty + (n - 1) * px * 0.42;
-      g.fillStyle = col; g.beginPath(); g.roundRect(bx - px * 0.3, by - px * 0.19, px * 0.6, px * 0.38, 3); g.fill(); g.fillStyle = '#fff'; g.fillText(SHORT[h.s.id] || '?', bx, by + 0.5);
+      if (h.s.id === 'lifts') continue; const bx = (h.x + 0.85) * px, by = (h.y + 0.15) * px;
+      g.fillStyle = DIV[L.DEPT[h.s.dept].division]; g.beginPath(); g.roundRect(bx - px * 0.3, by - px * 0.19, px * 0.6, px * 0.38, 3); g.fill(); g.fillStyle = '#fff'; g.fillText(SHORT[h.s.id] || '?', bx, by + 0.5);
     }
-    data._badge = null;
   }
   // route markers: start, chips, tubelift
   if (lay.route) {
@@ -283,7 +270,7 @@ function renderInfo(data) {
   const climb = data.props.filter(p => CLIMB.has(p.kind)).length;
   $('info').innerHTML = `
   <div class="card"><div class="eyebrow">Deck manifest</div>
-    <dl class="kv"><dt>Walkable tiles</dt><dd>${open}</dd><dt>Rooms</dt><dd>${data.rooms.length}${data.rooms.some(r => r.big) ? ' (1 large)' : ''}</dd><dt>Logic chips to find</dt><dd>${data.chips.length}</dd><dt>Jiffy tubes</dt><dd>${data.tubes.length}${ladders ? ` · ${ladders} with ladder` : ''}</dd><dt>Climbable props</dt><dd>${climb}</dd><dt>Flooded</dt><dd>${data.deck === 2 || data.deck === 5 ? 'yes' : 'no'}</dd></dl></div>
+    <dl class="kv"><dt>Walkable tiles</dt><dd>${open}</dd><dt>Rooms</dt><dd>${data.rooms.length}${(nb => nb ? ` (${nb} large)` : '')(data.rooms.filter(r => r.big).length)}</dd><dt>Logic chips to find</dt><dd>${data.chips.length}</dd><dt>Jiffy tubes</dt><dd>${data.tubes.length}${ladders ? ` · ${ladders} with ladder` : ''}</dd><dt>Climbable props</dt><dd>${climb}</dd><dt>Flooded</dt><dd>${data.deck === 2 || data.deck === 5 ? 'yes' : 'no'}</dd></dl></div>
   <div class="card"><div class="eyebrow">Rooms</div><ul class="list">${Object.entries(types).map(([t, n]) => `<li><span class="dot" style="background:var(${DIVVAR[divOfRoom(t)]})"></span><span>${L.ROOMS[t].label}</span><span class="r">${n > 1 ? '×' + n : ''} ${RMAP[t].map(d => L.DEPT[d].name).join(' / ')}</span></li>`).join('') || '<li><span></span><span class="note">Corridors only</span><span></span></li>'}</ul></div>
   <div class="card"><div class="eyebrow">System hardware on this deck</div><ul class="list">${hw.map(h => `<li><span class="dot" style="background:var(${DIVVAR[L.DEPT[h.s.dept].division]})"></span><span>${h.s.name}</span><span class="r">${SHORT[h.s.id] || 'lift'}</span></li>`).join('')}</ul>
     <p class="note">Every other system is serviced from a yellow maintenance junction on a corridor wall. Repairs there take 1.5× as long.</p></div>
@@ -316,7 +303,7 @@ function tileAt(ev) { const r = plan.getBoundingClientRect(), data = deckData(S.
 function describe(data, x, y) {
   const c = data.grid[y][x], r = data.room[y][x], k = data.tubeLevel[x + y * data.W];
   if (k) return [`Jiffy tube · ${k === 'lo' ? 'lower run' : k === 'up' ? 'upper run, 1.7 m up' : 'ladder shaft'}`, 'Crawl height 1.25 m. Gronk and Drone can\'t follow; crazed crew can, slower.'];
-  if (x === data.exit[0] && y === data.exit[1]) return ['Tubelift', `Needs all ${data.chips.length} logic chips. Leads to deck ${String(S.deck + 2).padStart(2, '0')}.`];
+  if (x === data.exit[0] && y === data.exit[1]) return ['Tubelift', `Needs all ${data.chips.length} logic chips. ` + (S.deck + 1 >= L.SHIPS[S.ship].decks ? 'Last deck: boarding it ends the run — you escape.' : `Leads to deck ${String(S.deck + 2).padStart(2, '0')}.`)];
   if (c === 1) return [data.inHull(x, y) ? 'Bulkhead' : 'Open space', data.inHull(x, y) ? 'Solid. Wall-run along it.' : 'Outside the hull at this deck.'];
   const extra = [];
   if (x === data.start[0] && y === data.start[1]) extra.push('You start here.');

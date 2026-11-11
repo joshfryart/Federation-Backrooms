@@ -114,6 +114,19 @@ export const CASCADES = [
   { from: 'helm', when: 'offline', after: 50, to: 'dampers', amount: 0.35, why: 'damper field overloaded by the drift' },
   { from: 'holo', when: 'offline', after: 70, to: 'emh', amount: 0.35, why: 'holo-grid feedback into the medical emitters' },
 ];
+// where each system's main hardware sits on a generated deck: [{ sys, tx, ty, kind }] (lift → the exit tile).
+// Systems with no matching prop (and every 'junction' system) are serviced from a wall junction instead.
+export function hardwareSites(data) {
+  const out = [];
+  for (const s of SYSTEMS) {
+    if (s.host === 'junction') continue;
+    if (s.host === 'lift') { out.push({ sys: s.id, tx: data.exit[0], ty: data.exit[1], kind: 'lift' }); continue; }
+    const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : [kind];
+    const p = data.props.find(p => kinds.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !out.some(o => o.tx === p.tx && o.ty === p.ty));
+    if (p) out.push({ sys: s.id, tx: p.tx, ty: p.ty, kind: p.kind });
+  }
+  return out;
+}
 export const HOST_LABEL = { 'console@bridge': 'bridge consoles', console: 'consoles', warpcore: 'reactor core', biobed: 'biobeds', pad: 'transporter pad', tree: 'grow beds', replicator: 'replicators', holocube: 'holo-grid', lift: 'tubelift controls', junction: 'maintenance junctions' };
 
 // ---------------------------------------------------------------- crew roster
@@ -122,7 +135,8 @@ const FAMILY = ['Tremblay', 'Gagnon', 'Roy', 'Côté', 'Bouchard', 'Gauthier', '
 const BODIES = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy'];
 
 export function makeComplement(ship, seed = 1) {
-  const rnd = mulberry32((seed * 2654435761) >>> 0 ^ ship.reg.length * 977), k = CREW_SCALE[ship.hull] || 1;
+  let h = 2166136261; for (const ch of ship.reg) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);   // each ship its own crew for the same run seed
+  const rnd = mulberry32(((seed * 2654435761) ^ h) >>> 0), k = CREW_SCALE[ship.hull] || 1;
   const people = [], byBillet = {}, used = new Set();
   const fam = FAMILY.slice(); for (let i = fam.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [fam[i], fam[j]] = [fam[j], fam[i]]; }   // unique surnames while they last
   const name = () => { const f = fam.length ? fam.pop() : FAMILY[Math.floor(rnd() * FAMILY.length)]; let g; do g = GIVEN[Math.floor(rnd() * GIVEN.length)]; while (used.has(f + g)); used.add(f + g); return { given: g, family: f }; };

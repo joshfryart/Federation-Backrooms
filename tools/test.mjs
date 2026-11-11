@@ -111,14 +111,16 @@ const park = await page.evaluate(async () => {
   { const Sx = g.S, NB = [[1, 0], [-1, 0], [0, 1], [0, -1]], c = {};
     const wd_up = (w, en) => w.tubeKind(...w.tile(en.x, en.z)) === 'up';
     const chase = (wd, from, secs, until) => { for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
-      const en = g.makeEnemy('crazed', wd, from, 3, 0, g.scene, g.sound); en.state = Sx.PATROL; en.mesh.visible = true; g.gorns.push(en); g.G.hp = 1e6; const hp0 = g.G.hp; let maxY = 0;
-      let up = false; for (let i = 0; i < 60 * secs && !until(en); i++) { g.G.phase = 'play'; en.state = Sx.CHASE; en.timer = 5; en.setTarget(...wd.tile(P.x, P.z)); tick(1); maxY = Math.max(maxY, en.y); if (wd.tubeKind(...wd.tile(en.x, en.z)) === 'up') up = true; }
-      return { maxY: +maxY.toFixed(2), upperRun: up, dist: +Math.hypot(en.x - P.x, en.z - P.z).toFixed(2), hit: g.G.hp < hp0 }; };
+      const en = g.makeEnemy('crazed', wd, from, 3, 0, g.scene, g.sound); en.state = Sx.PATROL; en.mesh.visible = true; g.gorns.push(en); g.G.hp = 1e6; let maxY = 0, byEn = 0;
+      const hp = g.G.hitPlayer, dd = g.G.dragDown; g.G.hitPlayer = (e, n) => { if (e === en) byEn++; return hp(e, n); }; g.G.dragDown = (e) => { if (e === en) byEn++; return dd(e); };
+      let up = false; for (let i = 0; i < 60 * secs && !until(en, byEn); i++) { g.G.phase = 'play'; en.state = Sx.CHASE; en.timer = 5; en.setTarget(...wd.tile(P.x, P.z)); tick(1); maxY = Math.max(maxY, en.y); if (wd.tubeKind(...wd.tile(en.x, en.z)) === 'up') up = true; }
+      g.G.hitPlayer = hp; g.G.dragDown = dd;
+      return { maxY: +maxY.toFixed(2), upperRun: up, dist: +Math.hypot(en.x - P.x, en.z - P.z).toFixed(2), hit: byEn > 0 }; };
     for (let d = 1; d < 9 && !(c.prop && c.tube); d++) { g.loadDeck(d); const w = g.world;
       if (!c.prop) { const pr = w.d.props.find(p => isFinite(w.topAt(p.tx, p.ty)) && w.topAt(p.tx, p.ty) < 1.1 && NB.some(([a, b]) => w.grid[p.ty + b]?.[p.tx + a] === 0));
         if (pr) { const [a, b] = NB.find(([a, b]) => w.grid[pr.ty + b]?.[pr.tx + a] === 0); const fld = w.field(pr.tx + a, pr.ty + b); const from = w.d.openTiles.find(([x, y]) => fld[x + y * w.W] >= 3 && fld[x + y * w.W] <= 6) || [pr.tx + a, pr.ty + b];
           reset(); const [px, pz] = w.center(pr.tx, pr.ty); P.x = px; P.z = pz; P.y = w.topAt(pr.tx, pr.ty); P.grounded = true; tick(2);
-          c.prop = { top: +w.topAt(pr.tx, pr.ty).toFixed(2), playerY: +P.y.toFixed(2), ...chase(w, from, 20, en => g.G.hp < 1e6) }; } }
+          c.prop = { top: +w.topAt(pr.tx, pr.ty).toFixed(2), playerY: +P.y.toFixed(2), ...chase(w, from, 20, (en, b) => b > 0) }; } }
       if (!c.tube) { const t = w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 2) || w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 1);
         if (t) { const up = t.tiles[t.ladder + 1]; reset(); const [px, pz] = w.center(up[0], up[1]); P.x = px; P.z = pz; P.y = 1.7; P.grounded = true; tick(2);
           c.tube = { playerY: +P.y.toFixed(2), ...chase(w, t.a, 40, en => en.y > 1.6 && wd_up(w, en)) }; } } }

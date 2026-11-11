@@ -9,7 +9,7 @@ import { makeSurvivor, makeCorpse, makeMedHolo, liveFace } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
-import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
+import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon } from './sysview.js';
 import { Director } from './director.js';
 import { mulberry32 } from './data.js';
@@ -761,15 +761,12 @@ function placeRepairPoints(data) {
     for (const gap of [7, 4, 1.5]) { const f = faces.find(f => ok(f, gap) && f.room) || faces.find(f => ok(f, gap)); if (f) { taken.push(f); return f; } }
     return null;
   };
-  let jn = 0;
+  let jn = 0; const sites = hardwareSites(data);
   for (const s of SYSTEMS) {
     let pt = null;
-    if (s.host === 'lift') pt = { x: world.liftPos.x, z: world.liftPos.z, main: true, reach: 2.8, y: 2.2, where: 'tubelift controls' };
-    else if (s.host !== 'junction') {
-      const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : [kind];
-      const pr = data.props.find(p => kinds.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !repairPts.some(r => r.tx === p.tx && r.ty === p.ty));
-      if (pr) { const [x, z] = world.center(pr.tx, pr.ty); pt = { x, z, tx: pr.tx, ty: pr.ty, main: true, reach: 2.2, y: pr.kind === 'warpcore' ? 2.0 : 1.6, where: HOST_LABEL[s.host] }; }
-    }
+    const site = sites.find(h => h.sys === s.id);
+    if (site?.kind === 'lift') pt = { x: world.liftPos.x, z: world.liftPos.z, main: true, reach: 2.8, y: 2.2, where: 'tubelift controls' };
+    else if (site) { const [x, z] = world.center(site.tx, site.ty); pt = { x, z, tx: site.tx, ty: site.ty, main: true, reach: 2.2, y: site.kind === 'warpcore' ? 2.0 : 1.6, where: HOST_LABEL[s.host] }; }
     if (!pt) {
       const f = takeFace(s.dept); if (!f) continue; jn++;
       const j = makeJunction(s, `JCT ${deckCode}-${String(jn).padStart(2, '0')}`, DEPT[s.dept].name, DIVISION[DEPT[s.dept].division].color);

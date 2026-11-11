@@ -179,6 +179,25 @@ export function generate(deck, seed, opts = {}) {
   const gornSpawn = (pickTile(([x, y]) => dist(x, y) >= maxD * 0.55 && !(Math.abs(x - exit[0]) + Math.abs(y - exit[1]) < 4)) || exit).slice();
   used.delete(gornSpawn.join(','));
 
-  return { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis, tubeLevel,
+  const data = { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis, tubeLevel,
+           masked: !!opts.inside, inHull: hull,
            openTiles, maxD, dist: reach, rnd, used, pickTile, bfsFrom };
+  furnish(data);
+  return data;
+}
+
+// lonely furniture in dead ends: chairs facing walls, plants, carts, replicator alcoves (liminal set dressing).
+// Part of generation so every consumer (game, deck-plans page, tests) sees the same props and blocked tiles.
+function furnish(d) {
+  const rnd = mulberry32(d.deck * 191 + 7);
+  for (const [x, y] of d.openTiles) {
+    if (d.grid[y][x] !== 0 || d.room[y][x] || d.used.has(x + ',' + y)) continue;
+    if (Math.abs(x - d.exit[0]) + Math.abs(y - d.exit[1]) < 3 || (x === d.gornSpawn[0] && y === d.gornSpawn[1])) continue;
+    const open = DIRS.filter(([a, b]) => d.grid[y + b]?.[x + a] === 0);
+    if (open.length !== 1 || rnd() > 0.55) continue;
+    const [ox, oy] = open[0];
+    const kind = ['lonechair', 'plant', 'cart', 'replicator', 'lonechair'][Math.floor(rnd() * 5)];
+    d.grid[y][x] = 2; d.used.add(x + ',' + y);
+    d.props.push({ kind, tx: x, ty: y, rot: kind === 'lonechair' ? Math.atan2(ox, oy) : Math.atan2(-ox, -oy), liminal: true });
+  }
 }
