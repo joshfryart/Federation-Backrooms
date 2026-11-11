@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Federation Backrooms</title>
+<style>
+  :root { --lc1:#ff9966; --lc2:#cc99cc; --lc3:#9999ff; --lc4:#ffcc99; --bg:#05060a; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; background:#000; overflow:hidden; font-family:'Helvetica Neue',Arial,sans-serif; color:#fff; user-select:none; }
+  canvas#view { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .layer { position:fixed; inset:0; pointer-events:none; }
+  #vignette { background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.75) 100%); }
+  #flash { background:#c00; opacity:0; transition:opacity .35s; }
+  #scan { background: repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 3px); mix-blend-mode:multiply; }
+  #danger { background: radial-gradient(ellipse at center, transparent 30%, rgba(160,0,0,.7) 100%); opacity:0; transition:opacity .2s; }
+  .hud { position:fixed; font-size:13px; letter-spacing:.08em; text-transform:uppercase; pointer-events:none; }
+  #topleft { top:14px; left:14px; }
+  #topleft .pill { display:inline-block; background:var(--lc1); color:#000; padding:3px 14px 3px 10px; border-radius:14px 0 0 14px; font-weight:700; }
+  #topleft .pill2 { background:var(--lc2); border-radius:0 14px 14px 0; margin-left:2px; padding-left:12px; }
+  #shipname { margin-top:6px; color:var(--lc4); font-size:12px; opacity:.9; }
+  #roomname { margin-top:2px; color:#9cf; font-size:11px; opacity:.8; }
+  #bars { bottom:16px; left:16px; width:230px; }
+  .bar { height:10px; background:rgba(255,255,255,.12); margin:5px 0; border-radius:5px; overflow:hidden; }
+  .bar > i { display:block; height:100%; width:100%; transition:width .15s; }
+  #hpbar { background:linear-gradient(90deg,#c33,#f66); }
+  #stbar { background:linear-gradient(90deg,#39c,#6cf); }
+  #lbl { font-size:10px; opacity:.7; }
+  #objective { top:14px; right:14px; text-align:right; }
+  #objective b { color:#6f9; }
+  #phaser { bottom:16px; right:16px; text-align:right; }
+  #phaser .cells span { display:inline-block; width:14px; height:22px; margin-left:4px; background:#3cf; border-radius:2px; box-shadow:0 0 8px #3cf; }
+  #phaser .cells span.off { background:#234; box-shadow:none; }
+  #minimap { top:60px; right:14px; width:170px; height:170px; border:2px solid var(--lc3); background:rgba(0,0,10,.55); border-radius:6px; image-rendering:pixelated; }
+  #prompt { bottom:34%; left:0; right:0; text-align:center; font-size:15px; color:#ffe9a8; text-shadow:0 0 6px #000; }
+  #toast { top:22%; left:0; right:0; text-align:center; font-size:15px; text-shadow:0 0 6px #000, 0 0 2px #000; opacity:0; transition:opacity .4s; padding:0 20px; }
+  #toast.warn { color:#ff7766; } #toast.good { color:#8fffb0; } #toast.npc { color:#ffd69a; }
+  #cross { top:50%; left:50%; width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%; background:rgba(255,255,255,.55); }
+  #perks { bottom:52px; left:16px; font-size:11px; opacity:.75; max-width:340px; }
+  .screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; background:rgba(2,3,8,.88); text-align:center; padding:20px; z-index:10; }
+  .screen.show { display:flex; }
+  .screen h1 { font-size:clamp(28px,6vw,64px); margin:0; letter-spacing:.18em; font-weight:300; text-transform:uppercase; }
+  .screen h1 b { color:var(--lc1); font-weight:800; }
+  .screen h2 { letter-spacing:.2em; text-transform:uppercase; font-weight:300; color:var(--lc4); }
+  .screen p { max-width:640px; line-height:1.55; opacity:.85; }
+  .btn { margin-top:14px; background:var(--lc1); color:#000; border:0; font-size:18px; letter-spacing:.2em; padding:12px 40px; border-radius:24px; cursor:pointer; font-weight:700; text-transform:uppercase; }
+  .btn:hover { background:var(--lc4); }
+  .keys { display:grid; grid-template-columns:auto auto; gap:4px 18px; text-align:left; font-size:13px; margin-top:8px; opacity:.85; }
+  .keys b { color:var(--lc4); }
+  .cards { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; margin-top:14px; }
+  .card { width:210px; padding:16px; background:#0c1020; border:2px solid var(--lc3); border-radius:12px; cursor:pointer; text-align:left; }
+  .card:hover { border-color:var(--lc1); background:#141a30; }
+  .card h3 { margin:0 0 6px; font-size:15px; color:var(--lc1); text-transform:uppercase; letter-spacing:.06em; }
+  .card p { margin:0; font-size:13px; }
+  .card small { color:#8ac; }
+  #best { margin-top:18px; font-size:12px; opacity:.6; }
+  #fade { background:#000; opacity:0; transition:opacity .7s; z-index:5; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div class="layer" id="vignette"></div>
+<div class="layer" id="scan"></div>
+<div class="layer" id="danger"></div>
+<div class="layer" id="flash"></div>
+<div class="layer" id="fade"></div>
+<div class="hud" id="cross"></div>
+
+<div class="hud" id="topleft"><span class="pill" id="decklbl">DECK 1</span><span class="pill pill2" id="shipcls">—</span>
+  <div id="shipname"></div><div id="roomname"></div></div>
+<div class="hud" id="objective"></div>
+<canvas class="hud" id="minimap" width="85" height="85"></canvas>
+<div class="hud" id="bars"><div id="lbl">HULL INTEGRITY</div><div class="bar"><i id="hpbar"></i></div><div id="lbl2">STAMINA</div><div class="bar"><i id="stbar"></i></div></div>
+<div class="hud" id="perks"></div>
+<div class="hud" id="phaser"><div id="lbl3">TYPE-2 PHASER</div><div class="cells" id="cells"></div></div>
+<div class="hud" id="prompt"></div>
+<div class="hud" id="toast"></div>
+
+<div class="screen show" id="title">
+  <h1>Federation <b>Backrooms</b></h1>
+  <h2>Stardate unknown · Something green is aboard</h2>
+  <p>You are the last crew member awake aboard a Starfleet vessel that keeps changing. The corridors repeat. The hum never stops.
+     A <b>Gorn</b> is hunting you. Find the isolinear chips, power the turbolift, and descend — ship after ship, deck after deck.</p>
+  <div class="keys">
+    <span><b>W A S D</b> move</span><span><b>Shift</b> sprint (loud!)</span>
+    <span><b>C</b> creep (quiet)</span><span><b>Mouse</b> look</span>
+    <span><b>Click / Space</b> fire phaser (stuns)</span><span><b>E</b> interact / board lift</span>
+    <span><b>F</b> flashlight</span><span><b>M</b> toggle tricorder map</span>
+  </div>
+  <button class="btn" id="begin">Begin shift</button>
+  <div id="best"></div>
+</div>
+<div class="screen" id="pause"><h2>Paused</h2><p>Click to resume. The Gorn does not pause.</p><button class="btn" id="resume">Resume</button></div>
+<div class="screen" id="perkscreen"><h2>Deck cleared</h2><p id="perkinfo">Choose a requisition for the next deck.</p><div class="cards" id="cards"></div></div>
+<div class="screen" id="dead"><h1><b>Lost</b></h1><h2 id="deathline"></h2><p id="stats"></p><button class="btn" id="again">New run</button></div>
+<div class="screen" id="win"><h1>You <b>escaped</b></h1><h2>Escape pod away</h2><p id="winstats"></p><button class="btn" id="cont">Keep going (endless)</button> <button class="btn" id="again2">New run</button></div>
+
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
