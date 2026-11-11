@@ -224,6 +224,45 @@ function bloodyMap(tex, amount) {
   const t = new THREE.CanvasTexture(c); t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.wrapS = tex.wrapS; t.wrapT = tex.wrapT; return t;
 }
 
+// ---- skin detail without UVs: bind-pose object-space noise on the `body` material (pores, mottle, flush, veins, bruising/wounds, derivative bump) ----
+const SKIN_GLSL = `
+float sh_h(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float sh_n(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(sh_h(i), sh_h(i + vec3(1,0,0)), f.x), mix(sh_h(i + vec3(0,1,0)), sh_h(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(sh_h(i + vec3(0,0,1)), sh_h(i + vec3(1,0,1)), f.x), mix(sh_h(i + vec3(0,1,1)), sh_h(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float sh_f(vec3 p){ return 0.5 * sh_n(p) + 0.25 * sh_n(p * 2.03 + 7.1) + 0.125 * sh_n(p * 4.1 + 3.7) + 0.0625 * sh_n(p * 8.3 + 1.3); }
+`;
+export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
+  const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      { vec3 q = vObj * 9.0 + uSeed;
+        float mot = sh_f(q * 0.5), pore = sh_n(vObj * 260.0 + uSeed), freck = smoothstep(0.72, 0.8, sh_n(vObj * 70.0 + uSeed * 1.7));
+        float vein = smoothstep(0.47, 0.5, sh_f(vObj * 14.0 + uSeed)) * smoothstep(0.53, 0.5, sh_f(vObj * 14.0 + uSeed));
+        diffuseColor.rgb *= 0.9 + 0.2 * mot;
+        diffuseColor.rgb *= vec3(1.0, 1.0 - 0.06 * (mot - 0.5), 1.0 - 0.12 * (mot - 0.5));     // blotchy flush
+        diffuseColor.rgb *= 1.0 - 0.1 * pore - 0.18 * freck;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.86, 1.05), vein * (0.25 + uPale * 0.6));
+        float w = sh_f(vObj * 6.5 + uSeed * 3.1); gWound = uWound * smoothstep(0.6, 0.68, w);
+        float bruise = uWound * smoothstep(0.52, 0.64, sh_f(vObj * 4.0 + uSeed * 5.3 + 11.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.6, 0.38, 0.5), bruise * 0.6);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.17, 0.015, 0.02), gWound);
+        gH = 0.45 * pore + 0.5 * mot - 1.1 * gWound; }`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor * (0.92 + 0.2 * pore_r()), 0.12, gWound);')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      { vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition); float hx = dFdx(gH), hy = dFdy(gH);
+        vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1);
+        vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad * 0.0012); }`)
+      .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0');
+  };
+  m.customProgramCacheKey = () => 'skin1';
+  m.needsUpdate = true;
+  return u;
+}
+
 /**
  * opts: kind, height, uniform (hex), skin (hex), hair ([r,g,b] multiplier), material (override, e.g. hologram),
  *       bloody (0..1), pale (0..1), slime (bool), tint (hex multiply on everything), shadow (blob), rnd,
@@ -247,6 +286,7 @@ export function makeHuman(opts = {}) {
     if (opts.material) { o.material = opts.material; if (name === 'eyelashes' || name === 'tongue') o.visible = false; return; }
     const m = o.material = o.material.clone(); mats[name.split('_')[0]] = m;
     if (name === 'body' && kind !== 'suit') { m.color.copy(skin); m.roughness = 0.58; m.emissive = skin.clone().multiply(new THREE.Color(0.9, 0.35, 0.25)); m.emissiveIntensity = 0.07;   // cheap subsurface warmth
+      if (!opts.slime && !opts.material) mats.skinU = skinShader(m, { wound: Math.min(1, (opts.bloody || 0) * 0.9), seed: rnd() * 40, pale: opts.pale || 0 });
       if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
     else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.75; }
     else if (name === 'brows') { m.color.setRGB(hair[0] * 0.6, hair[1] * 0.6, hair[2] * 0.6); m.alphaTest = 0.02; m.transparent = true; m.depthWrite = false; m.roughness = 0.8; o.castShadow = false; }
