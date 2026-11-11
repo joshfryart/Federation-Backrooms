@@ -25,6 +25,24 @@ function noise(g, s, n, a) {
     g.fillRect(Math.random() * s, Math.random() * s, 2, 2);
   }
 }
+// derive a normal map and roughness map from an albedo canvas (Sobel on luminance)
+function derive(tex, strength = 2.0, rBase = 0.55, rVar = 0.4) {
+  const src = tex.image, w = src.width, h = src.height, ctx = src.getContext('2d'), d = ctx.getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(w * h); for (let i = 0; i < w * h; i++) lum[i] = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) / 255;
+  const nc = document.createElement('canvas'); nc.width = w; nc.height = h; const rc = document.createElement('canvas'); rc.width = w; rc.height = h;
+  const nctx = nc.getContext('2d'), rctx = rc.getContext('2d'); const nimg = nctx.createImageData(w, h), rimg = rctx.createImageData(w, h);
+  const L = (x, y) => lum[((y + h) % h) * w + ((x + w) % w)];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = (L(x + 1, y - 1) + 2 * L(x + 1, y) + L(x + 1, y + 1)) - (L(x - 1, y - 1) + 2 * L(x - 1, y) + L(x - 1, y + 1));
+    const dy = (L(x - 1, y + 1) + 2 * L(x, y + 1) + L(x + 1, y + 1)) - (L(x - 1, y - 1) + 2 * L(x, y - 1) + L(x + 1, y - 1));
+    let nx = -dx * strength, ny = dy * strength, nz = 1; const il = 1 / Math.hypot(nx, ny, nz); nx *= il; ny *= il; nz *= il;
+    const i = (y * w + x) * 4; nimg.data[i] = (nx * 0.5 + 0.5) * 255; nimg.data[i + 1] = (ny * 0.5 + 0.5) * 255; nimg.data[i + 2] = (nz * 0.5 + 0.5) * 255; nimg.data[i + 3] = 255;
+    const r = Math.min(1, rBase + (1 - lum[y * w + x]) * rVar) * 255; rimg.data[i] = rimg.data[i + 1] = rimg.data[i + 2] = r; rimg.data[i + 3] = 255;
+  }
+  nctx.putImageData(nimg, 0, 0); rctx.putImageData(rimg, 0, 0);
+  const mk = (c) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; };
+  return { normal: mk(nc), rough: mk(rc) };
+}
 export function textures() {
   if (texCache.wall) return texCache;
   texCache.wall = canvasTex(256, (g, s) => {
@@ -92,6 +110,7 @@ export function textures() {
     for (let y = 0; y < s; y += 12) for (let x = (y / 12 % 2) * 6; x < s; x += 12) { g.beginPath(); g.arc(x + 6, y + 6, 6, 0, Math.PI); g.stroke(); }
     noise(g, s, 400, 0.2);
   });
+  texCache.d = { wall: derive(texCache.wall, 3.2, 0.78, 0.2), floor: derive(texCache.floor, 2.2, 0.8, 0.2), carpet: derive(texCache.carpet, 3.0, 0.9, 0.1), holo: derive(texCache.holo, 1.0, 0.2, 0.2) };
   return texCache;
 }
 
@@ -359,7 +378,7 @@ export class World {
     this.explored = new Uint8Array(this.W * this.H);
     this.wallFaces = []; this.sparkers = []; this.steamers = []; this.alertAmt = 0;
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
-    this.flooded = !!data.flooded;
+    this.flooded = !!data.flooded; this.cones = new THREE.Group();
     this._furnish();
     this._build();
     this._details();
@@ -470,7 +489,8 @@ export class World {
     const mkFloor = (list, map, colorFn) => {
       if (!list.length) return;
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(-Math.PI / 2);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map, bumpMap: map, bumpScale: 1.2, roughness: map === T.holo ? 0.25 : 0.62, metalness: 0.0 }), list.length);
+      const dm = map === T.holo ? T.d.holo : map === T.carpet ? T.d.carpet : T.d.floor;
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map, normalMap: dm.normal, normalScale: new THREE.Vector2(0.9, 0.9), roughnessMap: dm.rough, roughness: map === T.holo ? 0.3 : 1, metalness: 0.0 }), list.length);
       list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, colorFn(x, y)); });
       im.receiveShadow = true; g.add(im);
     };
@@ -490,7 +510,7 @@ export class World {
     }
     // light panels (steady + flickering + dead)
     {
-      const lightCol = new THREE.Color(ship.light);
+      const lightCol = new THREE.Color(ship.light).multiplyScalar(3.4);
       const geo = new THREE.PlaneGeometry(1.5, 0.6); geo.rotateX(Math.PI / 2);
       const steady = [], flick = [];
       for (const [x, y] of open) {
@@ -517,7 +537,7 @@ export class World {
     // walls
     {
       const geo = new THREE.BoxGeometry(TS, WH, TS);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, bumpMap: T.wall, bumpScale: 1.5, roughness: 0.78, metalness: 0.05 }), walls.length);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, normalScale: new THREE.Vector2(1, 1), roughnessMap: T.d.wall.rough, roughness: 1, metalness: 0.05 }), walls.length);
       walls.forEach(([x, y], i) => {
         dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
         im.setColorAt(i, wallCol.clone().multiplyScalar(0.82 + rndv() * 0.22));
@@ -604,7 +624,7 @@ export class World {
       const fs = this.wallFaces.filter(f => f.room === r.type && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h);
       if (fs.length) place(fs[Math.floor(rnd() * fs.length)], ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
     }
-    const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'JEFFERIES\nTUBE ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TURBOLIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
+    const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'MAINTENANCE\nDUCT ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TUBELIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
     for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) place(f, corr[Math.floor(rnd() * corr.length)], 2.55, 1.2);
     // --- handrails and floor light strips along walls
     {
@@ -719,7 +739,7 @@ export class World {
       im.receiveShadow = true; g.add(im);
     });
     // --- bureaucratic safety posters
-    const posters = ['REPORT ALL\nREPTILIAN\nACTIVITY', 'NO RUNNING\nIN\nCORRIDORS', 'ARE YOU\nSLEEPING\nENOUGH?', 'THE GORN\nIS NOT\nYOUR FRIEND', 'WASH YOUR\nHANDS', 'SAFETY\nFIRST', 'STAY CALM.\nSTAY QUIET.', 'IF YOU SEE\nSOMETHING,\nSAY NOTHING'];
+    const posters = ['REPORT ALL\nREPTILIAN\nACTIVITY', 'NO RUNNING\nIN\nCORRIDORS', 'ARE YOU\nSLEEPING\nENOUGH?', 'THE GRONK\nIS NOT\nYOUR FRIEND', 'WASH YOUR\nHANDS', 'SAFETY\nFIRST', 'STAY CALM.\nSTAY QUIET.', 'IF YOU SEE\nSOMETHING,\nSAY NOTHING'];
     const free = this.wallFaces.filter(f => !f.room);
     for (let i = 0; i < Math.min(10, free.length); i++) {
       const f = free[Math.floor(rnd() * free.length)], txt = posters[Math.floor(rnd() * posters.length)];
@@ -747,11 +767,25 @@ export class World {
       g.add(im);
       for (let i = 0; i < 14; i++) { const t = tiles[Math.floor(rnd() * tiles.length)]; this.drips.push({ x: (t[0] + 0.5) * TS + (rnd() - 0.5) * 2, z: (t[1] + 0.5) * TS + (rnd() - 0.5) * 2, t: rnd() * 3, y: this.ceilAt(t[0], t[1]) }); }
     }
+    // --- faint volumetric cones under working ceiling panels
+    if (this.panels.length) {
+      const mkCones = (list, tag) => {
+        if (!list.length) return null;
+        const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(ship.light).multiplyScalar(0.9), transparent: true, opacity: 0.04, alphaMap: T.aoGrad, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+        const geo = new THREE.ConeGeometry(0.85, 2.0, 14, 1, true);
+        const im = new THREE.InstancedMesh(geo, mat, list.length);
+        list.forEach((p, i) => { dummy.position.set(p.x, p.y + 0.3 - 1.1 + 0.2, p.z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+        im.frustumCulled = false; this.cones.add(im); return mat;
+      };
+      this.cones = new THREE.Group(); g.add(this.cones);
+      this.coneMat = mkCones(this.panels.filter(p => !p.flick)); this.coneFlickMat = mkCones(this.panels.filter(p => p.flick));
+    }
     // --- a beacon at the end of the hall
     const [ex, ey] = d.exit; const [cx, cz] = this.center(ex, ey);
     this.liftLight = new THREE.PointLight(0xff3030, 5, 11, 1.6); this.liftLight.position.set(cx, 2.3, cz); g.add(this.liftLight);
   }
 
+  setFancy(on) { this.cones.visible = on; }
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
 
@@ -763,6 +797,8 @@ export class World {
 
   update(dt, t) {
     this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
+    if (this.coneMat) this.coneMat.opacity = 0.04 * this.powerAmt * (1 - this.alertAmt * 0.5);
+    if (this.coneFlickMat) this.coneFlickMat.opacity = 0.04 * this.powerAmt * this.flickerF;
     if (this.restoreT > 0) { this.restoreT -= dt; this.powerAmt = Math.random() < 0.5 ? this.powerTarget : this.powerAmt * 0.4; if (this.restoreT <= 0) this.powerAmt = 1; }
     else this.powerAmt += (this.powerTarget - this.powerAmt) * Math.min(1, dt * (this.powerTarget ? 8 : 5));
     if (this.drips.length) for (const dr of this.drips) { dr.t -= dt; if (dr.t <= 0) { dr.t = 1.5 + Math.random() * 4; dr.fire = true; } }

@@ -32,6 +32,14 @@ const FinalShader = {
     }`,
 };
 
+// soft highlight compression so a torch pressed against a wall can't send the bloom into orbit
+const CompressShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    vec3 comp(vec3 x){ return mix(x, 1.6 + log2(max(x, vec3(1.6)) / 1.6) * 0.45, step(vec3(1.6), x)); }
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); c.rgb = clamp(c.rgb, 0.0, 1000.0); c.rgb = comp(c.rgb); gl_FragColor = c; }`,
+};
 export class Post {
   constructor(renderer, scene, camera) {
     this.renderer = renderer; this.enabled = true;
@@ -39,12 +47,13 @@ export class Post {
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.6, 0.97);
+    this.composer.addPass(new ShaderPass(CompressShader));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.3, 0.5, 1.9);
     this.composer.addPass(this.bloom);
     this.final = new ShaderPass(FinalShader);
     this.composer.addPass(this.final);
     this.composer.addPass(new OutputPass());
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.25;
+    this.renderer.toneMapping = THREE.AgXToneMapping; this.renderer.toneMappingExposure = 1.05;
     this.setSize(size.x, size.y);
   }
   setSize(w, h) { this.composer.setSize(w, h); this.final.uniforms.res.value.set(w, h); }
@@ -174,12 +183,14 @@ export class Dust {
   constructor(scene, n = 140) {
     this.n = n; this.p = new Float32Array(n * 3); this.v = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { this.p[i * 3] = (Math.random() - 0.5) * 12; this.p[i * 3 + 1] = Math.random() * 3; this.p[i * 3 + 2] = (Math.random() - 0.5) * 12; this.v[i * 3] = (Math.random() - 0.5) * 0.05; this.v[i * 3 + 1] = (Math.random() - 0.5) * 0.04; this.v[i * 3 + 2] = (Math.random() - 0.5) * 0.05; }
-    this.w = new Float32Array(n * 3);
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(this.w, 3));
-    this.pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.04, map: dotTex(), color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false, sizeAttenuation: true }));
+    this.w = new Float32Array(n * 3); this.c = new Float32Array(n * 3).fill(0.3);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(this.w, 3)); g.setAttribute('color', new THREE.BufferAttribute(this.c, 3));
+    this.pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.045, map: dotTex(), vertexColors: true, color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false, sizeAttenuation: true }));
     this.pts.frustumCulled = false; scene.add(this.pts);
   }
-  update(dt, cx, cz) {
+  update(dt, cx, cz, cam, torchOn = true) {
+    let fx = 0, fy = 0, fz = 0, ex = 0, ey = 0, ez = 0;
+    if (cam) { const e = cam.elements ? null : null; ex = cam.position.x; ey = cam.position.y; ez = cam.position.z; const q = cam.getWorldDirection(this._v || (this._v = new THREE.Vector3())); fx = q.x; fy = q.y; fz = q.z; }
     for (let i = 0; i < this.n; i++) {
       for (let a = 0; a < 3; a++) this.p[i * 3 + a] += this.v[i * 3 + a] * dt;
       if (this.p[i * 3 + 1] < 0 || this.p[i * 3 + 1] > 3) this.v[i * 3 + 1] *= -1;
@@ -187,7 +198,10 @@ export class Dust {
       const dx = this.p[i * 3] - cx; this.p[i * 3] -= Math.round(dx / 12) * 12;
       const dz = this.p[i * 3 + 2] - cz; this.p[i * 3 + 2] -= Math.round(dz / 12) * 12;
       this.w[i * 3] = this.p[i * 3]; this.w[i * 3 + 1] = this.p[i * 3 + 1]; this.w[i * 3 + 2] = this.p[i * 3 + 2];
+      let b = 0.22;
+      if (cam && torchOn) { const dx = this.w[i * 3] - ex, dy = this.w[i * 3 + 1] - ey, dz = this.w[i * 3 + 2] - ez, d = Math.hypot(dx, dy, dz) || 1, cs = (dx * fx + dy * fy + dz * fz) / d; if (cs > 0.88 && d < 14) b += Math.min(1, (cs - 0.88) / 0.08) * (1 - d / 14) * 1.6; }
+      this.c[i * 3] = this.c[i * 3 + 1] = b; this.c[i * 3 + 2] = b * 0.95;
     }
-    this.pts.geometry.attributes.position.needsUpdate = true;
+    this.pts.geometry.attributes.position.needsUpdate = true; this.pts.geometry.attributes.color.needsUpdate = true;
   }
 }

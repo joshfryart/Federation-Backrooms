@@ -363,3 +363,33 @@ export function makeItem(kind) {
   g.position.y = 0.9;
   return g;
 }
+
+// =====================================================================
+//  CLINGON CRAWLER (spider-ish ceiling ambusher). Built standing on the floor; flipped when on the ceiling.
+// =====================================================================
+export function makeSpider() {
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: 0x2a1418, roughness: 0.25, metalness: 0.1 });
+  const flesh = new THREE.MeshStandardMaterial({ color: 0x6a1a22, roughness: 0.3 });
+  const eye = new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 2 });
+  const body = mk(new THREE.SphereGeometry(0.2, 14, 10), skin, 0, 0.34, 0.05); body.scale.set(1, 0.7, 1.2); g.add(body);
+  const abd = mk(new THREE.SphereGeometry(0.26, 14, 10), flesh, 0, 0.36, -0.28); abd.scale.set(1, 0.85, 1.2); g.add(abd);
+  for (let i = 0; i < 6; i++) { const e = mk(new THREE.SphereGeometry(0.025, 6, 4), eye, (i % 3 - 1) * 0.06, 0.4 + (i > 2 ? 0.05 : 0), 0.22); g.add(e); }
+  for (const sx of [-1, 1]) { const m = mk(new THREE.ConeGeometry(0.025, 0.14, 5), new THREE.MeshStandardMaterial({ color: 0xd8d0b0 }), sx * 0.05, 0.28, 0.27); m.rotation.x = Math.PI; g.add(m); }
+  const legs = [];
+  for (let i = 0; i < 8; i++) {
+    const side = i < 4 ? -1 : 1, k = i % 4, yaw = (k - 1.5) * 0.55;
+    const hip = new THREE.Group(); hip.position.set(side * 0.14, 0.34, 0.12 - k * 0.1); hip.rotation.y = side * (Math.PI / 2) + yaw * side; g.add(hip);
+    const up = mk(cap(0.018, 0.3, 5), skin, 0, 0.0, 0.17); up.rotation.x = Math.PI / 2 - 0.5; hip.add(up);
+    const knee = new THREE.Group(); knee.position.set(0, 0.15, 0.3); hip.add(knee);
+    const low = mk(cap(0.014, 0.4, 5), skin, 0, -0.18, 0.08); low.rotation.x = 0.35; knee.add(low);
+    legs.push({ hip, knee, ph: i * 0.9 });
+  }
+  g.userData = { legs, body, abd };
+  return g;
+}
+export function animateSpider(g, t, speed, latched) {
+  const u = g.userData;
+  u.legs.forEach((l, i) => { const f = latched ? 3 : speed > 0.5 ? 12 : 2.2; l.knee.rotation.x = Math.sin(t * f + l.ph) * (speed > 0.5 || latched ? 0.5 : 0.12); l.hip.rotation.z = Math.sin(t * f * 0.7 + l.ph) * (speed > 0.5 || latched ? 0.2 : 0.04); });
+  u.abd.scale.y = 0.85 + Math.sin(t * 3) * 0.05;
+}

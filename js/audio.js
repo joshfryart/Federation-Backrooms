@@ -119,6 +119,11 @@ export class Sound {
   heartbeat(vol = 0.3) { this.tone(60, 0.12, 'sine', vol, -20); this.tone(52, 0.14, 'sine', vol * 0.8, -15, 0.16); }
   lift() { this.tone(110, 1.6, 'sawtooth', 0.12, 50); this.noise(1.6, 0.1, 150, 0.6, 'lowpass'); }
   death() { this.noise(1.6, 0.5, 120, 0.5, 'lowpass'); this.tone(300, 1.6, 'sawtooth', 0.3, -270); }
+  shriek(vol = 0.25) { this.tone(900, 0.7, 'sawtooth', vol, 700); this.tone(1300, 0.6, 'square', vol * 0.5, -500, 0.05); this.noise(0.6, vol * 0.5, 2200, 1, 'bandpass'); }
+  mutter(vol = 0.1) { for (let i = 0; i < 4; i++) this.tone(110 + Math.random() * 90, 0.15, 'sawtooth', vol, 40, i * 0.17); this.noise(0.7, vol * 0.4, 700, 1.5, 'bandpass'); }
+  whir(vol = 0.12) { this.tone(240, 0.8, 'sawtooth', vol, 160); this.tone(120, 0.9, 'square', vol * 0.5, 80); }
+  giggle(vol = 0.15) { for (let i = 0; i < 5; i++) this.tone(900 + (i % 2) * 220, 0.08, 'sine', vol, 150, i * 0.1); this.tone(1800, 0.5, 'triangle', vol * 0.3, -600, 0.1); }
+  skitter(vol = 0.15) { for (let i = 0; i < 8; i++) this.noise(0.03, vol, 3500 + Math.random() * 1500, 4, 'highpass', i * 0.04); }
   thud(vol = 0.3) { this.tone(55, 0.25, 'sine', vol, -20); this.noise(0.12, vol * 0.5, 150, 0.7, 'lowpass'); }
   klaxon() { for (let i = 0; i < 3; i++) { this.tone(520, 0.35, 'sawtooth', 0.08, 120, i * 0.5); this.tone(380, 0.35, 'square', 0.04, 80, i * 0.5); } }
   clang(vol = 0.25) { this.tone(160 + Math.random() * 80, 0.9, 'triangle', vol, -60); this.noise(0.3, vol * 0.6, 900, 4, 'bandpass'); }

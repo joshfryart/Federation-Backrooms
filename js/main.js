@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS } from './world.js';
 import { Sound } from './audio.js';
-import { Gorn, S } from './gorn.js';
+import { makeEnemy, S, THREATS } from './enemies.js';
+import { loadModels, loadEnv, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem } from './actors.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 
 const $ = (id) => document.getElementById(id);
 const WIN_DECK = 8;
-const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder alert.', 'Warning: structural integrity field fluctuating.', 'Transporter room 3 reports unauthorized biosign.',
+const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder alert.', 'Warning: structural integrity field fluctuating.', 'Beam room 3 reports unauthorized biosign.',
   'Please remain calm. All decks are safe.', 'Hull breach detected. Sealing bulkheads.', 'Unable to locate captain.', 'Gravity plating offline in section 12.', 'Security teams respond to the cargo bay.', 'Self-destruct sequence: cancelled.', 'There are no lifeforms aboard.'];
 
 // ---------------- renderer ----------------
@@ -21,7 +22,7 @@ const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 80);
 scene.add(camera);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi);
 const lamp = new THREE.PointLight(0xfff0d0, 9, 14, 1.8); scene.add(lamp);
-const torch = new THREE.SpotLight(0xfff6e0, 38, 30, 0.5, 0.6, 1.6); torch.position.set(0.15, -0.1, 0); camera.add(torch);
+const torch = new THREE.SpotLight(0xfff6e0, 22, 30, 0.5, 0.65, 1.7); torch.position.set(0.15, -0.1, 0); camera.add(torch);
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.camera.near = 0.2; torch.shadow.camera.far = 30; torch.shadow.bias = -0.0004; torch.shadow.normalBias = 0.04;
@@ -78,7 +79,7 @@ const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(loc
 const sound = new Sound(); sound.vol = CFG.vol;
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
 function setQuality(q) {
-  CFG.quality = q; torch.castShadow = q === 'high'; renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
+  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
   const el = $('qsel'); if (el) el.value = q;
 }
 
@@ -96,7 +97,7 @@ const G = {
 };
 const P = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0, pitch: 0, crouch: false, sprint: false, bob: 0, stepD: 0, torch: true, shake: 0, kbx: 0, kbz: 0 };
 const keys = {};
-let wasChased = false, world = null, gorns = [], ents = [], ship = null, shot = 0, noiseNow = 0, mapOn = true, locked = false, lastHeart = 0, invuln = 0;
+let beamCone = null, wasChased = false, world = null, gorns = [], ents = [], ship = null, shot = 0, noiseNow = 0, mapOn = true, locked = false, lastHeart = 0, invuln = 0;
 
 const perk = (id) => G.perks[id] || 0;
 
@@ -118,8 +119,8 @@ function updateHUD() {
   for (let i = 0; i < G.maxPhaser; i++) h += `<span class="${i < G.phaser ? '' : 'off'}"></span>`; cells.innerHTML = h;
   const need = world ? world.d.chips.length : 0;
   $('objective').innerHTML = G.chips >= need
-    ? `<b>Turbolift online</b> — reach the lift<br>Chips ${G.chips}/${need}`
-    : `Isolinear chips <b>${G.chips}/${need}</b><br>Restore power to the turbolift`;
+    ? `<b>Tubelift online</b> — reach the lift<br>Chips ${G.chips}/${need}`
+    : `Logic chips <b>${G.chips}/${need}</b><br>Restore power to the tubelift`;
   const pl = Object.entries(G.perks).map(([id, n]) => PERKS.find(p => p.id === id).name + (n > 1 ? ' ×' + n : '')).join(' · ');
   $('perks').textContent = pl;
 }
@@ -138,7 +139,7 @@ function loadDeck(n) {
   ship = SHIPS[G.shipOrder[(n - 1) % G.shipOrder.length]];
   const data = generate(n - 1, G.runSeed + n * 7919);
   data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25);
-  world = new World(data, ship); scene.add(world.group);
+  world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
@@ -165,7 +166,7 @@ function loadDeck(n) {
   for (let i = 0; i < 2; i++) {
     const t = data.pickTile(() => true); if (!t) continue;
     const m = makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
-    add('crew', t, m, { used: false });
+    add('crew', t, m, { used: false, fake: n >= 2 && rnd() < 0.3 });
   }
   { const t = data.pickTile(() => true); if (t) add('body', t, makeCrew(0xb02a20, true), { used: false }); }
   { const t = data.rooms.find(r => r.type === 'sickbay'); if (t) {
@@ -173,11 +174,7 @@ function loadDeck(n) {
       if (tile) add('emh', tile, makeHologram(), { used: false });
   } }
 
-  // gorn(s)
-  const delay = Math.max(10, 28 - n * 2);
-  gorns.push(new Gorn(world, data.gornSpawn, n, delay, scene, sound));
-  if (n >= 6) { const t2 = data.pickTile(([x, y]) => data.dist[x + y * data.W] > data.maxD * 0.4) || data.gornSpawn; gorns.push(new Gorn(world, t2, n, delay + 25, scene, sound)); }
-
+  spawnThreats(data, n, rnd);
   placeGore(data, rnd, n);
   world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
   G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.distT = 20 + Math.random() * 20; G.hints = {};
@@ -186,11 +183,26 @@ function loadDeck(n) {
   $('shipcls').textContent = ship.cls + '-class';
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
-  G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} isolinear chips`, 'good');
+  G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
 }
 
+function spawnThreats(data, n, rnd) {
+  const pool = shuffle(['gronk', 'drone', 'phantom', 'crazed']);
+  const chosen = n === 1 ? [pick(['gronk', 'drone', 'crazed'])] : pool.slice(0, n < 3 ? 1 : n < 6 ? 2 : 3);
+  G.threats = [];
+  const far = (f) => data.pickTile(([x, y]) => data.dist[x + y * data.W] >= data.maxD * f) || data.gornSpawn;
+  chosen.forEach((type, i) => {
+    const delay = Math.max(10, 28 - n * 2) + i * 22, count = type === 'crazed' ? 1 + (n > 2 ? 1 : 0) + (n > 5 ? 1 : 0) : 1;
+    for (let k = 0; k < count; k++) gorns.push(makeEnemy(type, world, i === 0 && k === 0 ? data.gornSpawn : far(0.4), n, delay + k * 7, scene, sound));
+    G.threats.push(type);
+  });
+  const nc = n >= 2 ? Math.min(4, 1 + Math.floor(rnd() * (1 + n / 3))) : 0; let made = 0;
+  for (let i = 0; i < nc; i++) { const t = data.pickTile(([x, y]) => !data.room[y][x] && data.dist[x + y * data.W] > data.maxD * 0.15); if (t) { gorns.push(makeEnemy('clinger', world, t, n, 0, scene, sound)); made++; } }
+  if (made) G.threats.push('clinger');
+  if (n >= 2 && ents.some(e => e.fake)) G.threats.push('slimeling');
+}
 function showCard(n, ship, flooded) {
-  const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}`;
+  const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}<div class="thr">${(G.threats || []).map(t => THREATS[t]).join('<br>')}</div>`;
   c.classList.remove('show'); void c.offsetWidth; c.classList.add('show');
 }
 function placeGore(data, rnd, n) {
@@ -245,7 +257,7 @@ function completeDeck() {
   setTimeout(() => {
     if (G.deck >= WIN_DECK && !G.endless) {
       document.exitPointerLock?.();
-      $('winstats').textContent = `${WIN_DECK} decks, ${G.tribbles} tribbles, ${G.stuns} Gorn stunned. Time: ${fmtTime(G.time)}.`;
+      $('winstats').textContent = `${WIN_DECK} decks, ${G.tribbles} furbles, ${G.stuns} hostiles stunned. Time: ${fmtTime(G.time)}.`;
       localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck);
       showScreen('win'); G.phase = 'win'; return;
     }
@@ -283,22 +295,28 @@ function die(by) {
   const deckReached = G.deck;
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
   $('deathline').textContent = pick(DEATH_LINES);
-  $('stats').innerHTML = `Reached <b>Deck ${deckReached}</b> aboard the ${ship.name} (${ship.reg}).<br>Tribbles rescued: ${G.tribbles} · Gorn stunned: ${G.stuns} · Time: ${fmtTime(G.time)}<br>Best: Deck ${G.best}`;
+  $('stats').innerHTML = `Reached <b>Deck ${deckReached}</b> aboard the ${ship.name} (${ship.reg}).<br>Furbles rescued: ${G.tribbles} · Hostiles stunned: ${G.stuns} · Time: ${fmtTime(G.time)}<br>Best: Deck ${G.best}`;
   setTimeout(() => showScreen('dead'), 2400);
 }
 
 // callbacks used by Gorn AI
-G.onGornStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
-G.onGornSpotted = () => { flash('#600', 0.35); G.say('IT SEES YOU — RUN', 'warn'); };
+G.onEnemyStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
+G.onEnemySpotted = (g) => { flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
+G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
+G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
+G.isClung = () => P.clung > 0;
+G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
+G.glitch = (sec) => { G.glitchT = sec; };
+G.clingOn = (c) => { P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
 G.hitPlayer = (gorn, dmg) => {
   if (invuln > 0 || G.phase !== 'play') return;
   if (G.shield) { G.shield = false; G.say('Deflector absorbed the hit!', 'good'); flash('#39f', 0.5); sound.hit(); }
-  else { G.hp -= dmg; flash('#c00', 0.7); sound.hit(); G.say('Gorn attack!', 'warn'); }
+  else { G.hp -= dmg; flash('#c00', 0.7); sound.hit(); G.say(gorn.name + ' attacks!', 'warn'); }
   P.shake = 0.6; invuln = 1.2;
   if (!G.shield || G.hp < G.maxHp) { bloodBurst(P.x, 1.2, P.z, 60, 4, Math.sin(gorn.yaw) * 2, Math.cos(gorn.yaw) * 2); decals.floor('blood1', P.x, P.z, 1.4, 1); sound.squelch(); screenSplat(4); gorn.bloodTrail = 14; }
   const dx = P.x - gorn.x, dz = P.z - gorn.z, d = Math.hypot(dx, dz) || 1;
   const kb = perk('dampener') ? 4 : 8; P.kbx = dx / d * kb; P.kbz = dz / d * kb;
-  gorn.attackCd = 3; gorn.state = S.SEARCH; gorn.timer = 4;
+  if (gorn.cfg) { gorn.attackCd = Math.max(gorn.attackCd, gorn.cfg.atkCd); gorn.state = S.SEARCH; gorn.timer = 4; }
   if (G.hp <= 0) die(gorn);
   updateHUD();
 };
@@ -308,9 +326,9 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
   if (G.phase === 'play') {
-    if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; sound.flick(); }
+    if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
-    if (e.code === 'KeyE') interact();
+    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
     if (e.code === 'Space') { e.preventDefault(); fire(); }
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
@@ -329,6 +347,7 @@ $('qsel').onchange = (e) => setQuality(e.target.value);
 $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
 if (CFG.quality === 'low') setQuality('low');
 $('resume').onmousedown = (e) => e.stopPropagation();
+$('credbtn').onclick = () => showScreen('credits'); $('credback').onclick = () => showScreen('title');
 $('begin').onclick = newRun; $('again').onclick = newRun; $('again2').onclick = newRun; $('resume').onclick = resumeGame;
 $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offerPerks(); };
 
@@ -336,24 +355,26 @@ $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offer
 const _v = new THREE.Vector3(), _f = new THREE.Vector3();
 function fire() {
   if (G.phase !== 'play' || shot > 0) return;
-  if (G.phaser <= 0) { sound.empty(); G.say('Phaser depleted — find a power cell', 'warn'); shot = 0.3; return; }
-  G.phaser--; shot = 0.45; sound.phaser(); noiseNow = Math.max(noiseNow, 16); updateHUD();
+  if (G.phaser <= 0) { sound.empty(); G.say('Zapper depleted — find a power cell', 'warn'); shot = 0.3; return; }
+  gunKick = 1; G.phaser--; shot = 0.45; sound.phaser(); noiseNow = Math.max(noiseNow, 16); updateHUD();
   camera.getWorldDirection(_f);
   const eye = camera.position;
   let hit = null, hitD = 40;
   for (const g of gorns) {
     if (!g.active || g.state === S.STUNNED) continue;
-    _v.set(g.x - eye.x, 1.5 - eye.y, g.z - eye.z); const d = _v.length(); _v.normalize();
+    _v.set(g.x - eye.x, g.hitY - eye.y, g.z - eye.z); const d = _v.length(); _v.normalize();
     const ang = Math.acos(Math.max(-1, Math.min(1, _v.dot(_f))));
-    if (d < 28 && ang < Math.atan2(0.75, d) + 0.04 && world.los(eye.x, eye.z, g.x, g.z) && d < hitD) { hit = g; hitD = d; }
+    if (d < 28 && ang < Math.atan2(g.hitR, d) + 0.04 && world.los(eye.x, eye.z, g.x, g.z) && d < hitD) { hit = g; hitD = d; }
   }
   // beam visual
-  const end = hit ? new THREE.Vector3(hit.x, 1.5, hit.z) : eye.clone().addScaledVector(_f, 12);
+  const end = hit ? new THREE.Vector3(hit.x, hit.hitY, hit.z) : eye.clone().addScaledVector(_f, 12);
   const start = eye.clone().add(new THREE.Vector3(0.25, -0.22, 0).applyQuaternion(camera.quaternion)).addScaledVector(_f, 0.4);
   beam.geometry.setFromPoints([start, end]); beam.visible = true; beamT = 0.12;
   if (hit) {
-    hit.stunFor(4 + perk('overload') * 3); G.stuns++;
-    G.say('Direct hit! The Gorn is stunned — RUN', 'good'); flash('#fa5', 0.25);
+    const r = hit.stunFor(4 + perk('overload') * 3); G.stuns++;
+    const msg = hit.kind === 'drone' ? (r === 'adapted' ? 'The drone has ADAPTED to your zapper!' : 'Drone stunned — it will adapt. Run.') :
+      hit.kind === 'phantom' ? 'Hologram dissolved… for now.' : hit.kind === 'clinger' ? 'Splat. One less ceiling-dweller.' : `Direct hit! ${hit.name} is stunned — RUN`;
+    G.say(msg, 'good'); flash('#fa5', 0.25);
   }
 }
 
@@ -361,22 +382,27 @@ function interact() {
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
   if (near) {
     near.used = true; sound.pickup();
+    if (near.kind === 'crew' && near.fake) {
+      scene.remove(near.mesh); ents.splice(ents.indexOf(near), 1);
+      const en = makeEnemy('slimeling', world, world.tile(near.x, near.z), G.deck, 0, scene, sound); en.state = S.PATROL; en.mesh.visible = true; en.x = near.x; en.z = near.z; en.pickPatrol(P); en.state = S.CHASE; en.timer = 6; en.setTarget(...world.tile(P.x, P.z)); gorns.push(en);
+      G.say('"Hello fellow crewman! I am definitely not— *SCHLOOORP*"', 'warn'); sound.shriek(0.3); flash('#240', 0.4); P.shake = 0.5; return;
+    }
     if (near.kind === 'crew') {
       G.say(pick(REDSHIRT_LINES), 'npc');
       if (Math.random() < 0.6) giveLoot();
     } else if (near.kind === 'body') { G.say('You search the crewman\'s body…', 'npc'); giveLoot(true); }
-    else if (near.kind === 'emh') { G.say('Hologram: "Please state the nature of the medical emergency." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
+    else if (near.kind === 'emh') { G.say('Hologram: "Please describe your medical emergency. Or don\'t. I\'m a projection, not a mind-reader." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
     updateHUD(); return;
   }
   // lift
   if (world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) {
     if (G.chips >= world.d.chips.length) completeDeck();
-    else { sound.denied(); G.say(`Turbolift offline — ${world.d.chips.length - G.chips} isolinear chip(s) missing`, 'warn'); }
+    else { sound.denied(); G.say(`Tubelift offline — ${world.d.chips.length - G.chips} logic chip(s) missing`, 'warn'); }
   }
 }
 function giveLoot(forced) {
   const r = Math.random();
-  if (r < 0.45) { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a phaser power cell (+1)', 'good'), 1200); }
+  if (r < 0.45) { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 1200); }
   else if (r < 0.8 || forced) { G.hp = Math.min(G.maxHp, G.hp + 25); setTimeout(() => G.say('Found a hypospray (+25 health)', 'good'), 1200); sound.heal(); }
 }
 function nearest(r, pred) {
@@ -408,6 +434,22 @@ function drawMap() {
 }
 
 // ---------------- main loop ----------------
+// flashlight volumetric cone (cheap fake: additive cone fading with distance)
+beamCone = (() => {
+  const c = document.createElement('canvas'); c.width = 4; c.height = 64; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, '#fff'); gr.addColorStop(1, '#000'); g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
+  const geo = new THREE.ConeGeometry(7, 15, 24, 1, true); geo.translate(0, -7.5, 0); geo.rotateX(Math.PI / 2);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xfff1d0, transparent: true, opacity: 0.02, alphaMap: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  m.position.set(0.12, -0.1, 0); m.frustumCulled = false; camera.add(m); return m;
+})();
+// first-person zapper (Kenney Space Kit blaster, CC0)
+let gunVM = null, gunKick = 0, muzzle = null;
+function buildViewmodel() {
+  const inst = hasModel('weapon_gun') ? instance('weapon_gun', { height: 0.2, byMax: true, tint: 0x888a90 }) : null; if (!inst) return;
+  inst.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 10; o.material.depthTest = true; } });
+  gunVM = new THREE.Group(); gunVM.add(inst.root); inst.root.rotation.y = Math.PI; gunVM.position.set(0.17, -0.17, -0.5); gunVM.rotation.set(0.05, -0.12, 0);
+  muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0 })); muzzle.position.set(0, 0.02, -0.28); gunVM.add(muzzle);
+  camera.add(gunVM);
+}
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
 function step(dt, t) {
   if (shot > 0) shot -= dt;
@@ -426,7 +468,7 @@ function step(dt, t) {
   P.crouch = !!(keys.KeyC || keys.ControlLeft);
   const wantSprint = !!(keys.ShiftLeft || keys.ShiftRight) && moving && !P.crouch && G.stamina > 3;
   P.sprint = wantSprint;
-  const base = P.crouch ? 1.7 : 3.3, spd = P.sprint ? 5.6 : base;
+  const base = P.crouch ? 1.7 : 3.3, spd = (P.sprint ? 5.6 : base) * (P.clung > 0 ? 0.4 : 1);
   const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l;
   const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
   const tvx = (fx * cy + fz * sy) * spd, tvz = (-fx * sy + fz * cy) * spd;
@@ -441,6 +483,8 @@ function step(dt, t) {
   const legs = perk('legs');
   if (P.sprint) G.stamina -= dt * (22 - legs * 3.5); else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2));
   if (G.stamina < 0) G.stamina = 0;
+  if (P.clung > 0) { P.clung -= dt; G.hp -= 2.5 * dt; $('clung').style.transform = `translate(${(Math.random() - 0.5) * 6}px,${(Math.random() - 0.5) * 6}px)`; if (P.clung <= 0) { $('clung').style.opacity = 0; G.say('You tear it off and hurl it away!', 'good'); bloodBurst(P.x, 1.5, P.z, 25, 3); if (G.hp <= 0) { die(gorns.find(g => g.kind === 'clinger') || gorns[0]); return; } } updateHUD(); }
+  if (G.glitchT > 0) G.glitchT -= dt;
 
   // footsteps / noise
   P.stepD += speedNow * dt;
@@ -459,14 +503,14 @@ function step(dt, t) {
   let tension = 0;
   for (const g of gorns) {
     g.update(dt, P, noiseNow, P.crouch, G);
-    if (g.active) {
+    if (g.active && !g.quiet) {
       const d = Math.hypot(g.x - P.x, g.z - P.z);
       const t = Math.max(0, 1 - d / 22) * (g.state === S.STUNNED ? 0.3 : 1) * (g.state === S.CHASE ? 1.3 : 1);
       tension = Math.max(tension, t);
     }
   }
   tension = Math.min(1, tension);
-  const chased = gorns.some(g => g.state === S.CHASE);
+  const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { world.setAlert(chased); if (chased) sound.klaxon(); wasChased = chased; }
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
@@ -480,17 +524,17 @@ function step(dt, t) {
     if (e.kind === 'chip') {
       e.mesh.rotation.y += dt * 2; e.mesh.position.y = 0.9 + Math.sin(e.t * 2) * 0.08;
       if (d < 1.1) { G.chips++; remove(e); sound.chip(); const need = world.d.chips.length;
-        if (G.chips >= need) { world.setLiftOpen(true); G.say('All chips installed — TURBOLIFT ONLINE. Find it!', 'good'); sound.ding(); } else G.say(`Isolinear chip acquired (${G.chips}/${need})`, 'good');
+        if (G.chips >= need) { world.setLiftOpen(true); G.say('All chips installed — TUBELIFT ONLINE. Find it!', 'good'); sound.ding(); } else G.say(`Logic chip acquired (${G.chips}/${need})`, 'good');
         updateHUD(); }
     } else if (e.kind === 'battery') {
       e.mesh.rotation.y += dt * 2; e.mesh.position.y = 0.8 + Math.sin(e.t * 2) * 0.06;
-      if (d < 1.0 && G.phaser < G.maxPhaser) { G.phaser = Math.min(G.maxPhaser, G.phaser + 2); remove(e); sound.pickup(); G.say('Phaser power cell (+2)', 'good'); updateHUD(); }
+      if (d < 1.0 && G.phaser < G.maxPhaser) { G.phaser = Math.min(G.maxPhaser, G.phaser + 2); remove(e); sound.pickup(); G.say('Zapper power cell (+2)', 'good'); updateHUD(); }
     } else if (e.kind === 'medkit') {
       e.mesh.rotation.y += dt * 1.5; e.mesh.position.y = 0.8 + Math.sin(e.t * 2) * 0.06;
       if (d < 1.0 && G.hp < G.maxHp) { G.hp = Math.min(G.maxHp, G.hp + 35); remove(e); sound.heal(); G.say('Medkit (+35 health)', 'good'); updateHUD(); }
     } else if (e.kind === 'tribble') {
       const b = e.mesh.userData.body; b.scale.y = 0.85 + Math.sin(e.t * 4) * 0.04; e.mesh.position.y = Math.abs(Math.sin(e.t * 1.6)) * 0.03;
-      if (d < 0.9) { G.tribbles++; G.hp = Math.min(G.maxHp, G.hp + 3); remove(e); sound.purr(); G.say(['Coo-coo… a tribble!', 'It purrs. Your stress level drops.', 'Tribble acquired. Do NOT feed it.'][G.tribbles % 3], 'npc'); updateHUD(); }
+      if (d < 0.9) { G.tribbles++; G.hp = Math.min(G.maxHp, G.hp + 3); remove(e); sound.purr(); G.say(['Coo-coo… a furble!', 'It purrs. Your stress level drops.', 'Furble acquired. Do NOT feed it.'][G.tribbles % 3], 'npc'); updateHUD(); }
     } else if (e.kind === 'crew' || e.kind === 'emh') {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
       animateCrew(e.mesh, e.t);
@@ -502,7 +546,7 @@ function step(dt, t) {
   let prompt = '';
   const npc = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
   if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : '[E] Talk to crewman';
-  else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board turbolift' : 'Turbolift offline';
+  else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   $('prompt').textContent = prompt;
 
   // room label + exploration
@@ -519,7 +563,7 @@ function step(dt, t) {
   lamp.intensity = 9 * (0.15 + 0.85 * world.powerAmt);
 
   // particles & ambient events
-  blood.update(dt); sparks.update(dt); steam.update(dt); water.update(dt); dust.update(dt, P.x, P.z);
+  blood.update(dt); sparks.update(dt); steam.update(dt); water.update(dt); dust.update(dt, P.x, P.z, camera, P.torch);
   updatePanelLights(dt);
   // rolling blackouts: the hum stops, the lights die, something is still walking
   if (G.blackout > 0) { G.blackout -= dt; if (G.blackout <= 0) { world.setPower(true); sound.setPower(true); sound.powerUp(); } }
@@ -528,9 +572,9 @@ function step(dt, t) {
   for (const dr of world.drips) if (dr.fire) { dr.fire = false; if (Math.hypot(dr.x - P.x, dr.z - P.z) < 16) { for (let i = 0; i < 4; i++) water.add(dr.x, dr.y - 0.1, dr.z, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3, WATER, 1.2); sound.drip(); } }
   if (G.phase === 'play' && G.deck === 1) {
     const h = G.hints, dt2 = G.deckTime;
-    if (dt2 > 4 && !h.a) { h.a = 1; G.say('WASD to move · mouse to look · find the green isolinear chips', 'comp'); }
-    if (dt2 > 16 && !h.b) { h.b = 1; G.say('Check the tricorder map (top right). Hold C to creep silently.', 'comp'); }
-    if (dt2 > 30 && !h.c) { h.c = 1; G.say('Click or Space fires the phaser. It only stuns. Then run.', 'comp'); }
+    if (dt2 > 4 && !h.a) { h.a = 1; G.say('WASD to move · mouse to look · find the green logic chips', 'comp'); }
+    if (dt2 > 16 && !h.b) { h.b = 1; G.say('Check the scan-o-matic map (top right). Hold C to creep silently.', 'comp'); }
+    if (dt2 > 30 && !h.c) { h.c = 1; G.say('Click or Space fires the zapper. It only stuns. Then run.', 'comp'); }
   }
   for (const sp of world.sparkers) {
     sp.t -= dt;
@@ -549,6 +593,7 @@ function step(dt, t) {
   if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
 
+  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); gunVM.position.set(0.17 + Math.sin(P.bob * 1.1) * 0.006, -0.17 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0), -0.5 + gunKick * 0.06); gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play'; }
   // camera
   const eyeH = P.crouch ? 1.05 : 1.65;
   P.shake = Math.max(0, P.shake - dt * 1.5);
@@ -572,16 +617,18 @@ function frame() {
   const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; elapsed += dt; const t = elapsed;
   if (G.phase === 'play' && world) step(dt, t);
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
-  else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z); }
+  else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
   // auto-downgrade if the machine struggles
   if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
-    post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
+    post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
   } else renderer.render(scene, camera);
 }
 
 // expose for debugging/tests
-window.__game = { CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer };
+const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby')]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+$('begin').disabled = true; $('begin').textContent = 'Loading assets…';
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

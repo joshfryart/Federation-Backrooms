@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Federation Backrooms</title>
+<title>Starfarers: The Backdecks</title>
 <style>
   :root { --lc1:#ff9966; --lc2:#cc99cc; --lc3:#9999ff; --lc4:#ffcc99; --bg:#05060a; }
   * { box-sizing: border-box; }
@@ -58,6 +58,7 @@
   #card { z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; opacity:0; text-transform:uppercase; letter-spacing:.3em; text-shadow:0 0 18px #000; }
   #card.show { animation: cardin 4.5s ease-out forwards; }
   #card small { font-size:13px; opacity:.7; } #card b { font-size:clamp(40px,9vw,110px); font-weight:200; letter-spacing:.35em; margin:6px 0; } #card span { font-size:14px; color:var(--lc4); } #card em { margin-top:16px; font-style:normal; color:#8fd8ff; font-size:13px; }
+  #card .thr { margin-top:18px; font-size:12px; letter-spacing:.12em; color:#ffb0a0; line-height:1.7; opacity:.9; text-transform:none; }
   @keyframes cardin { 0% { opacity:0 } 15% { opacity:1 } 70% { opacity:1 } 100% { opacity:0 } }
   .screen h1 { animation: hum 5s infinite; } @keyframes hum { 0%,100% { opacity:1 } 46% { opacity:1 } 47% { opacity:.35 } 48% { opacity:1 } 49% { opacity:.6 } 50% { opacity:1 } }
   #best { margin-top:18px; font-size:12px; opacity:.6; }
@@ -73,6 +74,7 @@
 <div class="layer" id="fade"></div>
 <div class="hud" id="cross"></div>
 <div class="layer" id="card"></div>
+<div class="layer" id="clung" style="opacity:0;transition:opacity .2s;z-index:6;background:radial-gradient(ellipse at 50% 55%,rgba(8,2,4,.96) 15%,rgba(40,6,10,.85) 45%,rgba(0,0,0,.2) 100%)"><div style="position:absolute;bottom:22%;left:0;right:0;text-align:center;font-size:30px;letter-spacing:.3em;color:#ff6a5a;text-shadow:0 0 14px #000">MASH [E]</div></div>
 
 <div class="hud" id="topleft"><span class="pill" id="decklbl">DECK 1</span><span class="pill pill2" id="shipcls">—</span>
   <div id="shipname"></div><div id="roomname"></div></div>
@@ -80,25 +82,31 @@
 <canvas class="hud" id="minimap" width="85" height="85"></canvas>
 <div class="hud" id="bars"><div id="lbl">HULL INTEGRITY</div><div class="bar"><i id="hpbar"></i></div><div id="lbl2">STAMINA</div><div class="bar"><i id="stbar"></i></div></div>
 <div class="hud" id="perks"></div>
-<div class="hud" id="phaser"><div id="lbl3">TYPE-2 PHASER</div><div class="cells" id="cells"></div></div>
+<div class="hud" id="phaser"><div id="lbl3">MK-II ZAPPER</div><div class="cells" id="cells"></div></div>
 <div class="hud" id="prompt"></div>
 <div class="hud" id="toast"></div>
 
 <div class="screen show" id="title">
-  <h1>Federation <b>Backrooms</b></h1>
-  <h2>Stardate unknown · Something green is aboard</h2>
-  <p>You are the last crew member awake aboard a Starfleet vessel that keeps changing. The corridors repeat. The hum never stops. The lights go out sometimes. Something is still walking.
-     A <b>Gorn</b> is hunting you. Find the isolinear chips, power the turbolift, and descend — ship after ship, deck after deck.</p>
+  <h1>Starfarers: <b>The Backdecks</b></h1>
+  <h2>Stardate unknown · Something is aboard</h2>
+  <p>You are the last crew member awake aboard a United Starfarers' Fleet vessel that keeps changing. The corridors repeat. The hum never stops. The lights go out sometimes. Something is still walking.
+     Something is hunting you — a <b>Gronk</b>, a drone, a hologram with a grin, or worse. Find the logic chips, power the tubelift, and descend — ship after ship, deck after deck.</p>
   <div class="keys">
     <span><b>W A S D</b> move</span><span><b>Shift</b> sprint (loud!)</span>
     <span><b>C</b> creep (quiet)</span><span><b>Mouse</b> look</span>
-    <span><b>Click / Space</b> fire phaser (stuns)</span><span><b>E</b> interact / board lift</span>
-    <span><b>F</b> flashlight</span><span><b>M</b> toggle tricorder map</span>
+    <span><b>Click / Space</b> fire zapper (stuns)</span><span><b>E</b> interact / board lift</span>
+    <span><b>F</b> flashlight</span><span><b>M</b> toggle scan-o-matic map</span>
   </div>
-  <button class="btn" id="begin">Begin shift</button>
+  <button class="btn" id="begin">Begin shift</button> <button class="btn" id="credbtn" style="background:var(--lc3)">Credits</button>
   <div id="best"></div>
 </div>
-<div class="screen" id="pause"><h2>Paused</h2><p>Click to resume. The Gorn does not pause.</p><button class="btn" id="resume">Resume</button>
+<div class="screen" id="credits"><h2>Credits</h2><p style="font-size:13px;text-align:left;max-width:620px">
+<b>Models (CC0):</b> <b>Quaternius</b> — Robot Large, Zombie, Ghost, Alien Big (quaternius.com) · <b>Kenney</b> — Space Kit blaster, chair, computer, barrels (kenney.nl).<br>
+<b>HDRI (CC0):</b> <b>Poly Haven</b> "Lobby" (polyhaven.com), via @pmndrs/assets.<br>
+<b>Libraries:</b> three.js (MIT) and addons, meshoptimizer decoder (MIT), fflate (MIT).<br>
+<b>Everything else</b> — levels, creatures, textures, sound and code — is procedural / original.<br><br>
+<i>A parody and homage. Not affiliated with any franchise. All names are jokes.</i></p><button class="btn" id="credback">Back</button></div>
+<div class="screen" id="pause"><h2>Paused</h2><p>Click to resume. The hostiles do not pause.</p><button class="btn" id="resume">Resume</button>
   <div class="settings"><label>Mouse sensitivity <input id="sens" type="range" min="0.3" max="2.5" step="0.05" value="1"></label>
   <label>Volume <input id="vol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
   <label>Graphics <select id="qsel"><option value="high">High (bloom, shadows)</option><option value="low">Performance</option></select></label></div></div>

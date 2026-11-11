@@ -15,8 +15,8 @@ s.add(new THREE.HemisphereLight(0xffffff, 0x445, 1.8));
 const key = new THREE.DirectionalLight(0xfff0d8, 2.2); key.position.set(3, 6, 6); key.castShadow = true; s.add(key);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshLambertMaterial({ color: 0x2a3040 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
 const list = [
-  ['Gorn', makeGorn(), -5.6], ['Redshirt', makeCrew(0xb02a20), -3.4], ['Command (gold)', makeCrew(0xd0a020), -2.0], ['Science (blue)', makeCrew(0x2a5fb0), -0.6],
-  ['Medical hologram', makeHologram(), 0.8], ['Fallen crewman', makeCrew(0xb02a20, true), 2.6], ['Tribble', makeTribble(), 4.4], ['Items', new THREE.Group(), 5.9]];
+  ['Gronk', makeGorn(), -5.6], ['Redshirt', makeCrew(0xb02a20), -3.4], ['Command (gold)', makeCrew(0xd0a020), -2.0], ['Science (blue)', makeCrew(0x2a5fb0), -0.6],
+  ['Medical hologram', makeHologram(), 0.8], ['Fallen crewman', makeCrew(0xb02a20, true), 2.6], ['Furble', makeTribble(), 4.4], ['Items', new THREE.Group(), 5.9]];
 const items = list[7][1]; ['chip', 'battery', 'medkit'].forEach((k, i) => { const m = makeItem(k); m.position.set(-0.4 + i * 0.4, 0.9 - i * 0, 0); m.scale.setScalar(1.2); items.add(m); items.children[i].position.set(0, 0.4 + i * 0.5, 0); });
 for (const [n, m, x] of list) { m.position.x = x; m.traverse(o => { if (o.isMesh) o.castShadow = true; }); s.add(m); }
 list[0][1].position.x = -6.6; list[0][1].rotation.y = 0.5; list[1][1].rotation.y = 0.4; list[1][1].position.x = -3.6; list[2][1].position.x = -2.2; list[3][1].position.x = -0.8;
