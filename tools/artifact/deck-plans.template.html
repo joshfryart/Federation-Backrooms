@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Provincial Squadron Deck Plans</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,8 +29,19 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 600; letter-spacing: .0
 h1 { font-size: clamp(30px, 5vw, 54px); line-height: 1; letter-spacing: .03em }
 h2 { font-size: 20px } h3 { font-size: 15px; letter-spacing: .1em; color: var(--muted); font-weight: 400 }
 .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums }
-.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: flex; gap: 6px; align-items: center }
 header { display: grid; gap: 10px }
+.title-block { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 340px); gap: 16px; align-items: stretch; border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--panel); padding: 12px 14px; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%) }
+.title-block .tb-main { display: grid; gap: 8px; align-content: center; min-width: 0 }
+.title-block .tb-sheet { background: #0a1120; border: 1px solid #26314c; display: grid; grid-template-rows: 1fr auto; min-width: 0 }
+.title-block canvas { width: 100%; height: auto; display: block }
+.title-block .tb-cap { display: flex; justify-content: space-between; gap: 8px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #8e99b3; padding: 4px 8px; border-top: 1px solid #26314c }
+@media (max-width: 720px) { .title-block { grid-template-columns: minmax(0, 1fr) } }
+.legend-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 18px; border-top: 1px solid var(--line); padding-top: 10px }
+.legend-groups h4 { margin: 0 0 5px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 500 }
+.legend svg { width: 16px; height: 16px; flex: none; color: var(--ink) }
+.legend .hwb { font-family: var(--f-mono); font-size: 9px; color: #fff; padding: 1px 4px; border-radius: 3px }
+.ricon { width: 14px; height: 14px; flex: none; color: var(--muted) }
 .reg { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--f-mono); font-size: 12px; color: var(--muted) }
 .reg b { color: var(--ink); font-weight: 500 }
 .ships { display: flex; flex-wrap: wrap; gap: 6px }
@@ -69,7 +81,7 @@ main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 18
 #tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); font-size: 12px; padding: 7px 9px; border-radius: 6px; max-width: 260px; line-height: 1.4; transform: translate(12px, 12px); z-index: 2 }
 #tip b { font-family: var(--f-display); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; font-size: 14px; display: block }
 #tip small { opacity: .75; display: block }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted) }
+.legend { display: grid; gap: 4px; font-size: 12px; color: var(--muted); align-content: start }
 .legend span { display: inline-flex; gap: 6px; align-items: center }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid var(--line) }
 .info { display: grid; gap: 14px; min-width: 0 }
@@ -94,8 +106,10 @@ main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 18
 <div class="wrap">
   <header>
     <div class="eyebrow">United Starfarers' Fleet · Provincial Squadron · deck plans</div>
-    <h1 id="shipName">USF Ontario</h1>
-    <div class="reg" id="shipReg"></div>
+    <div class="title-block">
+      <div class="tb-main"><h1 id="shipName">USF Ontario</h1><div class="reg" id="shipReg"></div></div>
+      <div class="tb-sheet"><canvas id="profile" width="680" height="250" aria-label="Ship profile with the selected deck lit"></canvas><div class="tb-cap"><span id="tbSheet">Sheet 01/10</span><span id="tbDeck">Deck 01</span></div></div>
+    </div>
     <div class="ships" id="ships" role="group" aria-label="Ship"></div>
     <div class="tools">
       <label for="seed">Run seed <input id="seed" type="number" min="1" max="999999" value="1867"></label>
@@ -115,7 +129,7 @@ main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 18
         <div class="layers" id="layers" role="group" aria-label="Map layers"></div>
       </div>
       <div class="plan-box" id="planBox"><canvas id="plan" width="800" height="800" aria-label="Deck plan"></canvas><div id="tip" hidden></div></div>
-      <div class="legend" id="legend"></div>
+      <div class="legend-groups" id="legend"></div>
     </section>
     <aside class="info" id="info"></aside>
   </main>
@@ -133,6 +147,9 @@ const RMAP = { bridge: ['command', 'flight'], engineering: ['engineering'], sick
 const DIVVAR = { command: '--cmd', operations: '--ops', sciences: '--sci' };
 const divOfRoom = (r) => L.DEPT[RMAP[r][0]].division;
 const PROP_NAME = { console: 'Console', chair: 'Command chair', viewscreen: 'Viewscreen', warpcore: 'Reactor core', shuttle: 'Shuttle', holocube: 'Holo-grid emitter', pad: 'Transporter pad', bunk: 'Bunk', table: 'Galley table', biobed: 'Biobed', crate: 'Cargo', tree: 'Grow bed', lonechair: 'Chair', plant: 'Planter', cart: 'Cart', replicator: 'Replicator' };
+const RCODE = { bridge: 'BR', engineering: 'EN', sickbay: 'SB', mess: 'GA', transporter: 'BM', shuttlebay: 'SH', cargo: 'CG', holodeck: 'HP', quarters: 'CQ', arboretum: 'AR' };
+const RSHADE = { bridge: 0.34, engineering: 0.3, sickbay: 0.16, mess: 0.24, transporter: 0.2, shuttlebay: 0.26, cargo: 0.14, holodeck: 0.36, quarters: 0.18, arboretum: 0.3 };   // fill strength per room type, so rooms of one division still read apart
+const RHATCH = { cargo: 'diag', shuttlebay: 'diag', engineering: 'cross', holodeck: 'grid', arboretum: 'dots', sickbay: 'plus' };
 const CLIMB = new Set(['console', 'table', 'bunk', 'biobed', 'shuttle', 'cart', 'crate']);
 const S = { ship: 0, deck: 0, seed: 1867, view: 'deck', layers: { rooms: true, props: true, tubes: true, hardware: true, route: true } };
 try { const v = JSON.parse(localStorage.getItem('deckplans') || '{}'); Object.assign(S.layers, v.layers || {}); } catch (e) {}
@@ -161,6 +178,7 @@ function drawPlan(cv, data, { small = false, hover = null } = {}) {
   const DIV = { command: css('--cmd'), operations: css('--ops'), sciences: css('--sci') }, divCol = (r) => DIV[divOfRoom(r)];   // resolved once per draw
   const C = { space: css('--space'), hull: css('--hull'), deck: css('--deck'), ink: css('--ink'), muted: css('--muted'), accent: css('--accent'), tube: css('--tube'), chip: css('--chip'), line: css('--line'), panel: css('--panel') };
   g.fillStyle = C.space; g.fillRect(0, 0, W * px, H * px);
+  if (!small) { g.strokeStyle = C.line; g.globalAlpha = 0.5; g.lineWidth = 1; g.beginPath(); for (let x = 0; x <= W; x += 2) { g.moveTo(x * px + 0.5, 0); g.lineTo(x * px + 0.5, H * px); } for (let y = 0; y <= H; y += 2) { g.moveTo(0, y * px + 0.5); g.lineTo(W * px, y * px + 0.5); } g.stroke(); g.globalAlpha = 1; }
   // hull: everything inside the hull outline that isn't open floor is bulkhead
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (data.inHull(x, y) || data.grid[y][x] !== 1) { g.fillStyle = C.hull; g.fillRect(x * px, y * px, px, px); }
   // floors
@@ -169,11 +187,21 @@ function drawPlan(cv, data, { small = false, hover = null } = {}) {
     const c = data.grid[y][x], r = data.room[y][x]; if (c === 1) continue;
     if (r === 'jefferies') continue;
     g.fillStyle = C.deck; g.fillRect(x * px, y * px, px, px);
-    if (r && lay.rooms) { g.globalAlpha = r === 'holodeck' ? 0.3 : 0.2; g.fillStyle = divCol(r); g.fillRect(x * px, y * px, px, px); g.globalAlpha = 1; }
+    if (r && lay.rooms) {
+      g.globalAlpha = RSHADE[r] ?? 0.2; g.fillStyle = divCol(r); g.fillRect(x * px, y * px, px, px);
+      const h = RHATCH[r]; if (h && !small) { g.globalAlpha = 0.28; g.strokeStyle = g.fillStyle; g.lineWidth = 1; const X = x * px, Y = y * px; g.beginPath();
+        if (h === 'diag' || h === 'cross') { g.moveTo(X, Y + px); g.lineTo(X + px, Y); g.moveTo(X, Y + px / 2); g.lineTo(X + px / 2, Y); g.moveTo(X + px / 2, Y + px); g.lineTo(X + px, Y + px / 2); }
+        if (h === 'cross') { g.moveTo(X, Y); g.lineTo(X + px, Y + px); }
+        if (h === 'grid') { g.moveTo(X + px / 2, Y); g.lineTo(X + px / 2, Y + px); g.moveTo(X, Y + px / 2); g.lineTo(X + px, Y + px / 2); }
+        if (h === 'plus') { g.moveTo(X + px * 0.4, Y + px / 2); g.lineTo(X + px * 0.6, Y + px / 2); g.moveTo(X + px / 2, Y + px * 0.4); g.lineTo(X + px / 2, Y + px * 0.6); }
+        g.stroke(); if (h === 'dots') { g.beginPath(); g.arc(X + px * 0.3, Y + px * 0.3, 1.1, 0, 7); g.arc(X + px * 0.75, Y + px * 0.7, 1.1, 0, 7); g.fill(); } }
+      g.globalAlpha = 1;
+    }
   }
   // room outlines + labels
   if (lay.rooms && !small) for (const rm of data.rooms) {
     const col = divCol(rm.type); g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(rm.x * px + 1, rm.y * px + 1, rm.w * px - 2, rm.h * px - 2);
+    if (rm.w * px <= 70) { const bw = Math.max(16, px * 0.62), bh = Math.max(10, px * 0.38); g.fillStyle = col; g.beginPath(); g.roundRect(rm.x * px + 3, rm.y * px + 3, bw, bh, 2); g.fill(); g.fillStyle = '#fff'; g.font = `500 ${Math.max(7, bh * 0.72)}px "IBM Plex Mono", monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(RCODE[rm.type] || '', rm.x * px + 3 + bw / 2, rm.y * px + 3 + bh / 2 + 0.5); }
     if (rm.w * px > 70) { g.fillStyle = col; g.font = `600 ${Math.min(14, Math.max(10, px * 0.5))}px Antonio, "Arial Narrow", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(L.ROOMS[rm.type].label.toUpperCase() + (rm.big ? ' · LARGE' : ''), (rm.x + rm.w / 2) * px, rm.y * px + 4); }
   }
   // Jiffy tubes
@@ -219,6 +247,11 @@ function drawPlan(cv, data, { small = false, hover = null } = {}) {
     const [ex, ey] = data.exit; g.fillStyle = C.ink; g.beginPath(); g.roundRect((ex + 0.15) * px, (ey + 0.15) * px, px * 0.7, px * 0.7, 3); g.fill(); g.strokeStyle = C.panel; g.lineWidth = Math.max(1, px * 0.07);
     g.beginPath(); g.moveTo((ex + 0.5) * px, (ey + 0.3) * px); g.lineTo((ex + 0.5) * px, (ey + 0.7) * px); g.moveTo((ex + 0.35) * px, (ey + 0.55) * px); g.lineTo((ex + 0.5) * px, (ey + 0.7) * px); g.lineTo((ex + 0.65) * px, (ey + 0.55) * px); g.stroke();
   }
+  if (!small) {   // drafting marks: bow arrow and a 10 m scale bar (one tile is 2.5 m)
+    g.fillStyle = C.muted; g.strokeStyle = C.muted; g.font = `500 ${Math.max(8, Math.min(11, px * 0.4))}px "IBM Plex Mono", monospace`; g.textBaseline = 'middle'; g.textAlign = 'left';
+    g.beginPath(); g.moveTo(8, 16); g.lineTo(13, 6); g.lineTo(18, 16); g.closePath(); g.fill(); g.fillText('BOW', 23, 11);
+    const bx = 8, by = H * px - 9, bw = px * 4; g.lineWidth = 1; g.beginPath(); g.moveTo(bx, by - 3); g.lineTo(bx, by + 3); g.moveTo(bx, by); g.lineTo(bx + bw, by); g.moveTo(bx + bw, by - 3); g.lineTo(bx + bw, by + 3); g.stroke(); g.fillRect(bx, by - 1.5, bw / 2, 3); g.fillText('10 M', bx + bw + 5, by);
+  }
   if (hover && !small) { g.strokeStyle = C.accent; g.lineWidth = 2; g.strokeRect(hover[0] * px + 1, hover[1] * px + 1, px - 2, px - 2); }
 }
 // hull silhouette of one deck for the rail (fore-aft spans seen from the side)
@@ -236,6 +269,8 @@ function renderShips() {
 function renderHeader() {
   const s = L.SHIPS[S.ship], c = L.CLASSES[s.hull];
   $('shipName').textContent = s.name;
+  const pc = $('profile'); L.drawSchematic(pc, s, S.view === 'deck' ? S.deck : -1, { labels: false });
+  $('tbSheet').textContent = `Sheet ${String(S.ship + 1).padStart(2, '0')}/${L.SHIPS.length} · ${c.name}-class`; $('tbDeck').textContent = S.view === 'deck' ? `Deck ${String(S.deck + 1).padStart(2, '0')} · ${L.zoneOf(s.decks > 1 ? S.deck / (s.decks - 1) : 0).label}` : 'All decks';
   $('shipReg').innerHTML = `<span>Registry <b>${s.reg}</b></span><span>Class <b>${c.name}</b> · ${c.role}</span><span>Length <b>${c.length} m</b></span><span>Decks <b>${s.decks}</b></span><span>Crew <b>${L.makeComplement(s, S.seed).people.length}</b></span>`;
 }
 function renderRail() {
@@ -251,8 +286,31 @@ function renderRail() {
 function roomsSummary(data) { const t = [...new Set(data.rooms.map(r => L.ROOMS[r.type].label))]; return t.slice(0, 2).join(' · ') + (t.length > 2 ? ` +${t.length - 2}` : '') || 'Corridors'; }
 const LAYERS = [['rooms', 'Rooms', '--ops'], ['props', 'Props', '--ink'], ['tubes', 'Jiffy tubes', '--tube'], ['hardware', 'System hardware', '--sci'], ['route', 'Start · chips · lift', '--accent']];
 function renderLayers() { $('layers').innerHTML = LAYERS.map(([k, n, v]) => `<button type="button" class="layer" data-layer="${k}" aria-pressed="${S.layers[k]}"><i style="background:var(${v})"></i>${n}</button>`).join(''); }
+const ICON = {
+  start: '<svg viewBox="0 0 16 16"><path d="M8 2l6 12H2z" fill="var(--accent)"/></svg>',
+  chip: '<svg viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" transform="rotate(45 8 8)" fill="var(--chip)"/></svg>',
+  lift: '<svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2" fill="currentColor"/><path d="M8 4.5v7M5.5 9l2.5 2.5L10.5 9" fill="none" stroke="var(--panel)" stroke-width="1.5"/></svg>',
+  tubeLo: '<svg viewBox="0 0 16 16"><path d="M1 5h14M1 11h14" stroke="var(--tube)" stroke-width="1.5" stroke-dasharray="3 2" fill="none"/></svg>',
+  tubeUp: '<svg viewBox="0 0 16 16"><rect x="1" y="5" width="14" height="6" fill="var(--tube)" opacity=".35"/><path d="M1 5h14M1 11h14" stroke="var(--tube)" stroke-width="1.5" fill="none"/></svg>',
+  ladder: '<svg viewBox="0 0 16 16"><path d="M1 5h14M1 11h14M4 5v6M8 5v6M12 5v6" stroke="var(--tube)" stroke-width="1.3" fill="none"/></svg>',
+  console: '<svg viewBox="0 0 16 16"><rect x="1.5" y="5" width="13" height="6" rx="1.5" fill="var(--panel)" stroke="currentColor"/></svg>',
+  bed: '<svg viewBox="0 0 16 16"><rect x="5" y="1.5" width="6" height="13" rx="1.5" fill="var(--panel)" stroke="currentColor"/></svg>',
+  crate: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h11v11h-11zM2.5 2.5l11 11M13.5 2.5l-11 11" fill="var(--panel)" stroke="currentColor"/></svg>',
+  round: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="var(--panel)" stroke="currentColor"/></svg>',
+  core: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="var(--panel)" stroke="currentColor"/><circle cx="8" cy="8" r="3" fill="var(--sci)"/></svg>',
+  shuttle: '<svg viewBox="0 0 16 16"><path d="M2 3l12 5-12 5z" fill="var(--panel)" stroke="currentColor"/></svg>',
+  plant: '<svg viewBox="0 0 16 16"><g fill="var(--chip)" opacity=".8"><circle cx="5.5" cy="6.5" r="3.2"/><circle cx="10.5" cy="6" r="3.2"/><circle cx="8" cy="10.5" r="3.2"/></g></svg>',
+  crew: '<svg class="ricon" viewBox="0 0 16 16"><circle cx="8" cy="4.5" r="2.800" fill="currentColor"/><path d="M2.5 15c0-4 2.500-6 5.500-6s5.5 2 5.5 6z" fill="currentColor"/></svg>',
+  hw: '<svg class="ricon" viewBox="0 0 16 16"><path d="M8 1.5l1.200 2 2.300-.5.5 2.300 2 1.200-1.300 2 1.300 2-2 1.200-.5 2.300-2.300-.5-1.200 2-1.200-2-2.300.5-.5-2.300-2-1.200 1.300-2-1.300-2 2-1.200.5-2.300 2.300.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8.5" r="2" fill="currentColor"/></svg>',
+};
 function renderLegend() {
-  $('legend').innerHTML = [['--cmd', 'Command-division rooms'], ['--ops', 'Operations-division rooms'], ['--sci', 'Sciences-division rooms'], ['--hull', 'Bulkhead'], ['--tube', 'Jiffy tube (dashed lower · solid upper · rungs = ladder)'], ['--accent', '▲ start'], ['--chip', '◆ logic chip'], ['--ink', 'Tubelift']].map(([v, t]) => `<span><i style="background:var(${v})"></i>${t}</span>`).join('');
+  const sw = (v, t, o = 1) => `<span><i style="background:var(${v});opacity:${o}"></i>${t}</span>`, ic = (k, t) => `<span>${ICON[k]}${t}</span>`;
+  const rooms = Object.keys(RCODE).map(r => `<span><i style="background:var(${DIVVAR[divOfRoom(r)]});opacity:${Math.min(1, (RSHADE[r] ?? 0.2) * 2.6)}"></i><b class="mono" style="font-weight:500">${RCODE[r]}</b> ${L.ROOMS[r].label}</span>`).join('');
+  $('legend').innerHTML = `
+    <div class="legend"><h4>Rooms · tint = division, code = type</h4>${rooms}</div>
+    <div class="legend"><h4>Divisions &amp; structure</h4>${sw('--cmd', 'Command division')}${sw('--ops', 'Operations division')}${sw('--sci', 'Sciences division')}${sw('--hull', 'Bulkhead')}${sw('--deck', 'Open deck / corridor')}${sw('--space', 'Outside the hull')}</div>
+    <div class="legend"><h4>Route &amp; Jiffy tubes</h4>${ic('start', 'Start')}${ic('chip', 'Logic chip')}${ic('lift', 'Tubelift (exit)')}${ic('tubeLo', 'Tube, lower run')}${ic('tubeUp', 'Tube, upper run (1.7 m up)')}${ic('ladder', 'Ladder shaft')}</div>
+    <div class="legend"><h4>Props &amp; hardware</h4>${ic('console', 'Console · replicator · viewscreen')}${ic('bed', 'Bunk · biobed')}${ic('crate', 'Cargo')}${ic('round', 'Table · transporter pad')}${ic('core', 'Reactor core')}${ic('shuttle', 'Shuttle')}${ic('plant', 'Planter · grow bed')}<span><b class="hwb" style="background:var(--sci)">RX</b>System hardware badge</span></div>`;
 }
 function renderDeck() {
   const s = L.SHIPS[S.ship], data = deckData(S.ship, S.deck, S.seed);
@@ -272,9 +330,9 @@ function renderInfo(data) {
   <div class="card"><div class="eyebrow">Deck manifest</div>
     <dl class="kv"><dt>Walkable tiles</dt><dd>${open}</dd><dt>Rooms</dt><dd>${data.rooms.length}${(nb => nb ? ` (${nb} large)` : '')(data.rooms.filter(r => r.big).length)}</dd><dt>Logic chips to find</dt><dd>${data.chips.length}</dd><dt>Jiffy tubes</dt><dd>${data.tubes.length}${ladders ? ` · ${ladders} with ladder` : ''}</dd><dt>Climbable props</dt><dd>${climb}</dd><dt>Flooded</dt><dd>${data.deck === 2 || data.deck === 5 ? 'yes' : 'no'}</dd></dl></div>
   <div class="card"><div class="eyebrow">Rooms</div><ul class="list">${Object.entries(types).map(([t, n]) => `<li><span class="dot" style="background:var(${DIVVAR[divOfRoom(t)]})"></span><span>${L.ROOMS[t].label}</span><span class="r">${n > 1 ? '×' + n : ''} ${RMAP[t].map(d => L.DEPT[d].name).join(' / ')}</span></li>`).join('') || '<li><span></span><span class="note">Corridors only</span><span></span></li>'}</ul></div>
-  <div class="card"><div class="eyebrow">System hardware on this deck</div><ul class="list">${hw.map(h => `<li><span class="dot" style="background:var(${DIVVAR[L.DEPT[h.s.dept].division]})"></span><span>${h.s.name}</span><span class="r">${SHORT[h.s.id] || 'lift'}</span></li>`).join('')}</ul>
+  <div class="card"><div class="eyebrow">${ICON.hw} System hardware on this deck</div><ul class="list">${hw.map(h => `<li><span class="dot" style="background:var(${DIVVAR[L.DEPT[h.s.dept].division]})"></span><span>${h.s.name}</span><span class="r">${SHORT[h.s.id] || 'lift'}</span></li>`).join('')}</ul>
     <p class="note">Every other system is serviced from a yellow maintenance junction on a corridor wall. Repairs there take 1.5× as long.</p></div>
-  <div class="card"><div class="eyebrow">Who works on ${data.zone} decks</div><ul class="list">${depts.map(d => { const c = roster.people.filter(p => p.dept === d.id); const head = c[0]; return `<li><span class="dot" style="background:var(${DIVVAR[d.division]})"></span><span>${d.name}<br><span class="note">${head.rankTitle} ${head.given} ${head.family}</span></span><span class="r">${c.length} crew</span></li>`; }).join('') || '<li><span></span><span class="note">No department is based here.</span><span></span></li>'}</ul></div>`;
+  <div class="card"><div class="eyebrow">${ICON.crew} Who works on ${data.zone} decks</div><ul class="list">${depts.map(d => { const c = roster.people.filter(p => p.dept === d.id); const head = c[0]; return `<li><span class="dot" style="background:var(${DIVVAR[d.division]})"></span><span>${d.name}<br><span class="note">${head.rankTitle} ${head.given} ${head.family}</span></span><span class="r">${c.length} crew</span></li>`; }).join('') || '<li><span></span><span class="note">No department is based here.</span><span></span></li>'}</ul></div>`;
 }
 function renderOverview() {
   const s = L.SHIPS[S.ship];

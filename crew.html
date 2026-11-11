@@ -1,9 +1,15 @@
 <!doctype html><meta charset="utf-8"><title>Ship's company — Starfarers: The Backdecks</title>
-<style>body{margin:0;background:#070a12;color:#fff;font-family:Arial;padding:18px;font-size:13px}h1{font-weight:200;letter-spacing:.3em;font-size:20px;text-transform:uppercase;margin:0 0 4px}
-h2{font-weight:300;letter-spacing:.2em;text-transform:uppercase;font-size:14px;color:#ffcc99;margin:22px 0 8px}p{opacity:.65;max-width:980px;line-height:1.5}
-nav a{color:#9cf;margin-right:10px;text-decoration:none;font-size:12px}nav a.on{color:#fff;font-weight:bold}canvas{width:100%;max-width:960px;display:block;background:#0d1220;border-radius:8px}
-.fx{font-family:monospace;font-size:11px;background:#0d1220;border:1px solid #232b40;border-radius:8px;padding:8px;white-space:pre-wrap;max-width:960px}</style>
-<h1 id="t"></h1><nav id="nav"></nav>
+<style>body{margin:0;background:#05070c;background-image:linear-gradient(rgba(120,170,220,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,170,220,.05) 1px,transparent 1px);background-size:32px 32px;color:#e8eef6;font-family:"Helvetica Neue",Arial,sans-serif;padding:22px;--f-d:"Avenir Next Condensed","Roboto Condensed","Arial Narrow",Arial,sans-serif;--f-m:ui-monospace,Menlo,Consolas,monospace;--am:#f2a03d;--tl:#58c9b9;--line:rgba(150,180,210,.26)}
+.top{display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.top svg{width:46px;height:46px;color:var(--am);flex:none}
+.eyebrow{font-family:var(--f-m);font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#8fa0b6}
+h1{font-family:var(--f-d);font-weight:300;letter-spacing:.24em;font-size:22px;text-transform:uppercase;margin:2px 0 0}h1 b{color:var(--am);font-weight:800}
+p{opacity:.72;font-size:13px;max-width:980px;line-height:1.55}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}nav a{color:#bcd0e6;text-decoration:none;font-size:12px;font-family:var(--f-d);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line);padding:3px 10px}nav a:hover{border-color:var(--am)}nav a.on{background:var(--am);color:#0a0d12;font-weight:800;border-color:var(--am)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--f-m);font-size:11px;color:#9fb0c6;margin:8px 0 14px;text-transform:uppercase;letter-spacing:.08em}.legend i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+body{font-size:13px}h2{font-family:var(--f-d);font-weight:400;letter-spacing:.22em;text-transform:uppercase;font-size:14px;color:#ffd9a0;margin:24px 0 8px;border-left:3px solid var(--tl);padding-left:9px}
+canvas{width:100%;max-width:960px;display:block;background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--am);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.fx{font-family:var(--f-m);font-size:11px;background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--tl);padding:10px;white-space:pre-wrap;max-width:960px}</style>
+<div class="top"><svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="50" cy="50" r="44"/><circle cx="50" cy="50" r="36" stroke-dasharray="2.2 20.42" stroke-width="7" opacity=".85"/><path d="M50 16l7 27 27 7-27 7-7 27-7-27-27-7 27-7z" fill="currentColor" fill-opacity=".16"/><path d="M30 62h40M34 69h32M39 76h22" stroke-width="2" opacity=".8"/></g><circle cx="50" cy="50" r="4.5" fill="currentColor"/></svg><div><div class="eyebrow">United Starfarers' Fleet · Personnel &amp; systems</div><h1 id="t"></h1></div></div><nav id="nav"></nav>
 <p>Every department, its people and chain of command, and its full loadout: which systems it runs, the parts in each, which deck the main hardware sits on, how it is reached on other decks (maintenance junctions) and what the player feels when it is degraded or offline. The game's fault director breaks these systems over time; the player repairs them by holding E at the hardware. Use Break / Repair to try it — the live effects block shows exactly what the game reads.</p>
 <canvas id="sch" width="960" height="330"></canvas>
 <h2>Chain of command</h2><div id="org"></div>

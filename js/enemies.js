@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { TS, TUBE_UP } from './world.js';
 import { makeGorn, animateGorn, makeCrew, makeSpider, animateSpider } from './actors.js';
-import { makeHuman, humansReady, holoMaterial, CREW_KINDS } from './humans.js';
+import { makeHuman, humansReady, holoMaterial, CREW_KINDS, bindSurface, basisAt, pinToBone } from './humans.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export const S = { DORMANT: 0, PATROL: 1, INVESTIGATE: 2, CHASE: 3, SEARCH: 4, STUNNED: 5 };
@@ -12,7 +13,7 @@ const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // ------------------------------------------------------------------
 function gronkModel() {
   const mesh = makeGorn(); let t = 0;
-  return { mesh, tick(dt, speed, f) { t += dt; animateGorn(mesh, f.stunned ? 0 : speed, t, f.roaring); mesh.rotation.z = f.stunned ? Math.sin(t * 40) * 0.05 : 0; mesh.userData.body.rotation.x = f.stunned ? 0.35 : 0; } };
+  return { mesh, tick(dt, speed, f) { t += dt; animateGorn(mesh, f.stunned ? 0 : speed, t, f.roaring, f); mesh.rotation.z = f.stunned ? Math.sin(t * 40) * 0.05 : 0; mesh.userData.body.rotation.x = f.stunned ? 0.35 : 0; } };
 }
 function crewFallback(color) { const mesh = makeCrew(color, false, null, { species: 'human' }); return { mesh, tick(dt, speed, f) { mesh.userData.torso.rotation.x = Math.min(0.5, speed * 0.1); } }; }
 
@@ -51,10 +52,10 @@ const CRAZED_FACE = { JawDrop: 0.75, LeftBrowDown: 1, RightBrowDown: 1, UpperLip
 export const MODELS = {
   gronk: () => gronkModel(),
   crazed: (o = {}) => humanModel({ bloody: 0.8, pale: 0.55, rank: Math.floor(Math.random() * 3), ...(o.human || {}) }, { face: CRAZED_FACE, attack: 'punch_cross', tick(mesh, H, t) { H.lookYaw = Math.sin(t * 7) * 0.25 + Math.sin(t * 2.3) * 0.3; H.face({ JawDrop: 0.55 + Math.abs(Math.sin(t * 5)) * 0.45 }); } }, () => crewFallback(0xb02a20)),
-  slimeling: () => humanModel({ slime: true, bloody: 0.35 }, { face: { ...CRAZED_FACE, JawDrop: 1 }, attack: 'punch_jab', walk: 'jog', walkRef: 3, tick(mesh, H, t) { H.inner.scale.x = H.inner.scale.z * (1 + Math.sin(t * 9) * 0.03); } }, () => crewFallback(0x30a050)),
-  drone: () => humanModel({ kind: 'suit', height: 2.02, tint: 0x4e5a56 }, { walk: 'walk_formal', walkRef: 1.25, jogAt: 99, runAt: 99, attack: 'punch_jab', attackSpeed: 0.9, stun: 'hit_head', stunHold: 'idle', init: droneKit }, () => crewFallback(0x5a6660)),
-  phantom: () => humanModel({ kind: 'crew_m', height: 1.86, material: phantomMaterial(), shadow: false }, { idle: 'dance', walk: 'dance', jog: 'dance', run: 'dance', attack: 'punch_jab', face: { MouthLeftPullUp: 1, RightBrowDown: 0, MouthRightPullUp: 1, JawDrop: 0.35, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 } }, () => crewFallback(0xff3fd0)),
-  clinger: () => { const mesh = makeSpider(); let t = 0; return { mesh, tick(dt, speed, f) { t += dt; animateSpider(mesh, t, speed, f.latched); } }; },
+  slimeling: (o = {}) => humanModel({ slime: true, bloody: 0.35, ...(o.human || {}) }, { face: { ...CRAZED_FACE, JawDrop: 1 }, attack: 'punch_jab', walk: 'jog', walkRef: 3, init: slimeKit, tick: slimeTick }, () => crewFallback(0x30a050)),
+  drone: () => humanModel({ kind: 'suit', height: 2.02, tint: 0x4e5a56 }, { walk: 'walk_formal', walkRef: 1.25, jogAt: 99, runAt: 99, attack: 'punch_jab', attackSpeed: 0.9, stun: 'hit_head', stunHold: 'idle', init: droneKit, tick: droneTick }, () => crewFallback(0x5a6660)),
+  phantom: () => humanModel({ kind: 'crew_m', height: 1.86, material: phantomMaterial(), shadow: false }, { idle: 'dance', walk: 'dance', jog: 'dance', run: 'dance', attack: 'punch_jab', init: hostKit, face: { MouthLeftPullUp: 1, RightBrowDown: 0, MouthRightPullUp: 1, JawDrop: 0.35, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 } }, () => crewFallback(0xff3fd0)),
+  clinger: () => { const mesh = makeSpider(); let t = 0; return { mesh, tick(dt, speed, f) { t += dt; animateSpider(mesh, t, speed, f.latched, f); } }; },
 };
 // assimilation hardware bolted onto the suit: eye lens, cabling, tool arm
 function droneKit(mesh, H) {
@@ -75,7 +76,97 @@ function droneKit(mesh, H) {
   const pack = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.1), metal); add('spine_03', pack, 0, 0.05, -0.17);
   const strip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.2, 0.012), glow); add('spine_03', strip, 0, 0.05, -0.225);
   mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  // eye sweep: a flat fan of light from the lens that pans across the corridor
+  const fanGeo = droneGeo.fan || (droneGeo.fan = (() => { const g = new THREE.ConeGeometry(0.34, 3.4, 16, 1, true); g.translate(0, -1.7, 0); g.rotateX(-Math.PI / 2); const p = g.attributes.position, c = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const k = Math.max(0, 1 - p.getZ(i) / 3.4) ** 1.6; c[i * 3] = c[i * 3 + 1] = c[i * 3 + 2] = k; } g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g; })());
+  const beamM = new THREE.MeshBasicMaterial({ color: 0x50ff70, vertexColors: true, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const sweep = new THREE.Group(); sweep.position.set(0.033, 0.06, 0.14); const fan = new THREE.Mesh(fanGeo, beamM); fan.scale.set(1, 0.07, 1); fan.castShadow = false; fan.frustumCulled = false; sweep.add(fan); head.add(sweep);
+  // exposed cabling: ribbed hoses from the pack to the skull plate, over the shoulder to a chest port, and down the spine
+  H.inner.updateMatrixWorld(true); const cast = bindSurface(H.inner, () => true), W = (n) => H.bones[n].getWorldPosition(new THREE.Vector3());
+  const sp = W('spine_03'), hd = W('Head'), shR = W('upperarm_r'), pel = W('pelvis'), sR = Math.sign(shR.x - sp.x) || -1, half = Math.abs(shR.x - sp.x);
+  const hit = (ox, oy, oz, dx, dy, dz, fb) => cast(ox, oy, oz, dx, dy, dz).find(h => h.front)?.p || fb;
+  const back = hit(sp.x, sp.y + 0.05, sp.z - 1, 0, 0, 1, new THREE.Vector3(sp.x, sp.y, sp.z - 0.14)), front = hit(sp.x + sR * 0.08, sp.y - 0.02, sp.z + 1, 0, 0, -1, new THREE.Vector3(sp.x, sp.y, sp.z + 0.15));
+  const top = hit(sp.x + sR * half * 0.6, sp.y + 1, sp.z, 0, -1, 0, new THREE.Vector3(sp.x + sR * half * 0.6, shR.y + 0.08, sp.z)), nape = hit(hd.x, hd.y + 0.06, hd.z - 1, 0, 0, 1, new THREE.Vector3(hd.x, hd.y, hd.z - 0.11)), low = hit(pel.x, pel.y + 0.1, pel.z - 1, 0, 0, 1, new THREE.Vector3(pel.x, pel.y, pel.z - 0.12));
+  const V = (x, y, z) => new THREE.Vector3(x, y, z), tube = (pts, r) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 18, r, 5);
+  const hoses = [
+    tube([V(sp.x - sR * 0.05, sp.y + 0.14, back.z - 0.1), V(sp.x - sR * 0.07, sp.y + 0.27, back.z - 0.13), V(hd.x - sR * 0.06, hd.y + 0.02, nape.z - 0.07), V(hd.x - sR * 0.04, hd.y + 0.09, nape.z - 0.01)], 0.013),
+    tube([V(sp.x + sR * 0.05, sp.y + 0.14, back.z - 0.1), V(sp.x + sR * 0.04, sp.y + 0.3, back.z - 0.11), V(hd.x + sR * 0.05, hd.y + 0.05, nape.z - 0.06), V(hd.x + sR * 0.07, hd.y + 0.12, nape.z + 0.0)], 0.009),
+    tube([V(sp.x + sR * 0.09, sp.y + 0.1, back.z - 0.09), V(top.x - sR * 0.02, top.y + 0.02, back.z - 0.04), V(top.x, top.y + 0.035, top.z + 0.02), V(front.x + sR * 0.03, front.y + 0.12, front.z + 0.03), V(front.x, front.y, front.z + 0.012)], 0.012),
+    tube([V(sp.x, sp.y - 0.07, back.z - 0.09), V(sp.x + sR * 0.03, (sp.y + pel.y) / 2, low.z - 0.07), V(pel.x, pel.y + 0.12, low.z - 0.015)], 0.011),
+  ];
+  for (let i = 0; i < 7; i++) { const r = new THREE.TorusGeometry(0.017, 0.004, 4, 8), k = i / 6, a = V(sp.x + sR * 0.09, sp.y + 0.1, back.z - 0.09).lerp(V(top.x - sR * 0.02, top.y + 0.02, back.z - 0.04), k); r.rotateX(Math.PI / 2 - 0.6); r.translate(a.x, a.y, a.z); hoses.push(r); }
+  const cab = new THREE.Mesh(mergeGeometries(hoses.map(g => { const o = g.index ? g.toNonIndexed() : g; return o; })), droneGeo.hose || (droneGeo.hose = new THREE.MeshStandardMaterial({ color: 0x0d0f10, metalness: 0.5, roughness: 0.4 }))); cab.castShadow = false; pinToBone(H.inner, 'spine_03', cab);
+  const port = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.02, 10), glow); port.rotation.x = Math.PI / 2; port.position.set(front.x, front.y, front.z + 0.012); pinToBone(H.inner, 'spine_03', port);
+  // adaptive shield: only shows once it has learned the zapper's frequency
+  const shM = new THREE.MeshBasicMaterial({ color: 0xffa030, wireframe: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  const shield = new THREE.Mesh(droneGeo.shell || (droneGeo.shell = new THREE.IcosahedronGeometry(1, 2)), shM); shield.scale.set(0.62, 1.12, 0.62); shield.position.y = 1.05; shield.castShadow = false; shield.visible = false; mesh.add(shield);
+  H.drone = { glow, beamM, sweep, shield, shM, flash: 0, was: false };
 }
+const droneGeo = {};
+const GREEN = new THREE.Color(0x50ff70), AMBER = new THREE.Color(1.0, 0.55, 0.12);
+function droneTick(mesh, H, t, f) {
+  const d = H.drone; if (!d) return; const ad = !!f.adapted, col = ad ? AMBER : GREEN;
+  d.glow.color.copy(col).multiplyScalar(f.stunned && !ad ? (Math.sin(t * 50) > 0 ? 0.9 : 0.1) : 0.85 + 0.15 * Math.sin(t * 6)); d.beamM.color.copy(col);
+  d.sweep.visible = !(f.stunned && !ad); d.sweep.rotation.y = Math.sin(t * (ad ? 1.7 : 0.9)) * 0.6; d.sweep.rotation.x = 0.14 + Math.sin(t * 0.37) * 0.06; d.beamM.opacity = 0.085 + 0.025 * Math.sin(t * 23);
+  if (ad && f.stunned && !d.was) d.flash = 1;   // a zap just splashed off the shield
+  d.was = !!f.stunned; d.flash = Math.max(0, d.flash - 0.03);
+  d.shield.visible = ad; if (ad) { d.shM.opacity = 0.035 + 0.02 * Math.sin(t * 3) + d.flash * 0.5; d.shield.rotation.y = t * 0.4; }
+}
+
+// Slimeling: what is left of the disguise sloughs off — blobs swell out of the joints, strands hang from the hands and chin
+let slimeM = null, slimeGeo = null;
+function slimeKit(mesh, H) {
+  slimeM = slimeM || new THREE.MeshStandardMaterial({ color: 0x58b85a, roughness: 0.06, metalness: 0, emissive: 0x0c5a1c, emissiveIntensity: 0.7, transparent: true, opacity: 0.86 });
+  slimeGeo = slimeGeo || { blob: new THREE.SphereGeometry(1, 10, 8), drip: (() => { const g = new THREE.ConeGeometry(0.011, 0.2, 6); g.rotateX(Math.PI); g.translate(0, -0.1, 0); return g; })(), bead: new THREE.SphereGeometry(0.014, 6, 5) };
+  H.inner.updateMatrixWorld(true); const u = H.height / 1.75, blobs = [], drips = [], R = Math.random;
+  const at = (bone, dx, dy, dz, r, sy = 1) => { const b = H.bones[bone] || H.inner.getObjectByName(bone); if (!b) return; const p = b.getWorldPosition(new THREE.Vector3()), m = new THREE.Mesh(slimeGeo.blob, slimeM); m.position.set(p.x + dx * u, p.y + dy * u, p.z + dz * u); const s = r * u; m.userData.s = [s, s * sy, s * (0.8 + R() * 0.3)]; m.scale.setScalar(0.001); m.castShadow = false; pinToBone(H.inner, bone, m); blobs.push(m); };
+  at('upperarm_l', 0.02, 0.03, 0, 0.075, 0.8); at('upperarm_r', -0.02, 0.02, -0.02, 0.06, 1.1); at('Head', 0.05, 0.14, -0.03, 0.07, 0.7); at('spine_03', -0.08, 0.02, 0.1, 0.08, 1.2); at('spine_02', 0.07, -0.02, -0.1, 0.09);
+  at('lowerarm_r', 0, -0.05, 0.02, 0.05, 1.4); at('thigh_l', 0.05, -0.15, 0.03, 0.065, 1.5); at('calf_r', -0.02, -0.1, -0.03, 0.05, 1.3); at('pelvis', 0, 0.04, -0.11, 0.085, 0.9);
+  const hang = (bone, dx, dy, dz, len) => { const b = H.bones[bone]; if (!b) return; const p = b.getWorldPosition(new THREE.Vector3()), g = new THREE.Group(); g.position.set(p.x + dx * u, p.y + dy * u, p.z + dz * u); const m = new THREE.Mesh(slimeGeo.drip, slimeM), bead = new THREE.Mesh(slimeGeo.bead, slimeM); m.castShadow = bead.castShadow = false; g.add(m, bead); pinToBone(H.inner, bone, g); drips.push({ g, m, bead, len: len * u, ph: R() * 6 }); };
+  hang('hand_l', 0, -0.08, 0, 0.6); hang('hand_r', 0, -0.08, 0, 0.45); hang('Head', 0, 0.02, 0.1, 0.3); hang('lowerarm_l', 0, -0.03, 0, 0.35);
+  H.inner.traverse(o => { if (o.isMesh && (o.material.name || '').startsWith('garment')) { o.material.roughness = 0.38; o.material.color.lerp(new THREE.Color(0x2f6a34), 0.3); } });
+  H.slime = { inv: 1 / H.inner.scale.z, blobs, drips, skin: H.mats.body ? H.mats.body.color.clone() : null, from: new THREE.Color(0xc99a78), sy: H.inner.scale.y };
+}
+const _q = new THREE.Quaternion();
+function slimeTick(mesh, H, t) {
+  const S = H.slime; H.inner.scale.x = H.inner.scale.z * (1 + Math.sin(t * 9) * 0.03); if (!S) return;
+  const r = Math.min(1, t / 1.1), k = r < 1 ? 1 + 2.2 * (r - 1) ** 3 + 1.2 * (r - 1) ** 2 : 1;   // the reveal: skin greens over, growths burst out with a little overshoot
+  H.inner.scale.y = S.sy * (1 - Math.sin(t * 24) * 0.09 * (1 - r) + Math.sin(t * 2.1) * 0.012);
+  if (S.skin && r < 1) H.mats.body.color.copy(S.from).lerp(S.skin, r); else if (S.skin && !S.done) { H.mats.body.color.copy(S.skin); S.done = true; }
+  S.blobs.forEach((b, i) => { const w = 1 + Math.sin(t * 3.1 + i * 1.7) * 0.12, s = b.userData.s; b.scale.set(s[0] * k * w * S.inv, s[1] * k / w * S.inv, s[2] * k * w * S.inv); });
+  for (const d of S.drips) {   // strands always hang straight down, stretch, snap and start again
+    d.g.parent.getWorldQuaternion(_q); d.g.quaternion.copy(_q.invert());
+    const c = (t * 0.45 + d.ph) % 1, len = k * d.len * (0.25 + c * 1.1); d.m.scale.set(1.2 - c * 0.6, len, 1.2 - c * 0.6); d.bead.position.y = -0.2 * len; d.bead.scale.setScalar(0.7 + c * 0.8);
+  }
+}
+
+// Mr. Grinsworth's host outfit, all in the same projection: bow tie, lapels, coat tails, a straw boater and eyes that shine
+function hostKit(mesh, H) {
+  const mat = phantomMaterial(), inner = H.inner; inner.updateMatrixWorld(true);
+  const cast = bindSurface(inner), castHair = bindSurface(inner, (n) => n === 'hair' || n === 'body'), u = H.height / 1.75, W = (n) => (H.bones[n] || inner.getObjectByName(n)).getWorldPosition(new THREE.Vector3());
+  const np = W('neck_01'), shL = W('upperarm_l'), pel = W('pelvis'), hd = W('Head'), half = Math.abs(shL.x - np.x), Z = new THREE.Vector3(0, 0, 1);
+  const first = (c, ...a) => c(...a).find(h => h.front), sc = new THREE.Matrix4().makeScale(u, u, u);
+  const flat = (g) => { const o = g.index ? g.toNonIndexed() : g; return o; }, pin = (bone, geos) => { const m = new THREE.Mesh(mergeGeometries(geos.map(flat)), mat); m.castShadow = false; m.frustumCulled = false; pinToBone(inner, bone, m); return m; };
+  const chest = [];
+  { const h = first(cast, np.x, np.y - 0.05 * u, np.z + 1, 0, 0, -1); if (h) { const m = basisAt(h.p, Z, undefined, 0.012 * u);
+      for (const sx of [-1, 1]) { const c = new THREE.ConeGeometry(0.036, 0.075, 4); c.rotateZ(sx * Math.PI / 2); c.translate(sx * 0.04, 0, 0); c.scale(1, 1, 0.35); chest.push(c.applyMatrix4(sc).applyMatrix4(m)); }
+      const k = new THREE.SphereGeometry(0.016, 6, 5); chest.push(k.applyMatrix4(sc).applyMatrix4(m)); } }
+  for (const sx of [-1, 1]) { const h = first(cast, np.x + sx * half * 0.3, np.y - 0.17 * u, np.z + 1, 0, 0, -1); if (!h) continue;
+    const l = new THREE.BoxGeometry(0.05, 0.25, 0.008); l.rotateZ(sx * 0.3); chest.push(l.applyMatrix4(sc).applyMatrix4(basisAt(h.p, h.n.lerp(Z, 0.6), undefined, 0.012 * u)));
+    const b = new THREE.SphereGeometry(0.012, 6, 4); b.translate(0, -0.15 - (sx > 0 ? 0.05 : 0), 0); chest.push(b.applyMatrix4(sc).applyMatrix4(basisAt(new THREE.Vector3(np.x, h.p.y, h.p.z), Z, undefined, 0.014 * u))); }
+  if (chest.length) pin('spine_03', chest);
+  { const h = first(cast, pel.x, pel.y + 0.04 * u, pel.z - 1, 0, 0, 1), zb = h ? h.p.z : pel.z - 0.12, tails = [];
+    for (const sx of [-1, 1]) { const t = new THREE.BoxGeometry(0.12, 0.5, 0.01); const p = t.attributes.position; for (let i = 0; i < p.count; i++) if (p.getY(i) < 0) p.setX(i, p.getX(i) * 0.35 + sx * 0.03); t.translate(sx * 0.075, -0.25, 0); t.rotateX(0.16); t.applyMatrix4(sc); t.translate(pel.x, pel.y + 0.06 * u, zb - 0.02 * u); tails.push(t); }
+    H.tails = pin('pelvis', tails); }
+  { const h = first(castHair, hd.x, hd.y + 1, hd.z + 0.01, 0, -1, 0), top = h ? h.p.y : hd.y + 0.2 * u;
+    const brim = new THREE.CylinderGeometry(0.155, 0.155, 0.012, 20), crown = new THREE.CylinderGeometry(0.09, 0.095, 0.075, 16), band = new THREE.CylinderGeometry(0.098, 0.098, 0.028, 16, 1, true); crown.translate(0, 0.04, 0); band.translate(0, 0.022, 0);
+    const hat = [brim, crown, band].map(g => { g.rotateZ(-0.16); g.rotateX(-0.1); g.applyMatrix4(sc); g.translate(hd.x + 0.012 * u, top - 0.012 * u, hd.z + 0.005); return g; }); pin('Head', hat); }
+  { const eyes = inner.getObjectByName('eyes');
+    if (eyes?.isSkinnedMesh) { eyes.skeleton.update(); const v = new THREE.Vector3(), c = [new THREE.Vector3(), new THREE.Vector3()], n = [0, 0], pos = eyes.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) { eyes.getVertexPosition(i, v).applyMatrix4(eyes.matrixWorld); const k = v.x > hd.x ? 0 : 1; c[k].add(v); n[k]++; }
+      const em = hostEye || (hostEye = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.5, 2.1) }));
+      for (const k of [0, 1]) if (n[k]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.0085 * u, 8, 6), em); e.position.copy(c[k].multiplyScalar(1 / n[k])); e.position.z += 0.008 * u; e.castShadow = false; pinToBone(inner, 'Head', e); } } }
+}
+let hostEye = null;
 
 // ------------------------------------------------------------------
 // Base class
@@ -162,7 +253,7 @@ export class Enemy {
 const HUNTERS = {
   gronk: { name: 'Gronk', model: () => MODELS.gronk(), base: 2.3, baseDeck: 0.12, chase: 4.1, chaseDeck: 0.16, chaseMax: 5.2, sight: 20, sightCrouch: 13, hear: 1, dmg: 34, atkCd: 2.5, atkRange: 1.25, hitY: 1.5, hitR: 0.8, reach: 1.7, noCrawl: true, roarOnSpot: true, spawnMsg: 'The ship shudders. Something heavy is moving on this deck…' },
   crazed: { name: 'Space-Madness Crewman', model: (o) => MODELS.crazed(o), base: 2.0, baseDeck: 0.06, chase: 4.4, chaseDeck: 0.08, chaseMax: 5.3, sight: 14, sightCrouch: 9, hear: 1.2, dmg: 16, atkCd: 1.0, atkRange: 1.15, hitY: 1.2, hitR: 0.55, climber: true, roarOnSpot: 'shriek', spawnMsg: 'Somewhere nearby, someone is laughing. It is not a happy laugh.' },
-  slimeling: { name: 'Slimeling Impostor', model: () => MODELS.slimeling(), base: 2.6, baseDeck: 0.05, chase: 4.6, chaseDeck: 0.05, chaseMax: 5.2, sight: 16, sightCrouch: 10, hear: 1.2, dmg: 20, atkCd: 1.4, atkRange: 1.3, hitY: 1.2, hitR: 0.7, roarOnSpot: 'shriek', spawnMsg: '' },
+  slimeling: { name: 'Slimeling Impostor', model: (o) => MODELS.slimeling(o), base: 2.6, baseDeck: 0.05, chase: 4.6, chaseDeck: 0.05, chaseMax: 5.2, sight: 16, sightCrouch: 10, hear: 1.2, dmg: 20, atkCd: 1.4, atkRange: 1.3, hitY: 1.2, hitR: 0.7, roarOnSpot: 'shriek', spawnMsg: '' },
 };
 
 export class Hunter extends Enemy {
@@ -246,7 +337,7 @@ export class Hunter extends Enemy {
     if (this.roar > 0) this.roar -= dt;
     if (this.climber) this.stepY(dt);
     this.place();
-    this.model.tick(dt, this.state === S.STUNNED ? 0 : this.speed, { stunned: this.state === S.STUNNED, roaring: this.roar > 0, attacking: this.attacking > 0, crawl: this.crawl, climb: this.climbing, vault: this.vaulting });
+    this.model.tick(dt, this.state === S.STUNNED ? 0 : this.speed, { stunned: this.state === S.STUNNED, roaring: this.roar > 0, attacking: this.attacking > 0, crawl: this.crawl, climb: this.climbing, vault: this.vaulting, look: this.state === S.CHASE || dist < 8 ? wrapA(Math.atan2(dx, dz) - this.yaw) : undefined });
   }
 }
 
@@ -278,7 +369,8 @@ export class Drone extends Enemy {
     }
     this.eye.intensity = this.state === S.STUNNED ? 0 : 1.2 + Math.sin(this.t * 6) * 0.4;
     this.place();
-    this.model.tick(dt, this.speed, { stunned: this.state === S.STUNNED, attacking: this.attacking > 0 });
+    this.eye.color.set(this.adapted ? 0xffa030 : 0x40ff60);
+    this.model.tick(dt, this.speed, { stunned: this.state === S.STUNNED, attacking: this.attacking > 0, adapted: this.adapted });
   }
 }
 
@@ -319,14 +411,15 @@ export class Phantom extends Enemy {
     this.giggleT -= dt; if (this.giggleT <= 0) { this.giggleT = 5 + Math.random() * 6; if (dist < 22) this.sound.giggle(Math.max(0.05, 0.2 - dist * 0.008)); }
     // flicker like a bad projection; frozen & grinning when watched
     this.mesh.visible = this.seen ? true : (Math.random() > 0.08);
-    phantomMaterial().uniforms.uOpacity.value = this.seen ? 0.95 : 0.6 + Math.sin(this.t * 30) * 0.1; phantomMaterial().uniforms.uGlitch.value = this.seen ? 0 : 1;
-    this.glow.intensity = this.seen ? 4.5 : 2.2;
+    phantomMaterial().uniforms.uOpacity.value = this.seen ? 0.95 : 0.6 + Math.sin(this.t * 30) * 0.1; this.glitchT = Math.max(0, (this.glitchT || 0) - dt); const gb = this.glitchT > 0 ? this.glitchT / 0.7 : 0;   // re-materialising: the projection tears and stretches for a moment
+    phantomMaterial().uniforms.uGlitch.value = Math.max(this.seen ? 0 : 1, gb * 5); this.mesh.scale.set(1 + gb * Math.sin(this.t * 90) * 0.25, 1 + gb * 0.35 * Math.sin(this.t * 55), 1);
+    this.glow.intensity = (this.seen ? 4.5 : 2.2) + gb * 9;
     this.place(); this.mesh.position.y = 0.06 + Math.sin(this.t * 1.7) * 0.04;
     this.model.tick(dt, this.seen ? 0 : 1, { attacking: this.attacking > 0, frozen: this.seen && this.attacking <= 0 });
   }
   relocate(p, rmin, rmax) {
     const open = this.w.d.openTiles.filter(([x, y]) => { if (this.w.grid[y][x] !== 0) return false; const [cx, cz] = this.w.center(x, y); const d = Math.hypot(cx - p.x, cz - p.z); return d > rmin && d < rmax && !this.w.los(cx, cz, p.x, p.z); });
-    if (!open.length) return; const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]); this.x = c[0]; this.z = c[1];
+    if (!open.length) return; const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]); this.x = c[0]; this.z = c[1]; this.glitchT = 0.7;
   }
 }
 
@@ -366,7 +459,7 @@ export class Clinger extends Enemy {
       this.mesh.position.set(this.x, 0, this.z); this.mesh.rotation.y = this.yaw; this.quiet = true; this.state = S.PATROL;
       if (this.fleeT <= 0) { this.dead = true; this.mesh.visible = false; }
     }
-    this.model.tick(dt, this.mode === 'flee' ? 4 : 0, { latched: this.mode === 'latched' });
+    this.model.tick(dt, this.mode === 'flee' ? 4 : 0, { latched: this.mode === 'latched', lurk: this.mode === 'lurk' });
   }
 }
 

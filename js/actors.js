@@ -39,13 +39,22 @@ function gMats() {
     claw: new THREE.MeshStandardMaterial({ color: 0x25251f, roughness: 0.3, metalness: 0.2 }),
     mouth: new THREE.MeshStandardMaterial({ color: 0x5a1010, roughness: 0.3 }),
     gore: new THREE.MeshStandardMaterial({ color: 0x5a0707, roughness: 0.12, metalness: 0.1 }),
+    lid: new THREE.MeshStandardMaterial({ color: 0xa9ad7c, roughness: 0.25, transparent: true, opacity: 0.92 }),
+    tongue: new THREE.MeshStandardMaterial({ color: 0x7a2038, roughness: 0.25 }),
+    scar: new THREE.MeshStandardMaterial({ color: 0xc7a58e, roughness: 0.45 }),
+    strap: new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 0.85 }),
+    iron: new THREE.MeshStandardMaterial({ color: 0x4a4d52, metalness: 0.9, roughness: 0.45 }),
+    brass: new THREE.MeshStandardMaterial({ color: 0xd8b24a, metalness: 0.9, roughness: 0.3 }),
+    plate: new THREE.MeshStandardMaterial({ color: 0xd8d2c0, metalness: 0.3, roughness: 0.5 }),
+    chip: new THREE.MeshBasicMaterial({ color: 0x40ffa0 }),
+    bone: new THREE.MeshStandardMaterial({ color: 0xe6dcc0, roughness: 0.55 }),
     rep,
   };
   return gornMats;
 }
 
 export function makeGorn() {
-  const M = gMats();
+  const M = gMats(), eyeM = M.eye.clone();
   const g = new THREE.Group();
   const body = grp(); g.add(body);
   // pelvis & torso
@@ -67,7 +76,7 @@ export function makeGorn() {
   for (const sx of [-1, 1]) {
     head.add(mk(new THREE.SphereGeometry(0.025, 6, 4), M.pupil, sx * 0.05, -0.02, 0.77));
     // compound eyes on the sides
-    const eye = mk(new THREE.SphereGeometry(0.075, 16, 12), M.eye, sx * 0.29, 0.1, 0.22); eye.scale.set(0.8, 1, 1.1); head.add(eye);
+    const eye = mk(new THREE.SphereGeometry(0.075, 16, 12), eyeM, sx * 0.29, 0.1, 0.22); eye.scale.set(0.8, 1, 1.1); head.add(eye);
     const slit = mk(new THREE.SphereGeometry(0.04, 10, 8), M.pupil, sx * 0.338, 0.1, 0.245); slit.scale.set(0.35, 1.5, 0.5); head.add(slit);
     const lid = mk(new THREE.SphereGeometry(0.085, 12, 8, 0, Math.PI * 2, 0, 1.2), M.dark, sx * 0.285, 0.115, 0.22); lid.scale.set(0.85, 1, 1.15); lid.rotation.z = -sx * 0.5; head.add(lid);
     const brow = mk(cap(0.06, 0.3, 6), M.dark, sx * 0.27, 0.23, 0.2); brow.rotation.set(0, 0, Math.PI / 2 + sx * 0.4); brow.rotation.order = 'XYZ'; head.add(brow);
@@ -129,13 +138,34 @@ export function makeGorn() {
   }
   const blob = new THREE.Mesh(new THREE.CircleGeometry(0.9, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2; blob.position.y = 0.02; blob.scale.set(1, 1.3, 1); g.add(blob);
-  g.userData = { body, torso, head, jaw, arms, legs, tail, neck };
+  // ---- polish: nictitating lids, forked tongue, osteoderms, old scars, a trophy bandolier and a broken shackle ----
+  const lids = [];
+  for (const sx of [-1, 1]) { const nl = mk(new THREE.SphereGeometry(0.081, 12, 8), M.lid, sx * 0.292, 0.1, 0.222); nl.scale.set(0.82, 0.02, 1.12); nl.castShadow = false; head.add(nl); lids.push(nl); }
+  const tongue = grp(0, 0.03, 0.3); jaw.add(tongue);
+  { const base = mk(cap(0.014, 0.2, 5), M.tongue, 0, 0, 0.1); base.rotation.x = Math.PI / 2; base.scale.set(1.6, 1, 0.6); tongue.add(base);
+    for (const sx of [-1, 1]) { const tip = mk(new THREE.ConeGeometry(0.01, 0.1, 5), M.tongue, sx * 0.018, 0, 0.26); tip.rotation.set(Math.PI / 2, 0, -sx * 0.25); tongue.add(tip); } tongue.scale.z = 0.05; }
+  { const spots = []; for (const sx of [-1, 1]) for (const [x, n] of [[0.11, 7], [0.23, 6], [0.34, 4]]) for (let i = 0; i < n; i++) spots.push([sx * x, 0.16 + i * 0.105 + (x > 0.3 ? 0.2 : 0), -Math.sqrt(Math.max(0.05, 1 - (x / 0.47) ** 2)) * 0.345, 0.8 + ((i * 7 + x * 40) % 5) * 0.09]);
+    for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) spots.push([sx * (0.52 + (i % 2) * 0.07), 0.86 + (i % 3) * 0.045, -0.06 + i * 0.035, 1.1]);
+    const im = new THREE.InstancedMesh(new THREE.SphereGeometry(0.036, 6, 4), M.dark, spots.length), d = new THREE.Object3D();
+    spots.forEach(([x, y, z, sc], i) => { d.position.set(x, y, z); d.scale.set(sc, sc * 0.7, sc * 0.8); d.updateMatrix(); im.setMatrixAt(i, d.matrix); }); im.castShadow = true; torso.add(im); }
+  for (const [x, y, z, len, rz] of [[-0.14, 0.62, 0.345, 0.3, 0.7], [-0.1, 0.56, 0.35, 0.24, 0.7], [-0.18, 0.67, 0.335, 0.2, 0.7]]) { const sc = mk(new THREE.BoxGeometry(len, 0.014, 0.014), M.scar, x, y, z); sc.rotation.z = rz; sc.castShadow = false; torso.add(sc); }
+  { const sc = mk(new THREE.BoxGeometry(0.2, 0.012, 0.012), M.scar, 0.13, 0.02, 0.5); sc.rotation.set(0.25, 0.45, 0.5); sc.castShadow = false; head.add(sc); }
+  const strap = mk(new THREE.TorusGeometry(0.425, 0.028, 5, 26), M.strap, 0, 0.47, 0.0); strap.scale.set(1.17, 1.0, 1.25); strap.rotation.order = 'ZXY'; strap.rotation.set(Math.PI / 2, 0, 0.62); torso.add(strap);
+  { const on = (th, m, dz = 0.03) => { m.position.set(Math.cos(th) * 0.425, Math.sin(th) * 0.425, 0); m.rotation.z = th - Math.PI / 2; m.position.z += 0; m.translateY(dz); strap.add(m); return m; };
+    for (let i = 0; i < 3; i++) { const pl = on(1.25 + i * 0.3, new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.012, 0.03), M.plate)); pl.rotation.x = (i - 1) * 0.15; }   // name plates of people it has met
+    on(2.25, new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.014, 0.07), M.chip)); on(2.25, new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.01, 0.09), M.iron), 0.025);
+    for (let i = 0; i < 5; i++) { const th = 0.25 + i * 0.16, t = on(th, new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.075, 5), M.bone), 0.04); t.rotation.x = Math.PI / 2; t.translateY(0.04); }
+    on(Math.PI / 2 + 0.05, new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 10), M.brass), 0.035); }
+  { const el = arms[0].el, cuff = mk(new THREE.TorusGeometry(0.1, 0.022, 6, 14), M.iron, 0, -0.4, 0); cuff.rotation.x = Math.PI / 2; el.add(cuff);
+    for (let i = 0; i < 3; i++) { const l = mk(new THREE.TorusGeometry(0.03, 0.008, 5, 10), M.iron, 0.1 + i * 0.012, -0.44 - i * 0.05, 0); l.rotation.y = i % 2 ? Math.PI / 2 : 0; el.add(l); } }
+  g.userData = { body, torso, head, jaw, arms, legs, tail, neck, chest, lids, tongue, eyeM, lookY: 0, seed: Math.random() * 10 };
   g.scale.setScalar(1.22);
   return g;
 }
 
-export function animateGorn(g, speed, t, roaring) {
-  const u = g.userData; const f = Math.min(1, speed / 3);
+// ex: { stunned, look (yaw to the quarry relative to the body, radians), attacking }
+export function animateGorn(g, speed, t, roaring, ex = {}) {
+  const u = g.userData; const f = Math.min(1, speed / 3), st = !!ex.stunned;
   const ph = t * (2.3 + speed * 1.15);
   for (const L of u.legs) {
     const s = Math.sin(ph + (L.sx > 0 ? 0 : Math.PI)), c = Math.cos(ph + (L.sx > 0 ? 0 : Math.PI));
@@ -145,17 +175,28 @@ export function animateGorn(g, speed, t, roaring) {
   }
   u.arms.forEach((a, i) => {
     const s = Math.sin(ph + (i ? Math.PI : 0));
-    a.sh.rotation.x = -0.25 - s * 0.45 * f; a.sh.rotation.z = (i ? -1 : 1) * (0.12 + (roaring ? 0.7 : 0));
-    a.el.rotation.x = -0.6 - (roaring ? 0.5 : 0) - Math.max(0, s) * 0.4 * f;
+    a.sh.rotation.x = -0.25 - s * 0.45 * f + (st ? 0.2 : 0); a.sh.rotation.z = (i ? -1 : 1) * (0.12 + (roaring ? 0.7 : 0));
+    a.el.rotation.x = -0.6 - (roaring ? 0.5 : 0) - Math.max(0, s) * 0.4 * f + (st ? 0.4 : 0);
   });
   u.body.position.y = Math.abs(Math.sin(ph)) * 0.07 * f;
   u.body.rotation.z = Math.sin(ph) * 0.04 * f;
   u.torso.rotation.x = 0.5 + Math.sin(t * 1.6) * 0.02 + (roaring ? -0.3 : 0) + f * 0.1;
   u.torso.rotation.y = Math.sin(ph) * 0.1 * f;
-  u.tail.forEach((s, i) => { s.rotation.y = Math.sin(t * 2.2 * (0.6 + f) - i * 0.7) * (0.12 + i * 0.02) * (0.5 + f); });
-  u.head.rotation.y = Math.sin(t * 0.9) * 0.3 * (1 - f * 0.7);
-  u.head.rotation.x = roaring ? -0.35 : Math.sin(t * 1.3) * 0.04;
-  u.jaw.rotation.x = roaring ? 0.65 + Math.sin(t * 28) * 0.05 : 0.04 + Math.max(0, Math.sin(t * 1.5)) * 0.06;
+  // breathing: slow at rest, heaving after a run
+  if (u.chest) { const br = Math.sin(t * (1.7 + f * 2.2) + u.seed) * (0.02 + f * 0.015); u.chest.scale.set(1.18 * (1 + br), 1, 0.9 * (1 + br * 1.6)); }
+  // tail: lazy sway, a hard lash when it roars or strikes
+  const lash = roaring || ex.attacking ? 1 : 0;
+  u.tail.forEach((s, i) => { s.rotation.y = Math.sin(t * 2.2 * (0.6 + f) - i * 0.7) * (0.16 + i * 0.035) * (0.6 + f) + lash * Math.sin(t * 11 - i * 0.9) * (0.12 + i * 0.05); if (i) s.rotation.x = -0.05 + (st ? -0.06 : Math.sin(t * 1.3 - i * 0.5) * 0.03); });
+  // head: idle scanning, or locked on to the quarry
+  const want = st ? 0 : ex.look !== undefined ? Math.max(-0.95, Math.min(0.95, ex.look)) - u.torso.rotation.y : Math.sin(t * 0.9) * 0.3 * (1 - f * 0.7);
+  u.lookY += (want - u.lookY) * 0.12; u.head.rotation.y = u.lookY * 0.65; u.neck.rotation.y = u.lookY * 0.35;
+  u.head.rotation.x = st ? 0.4 : roaring ? -0.35 : Math.sin(t * 1.3) * 0.04; u.head.rotation.z = st ? 0.22 : Math.sin(t * 0.7 + u.seed) * 0.04;
+  u.jaw.rotation.x = st ? 0.32 : roaring ? 0.65 + Math.sin(t * 28) * 0.05 : 0.04 + Math.max(0, Math.sin(t * 1.5)) * 0.06;
+  // nictitating lids: each eye blinks on its own clock; half shut when stunned
+  if (u.lids) u.lids.forEach((l, i) => { const b = (t * 0.23 + u.seed + i * 0.37) % 1, k = st ? 0.62 : b > 0.955 ? Math.sin((b - 0.955) / 0.045 * Math.PI) : 0; l.scale.y = 0.02 + 0.98 * k; l.position.y = 0.1 + 0.07 * (1 - k); l.visible = k > 0.01; });
+  // tongue: quick tasting flicks, lolling when stunned
+  if (u.tongue) { const b = (t * 0.31 + u.seed * 0.5) % 1, fl = st ? 0.8 : roaring ? 0.4 : b > 0.9 ? Math.abs(Math.sin((b - 0.9) * 10 * Math.PI * 2)) : 0; u.tongue.scale.z = 0.05 + fl * 0.95; u.tongue.rotation.x = st ? 0.5 : Math.sin(t * 40) * 0.08 * fl; u.tongue.rotation.y = st ? 0.3 : 0; }
+  if (u.eyeM) u.eyeM.emissiveIntensity = st ? (Math.sin(t * 37) > 0.2 ? 0.25 : 0.04) : 0.55 + (roaring ? 0.6 : 0);
 }
 
 // =====================================================================
@@ -368,31 +409,77 @@ export function makeItem(kind) {
 // =====================================================================
 //  CLINGON CRAWLER (spider-ish ceiling ambusher). Built standing on the floor; flipped when on the ceiling.
 // =====================================================================
+let spM = null;
+function spiderMats() {
+  if (spM) return spM;
+  const marks = canvasTex(128, 128, (g, s) => {   // abdomen: bruise-red with pale chevrons and warts
+    g.fillStyle = '#6a1a22'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '20,4,8' : '150,60,60'},${0.15 + Math.random() * 0.25})`; g.beginPath(); g.arc(Math.random() * s, Math.random() * s, 1 + Math.random() * 3, 0, 7); g.fill(); }
+    g.strokeStyle = 'rgba(226,206,160,0.85)'; g.lineWidth = 5; g.lineJoin = 'round';
+    for (const cx of [32, 96]) for (let i = 0; i < 5; i++) { const y = 22 + i * 20; g.beginPath(); g.moveTo(cx - 13 + i, y - 7); g.lineTo(cx, y + 3); g.lineTo(cx + 13 - i, y - 7); g.stroke(); }
+  });
+  marks.wrapS = marks.wrapT = THREE.RepeatWrapping;
+  return spM = {
+    skin: new THREE.MeshStandardMaterial({ color: 0x2a1418, roughness: 0.25, metalness: 0.1 }),
+    flesh: new THREE.MeshStandardMaterial({ color: 0xffffff, map: marks, roughness: 0.3 }),
+    eye: new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 1.3, roughness: 0.1 }),
+    fang: new THREE.MeshStandardMaterial({ color: 0xd8d0b0, roughness: 0.3 }),
+    joint: new THREE.MeshStandardMaterial({ color: 0x5a2228, roughness: 0.35 }),
+    geo: { up: cap(0.02, 0.3, 5), low: cap(0.015, 0.4, 5), tar: cap(0.011, 0.13, 4), claw: new THREE.ConeGeometry(0.014, 0.07, 5), knee: new THREE.SphereGeometry(0.03, 7, 5), bristle: new THREE.ConeGeometry(0.006, 0.07, 4) },
+  };
+}
 export function makeSpider() {
-  const g = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: 0x2a1418, roughness: 0.25, metalness: 0.1 });
-  const flesh = new THREE.MeshStandardMaterial({ color: 0x6a1a22, roughness: 0.3 });
-  const eye = new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 2 });
+  const g = new THREE.Group(), M = spiderMats(), G = M.geo;
+  const { skin, flesh, eye } = M;
   const body = mk(new THREE.SphereGeometry(0.2, 14, 10), skin, 0, 0.34, 0.05); body.scale.set(1, 0.7, 1.2); g.add(body);
   const abd = mk(new THREE.SphereGeometry(0.26, 14, 10), flesh, 0, 0.36, -0.28); abd.scale.set(1, 0.85, 1.2); g.add(abd);
-  for (let i = 0; i < 6; i++) { const e = mk(new THREE.SphereGeometry(0.025, 6, 4), eye, (i % 3 - 1) * 0.06, 0.4 + (i > 2 ? 0.05 : 0), 0.22); g.add(e); }
-  for (const sx of [-1, 1]) { const m = mk(new THREE.ConeGeometry(0.025, 0.14, 5), new THREE.MeshStandardMaterial({ color: 0xd8d0b0 }), sx * 0.05, 0.28, 0.27); m.rotation.x = Math.PI; g.add(m); }
+  { // bristles over the abdomen and carapace (one instanced mesh)
+    const n = 46, im = new THREE.InstancedMesh(G.bristle, skin, n), d = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3();
+    for (let i = 0; i < n; i++) { const onAbd = i < 34, th = Math.random() * 6.28, phi = 0.15 + Math.random() * 1.25; v.set(Math.sin(phi) * Math.cos(th), Math.cos(phi), Math.sin(phi) * Math.sin(th));
+      if (onAbd) d.position.set(v.x * 0.26, 0.36 + v.y * 0.26 * 0.85, -0.28 + v.z * 0.26 * 1.2); else d.position.set(v.x * 0.2, 0.34 + v.y * 0.2 * 0.7, 0.05 + v.z * 0.2 * 1.2);
+      d.quaternion.setFromUnitVectors(up, v.clone().add(new THREE.Vector3(0, 0, -0.5)).normalize()); const sc = 0.6 + Math.random() * 1.1; d.scale.set(1, sc, 1); d.translateY(0.03 * sc); d.updateMatrix(); im.setMatrixAt(i, d.matrix); }
+    g.add(im); }
+  for (let i = 0; i < 8; i++) { const big = i === 1 || i === 2, row = i < 4 ? 0 : 1, k = i % 4; const e = mk(new THREE.SphereGeometry(big ? 0.027 : 0.015, 7, 5), eye, (k - 1.5) * (row ? 0.075 : 0.055), 0.395 + row * 0.05, 0.235 - row * 0.035); e.castShadow = false; g.add(e); }
+  // chelicerae with fangs (they work when it feeds) and two feeler palps
+  const jaws = [];
+  for (const sx of [-1, 1]) {
+    const j = new THREE.Group(); j.position.set(sx * 0.05, 0.33, 0.26); g.add(j);
+    const base = mk(cap(0.03, 0.06, 5), M.joint, 0, -0.03, 0.02); j.add(base);
+    const fang = mk(new THREE.ConeGeometry(0.02, 0.13, 6), M.fang, -sx * 0.012, -0.13, 0.03); fang.rotation.set(Math.PI + 0.15, 0, sx * 0.2); j.add(fang);
+    jaws.push({ j, sx });
+    const palp = new THREE.Group(); palp.position.set(sx * 0.11, 0.32, 0.22); palp.rotation.y = sx * 0.5; g.add(palp);
+    const p1 = mk(cap(0.014, 0.12, 4), skin, 0, 0.0, 0.07); p1.rotation.x = Math.PI / 2 - 0.3; palp.add(p1); const p2 = mk(cap(0.012, 0.09, 4), M.joint, 0, -0.07, 0.15); p2.rotation.x = 0.5; palp.add(p2);
+    jaws.push({ j: palp, sx, palp: true });
+  }
   const legs = [];
   for (let i = 0; i < 8; i++) {
     const side = i < 4 ? -1 : 1, k = i % 4, yaw = (k - 1.5) * 0.55;
     const hip = new THREE.Group(); hip.position.set(side * 0.14, 0.34, 0.12 - k * 0.1); hip.rotation.y = side * (Math.PI / 2) + yaw * side; g.add(hip);
-    const up = mk(cap(0.018, 0.3, 5), skin, 0, 0.0, 0.17); up.rotation.x = Math.PI / 2 - 0.5; hip.add(up);
-    const knee = new THREE.Group(); knee.position.set(0, 0.15, 0.3); hip.add(knee);
-    const low = mk(cap(0.014, 0.4, 5), skin, 0, -0.18, 0.08); low.rotation.x = 0.35; knee.add(low);
-    legs.push({ hip, knee, ph: i * 0.9 });
+    const up = new THREE.Mesh(G.up, skin); up.position.set(0, 0.0, 0.17); up.castShadow = true; up.rotation.x = Math.PI / 2 - 0.5; hip.add(up);
+    const knee = new THREE.Group(); knee.position.set(0, 0.072, 0.3); hip.add(knee);
+    const kn = new THREE.Mesh(G.knee, M.joint); knee.add(kn);
+    const low = new THREE.Mesh(G.low, skin); low.position.set(0, -0.19, 0.05); low.castShadow = true; low.rotation.x = -0.25; knee.add(low);
+    const foot = new THREE.Group(); foot.position.set(0, -0.384, 0.099); knee.add(foot);
+    const tar = new THREE.Mesh(G.tar, skin); tar.position.set(0, -0.012, 0.06); tar.rotation.x = Math.PI / 2 - 0.2; foot.add(tar);
+    const claw = new THREE.Mesh(G.claw, M.fang); claw.position.set(0, -0.045, 0.135); claw.rotation.x = Math.PI - 0.45; foot.add(claw);
+    legs.push({ hip, knee, foot, ph: i * 0.9, k });
   }
-  g.userData = { legs, body, abd };
+  g.userData = { legs, body, abd, jaws };
   return g;
 }
-export function animateSpider(g, t, speed, latched) {
-  const u = g.userData;
-  u.legs.forEach((l, i) => { const f = latched ? 3 : speed > 0.5 ? 12 : 2.2; l.knee.rotation.x = Math.sin(t * f + l.ph) * (speed > 0.5 || latched ? 0.5 : 0.12); l.hip.rotation.z = Math.sin(t * f * 0.7 + l.ph) * (speed > 0.5 || latched ? 0.2 : 0.04); });
-  u.abd.scale.y = 0.85 + Math.sin(t * 3) * 0.05;
+// ex: { lurk: hanging from the ceiling, waiting }
+export function animateSpider(g, t, speed, latched, ex = {}) {
+  const u = g.userData, run = speed > 0.5, lurk = !!ex.lurk && !run && !latched;
+  u.legs.forEach((l, i) => {
+    const f = latched ? 3 : run ? 12 : 2.2, tw = lurk && Math.sin(t * 0.6 + i * 2.1) > 0.93 ? Math.sin(t * 30) * 0.12 : 0;   // a single leg twitches now and then while it waits
+    l.knee.rotation.x = Math.sin(t * f + l.ph) * (run || latched ? 0.5 : 0.12) + (latched ? 0.55 : lurk ? -0.22 : 0) + tw;
+    l.hip.rotation.z = Math.sin(t * f * 0.7 + l.ph) * (run || latched ? 0.2 : 0.04);
+    l.hip.rotation.x = latched ? 0.35 : lurk ? 0.2 + Math.sin(t * 0.8 + l.ph) * 0.03 : run ? Math.sin(t * f + l.ph + 1.2) * 0.18 : 0;
+    l.foot.rotation.x = latched ? 0.7 : lurk ? -0.3 : Math.sin(t * f + l.ph + 0.6) * (run ? 0.35 : 0.05);
+  });
+  u.abd.scale.y = 0.85 + Math.sin(t * 3) * 0.05; u.abd.position.y = 0.36 + (lurk ? 0.05 + Math.sin(t * 1.1) * 0.012 : 0); u.abd.rotation.x = lurk ? -0.18 : 0;
+  const chew = latched ? 0.5 + Math.sin(t * 22) * 0.4 : lurk ? 0.12 + Math.max(0, Math.sin(t * 1.4)) * 0.2 : run ? 0.35 : 0.1 + Math.sin(t * 2) * 0.06;
+  for (const { j, sx, palp } of u.jaws) { if (palp) { j.rotation.x = Math.sin(t * (latched ? 14 : 2.6) + sx) * (latched ? 0.3 : 0.14); } else { j.rotation.z = -sx * chew; j.rotation.x = latched ? -0.3 : 0; } }
 }
 
 // =====================================================================
@@ -400,7 +487,17 @@ export function animateSpider(g, t, speed, latched) {
 // =====================================================================
 export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   const g = new THREE.Group();
-  const shell = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.75, roughness: 0.38 });
+  const wear = canvasTex(128, 128, (c, w) => {   // scuffed finish: fine scratches and worn edges
+    c.fillStyle = '#b8b8b8'; c.fillRect(0, 0, w, w);
+    for (let i = 0; i < 260; i++) { const v = Math.random() < 0.5 ? 255 : 40; c.strokeStyle = `rgba(${v},${v},${v},${0.08 + Math.random() * 0.22})`; c.lineWidth = 0.5 + Math.random(); const x = Math.random() * w, y = Math.random() * w, a = Math.random() < 0.7 ? (Math.random() - 0.5) * 0.5 : Math.random() * 3, l = 4 + Math.random() * 26; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+    for (let i = 0; i < 30; i++) { c.fillStyle = `rgba(255,255,255,${Math.random() * 0.25})`; c.beginPath(); c.arc(Math.random() * w, Math.random() * w, 1 + Math.random() * 4, 0, 7); c.fill(); }
+  });
+  wear.wrapS = wear.wrapT = THREE.RepeatWrapping; wear.repeat.set(2, 2);
+  const label = canvasTex(128, 32, (c, w, h) => {
+    c.fillStyle = '#d8b21c'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; for (let x = -h; x < 30; x += 12) { c.beginPath(); c.moveTo(x, h); c.lineTo(x + 6, h); c.lineTo(x + 6 + h, 0); c.lineTo(x + h, 0); c.fill(); }
+    c.fillStyle = '#d8b21c'; c.fillRect(30, 0, w, h); c.fillStyle = '#111'; c.font = 'bold 11px Arial'; c.fillText('STUN ONLY', 36, 13); c.font = '8px Arial'; c.fillText('MK-II · DO NOT LICK', 36, 25);
+  });
+  const shell = new THREE.MeshStandardMaterial({ color: 0x3a3f48, map: wear, roughnessMap: wear, metalness: 0.75, roughness: 0.55 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x101216, metalness: 0.4, roughness: 0.6 });
   const steel = new THREE.MeshStandardMaterial({ color: 0x8d949c, metalness: 1, roughness: 0.22 });
   const grip = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.95 });
@@ -436,8 +533,28 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   const arm = P(cap(0.032, 0.34), skinM, 0.05, -0.2, 0.2, 0.95, 0, -0.22); arm.scale.set(1, 1, 0.85);
   const slv = P(new THREE.CylinderGeometry(0.043, 0.05, 0.3, 12), cloth, 0.063, -0.262, 0.285, 0.95, 0, -0.22);
   P(new THREE.CylinderGeometry(0.0445, 0.0445, 0.012, 12), new THREE.MeshStandardMaterial({ color: 0xd8b24a, metalness: 0.8, roughness: 0.3 }), 0.047, -0.178, 0.168, 0.95, 0, -0.22); // rank braid
+  // ---- detail: sights, heat vents, induction coil, warning label, wrist comm band ----
+  P(new THREE.BoxGeometry(0.004, 0.008, 0.006), dark, 0, 0.035, -0.1);                                     // front sight post
+  for (const sx of [-1, 1]) P(new THREE.BoxGeometry(0.005, 0.008, 0.006), dark, sx * 0.008, 0.035, 0.04);  // rear notch
+  const ventM = glow(0x1a0c06), vents = [0, 1, 2, 3].map(i => P(new THREE.BoxGeometry(0.02, 0.002, 0.007), ventM, 0, 0.0325, -0.065 + i * 0.013));
+  const coilM = glow(0xff7a20); for (let i = 0; i < 4; i++) P(new THREE.TorusGeometry(0.0235, 0.0028, 5, 16), coilM, 0, 0, -0.126 - i * 0.0085);
+  for (const sx of [-1, 1]) P(new THREE.BoxGeometry(0.003, 0.006, 0.04), steel, sx * 0.026, 0, -0.14);     // coil cage rails
+  const lab = P(new THREE.PlaneGeometry(0.052, 0.013), new THREE.MeshStandardMaterial({ map: label, roughness: 0.6 }), -0.0262, -0.006, -0.012, 0, -Math.PI / 2, 0);
+  P(new THREE.CylinderGeometry(0.0028, 0.0028, 0.054, 6), steel, 0, -0.03, 0.035, 0, 0, Math.PI / 2);        // grip pin
+  P(new THREE.BoxGeometry(0.032, 0.006, 0.044), dark, 0, -0.108, 0.049, 0.28);                             // butt cap
+  const band = P(new THREE.CylinderGeometry(0.0375, 0.0385, 0.034, 14), dark, 0.0385, -0.132, 0.119, 0.95, 0, -0.22);   // wrist comm band
+  const commM = glow(0x40c8ff), comm = P(new THREE.BoxGeometry(0.026, 0.02, 0.004), commM, 0.022, -0.105, 0.135, 0.95 - Math.PI / 2, 0, -0.22); comm.rotation.order = 'XYZ';
+  P(new THREE.BoxGeometry(0.004, 0.004, 0.004), glow(0xff4030), 0.006, -0.112, 0.128);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -0.18); g.add(muzzle);
   const flash = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); flash.position.copy(muzzle.position); flash.scale.set(1, 1, 2.2); g.add(flash);
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-  return { group: g, muzzle, flash, cells, ring, lens };
+  // per-frame: recoil pitch, vents glowing after a shot, coil idling with the charge, comm screen ticking over
+  let heat = 0, tt = 0; const hot = new THREE.Color(0xff5a14), cold = new THREE.Color(0x1a0c06), base = g.rotation.x;
+  const tick = (dt, kick = 0, charge = 1) => {
+    tt += dt; heat = Math.max(heat - dt * 0.55, kick); ventM.color.copy(cold).lerp(hot, Math.min(1, heat)).multiplyScalar(1 + heat);
+    const c = charge > 0 ? 0.55 + 0.25 * Math.sin(tt * 5) + kick * 2 : 0.06; coilM.color.setRGB(1.0 * c, 0.48 * c, 0.13 * c);
+    commM.color.setRGB(0.25, 0.78, 1).multiplyScalar(0.7 + 0.3 * (Math.sin(tt * 2.3) > 0.2 ? 1 : 0.4));
+    g.rotation.x = (g.userData.baseRx ?? base) + kick * kick * 0.16;
+  };
+  return { group: g, muzzle, flash, cells, ring, lens, tick, vents };
 }
