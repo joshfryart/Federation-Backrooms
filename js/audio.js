@@ -7,7 +7,13 @@ export class Sound {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     const ctx = this.ctx = new AC();
-    this.master = ctx.createGain(); this.master.gain.value = this.vol ?? 0.8; this.master.connect(ctx.destination);
+    this.master = ctx.createGain(); this.master.gain.value = this.vol ?? 0.8;
+    // cavernous reverb: everything sounds like an empty hallway
+    const irLen = Math.floor(ctx.sampleRate * 2.6), ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < irLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.6); }
+    const conv = ctx.createConvolver(); conv.buffer = ir; const wet = ctx.createGain(); wet.gain.value = 0.34;
+    const dry = ctx.createGain(); dry.gain.value = 0.9;
+    this.master.connect(dry); dry.connect(ctx.destination); this.master.connect(conv); conv.connect(wet); wet.connect(ctx.destination);
 
     // noise buffer
     const len = ctx.sampleRate * 2;
@@ -28,6 +34,13 @@ export class Sound {
     this.nzGain = ctx.createGain(); this.nzGain.gain.value = 0.03;
     nz.connect(bp); bp.connect(this.nzGain); this.nzGain.connect(this.master); nz.start();
 
+    // fluorescent buzz (louder under lit panels)
+    this.buzz = ctx.createGain(); this.buzz.gain.value = 0; this.buzz.connect(this.master);
+    for (const f of [120, 240.7, 360.4]) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 1.5; bp.Q.value = 4;
+      const g = ctx.createGain(); g.gain.value = f === 120 ? 0.6 : 0.25; o.connect(bp); bp.connect(g); g.connect(this.buzz); o.start();
+    }
     // tension drone (gain driven by gorn proximity)
     this.tension = ctx.createGain(); this.tension.gain.value = 0; this.tension.connect(this.master);
     for (const f of [55, 58.3, 110.7]) {
@@ -37,6 +50,25 @@ export class Sound {
     }
   }
 
+  setBuzz(v) { if (this.ctx) this.buzz.gain.setTargetAtTime(v * 0.04, this.ctx.currentTime, 0.15); }
+  setPower(on) { if (!this.ctx) return; const t = this.ctx.currentTime; this.hum.gain.setTargetAtTime(on ? 0.10 : 0.0, t, on ? 0.05 : 0.4); this.nzGain.gain.setTargetAtTime(on ? 0.03 : 0.004, t, 0.3); if (!on) this.buzz.gain.setTargetAtTime(0, t, 0.1); }
+  powerDown() { this.tone(90, 1.4, 'sawtooth', 0.2, -70); this.noise(0.6, 0.2, 200, 0.5, 'lowpass'); }
+  powerUp() { this.thud(0.5); this.tone(60, 0.8, 'square', 0.1, 180); this.noise(0.4, 0.2, 2500, 2, 'highpass', 0.1); this.flick(); }
+  splash(vol = 0.12) { this.noise(0.18, vol, 1800, 1.2, 'bandpass'); this.noise(0.3, vol * 0.7, 500, 0.8, 'lowpass', 0.03); }
+  drip() { this.tone(1400 + Math.random() * 600, 0.08, 'sine', 0.05, -500); }
+  // faraway wrongness: footsteps, scraping, a whisper that isn't there
+  distant(kind) {
+    if (!this.ctx) return; const ctx = this.ctx, t0 = ctx.currentTime;
+    const pan = ctx.createStereoPanner(); pan.pan.value = Math.random() * 2 - 1;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380;
+    const out = ctx.createGain(); out.gain.value = 0.5; pan.connect(lp); lp.connect(out); out.connect(this.master);
+    const burst = (dt, dur, vol, f) => { const s = ctx.createBufferSource(); s.buffer = this.noiseBuf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 0.8;
+      const g = ctx.createGain(); this._env(g, t0 + dt, 0.01, dur, vol); s.connect(bp); bp.connect(g); g.connect(pan); s.start(t0 + dt, Math.random()); s.stop(t0 + dt + dur + 0.1); };
+    if (kind === 'steps') { const n = 4 + Math.floor(Math.random() * 6), gap = 0.55 + Math.random() * 0.2; for (let i = 0; i < n; i++) burst(i * gap, 0.12, 0.35 * (1 - i / (n + 2)), 200); }
+    else if (kind === 'scrape') { burst(0, 1.8, 0.18, 700); burst(0.2, 1.4, 0.12, 1200); }
+    else if (kind === 'door') { burst(0, 0.7, 0.25, 900); burst(0.75, 0.15, 0.3, 160); }
+    else { for (let i = 0; i < 9; i++) burst(i * 0.18, 0.2, 0.1 + Math.random() * 0.08, 1800 + Math.random() * 1800); lp.frequency.value = 3200; } // whisper
+  }
   setTension(t) { // 0..1
     if (!this.ctx) return;
     this.tension.gain.setTargetAtTime(t * 0.12, this.ctx.currentTime, 0.2);

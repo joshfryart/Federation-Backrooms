@@ -34,6 +34,29 @@ const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
 const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
 const decals = new Decals(scene);
+const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
+const WATER = new THREE.Color(0x9ec8d8);
+const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d0, 0, 10, 1.5); scene.add(l); return l; });
+let panelSel = [], panelT = 0;
+function updatePanelLights(dt) {
+  panelT -= dt;
+  if (panelT <= 0 && world) {
+    panelT = 0.2; const arr = [];
+    for (const p of world.panels) { const dx = p.x - P.x, dz = p.z - P.z; arr.push([dx * dx + dz * dz, p]); }
+    arr.sort((a, b) => a[0] - b[0]); panelSel = arr.slice(0, 3);
+  }
+  const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0;
+  scene.environmentIntensity = 0.3 * (0.04 + 0.96 * pa);
+  panelLights.forEach((l, i) => {
+    const e = panelSel[i];
+    if (!e) { l.intensity = 0; return; }
+    l.position.set(e[1].x, e[1].y, e[1].z);
+    l.color.set(ship.light).lerp(new THREE.Color(0xff2010), al * 0.7);
+    l.intensity = 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3);
+  });
+  // fluorescent buzz, loudest right under a working panel
+  if (panelSel[0]) { const d = Math.sqrt(panelSel[0][0]); sound.setBuzz(Math.max(0, 1 - d / 7) * pa * (panelSel[0][1].flick ? world.flickerF : 1)); }
+}
 const dust = new Dust(scene);
 blood.onLand = (x, z) => { if (Math.random() < 0.35) decals.floor('blood', x, z, 0.12 + Math.random() * 0.3); };
 const RED = new THREE.Color(0x7a0808), RED2 = new THREE.Color(0xa01010), SPARK = new THREE.Color(0xffb050), STEAM = new THREE.Color(0xcfd8e0);
@@ -114,6 +137,7 @@ function loadDeck(n) {
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = SHIPS[G.shipOrder[(n - 1) % G.shipOrder.length]];
   const data = generate(n - 1, G.runSeed + n * 7919);
+  data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25);
   world = new World(data, ship); scene.add(world.group);
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
@@ -155,7 +179,9 @@ function loadDeck(n) {
   if (n >= 6) { const t2 = data.pickTile(([x, y]) => data.dist[x + y * data.W] > data.maxD * 0.4) || data.gornSpawn; gorns.push(new Gorn(world, t2, n, delay + 25, scene, sound)); }
 
   placeGore(data, rnd, n);
-  world.setLiftOpen(false); world.setAlert(false);
+  world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
+  G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.distT = 20 + Math.random() * 20; G.hints = {};
+  showCard(n, ship, data.flooded);
   $('decklbl').textContent = 'DECK ' + n;
   $('shipcls').textContent = ship.cls + '-class';
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
@@ -163,6 +189,10 @@ function loadDeck(n) {
   G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} isolinear chips`, 'good');
 }
 
+function showCard(n, ship, flooded) {
+  const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}`;
+  c.classList.remove('show'); void c.offsetWidth; c.classList.add('show');
+}
 function placeGore(data, rnd, n) {
   const w = world;
   const randOpen = () => data.openTiles[Math.floor(rnd() * data.openTiles.length)];
@@ -415,7 +445,11 @@ function step(dt, t) {
   // footsteps / noise
   P.stepD += speedNow * dt;
   const stride = P.sprint ? 1.5 : 1.9;
-  if (P.stepD > stride && speedNow > 0.8) { P.stepD = 0; sound.step(P.crouch ? 0.05 : P.sprint ? 0.22 : 0.13); }
+  if (P.stepD > stride && speedNow > 0.8) {
+    P.stepD = 0;
+    if (world.flooded) { sound.splash(P.crouch ? 0.05 : P.sprint ? 0.2 : 0.11); for (let i = 0; i < (P.sprint ? 10 : 5); i++) water.add(P.x + (Math.random() - 0.5) * 0.4, 0.08, P.z + (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 1.4, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 1.4, WATER, 0.6); }
+    else sound.step(P.crouch ? 0.05 : P.sprint ? 0.22 : 0.13);
+  }
   const boots = 1 - perk('boots') * 0.3;
   const sneakNoise = speedNow < 0.5 ? 0 : P.crouch ? 2.5 : P.sprint ? 15 : 7;
   noiseNow = Math.max(noiseNow * (1 - dt * 3), sneakNoise * boots);
@@ -481,10 +515,23 @@ function step(dt, t) {
   world.update(dt, t);
   lamp.position.set(P.x, 2.4, P.z);
   flickT -= dt;
-  if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0); }
+  if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = (bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0)) * (0.03 + 0.97 * world.powerAmt); }
+  lamp.intensity = 9 * (0.15 + 0.85 * world.powerAmt);
 
   // particles & ambient events
-  blood.update(dt); sparks.update(dt); steam.update(dt); dust.update(dt, P.x, P.z);
+  blood.update(dt); sparks.update(dt); steam.update(dt); water.update(dt); dust.update(dt, P.x, P.z);
+  updatePanelLights(dt);
+  // rolling blackouts: the hum stops, the lights die, something is still walking
+  if (G.blackout > 0) { G.blackout -= dt; if (G.blackout <= 0) { world.setPower(true); sound.setPower(true); sound.powerUp(); } }
+  else { G.blackT -= dt; if (G.blackT <= 0 && G.deckTime > 25) { G.blackout = 5 + Math.random() * 5; G.blackT = 60 + Math.random() * 50; world.setPower(false); sound.setPower(false); sound.powerDown(); G.say('Computer: Main power failure. Emergency lighting only.', 'comp'); } }
+  G.distT -= dt; if (G.distT <= 0) { G.distT = 25 + Math.random() * 30; sound.distant(pick(['steps', 'steps', 'scrape', 'door', 'whisper'])); }
+  for (const dr of world.drips) if (dr.fire) { dr.fire = false; if (Math.hypot(dr.x - P.x, dr.z - P.z) < 16) { for (let i = 0; i < 4; i++) water.add(dr.x, dr.y - 0.1, dr.z, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3, WATER, 1.2); sound.drip(); } }
+  if (G.phase === 'play' && G.deck === 1) {
+    const h = G.hints, dt2 = G.deckTime;
+    if (dt2 > 4 && !h.a) { h.a = 1; G.say('WASD to move · mouse to look · find the green isolinear chips', 'comp'); }
+    if (dt2 > 16 && !h.b) { h.b = 1; G.say('Check the tricorder map (top right). Hold C to creep silently.', 'comp'); }
+    if (dt2 > 30 && !h.c) { h.c = 1; G.say('Click or Space fires the phaser. It only stuns. Then run.', 'comp'); }
+  }
   for (const sp of world.sparkers) {
     sp.t -= dt;
     if (sp.t <= 0) {

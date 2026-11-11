@@ -17,11 +17,14 @@ const FinalShader = {
     void main(){
       vec2 d = vUv - 0.5; float r2 = dot(d,d);
       vec2 ca = d * (0.0015 + r2 * 0.012 + danger * 0.006 + hurt * 0.02);
-      vec3 c = vec3(texture2D(tDiffuse, vUv + ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - ca).b);
+      float wob = sin(vUv.y * 40.0 + time * 1.7) * 0.0004 * (1.0 + danger * 2.0);
+      vec2 uv = vUv + vec2(wob, 0.0);
+      vec3 c = vec3(texture2D(tDiffuse, uv + ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - ca).b);
       float g = rnd(vUv * res + fract(time) * 100.0) - 0.5;
       c += g * 0.028;
       float l = dot(c, vec3(0.299,0.587,0.114));
       c = mix(c, vec3(l), hurt * 0.5 + danger * 0.15);
+      c *= vec3(1.045, 1.02, 0.93); c = c * 0.95 + 0.012;
       c *= 1.0 - smoothstep(0.25, 0.95, r2 * 2.6) * (0.55 + danger * 0.3);
       c.r += danger * 0.08 * (1.0 - r2 * 2.0) + hurt * 0.25;
       c *= 1.0 - 0.04 * sin(vUv.y * res.y * 1.3);
