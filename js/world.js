@@ -253,6 +253,9 @@ function mats() {
   M.holo = new THREE.MeshBasicMaterial({ color: 0xffcc33, wireframe: true });
   M.pad = new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.6 });
   M.view = new THREE.MeshBasicMaterial({ map: textures().stars });
+  M.blinkR = new THREE.MeshBasicMaterial({ color: 0xff3020 });
+  M.blinkG = new THREE.MeshBasicMaterial({ color: 0x30ff60 });
+  M.pipe = new THREE.MeshLambertMaterial({ color: 0x70757d });
   return M;
 }
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
@@ -263,14 +266,20 @@ export function buildProp(kind) {
   switch (kind) {
     case 'console':
       g.add(box(1.6, 1.0, 0.7, m.dark)); const s = box(1.4, 0.05, 0.5, m.screenB, 0, 1.0, 0); s.rotation.x = -0.3; g.add(s);
-      g.add(box(0.2, 0.05, 0.2, m.screenO, 0.4, 1.02, 0.1)); break;
+      g.add(box(0.2, 0.05, 0.2, m.screenO, 0.4, 1.02, 0.1));
+      g.add(box(0.07, 0.07, 0.07, m.blinkR, -0.6, 1.04, 0.25)); g.add(box(0.07, 0.07, 0.07, m.blinkG, -0.45, 1.04, 0.25));
+      for (let i = 0; i < 4; i++) g.add(box(0.14, 0.14, 0.02, i % 2 ? m.screenO : m.screenB, -0.5 + i * 0.33, 0.35, 0.36));
+      g.add(box(0.5, 0.9, 0.5, m.dark, 0.0, 1.0, -0.2)); break;
     case 'chair':
       g.add(box(0.8, 0.45, 0.8, m.fabric)); g.add(box(0.8, 0.9, 0.15, m.fabric, 0, 0.45, 0.35)); g.add(box(0.3, 0.3, 0.3, m.metal, 0, -0.0, 0)); g.add(box(0.1, 0.3, 0.8, m.dark, 0.55, 0.45, 0)); g.add(box(0.1, 0.3, 0.8, m.dark, -0.55, 0.45, 0)); break;
     case 'viewscreen': {
       const v = box(2.2, 1.4, 0.1, m.view, 0, 0.8, 0); g.add(v); g.add(box(2.4, 0.8, 0.5, m.dark)); break; }
     case 'warpcore': {
       const c = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, WH, 12), m.core); c.position.y = WH / 2; c.name = 'core'; g.add(c);
-      g.add(box(1.1, 0.4, 1.1, m.metal)); g.add(box(1.1, 0.3, 1.1, m.metal, 0, WH - 0.3, 0)); break; }
+      g.add(box(1.1, 0.4, 1.1, m.metal)); g.add(box(1.1, 0.3, 1.1, m.metal, 0, WH - 0.3, 0));
+      for (let i = 0; i < 5; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.04, 6, 16), m.metal); r.rotation.x = Math.PI / 2; r.position.y = 0.7 + i * 0.5; g.add(r); }
+      for (const [px, pz] of [[0.8, 0.8], [-0.8, 0.8], [0.8, -0.8], [-0.8, -0.8]]) { const pp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, WH, 6), m.pipe); pp.position.set(px * 0.7, WH / 2, pz * 0.7); g.add(pp); }
+      break; }
     case 'shuttle':
       g.add(box(2.0, 0.9, 1.5, m.white, 0, 0.2, 0)); g.add(box(0.8, 0.5, 1.2, m.metal, 1.1, 0.2, 0)); g.add(box(0.6, 0.35, 0.05, m.screenB, 1.0, 0.75, 0.0)); g.add(box(0.5, 0.15, 1.8, m.metal, -0.3, 0.55, 0)); break;
     case 'holocube': {
@@ -324,7 +333,9 @@ export class World {
     this.flickers = [];
     this.spin = [];
     this.explored = new Uint8Array(this.W * this.H);
+    this.wallFaces = []; this.sparkers = []; this.steamers = []; this.alertAmt = 0;
     this._build();
+    this._details();
   }
 
   tile(x, z) { return [Math.floor(x / TS), Math.floor(z / TS)]; }
@@ -412,7 +423,7 @@ export class World {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(-Math.PI / 2);
       const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ map }), list.length);
       list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, colorFn(x, y)); });
-      g.add(im);
+      im.receiveShadow = true; g.add(im);
     };
     mkFloor(normal, T.floor, (x, y) => {
       const r = d.room[y][x]; const c = floorCol.clone();
@@ -447,7 +458,7 @@ export class World {
         list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, WH - 0.02, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
         g.add(im); return mat;
       };
-      mkPanels(steady);
+      this.steadyMat = mkPanels(steady); this.alertCol = new THREE.Color(0xff1808);
       const fm = mkPanels(flick);
       if (fm) this.flickMat = fm;
       this.lightCol = lightCol;
@@ -460,7 +471,7 @@ export class World {
         dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
         im.setColorAt(i, wallCol.clone().multiplyScalar(0.82 + rndv() * 0.22));
       });
-      g.add(im);
+      im.castShadow = true; im.receiveShadow = true; g.add(im);
     }
     // wall decorations on faces adjoining open tiles
     {
@@ -471,6 +482,7 @@ export class World {
         const roomT = d.room[y + dy][x + dx];
         const roll = rndv();
         stripes.push({ px, pz, ry });
+        this.wallFaces.push({ tx: x, ty: y, dx, dy, px, pz, ry, room: roomT });
         if (roll < 0.18) lcars.push({ px, pz, ry, n: 1 + Math.floor(rndv() * 3) });
         else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) windows.push({ px, pz, ry });
       }
@@ -502,7 +514,7 @@ export class World {
       m.position.set(cx, 0, cz); m.rotation.y = p.kind === 'viewscreen' ? 0 : p.rot;
       if (p.kind === 'viewscreen') { m.position.z -= TS * 0.35; }
       g.add(m);
-      m.traverse(o => { if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
+      m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
     }
     // lift
     {
@@ -516,17 +528,115 @@ export class World {
     }
   }
 
+  _details() {
+    const d = this.d, ship = this.ship, g = this.group, T = textures();
+    const rnd = mulberry32(d.deck * 4421 + 5);
+    const dummy = new THREE.Object3D();
+    const accent = new THREE.Color(ship.accent);
+    // --- signs
+    const signTex = {};
+    const sign = (text, col) => {
+      const key = text + col;
+      if (!signTex[key]) signTex[key] = canvasTex(256, (c, sz) => {
+        c.fillStyle = '#0b0e16'; c.fillRect(0, 0, sz, sz);
+        c.fillStyle = '#' + new THREE.Color(col).getHexString(); c.fillRect(0, 0, sz, 10); c.fillRect(0, sz - 10, sz, 10);
+        c.fillStyle = '#fff'; c.font = 'bold 28px Helvetica, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        const words = text.split('\n'); words.forEach((w, i) => c.fillText(w, sz / 2, sz / 2 + (i - (words.length - 1) / 2) * 34));
+      });
+      return signTex[key];
+    };
+    const place = (f, text, y = 2.6, w = 1.4) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: sign(text, ship.accent), color: 0xdddddd }));
+      m.scale.set(1, 0.3, 1); m.position.set(f.px + f.dx * 0.01, y, f.pz + f.dy * 0.01); m.rotation.y = f.ry; g.add(m);
+    };
+    for (const r of d.rooms) {
+      const fs = this.wallFaces.filter(f => f.room === r.type && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h);
+      if (fs.length) place(fs[Math.floor(rnd() * fs.length)], ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
+    }
+    const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'JEFFERIES\nTUBE ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TURBOLIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
+    for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) place(f, corr[Math.floor(rnd() * corr.length)], 2.55, 1.2);
+    // --- door frames between rooms and corridors
+    const frames = [];
+    for (const r of d.rooms) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy; if (nx >= r.x && nx < r.x + r.w && ny >= r.y && ny < r.y + r.h) continue;
+      if (d.grid[ny]?.[nx] !== 0) continue; // 0 = open corridor
+      frames.push({ x: (x + 0.5) * TS + dx * TS / 2, z: (y + 0.5) * TS + dy * TS / 2, ax: dx !== 0 });
+    }
+    if (frames.length) {
+      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff }), frames.length * 3);
+      let i = 0; const c = accent.clone().multiplyScalar(0.55), c2 = new THREE.Color(0x30343c);
+      for (const f of frames) {
+        const lat = TS / 2 - 0.12;
+        const parts = [[0, 0, -lat, 0.28, WH, 0.24, c2], [0, 0, lat, 0.28, WH, 0.24, c2], [0, WH - 0.25, 0, 0.3, 0.5, TS, c]];
+        for (const [ox, oy, oz, sx, sy, sz, col] of parts) {
+          const X = f.ax ? ox : oz, Z = f.ax ? oz : ox;
+          dummy.position.set(f.x + X, oy + sy / 2, f.z + Z); dummy.scale.set(f.ax ? sx : sz, sy, f.ax ? sz : sx); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+          im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, col); i++;
+        }
+      }
+      im.castShadow = true; g.add(im);
+    }
+    // --- ceiling pipes + vents
+    const pipes = [], vents = [];
+    for (const [x, y] of d.openTiles) {
+      if (d.grid[y][x] === 2) continue;
+      const r = d.room[y][x];
+      if (rnd() < (r ? 0.1 : 0.22)) pipes.push({ x, y, ax: d.grid[y][x + 1] === 0 || d.grid[y][x - 1] === 0 ? 0 : 1, off: (rnd() - 0.5) * 1.8, col: rnd() < 0.3 ? accent : null });
+      else if ((x + y) % 2 === 1 && rnd() < 0.35) vents.push({ x, y });
+    }
+    if (pipes.length) {
+      const geo = new THREE.CylinderGeometry(0.07, 0.07, TS, 7);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff }), pipes.length);
+      pipes.forEach((p, i) => {
+        dummy.position.set((p.x + 0.5) * TS + (p.ax ? p.off : 0), WH - 0.2, (p.y + 0.5) * TS + (p.ax ? 0 : p.off));
+        dummy.rotation.set(p.ax ? 0 : Math.PI / 2, 0, p.ax ? 0 : Math.PI / 2); dummy.scale.set(1, 1, 1);
+        if (!p.ax) dummy.rotation.set(0, 0, Math.PI / 2); else dummy.rotation.set(Math.PI / 2, 0, 0);
+        dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, (p.col || new THREE.Color(0x777b83)).clone());
+      });
+      im.castShadow = true; g.add(im);
+    }
+    if (vents.length) {
+      const geo = new THREE.PlaneGeometry(0.9, 0.5); geo.rotateX(Math.PI / 2);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0x15171b }), vents.length);
+      vents.forEach((v, i) => { dummy.position.set((v.x + 0.5) * TS, WH - 0.03, (v.y + 0.5) * TS); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+      g.add(im);
+    }
+    // --- floor markings: hazard tape at the lift, launch ring in shuttlebays
+    const haz = canvasTex(128, (c, sz) => { c.fillStyle = '#e0b020'; c.fillRect(0, 0, sz, sz); c.fillStyle = '#111'; for (let i = -sz; i < sz * 2; i += 32) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 16, 0); c.lineTo(i + 16 - sz, sz); c.lineTo(i - sz, sz); c.fill(); } });
+    const [ex, ey] = d.exit, [edx, edy] = d.exitDir; const [ecx, ecz] = this.center(ex, ey);
+    const hm = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshLambertMaterial({ map: haz })); hm.rotation.x = -Math.PI / 2; hm.rotation.z = Math.atan2(edx, edy) + Math.PI / 2 * 0;
+    hm.rotation.set(-Math.PI / 2, 0, 0); hm.rotation.order = 'YXZ'; hm.rotation.y = Math.atan2(edx, edy); hm.position.set(ecx, 0.014, ecz); g.add(hm);
+    const ring = canvasTex(256, (c, sz) => { c.clearRect(0, 0, sz, sz); c.strokeStyle = '#e8c840'; c.lineWidth = 10; c.beginPath(); c.arc(sz / 2, sz / 2, sz / 2 - 12, 0, 7); c.stroke(); c.lineWidth = 4; c.beginPath(); c.arc(sz / 2, sz / 2, sz / 2 - 34, 0, 7); c.stroke(); c.fillStyle = '#e8c840'; c.font = 'bold 22px Helvetica'; c.textAlign = 'center'; c.fillText('LANDING ZONE', sz / 2, sz / 2 + 100); });
+    for (const r of d.rooms) {
+      if (r.type === 'shuttlebay') {
+        const [cx, cz] = this.center(r.x + (r.w >> 1), r.y + (r.h >> 1));
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), new THREE.MeshBasicMaterial({ map: ring, transparent: true, depthWrite: false, opacity: 0.8, color: 0xaaaaaa }));
+        m.rotation.x = -Math.PI / 2; m.position.set(cx, 0.014, cz); g.add(m);
+      }
+      if (r.type === 'engineering') { for (const [ox, oy] of [[0, 0], [r.w - 1, 0], [0, r.h - 1], [r.w - 1, r.h - 1]]) { const [sx, sz] = this.center(r.x + ox, r.y + oy); this.steamers.push({ x: sx, z: sz, t: rnd() * 2 }); } }
+    }
+    for (const p of d.props) if (p.kind === 'console' && rnd() < 0.4) { const [sx, sz] = this.center(p.tx, p.ty); this.sparkers.push({ x: sx, z: sz, t: 2 + rnd() * 8 }); }
+  }
+
+  setAlert(on) { this.alertTarget = on ? 1 : 0; }
+
   setLiftOpen(open) {
     this.liftStatus.material.color.set(open ? 0x40ff70 : 0xff3030);
     this.liftOpen = open;
   }
 
   update(dt, t) {
+    this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
+    M.blinkR.color.setRGB(0.4 + 0.6 * (Math.sin(t * 5) > 0 ? 1 : 0), 0.1, 0.07); M.blinkG.color.setRGB(0.1, 0.4 + 0.6 * (Math.sin(t * 3.1 + 1) > 0 ? 1 : 0), 0.2);
     for (const s of this.spin) { s.rotation.y += dt * 0.8; s.rotation.x += dt * 0.3; }
     if (this.core) this.core.material.opacity = 0.7 + Math.sin(t * 3) * 0.15;
     if (this.flickMat) {
       const f = (Math.sin(t * 31) + Math.sin(t * 17.3) + Math.sin(t * 5.1)) > 1.4 ? 0.15 : (Math.random() < 0.03 ? 0.4 : 1);
       this.flickMat.color.copy(this.lightCol).multiplyScalar(f);
+    }
+    if (this.steadyMat) {
+      const a = this.alertAmt, pulse = 0.55 + 0.45 * Math.sin(t * 6);
+      this.steadyMat.color.copy(this.lightCol).lerp(this.alertCol, a * pulse).multiplyScalar(1 - a * 0.35);
     }
     if (this.liftOpen) {
       const L = this.lift.getObjectByName('doorL'), R = this.lift.getObjectByName('doorR');

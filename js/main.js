@@ -4,9 +4,12 @@ import { generate, World, TS } from './world.js';
 import { Sound } from './audio.js';
 import { Gorn, S } from './gorn.js';
 import { makeCrew, makeTribble, makeItem } from './actors.js';
+import { Post, Particles, Decals, Dust } from './fx.js';
 
 const $ = (id) => document.getElementById(id);
 const WIN_DECK = 8;
+const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder alert.', 'Warning: structural integrity field fluctuating.', 'Transporter room 3 reports unauthorized biosign.',
+  'Please remain calm. All decks are safe.', 'Hull breach detected. Sealing bulkheads.', 'Unable to locate captain.', 'Gravity plating offline in section 12.', 'Security teams respond to the cargo bay.', 'Self-destruct sequence: cancelled.', 'There are no lifeforms aboard.'];
 
 // ---------------- renderer ----------------
 const canvas = $('view');
@@ -19,10 +22,40 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi)
 const lamp = new THREE.PointLight(0xfff0d0, 9, 14, 1.8); scene.add(lamp);
 const torch = new THREE.SpotLight(0xfff6e0, 38, 30, 0.5, 0.6, 1.6); torch.position.set(0.15, -0.1, 0); camera.add(torch);
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.camera.near = 0.2; torch.shadow.camera.far = 30; torch.shadow.bias = -0.0004; torch.shadow.normalBias = 0.04;
+let post = null;
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post?.setSize(innerWidth, innerHeight); }
 addEventListener('resize', resize); resize();
+post = new Post(renderer, scene, camera);
+const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
+const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
+const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
+const decals = new Decals(scene);
+const dust = new Dust(scene);
+blood.onLand = (x, z) => { if (Math.random() < 0.35) decals.floor('blood', x, z, 0.12 + Math.random() * 0.3); };
+const RED = new THREE.Color(0x7a0808), RED2 = new THREE.Color(0xa01010), SPARK = new THREE.Color(0xffb050), STEAM = new THREE.Color(0xcfd8e0);
+function bloodBurst(x, y, z, n, speed, dx = 0, dz = 0) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, sp = Math.random() * speed; blood.add(x, y, z, Math.cos(a) * sp + dx, 1 + Math.random() * 3, Math.sin(a) * sp + dz, Math.random() < 0.5 ? RED : RED2, 0.6 + Math.random() * 0.8); }
+}
+function screenSplat(n, persist = false) {
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div'); const sz = 90 + Math.random() * 260;
+    d.style.cssText = `position:fixed;z-index:4;pointer-events:none;left:${Math.random() * 100}%;top:${Math.random() * 100}%;width:${sz}px;height:${sz * (0.7 + Math.random() * 0.6)}px;margin:-${sz / 2}px;border-radius:${40 + Math.random() * 20}% ${40 + Math.random() * 20}% ${50 + Math.random() * 20}% ${40 + Math.random() * 20}%;background:radial-gradient(circle at 40% 40%,rgba(150,8,8,.95),rgba(80,0,0,.9) 60%,rgba(60,0,0,.55));filter:blur(1px);box-shadow:0 ${sz * 0.5}px ${sz * 0.12}px -${sz * 0.3}px rgba(100,0,0,.7);transition:opacity 5s ease-in ${persist ? 99 : 1.5}s,transform 6s ease-in;opacity:1;transform:scale(1)`;
+    document.body.appendChild(d);
+    if (!persist) requestAnimationFrame(() => { d.style.opacity = 0; d.style.transform = 'translateY(40px) scale(1.1)'; setTimeout(() => d.remove(), 7000); });
+    else d.className = 'persist-splat';
+  }
+}
+function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e => e.remove()); }
 
-const sound = new Sound();
+const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
+const sound = new Sound(); sound.vol = CFG.vol;
+function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
+function setQuality(q) {
+  CFG.quality = q; torch.castShadow = q === 'high'; renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
+  const el = $('qsel'); if (el) el.value = q;
+}
 
 // phaser beam visual
 const beamMat = new THREE.LineBasicMaterial({ color: 0xff9a3a, transparent: true, opacity: 1 });
@@ -38,7 +71,7 @@ const G = {
 };
 const P = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0, pitch: 0, crouch: false, sprint: false, bob: 0, stepD: 0, torch: true, shake: 0, kbx: 0, kbz: 0 };
 const keys = {};
-let world = null, gorns = [], ents = [], ship = null, shot = 0, noiseNow = 0, mapOn = true, locked = false, lastHeart = 0, invuln = 0;
+let wasChased = false, world = null, gorns = [], ents = [], ship = null, shot = 0, noiseNow = 0, mapOn = true, locked = false, lastHeart = 0, invuln = 0;
 
 const perk = (id) => G.perks[id] || 0;
 
@@ -75,7 +108,7 @@ function clearLevel() {
 }
 
 function loadDeck(n) {
-  clearLevel();
+  clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = SHIPS[G.shipOrder[(n - 1) % G.shipOrder.length]];
   const data = generate(n - 1, G.runSeed + n * 7919);
@@ -119,12 +152,38 @@ function loadDeck(n) {
   gorns.push(new Gorn(world, data.gornSpawn, n, delay, scene, sound));
   if (n >= 6) { const t2 = data.pickTile(([x, y]) => data.dist[x + y * data.W] > data.maxD * 0.4) || data.gornSpawn; gorns.push(new Gorn(world, t2, n, delay + 25, scene, sound)); }
 
-  world.setLiftOpen(false);
+  placeGore(data, rnd, n);
+  world.setLiftOpen(false); world.setAlert(false);
   $('decklbl').textContent = 'DECK ' + n;
   $('shipcls').textContent = ship.cls + '-class';
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
   G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} isolinear chips`, 'good');
+}
+
+function placeGore(data, rnd, n) {
+  const w = world;
+  const randOpen = () => data.openTiles[Math.floor(rnd() * data.openTiles.length)];
+  const jit = (v, r) => v + (rnd() - 0.5) * r;
+  // scattered splatters, more on deeper decks
+  const nSplat = 5 + n * 3;
+  for (let i = 0; i < nSplat; i++) { const t = randOpen(); if (data.grid[t[1]][t[0]] !== 0) continue; const [cx, cz] = w.center(t[0], t[1]); decals.floor('blood', jit(cx, TS * 0.8), jit(cz, TS * 0.8), 0.5 + rnd() * 1.1, rnd()); }
+  // wall splats + claw marks + scorch
+  const faces = w.wallFaces;
+  for (let i = 0; i < 3 + n * 2 && faces.length; i++) { const f = faces[Math.floor(rnd() * faces.length)]; decals.wall('blood', f.px + f.dx * 0.01, 0.8 + rnd() * 1.6, f.pz + f.dy * 0.01, f.ry, 0.8 + rnd() * 1.4); }
+  for (let i = 0; i < 2 + n && faces.length; i++) { const f = faces[Math.floor(rnd() * faces.length)]; decals.wall('claw', f.px + f.dx * 0.02, 1.3 + rnd() * 0.8, f.pz + f.dy * 0.02, f.ry, 1.0 + rnd() * 0.6); }
+  for (let i = 0; i < 2 + n && faces.length; i++) { const f = faces[Math.floor(rnd() * faces.length)]; decals.wall('scorch', f.px + f.dx * 0.015, 0.7 + rnd() * 1.6, f.pz + f.dy * 0.015, f.ry, 0.8 + rnd() * 1.2); }
+  // pools + drag trails at bodies
+  for (const e of ents) if (e.kind === 'body') {
+    decals.floor('blood0', e.x, e.z + 0.8, 2.2, 1); decals.floor('blood1', e.x + 0.3, e.z + 0.5, 1.6, 1);
+    const [tx, ty] = w.tile(e.x, e.z); let cx = tx, cy = ty, dir = null;
+    for (let seg = 0; seg < 5; seg++) {
+      const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => data.grid[cy + b]?.[cx + a] === 0);
+      if (!opts.length) break; if (!dir || rnd() < 0.3) dir = opts[Math.floor(rnd() * opts.length)];
+      for (let k = 0; k < 4; k++) { const [px, pz] = w.center(cx, cy); decals.floor('blood2', px + dir[0] * k * 0.6 + jit(0, 0.3), pz + dir[1] * k * 0.6 + jit(0, 0.3), 1.1, 1 - seg * 0.12); }
+      cx += dir[0]; cy += dir[1]; if (data.grid[cy]?.[cx] !== 0) break;
+    }
+  }
 }
 
 // ---------------- run control ----------------
@@ -186,12 +245,14 @@ function choosePerk(id) {
 function fmtTime(s) { s |= 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 function die(by) {
-  G.phase = 'dead'; sound.death(); document.exitPointerLock?.();
+  G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
+  bloodBurst(P.x, 1.0, P.z, 120, 5); for (let i = 0; i < 6; i++) decals.floor('blood', P.x + (Math.random() - 0.5) * 2, P.z + (Math.random() - 0.5) * 2, 1.2 + Math.random(), 1);
+  screenSplat(14, true); sound.roar(0.35); by.roar = 1.5; $('danger').style.opacity = 1; $('prompt').textContent = '';
   const deckReached = G.deck;
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
   $('deathline').textContent = pick(DEATH_LINES);
   $('stats').innerHTML = `Reached <b>Deck ${deckReached}</b> aboard the ${ship.name} (${ship.reg}).<br>Tribbles rescued: ${G.tribbles} · Gorn stunned: ${G.stuns} · Time: ${fmtTime(G.time)}<br>Best: Deck ${G.best}`;
-  setTimeout(() => showScreen('dead'), 900);
+  setTimeout(() => showScreen('dead'), 2400);
 }
 
 // callbacks used by Gorn AI
@@ -201,6 +262,7 @@ G.hitPlayer = (gorn, dmg) => {
   if (G.shield) { G.shield = false; G.say('Deflector absorbed the hit!', 'good'); flash('#39f', 0.5); sound.hit(); }
   else { G.hp -= dmg; flash('#c00', 0.7); sound.hit(); G.say('Gorn attack!', 'warn'); }
   P.shake = 0.6; invuln = 1.2;
+  if (!G.shield || G.hp < G.maxHp) { bloodBurst(P.x, 1.2, P.z, 60, 4, Math.sin(gorn.yaw) * 2, Math.cos(gorn.yaw) * 2); decals.floor('blood1', P.x, P.z, 1.4, 1); sound.squelch(); screenSplat(4); gorn.bloodTrail = 14; }
   const dx = P.x - gorn.x, dz = P.z - gorn.z, d = Math.hypot(dx, dz) || 1;
   const kb = perk('dampener') ? 4 : 8; P.kbx = dx / d * kb; P.kbz = dz / d * kb;
   gorn.attackCd = 3; gorn.state = S.SEARCH; gorn.timer = 4;
@@ -224,10 +286,16 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys[e.code] = false);
 addEventListener('mousemove', (e) => {
   if (!locked || G.phase !== 'play') return;
-  P.yaw -= e.movementX * 0.0022; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022));
+  P.yaw -= e.movementX * 0.0022 * CFG.sens; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022 * CFG.sens));
 });
-addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused') resumeGame(); });
+addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings')) resumeGame(); });
 function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
+$('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
+$('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
+$('qsel').onchange = (e) => setQuality(e.target.value);
+$('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
+if (CFG.quality === 'low') setQuality('low');
+$('resume').onmousedown = (e) => e.stopPropagation();
 $('begin').onclick = newRun; $('again').onclick = newRun; $('again2').onclick = newRun; $('resume').onclick = resumeGame;
 $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offerPerks(); };
 
@@ -361,6 +429,9 @@ function step(dt, t) {
     }
   }
   tension = Math.min(1, tension);
+  const chased = gorns.some(g => g.state === S.CHASE);
+  if (chased !== wasChased) { world.setAlert(chased); if (chased) sound.klaxon(); wasChased = chased; }
+  for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
   if (tension > 0.35 && t - lastHeart > 1.2 - tension * 0.7) { lastHeart = t; sound.heartbeat(0.2 + tension * 0.3); }
@@ -408,6 +479,25 @@ function step(dt, t) {
   flickT -= dt;
   if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0); }
 
+  // particles & ambient events
+  blood.update(dt); sparks.update(dt); steam.update(dt); dust.update(dt, P.x, P.z);
+  for (const sp of world.sparkers) {
+    sp.t -= dt;
+    if (sp.t <= 0) {
+      sp.t = 5 + Math.random() * 14; const d = Math.hypot(sp.x - P.x, sp.z - P.z);
+      if (d < 22) { for (let i = 0; i < 14; i++) sparks.add(sp.x, 1.1, sp.z, (Math.random() - 0.5) * 3, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3, SPARK, 0.5 + Math.random() * 0.5); if (d < 14) sound.zap(); }
+    }
+  }
+  for (const st of world.steamers) {
+    st.t -= dt;
+    if (st.t <= 0 && Math.hypot(st.x - P.x, st.z - P.z) < 20) { st.t = 0.08; steam.add(st.x, 0.3, st.z, (Math.random() - 0.5) * 0.4, 1.2 + Math.random(), (Math.random() - 0.5) * 0.4, STEAM, 2.2); }
+  }
+  G.annT = (G.annT ?? 40) - dt;
+  if (G.annT <= 0) { G.annT = 50 + Math.random() * 40; sound.chirp(); G.say('Computer: ' + pick(COMPUTER), 'comp'); }
+  G.clangT = (G.clangT ?? 20) - dt;
+  if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; sound.clang(0.15); }
+  if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
+
   // camera
   const eyeH = P.crouch ? 1.05 : 1.65;
   P.shake = Math.max(0, P.shake - dt * 1.5);
@@ -418,15 +508,29 @@ function step(dt, t) {
   camera.fov += ((P.sprint ? 82 : 75) - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix();
 }
 
+let slow = 0;
+function dyingStep(dt, t) {
+  G.dyingT += dt; world.update(dt, t); blood.update(dt); sparks.update(dt); steam.update(dt);
+  const k = Math.min(1, G.dyingT / 1.3);
+  camera.position.set(P.x, 1.65 - 1.4 * k * k, P.z);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(P.pitch + 0.6 * k, P.yaw, k * 1.3);
+  for (const g of gorns) if (g.active) { g.mesh.rotation.y = Math.atan2(P.x - g.x, P.z - g.z); }
+}
 function frame() {
   requestAnimationFrame(frame);
   const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; elapsed += dt; const t = elapsed;
   if (G.phase === 'play' && world) step(dt, t);
-  else if (world) { world.update(dt, t); }
-  renderer.render(scene, camera);
+  else if (G.phase === 'dying' && world) dyingStep(dt, t);
+  else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z); }
+  // auto-downgrade if the machine struggles
+  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
+  if (CFG.quality === 'high') {
+    const danger = parseFloat($('danger').style.opacity) || 0;
+    post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
+  } else renderer.render(scene, camera);
 }
 
 // expose for debugging/tests
-window.__game = { G, P, get world() { return world; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer };
+window.__game = { CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

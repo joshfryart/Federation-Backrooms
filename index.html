@@ -53,6 +53,8 @@
   .card h3 { margin:0 0 6px; font-size:15px; color:var(--lc1); text-transform:uppercase; letter-spacing:.06em; }
   .card p { margin:0; font-size:13px; }
   .card small { color:#8ac; }
+  .settings { margin-top:22px; display:grid; gap:10px; text-align:left; font-size:13px; letter-spacing:.06em; text-transform:uppercase; } .settings label { display:flex; justify-content:space-between; gap:20px; align-items:center; } .settings select { background:#101528; color:#fff; border:1px solid var(--lc3); padding:4px; }
+  #toast.comp { color:#8fd8ff; }
   #best { margin-top:18px; font-size:12px; opacity:.6; }
   #fade { background:#000; opacity:0; transition:opacity .7s; z-index:5; }
 </style>
@@ -90,12 +92,15 @@
   <button class="btn" id="begin">Begin shift</button>
   <div id="best"></div>
 </div>
-<div class="screen" id="pause"><h2>Paused</h2><p>Click to resume. The Gorn does not pause.</p><button class="btn" id="resume">Resume</button></div>
+<div class="screen" id="pause"><h2>Paused</h2><p>Click to resume. The Gorn does not pause.</p><button class="btn" id="resume">Resume</button>
+  <div class="settings"><label>Mouse sensitivity <input id="sens" type="range" min="0.3" max="2.5" step="0.05" value="1"></label>
+  <label>Volume <input id="vol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+  <label>Graphics <select id="qsel"><option value="high">High (bloom, shadows)</option><option value="low">Performance</option></select></label></div></div>
 <div class="screen" id="perkscreen"><h2>Deck cleared</h2><p id="perkinfo">Choose a requisition for the next deck.</p><div class="cards" id="cards"></div></div>
 <div class="screen" id="dead"><h1><b>Lost</b></h1><h2 id="deathline"></h2><p id="stats"></p><button class="btn" id="again">New run</button></div>
 <div class="screen" id="win"><h1>You <b>escaped</b></h1><h2>Escape pod away</h2><p id="winstats"></p><button class="btn" id="cont">Keep going (endless)</button> <button class="btn" id="again2">New run</button></div>
 
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>

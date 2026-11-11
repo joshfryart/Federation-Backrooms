@@ -11,6 +11,7 @@ export function makeGorn() {
   const dark = new THREE.MeshLambertMaterial({ color: 0x3b4420 });
   const eye = new THREE.MeshBasicMaterial({ color: 0xffd23a });
   const tooth = new THREE.MeshLambertMaterial({ color: 0xe8e2c0 });
+  const gore = new THREE.MeshLambertMaterial({ color: 0x6a0a0a });
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
   const torso = mk(new THREE.BoxGeometry(1.0, 1.2, 0.8), skin, 0, 1.55, 0); torso.rotation.x = 0.25; body.add(torso);
@@ -27,13 +28,16 @@ export function makeGorn() {
     for (let i = 0; i < 4; i++) head.add(mk(new THREE.ConeGeometry(0.035, 0.12, 4), tooth, sx * (0.08 + i * 0.09) * 1.0 - 0, -0.33, 0.6));
   }
   for (let i = 0; i < 5; i++) { const c = mk(new THREE.ConeGeometry(0.06, 0.25, 5), dark, 0, 0.3, -0.1 - i * 0.1); head.add(c); c.rotation.x = -0.3; }
+  head.add(mk(new THREE.BoxGeometry(0.5, 0.1, 0.12), gore, 0, -0.3, 0.6));
+  head.add(mk(new THREE.BoxGeometry(0.1, 0.3, 0.1), gore, 0.15, -0.5, 0.58));
+  body.add(mk(new THREE.BoxGeometry(0.5, 0.35, 0.05), gore, 0.1, 1.35, 0.46));
   // arms
   const arms = [];
   for (const sx of [-1, 1]) {
     const a = new THREE.Group(); a.position.set(sx * 0.65, 2.0, 0.15); body.add(a);
     a.add(mk(new THREE.BoxGeometry(0.25, 0.9, 0.25), skin, 0, -0.4, 0.15));
     const claw = mk(new THREE.BoxGeometry(0.3, 0.25, 0.3), dark, 0, -0.9, 0.25); a.add(claw);
-    for (let i = -1; i <= 1; i++) { const c = mk(new THREE.ConeGeometry(0.04, 0.2, 4), tooth, i * 0.09, -1.1, 0.3); c.rotation.x = Math.PI; a.add(c); }
+    for (let i = -1; i <= 1; i++) { const c = mk(new THREE.ConeGeometry(0.04, 0.2, 4), i === 0 ? gore : tooth, i * 0.09, -1.1, 0.3); c.rotation.x = Math.PI; a.add(c); }
     a.rotation.x = -0.5; arms.push(a);
   }
   // legs
@@ -78,11 +82,24 @@ export function makeCrew(color = 0xb02a20, dead = false, skinTone = 0xe0b090) {
   body.add(mk(new THREE.BoxGeometry(0.5, 0.1, 0.3), black, 0, 0.9, 0));
   const head = mk(new THREE.SphereGeometry(0.17, 10, 8), skin, 0, 1.7, 0); body.add(head);
   body.add(mk(new THREE.SphereGeometry(0.18, 10, 8, 0, Math.PI * 2, 0, 1.2), hair, 0, 1.72, -0.01));
+  const bl = new THREE.MeshLambertMaterial({ color: 0x5a0808 });
+  const parts = {};
   for (const sx of [-1, 1]) {
     body.add(mk(new THREE.BoxGeometry(0.14, 0.6, 0.14), tunic, sx * 0.34, 1.15, 0));
-    body.add(mk(new THREE.BoxGeometry(0.2, 0.8, 0.2), black, sx * 0.13, 0.45, 0));
+    parts[sx] = mk(new THREE.BoxGeometry(0.2, 0.8, 0.2), black, sx * 0.13, 0.45, 0); body.add(parts[sx]);
   }
-  if (dead) { body.rotation.x = -Math.PI / 2; body.position.set(0, 0.2, 0.9); body.rotation.z = Math.random() - 0.5; }
+  if (dead) {
+    body.rotation.x = -Math.PI / 2; body.position.set(0, 0.2, 0.9); body.rotation.z = Math.random() - 0.5;
+    // gore: torn tunic, bloody wounds, and sometimes a missing leg lying nearby
+    body.add(mk(new THREE.BoxGeometry(0.34, 0.4, 0.32), bl, 0.05, 1.2, 0.02));
+    body.add(mk(new THREE.BoxGeometry(0.2, 0.15, 0.2), bl, -0.1, 1.55, 0.05));
+    if (Math.random() < 0.7) {
+      const leg = parts[1]; body.remove(leg);
+      body.add(mk(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 8), bl, 0.13, 0.04, 0));
+      leg.position.set(0.9, 0.2, 0.3); leg.rotation.set(0.2, 0.5, 1.4); g.add(leg); leg.position.set(0.8, 0.12, 0.5);
+      leg.rotation.set(0, 0.6, Math.PI / 2); leg.userData.severed = true;
+    }
+  }
   g.userData.head = head;
   return g;
 }
