@@ -187,11 +187,11 @@ function loadDeck(n) {
 
   // Jiffy tubes: something worth crawling for in the middle, and sometimes something waiting
   for (const t of data.tubes) {
-    const mid = t.tiles[t.tiles.length >> 1];
+    const mid = t.tiles[(t.ladder > 0 ? t.ladder : t.tiles.length) >> 1];   // on the lower run
     const kind = rnd() < 0.5 ? 'battery' : 'medkit'; add(kind, mid, makeItem(kind));
   }
   spawnThreats(data, n, rnd);
-  for (const t of data.tubes) if (n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[1], n, 0, scene, sound));
+  for (const t of data.tubes) if (n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[t.ladder === 1 ? 0 : 1], n, 0, scene, sound));
   placeGore(data, rnd, n);
   world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
   G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.distT = 20 + Math.random() * 20; G.hints = {};
@@ -643,6 +643,8 @@ const moveApi = {
     else if (name === 'slide') { sound.noise(0.55, 0.12, 900, 0.7, 'bandpass'); slideHit = 0.9; }
     else if (name === 'wallrun') { sound.step(0.2); }
     else if (name === 'walljump') { sound.step(0.22); noiseNow = Math.max(noiseNow, 8); }
+    else if (name === 'rung') { sound.tone(180 + Math.random() * 40, 0.06, 'square', 0.03, -60); sound.step(0.07); noiseNow = Math.max(noiseNow, 4); }
+    else if (name === 'ladder') { if (!G.hints.ladder) { G.hints.ladder = 1; G.say('Ladder: W climbs · S or C climbs down · Space lets go', ''); } }
     else if (name === 'release') { sound.noise(0.18, 0.08, 2600, 2, 'bandpass'); }
   },
 };

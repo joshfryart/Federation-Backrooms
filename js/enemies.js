@@ -96,6 +96,8 @@ export class Enemy {
     if (this.noCrawl && this.w.isTube(tx, ty)) {   // too big for a Jiffy tube: wait at whichever mouth is nearer the quarry
       const t = this.w.d.tubes.find(t => t.tiles.some(([x, y]) => x === tx && y === ty)); const i = t.tiles.findIndex(([x, y]) => x === tx && y === ty);
       [tx, ty] = i < t.tiles.length / 2 ? t.a : t.b;
+    } else if (this.w.tubeKind(tx, ty) === 'up') {   // quarry is in an upper run: crawl to the foot of the ladder and wait
+      const t = this.w.d.tubes.find(t => t.tiles.some(([x, y]) => x === tx && y === ty)); [tx, ty] = t.tiles[t.ladder];
     }
     if (this.w.grid[ty]?.[tx] !== 0) {   // player is on top of a prop (or in a wall tile): aim for the nearest open neighbour instead
       let best = null; const [mx, my] = this.w.tile(this.x, this.z);

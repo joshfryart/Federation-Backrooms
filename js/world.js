@@ -6,6 +6,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
 export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
+export const TUBE_UP = 1.7; // floor height of a tube's upper run (reached by ladder)
 const TUBE_SIDE = 0.65;     // thickness of the tube's own side walls: leaves a 1.2 m wide crawlway in a 2.5 m tile
 
 // ------------------------------------------------------------------
@@ -178,18 +179,20 @@ export function generate(deck, seed) {
   const typeBag = [];
   for (const [k, v] of Object.entries(ROOMS)) for (let i = 0; i < v.weight; i++) typeBag.push(k);
   const want = Math.floor(N * 0.9) + 1;
-  let bridgeUsed = false;
+  let bridgeUsed = false, bigRooms = 0;
   for (let tries = 0; tries < 200 && rooms.length < want; tries++) {
     let type = typeBag[Math.floor(rnd() * typeBag.length)];
     if (type === 'bridge' && (bridgeUsed || deck < 1)) continue;
     const def = ROOMS[type];
-    const w = ri(def.size[0], def.size[1]) | 1, h = ri(def.size[0], def.size[1]) | 1;
+    // some rooms come in a large variant (galley, cargo bay, shuttlebay…): at most a couple per deck, and only where the deck is big enough
+    const big = def.big && bigRooms < (N >= 9 ? 2 : 1) && W >= 15 && rnd() < def.bigP, sz = big ? def.big : def.size;
+    const w = ri(sz[0], sz[1]) | 1, h = big ? ri(def.big[0] - 2, sz[1]) | 1 : ri(sz[0], sz[1]) | 1;
     if (w >= W - 2 || h >= H - 2) continue;
     const x0 = ri(1, W - 1 - w), y0 = ri(1, H - 1 - h);
     if (rooms.some(r => x0 < r.x + r.w + 1 && x0 + w + 1 > r.x && y0 < r.y + r.h + 1 && y0 + h + 1 > r.y)) continue;
-    if (type === 'bridge') bridgeUsed = true;
+    if (type === 'bridge') bridgeUsed = true; if (big) bigRooms++;
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) { grid[y][x] = 0; room[y][x] = type; }
-    rooms.push({ type, x: x0, y: y0, w, h });
+    rooms.push({ type, x: x0, y: y0, w, h, big: !!big });
   }
 
   // props (mark blocked tiles = 2)
@@ -210,7 +213,10 @@ export function generate(deck, seed) {
       case 'holodeck': put(cx, cy, 'holocube'); break;
       case 'transporter': put(cx, cy, 'pad'); break;
       case 'quarters': put(cx, cy, 'bunk'); break;
-      case 'mess': for (const [x, y] of interior) if ((x + y) % 2 === 0 || r.w < 5) put(x, y, 'table'); break;
+      case 'mess':
+        if (r.big) { for (const [x, y] of interior) { if (y === iy0) { if ((x - ix0) % 2 === 0) put(x, y, 'replicator', { rot: 0 }); } else if ((x - ix0) % 2 === 0 && (y - iy0) % 2 === 0) put(x, y, 'table', { rot: 0 }); } }   // serving line along one wall, tables in rows
+        else for (const [x, y] of interior) if ((x + y) % 2 === 0 || r.w < 5) put(x, y, 'table');
+        break;
       case 'sickbay': for (const [x, y] of interior) if (rnd() < 0.7 || (x === cx && y === cy)) put(x, y, 'biobed'); break;
       case 'cargo': for (const [x, y] of interior) if (rnd() < 0.65) put(x, y, 'crate'); break;
       case 'arboretum': for (const [x, y] of interior) if (rnd() < 0.8) put(x, y, 'tree'); break;
@@ -236,7 +242,7 @@ export function generate(deck, seed) {
 
   // Jiffy tubes: crawl-height maintenance ducts bored straight through solid bulkhead between two open tiles.
   // Only worth having when they are a real shortcut (or the only link). Movement inside is along the axis only.
-  const tubeAxis = {}, tubes = [];
+  const tubeAxis = {}, tubeLevel = {}, tubes = [];
   {
     const wantT = Math.min(3, 1 + Math.floor(deck / 2)), cands = [];
     for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
@@ -254,8 +260,10 @@ export function generate(deck, seed) {
       const tiles = []; for (let i = 1; i <= c.n; i++) tiles.push([c.x + c.dx * i, c.y + c.dy * i]);
       if (tiles.some(([tx, ty]) => [[0, 0], ...DIRS].some(([a, b]) => tubeAxis[(tx + a) + (ty + b) * W]))) continue;   // keep tubes apart
       const dAB = bfsFrom(c.x, c.y)[c.ex + c.ey * W]; if (dAB >= 0 && dAB < (c.n >= 2 ? 8 : 14)) continue;                // not a shortcut
-      for (const [tx, ty] of tiles) { grid[ty][tx] = 0; room[ty][tx] = 'jefferies'; tubeAxis[tx + ty * W] = c.dx ? 'x' : 'y'; }
-      tubes.push({ tiles, a: [c.x, c.y], b: [c.ex, c.ey], axis: c.dx ? 'x' : 'y' });
+      // longer tubes usually climb: lower run from mouth a, a ladder shaft, then an upper run that opens high in the wall at b
+      const ladder = c.n >= 3 && rnd() < 0.65 ? 1 + Math.floor(rnd() * (c.n - 2)) : -1;
+      tiles.forEach(([tx, ty], i) => { grid[ty][tx] = 0; room[ty][tx] = 'jefferies'; tubeAxis[tx + ty * W] = c.dx ? 'x' : 'y'; tubeLevel[tx + ty * W] = ladder < 0 || i < ladder ? 'lo' : i === ladder ? 'lad' : 'up'; });
+      tubes.push({ tiles, a: [c.x, c.y], b: [c.ex, c.ey], axis: c.dx ? 'x' : 'y', ladder });
     }
   }
 
@@ -304,7 +312,7 @@ export function generate(deck, seed) {
   const gornSpawn = (pickTile(([x, y]) => dist(x, y) >= maxD * 0.55 && !(Math.abs(x - exit[0]) + Math.abs(y - exit[1]) < 4)) || exit).slice();
   used.delete(gornSpawn.join(','));
 
-  return { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis,
+  return { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis, tubeLevel,
            openTiles, maxD, dist: reach, rnd, used, pickTile, bfsFrom };
 }
 
@@ -486,7 +494,7 @@ export class World {
     this.wallFaces = []; this.sparkers = []; this.steamers = []; this.alertAmt = 0;
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
-    this.tops = {}; this.propHalf = TS * 0.36; this.tubeMouths = [];
+    this.tops = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
     this._furnish();
     this._build();
     this._details();
@@ -494,8 +502,11 @@ export class World {
   }
 
   isTube(x, y) { return !!this.d.tubeAxis[x + y * this.W]; }
+  tubeKind(x, y) { return this.d.tubeLevel[x + y * this.W]; }   // 'lo' | 'lad' | 'up' | undefined
+  floorAt(x, y) { return this.tubeKind(x, y) === 'up' ? TUBE_UP : 0; }
+  headroomAt(x, y) { return this.ceilAt(x, y) - this.floorAt(x, y); }
   ceilAt(x, y) {
-    if (this.d.room[y]?.[x] === 'jefferies') return TUBE_H;
+    if (this.d.room[y]?.[x] === 'jefferies') return this.tubeKind(x, y) === 'lo' ? TUBE_H : TUBE_UP + TUBE_H;
     if (this.d.room[y]?.[x]) return WH;
     const h = Math.sin((x >> 1) * 12.9898 + (y >> 1) * 78.233 + this.d.deck * 3.1) * 43758.5453; const f = h - Math.floor(h);
     return f < 0.3 ? 2.45 : WH;
@@ -520,9 +531,10 @@ export class World {
   solid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.W || ty >= this.H || this.grid[ty][tx] !== 0; }
   solidAt(x, z) { const [tx, ty] = this.tile(x, z); return this.solid(tx, ty); }
   // parkour helpers: climbable prop height on a tile (Infinity = not climbable / not a prop)
-  topAt(tx, ty) { return this.grid[ty]?.[tx] === 2 ? (this.tops[tx + ty * this.W] ?? Infinity) : Infinity; }
+  topAt(tx, ty) { return this.grid[ty]?.[tx] === 2 ? (this.tops[tx + ty * this.W] ?? Infinity) : this.tubeKind(tx, ty) === 'up' ? TUBE_UP : Infinity; }
   groundAt(x, z, feetY = 0) {
-    const [tx, ty] = this.tile(x, z); const top = this.topAt(tx, ty); if (!isFinite(top) || feetY < top - 0.3) return 0;
+    const [tx, ty] = this.tile(x, z);
+    if (this.tubeKind(tx, ty) === 'up') return feetY >= TUBE_UP - 0.4 ? TUBE_UP : 0; const top = this.topAt(tx, ty); if (!isFinite(top) || feetY < top - 0.3) return 0;
     const h = this.propHalf + 0.12; return Math.abs(x - (tx + 0.5) * TS) <= h && Math.abs(z - (ty + 0.5) * TS) <= h ? top : 0;
   }
   // march a ray through the deck: returns { x, y, z, dist, kind: 'wall'|'ceiling'|'floor'|'prop', tx, ty } or null
@@ -531,7 +543,7 @@ export class World {
     for (let t = 0.3; t <= max; t += st) {
       const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t; const [tx, ty] = this.tile(x, z); const c = this.grid[ty]?.[tx];
       let kind = null;
-      if (c === undefined || c === 1) kind = 'wall'; else if (y <= 0) kind = 'floor'; else if (y >= this.ceilAt(tx, ty)) kind = 'ceiling';
+      if (c === undefined || c === 1 || (y < TUBE_UP && this.tubeKind(tx, ty) === 'up')) kind = 'wall'; else if (y <= 0) kind = 'floor'; else if (y >= this.ceilAt(tx, ty)) kind = 'ceiling';
       else if (c === 2) { const top = this.topAt(tx, ty), h = this.propHalf; if (y <= (isFinite(top) ? top : 2.2) && Math.abs(x - (tx + 0.5) * TS) <= h && Math.abs(z - (ty + 0.5) * TS) <= h) kind = 'prop'; }
       if (kind) { const b = t - st; return { x: ox + dx * b, y: Math.max(0.05, oy + dy * b), z: oz + dz * b, dist: b, kind, tx, ty }; }
     }
@@ -553,6 +565,8 @@ export class World {
       for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) {
         const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS;
         const ax = this.d.tubeAxis[x + y * this.W];
+        const tk = ax && this.d.tubeLevel[x + y * this.W], py = p.y || 0;
+        if (ax && ((tk === 'up' && py < TUBE_UP - 0.4) || (tk === 'lo' && py > 0.45))) { push(cx, cz, TS / 2, TS / 2); continue; }   // wrong level: it is just bulkhead
         if (ax) { const o = TS / 2 - TUBE_SIDE / 2; for (const sgn of [-1, 1]) ax === 'x' ? push(cx, cz + sgn * o, TS / 2, TUBE_SIDE / 2) : push(cx + sgn * o, cz, TUBE_SIDE / 2, TS / 2); continue; }
         if (!this.solid(x, y)) continue;
         const prop = this.grid[y]?.[x] === 2;
@@ -583,7 +597,7 @@ export class World {
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= W || ny >= H || g[ny][nx] !== 0 || d[nx + ny * W] >= 0) continue;
         const tb = T[nx + ny * W];
-        if (tb && noTube) continue;
+        if ((tb && noTube) || this.d.tubeLevel[nx + ny * W] === 'up') continue;   // nobody but the player uses the upper runs
         if ((ta === 'x' || tb === 'x') && dy !== 0) continue; if ((ta === 'y' || tb === 'y') && dx !== 0) continue;
         d[nx + ny * W] = d[q[i]] + 1; q.push(nx + ny * W);
       }
@@ -644,42 +658,56 @@ export class World {
       open.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(0.8)); });
       g.add(im);
     }
-    // Jiffy tubes: header block above the crawlway, the tube's own side walls, ribs, conduit and amber guide strips
+    // Jiffy tubes: the tube's own side walls, header/base blocks, ribs, conduit, amber guide strips, ladders and hatch frames
     if (d.tubes?.length) {
-      const m = mats(); const tiles = d.tubes.flatMap(t => t.tiles.map(([x, y]) => [x, y, t.axis]));
+      const m = mats();
       const shell = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.8) });
       const inner = new THREE.MeshStandardMaterial({ color: 0x4a4f57, metalness: 0.7, roughness: 0.5, normalMap: T.d.deck.normal, normalScale: new THREE.Vector2(0.4, 0.4) });
       const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2) });
-      const inst = (geo, mat, list) => { const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([px, py, pz, ry], i) => { dummy.position.set(px, py, pz); dummy.rotation.set(0, ry || 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); im.castShadow = im.receiveShadow = true; g.add(im); return im; };
-      const head = [], side = [], rib = [], strip = [], pipe = [], post = [], bar = [];
-      const o = TS / 2 - TUBE_SIDE / 2, hw = TS / 2 - TUBE_SIDE;   // side-wall offset, half width of the crawlway
-      for (const [x, y, ax] of tiles) {
+      const inst = (geo, mat, list) => { if (!list.length) return null; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([px, py, pz, ry], i) => { dummy.position.set(px, py, pz); dummy.rotation.set(0, ry || 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); im.castShadow = im.receiveShadow = true; g.add(im); return im; };
+      const headLo = [], headHi = [], base = [], side = [], sideTall = [], rib = [], strip = [], pipe = [], post = [], bar = [], rail = [], rung = [];
+      const o = TS / 2 - TUBE_SIDE / 2, hw = TS / 2 - TUBE_SIDE, FULL = TUBE_UP + TUBE_H;   // side-wall offset, half width of the crawlway, shaft height
+      for (const t of d.tubes) t.tiles.forEach(([x, y], i) => {
+        const ax = t.axis, kind = d.tubeLevel[x + y * W], y0 = kind === 'up' ? TUBE_UP : 0;
         const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS, ry = ax === 'x' ? Math.PI / 2 : 0, P = (along, across) => ax === 'x' ? [cx + along, cz + across] : [cx + across, cz + along];
-        head.push([cx, (WH + TUBE_H) / 2, cz, 0]);
+        if (kind === 'lo') headLo.push([cx, (WH + TUBE_H) / 2, cz, 0]); else headHi.push([cx, (WH + FULL) / 2, cz, 0]);
+        if (kind === 'up') base.push([cx, TUBE_UP / 2, cz, 0]);
         for (const sg of [-1, 1]) {
-          let q = P(0, sg * o); side.push([q[0], TUBE_H / 2, q[1], ry]);
-          q = P(0, sg * (hw - 0.02)); strip.push([q[0], 0.025, q[1], ry]);
-          q = P(0, sg * (hw - 0.07)); pipe.push([q[0], TUBE_H - 0.08, q[1], ry]);
-          for (const al of [-TS / 4, TS / 4]) { q = P(al, sg * (hw - 0.03)); rib.push([q[0], TUBE_H / 2, q[1], ry]); }
+          let q = P(0, sg * o); (kind === 'lad' ? sideTall : side).push([q[0], kind === 'lad' ? FULL / 2 : y0 + TUBE_H / 2, q[1], ry]);
+          q = P(0, sg * (hw - 0.02)); strip.push([q[0], y0 + 0.025, q[1], ry]);
+          if (kind !== 'lad') { q = P(0, sg * (hw - 0.07)); pipe.push([q[0], y0 + TUBE_H - 0.08, q[1], ry]); for (const al of [-TS / 4, TS / 4]) { q = P(al, sg * (hw - 0.03)); rib.push([q[0], y0 + TUBE_H / 2, q[1], ry]); } }
         }
-        for (const al of [-TS / 4, TS / 4]) { const q = P(al, 0); bar.push([q[0], TUBE_H - 0.03, q[1], ry]); }
-      }
-      // hazard-striped hatch frame on each mouth
+        if (kind !== 'lad') for (const al of [-TS / 4, TS / 4]) { const q = P(al, 0); bar.push([q[0], y0 + TUBE_H - 0.03, q[1], ry]); }
+        else {   // ladder on the face of the upper run's base block
+          const nxt = t.tiles[i + 1], dir = ax === 'x' ? Math.sign(nxt[0] - x) : Math.sign(nxt[1] - y), al = dir * (TS / 2 - 0.07);
+          for (const sg of [-1, 1]) { const q = P(al, sg * 0.24); rail.push([q[0], (TUBE_UP + 0.95) / 2, q[1], ry]); }
+          for (let h = 0.3; h < TUBE_UP + 0.9; h += 0.3) { const q = P(al, 0); rung.push([q[0], h, q[1], ry]); }
+          const q = P(-dir * (TS / 2 - 0.05), 0); const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.03), amber); lamp.position.set(q[0], FULL - 0.25, q[1]); lamp.rotation.y = ry; g.add(lamp);
+          this.ladders.push({ x: cx, z: cz });
+        }
+      });
+      // hazard-striped hatch frame on each mouth (the far mouth of a laddered tube sits high in the wall)
       for (const t of d.tubes) for (const [end, first] of [[t.a, t.tiles[0]], [t.b, t.tiles[t.tiles.length - 1]]]) {
+        const y0 = d.tubeLevel[first[0] + first[1] * W] === 'up' ? TUBE_UP : 0;
         const bx = ((end[0] + first[0]) / 2 + 0.5) * TS, bz = ((end[1] + first[1]) / 2 + 0.5) * TS, ry = t.axis === 'x' ? Math.PI / 2 : 0;
         const ox = t.axis === 'x' ? 0 : 1, oz = t.axis === 'x' ? 1 : 0, sx = Math.sign(end[0] - first[0]) * 0.05, sz = Math.sign(end[1] - first[1]) * 0.05;
-        for (const sg of [-1, 1]) post.push([bx + sx + ox * sg * (hw + 0.07), TUBE_H / 2, bz + sz + oz * sg * (hw + 0.07), ry]);
-        const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.28, 0.14, 0.14), m.hazard); top.position.set(bx + sx, TUBE_H + 0.07, bz + sz); top.rotation.y = ry; g.add(top);
-        const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), amber); lamp.position.set(bx + sx * 3, TUBE_H + 0.24, bz + sz * 3); lamp.rotation.y = ry; g.add(lamp);
-        this.tubeMouths.push({ x: bx, z: bz });
+        for (const sg of [-1, 1]) post.push([bx + sx + ox * sg * (hw + 0.07), y0 + TUBE_H / 2, bz + sz + oz * sg * (hw + 0.07), ry]);
+        for (const yy of y0 ? [y0 + TUBE_H + 0.07, y0 - 0.07] : [TUBE_H + 0.07]) { const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.28, 0.14, 0.14), m.hazard); top.position.set(bx + sx, yy, bz + sz); top.rotation.y = ry; g.add(top); }
+        if (!y0) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), amber); lamp.position.set(bx + sx * 3, TUBE_H + 0.24, bz + sz * 3); lamp.rotation.y = ry; g.add(lamp); }
+        this.tubeMouths.push({ x: bx, z: bz, y: y0 });
       }
-      inst(new THREE.BoxGeometry(TS, WH - TUBE_H, TS), shell, head);
+      inst(new THREE.BoxGeometry(TS, WH - TUBE_H, TS), shell, headLo);
+      inst(new THREE.BoxGeometry(TS, WH - FULL, TS), shell, headHi);
+      inst(new THREE.BoxGeometry(TS, TUBE_UP, TS), shell, base);
       inst(new THREE.BoxGeometry(TUBE_SIDE, TUBE_H, TS), shell, side);
+      inst(new THREE.BoxGeometry(TUBE_SIDE, FULL, TS), shell, sideTall);
       inst(new THREE.BoxGeometry(0.06, TUBE_H, 0.1), inner, rib);
       inst(new THREE.BoxGeometry(hw * 2, 0.06, 0.1), inner, bar);
       inst(new THREE.BoxGeometry(0.14, TUBE_H, 0.14), m.hazard, post);
+      inst(new THREE.BoxGeometry(0.045, TUBE_UP + 0.95, 0.045), m.pipe, rail);
+      inst(new THREE.BoxGeometry(0.5, 0.035, 0.035), m.pipe, rung);
       const pg = new THREE.CylinderGeometry(0.045, 0.045, TS, 8); pg.rotateX(Math.PI / 2); inst(pg, m.pipe, pipe);
-      inst(new THREE.BoxGeometry(0.03, 0.03, TS), amber, strip).castShadow = false;
+      const st = inst(new THREE.BoxGeometry(0.03, 0.03, TS), amber, strip); if (st) st.castShadow = false;
     }
     // light panels (steady + flickering + dead)
     {

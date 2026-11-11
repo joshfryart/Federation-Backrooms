@@ -18,7 +18,7 @@ WASD move · Shift sprint (loud) · Space jump / climb props / wall-jump · C cr
 
 Sprint and jump along a bulkhead to wall-run. Slide into man-sized hostiles to trip them. The grapple reels you to walls, ceilings and crate tops.
 
-**Jiffy tubes** — yellow-framed crawl ducts cut through the bulkheads. Walk in and you duck automatically. They are shortcuts with supplies inside; the Gronk and the Drone are too big to follow, the crazed crew are not.
+**Jiffy tubes** — yellow-framed crawl ducts cut through the bulkheads. Walk in and you duck automatically. They are shortcuts with supplies inside; the Gronk and the Drone are too big to follow, the crazed crew are not. Longer tubes have a ladder shaft up to a second crawlway that comes out high in a wall (W climbs, S or C climbs down, Space lets go).
 
 ## Credits
 Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **MakeHuman**, **dramatis3d** (Tonio Loewald), **Quaternius**, **Poly Haven**, **ambientCG**. Full list and licenses in [CREDITS.md](CREDITS.md).

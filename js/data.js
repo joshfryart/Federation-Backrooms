@@ -20,15 +20,15 @@ export const SHIPS = [
 // Room types. weight = spawn weight, size = [minTiles, maxTiles]
 export const ROOMS = {
   bridge:      { label: 'Bridge',            floor: 0x3a3f55, weight: 1, size: [5, 5] },
-  engineering: { label: 'Engineering',       floor: 0x555a4a, weight: 2, size: [5, 5] },
+  engineering: { label: 'Engineering',       floor: 0x555a4a, weight: 2, size: [5, 5], big: [7, 7], bigP: 0.35 },
   sickbay:     { label: 'Sickbay',           floor: 0x9fc5c0, weight: 2, size: [3, 5] },
-  mess:        { label: 'Mess Hall',         floor: 0x7a6650, weight: 2, size: [3, 5] },
+  mess:        { label: 'Galley',            floor: 0x7a6650, weight: 2, size: [3, 5], big: [7, 9], bigP: 0.7 },
   transporter: { label: 'Beam Room',  floor: 0x444a55, weight: 2, size: [3, 3] },
-  shuttlebay:  { label: 'Shuttlebay',        floor: 0x4a4d52, weight: 2, size: [5, 5] },
-  cargo:       { label: 'Cargo Bay',         floor: 0x5a5448, weight: 3, size: [3, 5] },
+  shuttlebay:  { label: 'Shuttlebay',        floor: 0x4a4d52, weight: 2, size: [5, 5], big: [7, 9], bigP: 0.4 },
+  cargo:       { label: 'Cargo Bay',         floor: 0x5a5448, weight: 3, size: [3, 5], big: [7, 9], bigP: 0.3 },
   holodeck:    { label: 'Holo-Playroom',          floor: 0x111111, weight: 2, size: [5, 5] },
   quarters:    { label: 'Crew Quarters',     floor: 0x6a5a58, weight: 3, size: [3, 3] },
-  arboretum:   { label: 'Arboretum',         floor: 0x3d5a35, weight: 1, size: [5, 5] },
+  arboretum:   { label: 'Arboretum',         floor: 0x3d5a35, weight: 1, size: [5, 5], big: [7, 9], bigP: 0.5 },
   jefferies:   { label: 'Jiffy Tube',          floor: 0x3a3d42, weight: 0, size: [1, 1] },   // crawl ducts; carved by generate(), never rolled as a room
 };
 

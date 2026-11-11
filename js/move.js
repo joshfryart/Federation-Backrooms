@@ -1,6 +1,6 @@
 // Player traversal: momentum running, jump, mantle/vault onto props, slide, wall-run and a grapple line.
 // Pure logic on the player state `P` + `world`; main.js owns input, camera, sound and enemy side-effects (via `api`).
-import { TS } from './world.js';
+import { TS, TUBE_UP } from './world.js';
 
 export const MOVE = {
   gravity: 21, jump: 6.3, walk: 3.3, crouch: 1.7, sprint: 5.7, flowBonus: 1.5, airAccel: 14, groundK: 10,
@@ -21,6 +21,11 @@ function ledgeAhead(P, world, dx, dz, reach) {
   for (const dist of [0.5, 0.75]) {
     const px = P.x + dx * dist, pz = P.z + dz * dist; const [tx, ty] = world.tile(px, pz);
     const top = world.topAt(tx, ty); if (!isFinite(top)) continue;
+    if (world.tubeKind(tx, ty) === 'up') {   // the high mouth of a laddered tube: pull yourself in along its axis
+      const rise = top - P.y, cx = (tx + 0.5) * TS, cz = (ty + 0.5) * TS, ax = world.d.tubeAxis[tx + ty * world.W];
+      if (rise < 0.25 || rise > reach || (ax === 'x' ? Math.abs(dz) > 0.6 || Math.abs(P.z - cz) > 0.5 : Math.abs(dx) > 0.6 || Math.abs(P.x - cx) > 0.5)) continue;
+      return ax === 'x' ? { top, x: cx - Math.sign(dx) * (TS / 2 - 0.6), z: cz, rise } : { top, x: cx, z: cz - Math.sign(dz) * (TS / 2 - 0.6), rise };
+    }
     const rise = top - P.y; if (rise < 0.25 || rise > reach) continue;
     if (top + MOVE.height * 0.6 > world.ceilAt(tx, ty)) continue;                 // no headroom (crouch height)
     const cx = (tx + 0.5) * TS, cz = (ty + 0.5) * TS, h = world.propHalf;
@@ -51,12 +56,28 @@ export function movePlayer(dt, P, world, input, api) {
   const wx = wfx * cy + wfz * sy, wz = -wfx * sy + wfz * cy;                       // wish direction (world)
   const fwdX = -sy, fwdZ = -cy;                                                   // facing
   // low headroom (Jiffy tubes): duck automatically on the way in, and no standing up or jumping inside
-  { const here = world.ceilAt(...world.tile(P.x, P.z)), dl = Math.hypot(P.vx, P.vz) || 1, ahead = world.ceilAt(...world.tile(P.x + P.vx / dl * 0.7, P.z + P.vz / dl * 0.7));
+  { const here = world.headroomAt(...world.tile(P.x, P.z)), dl = Math.hypot(P.vx, P.vz) || 1, at = world.tile(P.x + P.vx / dl * 0.7, P.z + P.vz / dl * 0.7), ahead = Math.abs(world.floorAt(at[0], at[1]) - P.y) < 0.5 ? world.headroomAt(at[0], at[1]) : 9;
     P.low = here < 1.7 || (ahead < 1.7 && P.grounded); if (P.low) { input = { ...input, crouch: true, jump: false, sprint: false }; if (P.mode === 'slide' && here < 1.7) P.slideT = Math.min(P.slideT, 0.6); } }
   P.jumpBuf = input.jump ? 0.14 : Math.max(0, P.jumpBuf - dt);
   P.slideCd = Math.max(0, P.slideCd - dt); P.wallCd = Math.max(0, P.wallCd - dt); P.grapCd = Math.max(0, P.grapCd - dt);
   P.land = Math.max(0, P.land - dt * 3.2);
   const hs0 = Math.hypot(P.vx, P.vz);
+
+  // ---------------- ladder (shaft tile of a Jiffy tube): W up, S / crouch / look down + W to descend, Space lets go ----------------
+  { const [lx, ly] = world.tile(P.x, P.z), onShaft = world.tubeKind(lx, ly) === 'lad';
+    if (P.mode === 'ladder' && !onShaft) { P.mode = 'air'; P.grounded = false; P.vy = 0; }
+    if (onShaft && P.mode !== 'grapple' && P.mode !== 'mantle' && (P.y > 0.05 || input.fz < 0 || P.mode === 'ladder')) {
+      if (P.mode !== 'ladder') ev('ladder');
+      P.mode = 'ladder'; P.grounded = false; P.crouch = false; P.sprint = false;
+      const down = input.fz > 0 || input.crouch || (input.fz < 0 && P.pitch < -0.8), up = input.fz < 0 && !down;
+      P.vy = up ? 2.5 : down ? -3.2 : 0; P.y = clamp(P.y + P.vy * dt, 0, TUBE_UP);
+      P.rungT = (P.rungT || 0) + Math.abs(P.vy) * dt; if (P.rungT > 0.3) { P.rungT = 0; ev('rung'); }
+      const hsT = P.y >= TUBE_UP - 0.02 || P.y <= 0.02 ? 1.8 : 0.5, k = Math.min(1, dt * 10); P.vx += (wx * hsT - P.vx) * k; P.vz += (wz * hsT - P.vz) * k;
+      P.x += P.vx * dt; P.z += P.vz * dt; world.resolve(P, M.radius);
+      if (P.jumpBuf > 0) { P.jumpBuf = 0; P.mode = 'air'; P.vy = 2.5; }
+      else if (P.y <= 0 && !up) { P.mode = 'ground'; P.grounded = true; P.vy = 0; }
+      return finish();
+    } }
 
   // ---------------- mantle / vault (scripted move onto a prop top) ----------------
   if (P.mode === 'mantle') {
