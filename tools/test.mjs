@@ -52,7 +52,7 @@ const run = await page.evaluate(async () => {
     for (const e of g.gorns) kinds.add(e.kind);
     for (const c of g.world.d.chips) { const [x, z] = g.world.center(c[0], c[1]); g.P.x = x; g.P.z = z; tick(4); }
     const need = g.world.d.chips.length; if (g.G.chips < need) return { err: `deck ${deck}: chips ${g.G.chips}/${need}`, log };
-    g.P.x = g.world.liftPos.x; g.P.z = g.world.liftPos.z; tick(4); key('KeyE');
+    for (let k = 0; k < 4 && g.G.phase === 'play'; k++) { g.P.clung = 0; g.P.kbx = g.P.kbz = 0; g.P.x = g.world.liftPos.x; g.P.z = g.world.liftPos.z; tick(2); key('KeyE'); tick(1); }
     await new Promise(r => setTimeout(r, 2600)); tick(4);
     if (g.G.phase === 'perk') { key('Digit1'); await new Promise(r => setTimeout(r, 300)); }
     if (g.G.phase === 'paused') { document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; }   // no pointer lock in headless
@@ -61,6 +61,29 @@ const run = await page.evaluate(async () => {
   }
   return { phase: g.G.phase, deck: g.G.deck, kinds: [...kinds], log };
 });
+const park = await page.evaluate(async () => {
+  const g = __game, P = g.P, r = {}; g.newRun(); const w = g.world; g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = 1e6; for (const e of g.gorns) { e.dead = true; e.delay = 1e9; e.mesh.visible = false; } g.gorns.length = 0; P.clung = 0;
+  const key = (code) => { g.G.phase = 'play'; for (const t of ['keydown', 'keyup']) window.dispatchEvent(new KeyboardEvent(t, { code })); };
+  await new Promise(r => setTimeout(r, 300));
+  let t = 100; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 60; g.step(1 / 60, t); } };
+  const c = w.center(w.d.start[0], w.d.start[1]); P.x = c[0]; P.z = c[1]; tick(5);
+  // jump: leaves the floor, comes back
+  key('Space'); let peak = 0; for (let i = 0; i < 80; i++) { tick(1); peak = Math.max(peak, P.y); } r.jumpPeak = +peak.toFixed(2); r.landed = P.grounded && P.y === 0;
+  // mantle: stand next to a climbable prop, face it, jump
+  const reset = () => { P.y = 0; P.vx = P.vz = P.vy = 0; P.mode = 'ground'; P.grounded = true; P.grapCd = 0; P.clung = 0; g.G.stamina = 100; };
+  const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const prop = w.d.props.find(p => isFinite(w.topAt(p.tx, p.ty)) && NB.some(([a, b]) => w.grid[p.ty + b]?.[p.tx + a] === 0));
+  if (prop) { const [a, b] = NB.find(([a, b]) => w.grid[prop.ty + b]?.[prop.tx + a] === 0); const pc = w.center(prop.tx, prop.ty);
+    reset(); P.x = pc[0] + a * 1.4; P.z = pc[1] + b * 1.4; P.yaw = Math.atan2(a, b); tick(3); key('Space'); tick(70);
+    r.mantleTop = +w.topAt(prop.tx, prop.ty).toFixed(2); r.mantleY = +P.y.toFixed(2); r.mantled = Math.abs(P.y - w.topAt(prop.tx, prop.ty)) < 0.02; }
+  // grapple: aim down the longest straight run from the start tile, slightly upward; expect to be reeled off the floor
+  const [sx, sy] = w.d.start; let best = null;
+  for (const [dx, dy, yaw] of [[1, 0, -Math.PI / 2], [-1, 0, Math.PI / 2], [0, 1, Math.PI], [0, -1, 0]]) { let n = 0; while (w.grid[sy + dy * (n + 1)]?.[sx + dx * (n + 1)] === 0) n++; if (!best || n > best.n) best = { n, yaw }; }
+  reset(); P.x = c[0]; P.z = c[1]; P.yaw = best.yaw; P.pitch = 0.12; tick(3); key('KeyQ'); let gp = 0, modes = new Set();
+  for (let i = 0; i < 150; i++) { tick(1); gp = Math.max(gp, P.y); modes.add(P.mode); } r.grapplePeak = +gp.toFixed(2); r.modes = [...modes]; r.run = best.n; P.pitch = 0;
+  return r;
+});
+console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple'))) fail('parkour');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

@@ -47,7 +47,7 @@ function humanModel(opts, cfg, fallback) {
 const CRAZED_FACE = { JawDrop: 0.75, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 0.9, NoseWrinkler: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 };
 export const MODELS = {
   gronk: () => gronkModel(),
-  crazed: () => humanModel({ bloody: 0.8, pale: 0.55 }, { face: CRAZED_FACE, attack: 'punch_cross', tick(mesh, H, t) { H.lookYaw = Math.sin(t * 7) * 0.25 + Math.sin(t * 2.3) * 0.3; H.face({ JawDrop: 0.55 + Math.abs(Math.sin(t * 5)) * 0.45 }); } }, () => crewFallback(0xb02a20)),
+  crazed: (o = {}) => humanModel({ bloody: 0.8, pale: 0.55, rank: Math.floor(Math.random() * 3), ...(o.human || {}) }, { face: CRAZED_FACE, attack: 'punch_cross', tick(mesh, H, t) { H.lookYaw = Math.sin(t * 7) * 0.25 + Math.sin(t * 2.3) * 0.3; H.face({ JawDrop: 0.55 + Math.abs(Math.sin(t * 5)) * 0.45 }); } }, () => crewFallback(0xb02a20)),
   slimeling: () => humanModel({ slime: true, bloody: 0.35 }, { face: { ...CRAZED_FACE, JawDrop: 1 }, attack: 'punch_jab', walk: 'jog', walkRef: 3, tick(mesh, H, t) { H.inner.scale.x = H.inner.scale.z * (1 + Math.sin(t * 9) * 0.03); } }, () => crewFallback(0x30a050)),
   drone: () => humanModel({ kind: 'suit', height: 2.02, tint: 0x4e5a56 }, { walk: 'walk_formal', walkRef: 1.25, jogAt: 99, runAt: 99, attack: 'punch_jab', attackSpeed: 0.9, stun: 'hit_head', stunHold: 'idle', init: droneKit }, () => crewFallback(0x5a6660)),
   phantom: () => humanModel({ kind: 'crew_m', height: 1.86, material: phantomMaterial(), shadow: false }, { idle: 'dance', walk: 'dance', jog: 'dance', run: 'dance', attack: 'punch_jab', face: { MouthLeftPullUp: 1, RightBrowDown: 0, MouthRightPullUp: 1, JawDrop: 0.35, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 } }, () => crewFallback(0xff3fd0)),
@@ -92,6 +92,11 @@ export class Enemy {
   get active() { return !this.dead && this.state !== S.DORMANT; }
 
   setTarget(tx, ty) {
+    if (this.w.grid[ty]?.[tx] !== 0) {   // player is on top of a prop (or in a wall tile): aim for the nearest open neighbour instead
+      let best = null; const [mx, my] = this.w.tile(this.x, this.z);
+      for (const [a, b] of DIRS) { if (this.w.grid[ty + b]?.[tx + a] !== 0) continue; const d = Math.abs(tx + a - mx) + Math.abs(ty + b - my); if (!best || d < best.d) best = { x: tx + a, y: ty + b, d }; }
+      if (!best) return; tx = best.x; ty = best.y;
+    }
     const key = tx + ',' + ty; this.target = [tx, ty];
     if (key !== this.fieldKey) { this.field = this.w.field(tx, ty); this.fieldKey = key; }
   }
@@ -132,14 +137,14 @@ export class Enemy {
 // Hunter: patrol / investigate noise / chase by sight / search. Used by Gronk, crazed crew, slimelings.
 // ------------------------------------------------------------------
 const HUNTERS = {
-  gronk: { name: 'Gronk', model: () => MODELS.gronk(), base: 2.3, baseDeck: 0.12, chase: 4.1, chaseDeck: 0.16, chaseMax: 5.2, sight: 20, sightCrouch: 13, hear: 1, dmg: 34, atkCd: 2.5, atkRange: 1.25, hitY: 1.5, hitR: 0.8, roarOnSpot: true, spawnMsg: 'The ship shudders. Something heavy is moving on this deck…' },
-  crazed: { name: 'Space-Madness Crewman', model: () => MODELS.crazed(), base: 2.0, baseDeck: 0.06, chase: 4.4, chaseDeck: 0.08, chaseMax: 5.3, sight: 14, sightCrouch: 9, hear: 1.2, dmg: 16, atkCd: 1.0, atkRange: 1.15, hitY: 1.2, hitR: 0.55, roarOnSpot: 'shriek', spawnMsg: 'Somewhere nearby, someone is laughing. It is not a happy laugh.' },
+  gronk: { name: 'Gronk', model: () => MODELS.gronk(), base: 2.3, baseDeck: 0.12, chase: 4.1, chaseDeck: 0.16, chaseMax: 5.2, sight: 20, sightCrouch: 13, hear: 1, dmg: 34, atkCd: 2.5, atkRange: 1.25, hitY: 1.5, hitR: 0.8, reach: 1.7, roarOnSpot: true, spawnMsg: 'The ship shudders. Something heavy is moving on this deck…' },
+  crazed: { name: 'Space-Madness Crewman', model: (o) => MODELS.crazed(o), base: 2.0, baseDeck: 0.06, chase: 4.4, chaseDeck: 0.08, chaseMax: 5.3, sight: 14, sightCrouch: 9, hear: 1.2, dmg: 16, atkCd: 1.0, atkRange: 1.15, hitY: 1.2, hitR: 0.55, roarOnSpot: 'shriek', spawnMsg: 'Somewhere nearby, someone is laughing. It is not a happy laugh.' },
   slimeling: { name: 'Slimeling Impostor', model: () => MODELS.slimeling(), base: 2.6, baseDeck: 0.05, chase: 4.6, chaseDeck: 0.05, chaseMax: 5.2, sight: 16, sightCrouch: 10, hear: 1.2, dmg: 20, atkCd: 1.4, atkRange: 1.3, hitY: 1.2, hitR: 0.7, roarOnSpot: 'shriek', spawnMsg: '' },
 };
 
 export class Hunter extends Enemy {
-  constructor(world, spawnTile, deck, delay, scene, sound, type = 'gronk') {
-    const cfg = HUNTERS[type]; super(world, spawnTile, deck, delay, scene, sound, cfg.model());
+  constructor(world, spawnTile, deck, delay, scene, sound, type = 'gronk', opts = {}) {
+    const cfg = { ...HUNTERS[type], ...(opts.cfg || {}) }; super(world, spawnTile, deck, delay, scene, sound, cfg.model(opts));
     this.cfg = cfg; this.kind = type; this.name = cfg.name; this.hitY = cfg.hitY; this.hitR = cfg.hitR;
     this.baseSpeed = cfg.base + Math.min(deck, 8) * cfg.baseDeck; this.chaseSpeed = Math.min(cfg.chase + deck * cfg.chaseDeck, cfg.chaseMax);
     this.growlT = 3 + Math.random() * 4; this.huntT = 0; this.pulse = 16 + Math.random() * 10;
@@ -194,7 +199,10 @@ export class Hunter extends Enemy {
       } else if (this.state === S.CHASE) speed = this.chaseSpeed;
       this.move(dt, speed, this.state === S.CHASE, p, (e) => game.onEnemyStep(e, dist));
       if (speed === 0) this.speed = 0;
-      if (dist < cfg.atkRange && this.attackCd <= 0) { this.attackCd = cfg.atkCd; this.attacking = 0.5; this.state = S.SEARCH; this.timer = 4; game.hitPlayer(this, cfg.dmg); }
+      const high = (p.y || 0) > (cfg.reach ?? 1.1);
+      if (dist < cfg.atkRange && this.attackCd <= 0 && !high) { this.attackCd = cfg.atkCd; this.attacking = 0.5; this.state = S.SEARCH; this.timer = 4; game.hitPlayer(this, cfg.dmg); }
+      // perched out of reach: it claws at your ankles, then hauls you down
+      if (high && dist < cfg.atkRange + 1.3) { this.campT = (this.campT || 0) + dt; if (this.campT > 1.8 && this.attackCd <= 0) { this.campT = 0; this.attackCd = cfg.atkCd; this.attacking = 0.5; game.dragDown?.(this); } } else this.campT = 0;
       this.growlT -= dt;
       if (this.growlT <= 0) { this.growlT = 4 + Math.random() * 6; if (dist < 28) (this.kind === 'gronk' ? this.sound.growl(Math.max(0.03, 0.14 - dist * 0.004)) : this.sound.mutter(Math.max(0.03, 0.12 - dist * 0.004))); }
     }
@@ -227,7 +235,7 @@ export class Drone extends Enemy {
     else {
       this.retarget -= dt; if (this.retarget <= 0) { this.retarget = 0.6; const [tx, ty] = this.w.tile(p.x, p.z); this.setTarget(tx, ty); }
       this.move(dt, this.speedV, dist < 3, p, (e) => game.onEnemyStep(e, dist));
-      if (dist < 1.4 && this.attackCd <= 0) { this.attackCd = 2.8; this.attacking = 0.7; game.hitPlayer(this, 26); game.drainStamina?.(45); }
+      if (dist < 1.4 && this.attackCd <= 0 && (p.y || 0) < 1.3) { this.attackCd = 2.8; this.attacking = 0.7; game.hitPlayer(this, 26); game.drainStamina?.(45); }
       this.whirT -= dt; if (this.whirT <= 0) { this.whirT = 2.5 + Math.random() * 2; if (dist < 26) this.sound.whir(Math.max(0.04, 0.16 - dist * 0.005)); }
     }
     this.eye.intensity = this.state === S.STUNNED ? 0 : 1.2 + Math.sin(this.t * 6) * 0.4;
@@ -324,12 +332,12 @@ export class Clinger extends Enemy {
   }
 }
 
-export function makeEnemy(type, world, tile, deck, delay, scene, sound) {
+export function makeEnemy(type, world, tile, deck, delay, scene, sound, opts = {}) {
   switch (type) {
     case 'drone': return new Drone(world, tile, deck, delay, scene, sound);
     case 'phantom': return new Phantom(world, tile, deck, delay, scene, sound);
     case 'clinger': return new Clinger(world, tile, deck, scene, sound);
-    default: return new Hunter(world, tile, deck, delay, scene, sound, type);
+    default: return new Hunter(world, tile, deck, delay, scene, sound, type, opts);
   }
 }
 export const THREATS = {

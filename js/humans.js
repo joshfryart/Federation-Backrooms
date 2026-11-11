@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { has, get } from './assets.js';
+import { RANKS } from './data.js';
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -36,6 +37,31 @@ function info(kind) {
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); o.material.vertexColors = true;
   });
   return meta[kind] = { height: box.max.y - box.min.y, clips };
+}
+
+// ---- rank pips: solid = gold disc, hollow = dark disc with a gold rim; pinned to the collar (wearer's right) ----
+let pipGeo = null, pipMats = null;
+function addPips(inner, rank) {
+  const [, solid, hollow] = RANKS[rank] || RANKS[0]; const n = solid + hollow; if (!n) return;
+  if (!pipGeo) {
+    pipGeo = { disc: new THREE.CylinderGeometry(0.0062, 0.0062, 0.003, 14), rim: new THREE.TorusGeometry(0.0062, 0.0017, 6, 16) };
+    pipMats = { gold: new THREE.MeshStandardMaterial({ color: 0xe2b23a, metalness: 1, roughness: 0.22, emissive: 0x8a6510, emissiveIntensity: 0.9 }), dark: new THREE.MeshStandardMaterial({ color: 0x15161a, metalness: 0.6, roughness: 0.4 }) };
+  }
+  inner.updateMatrixWorld(true);
+  const chest = inner.getObjectByName('spine_03'), neck = inner.getObjectByName('neck_01'), clavR = inner.getObjectByName('upperarm_r'); if (!chest || !neck) return;
+  const np = neck.getWorldPosition(new THREE.Vector3()), sh = clavR.getWorldPosition(new THREE.Vector3());
+  const s = inner.scale.x, half = Math.abs(sh.x - np.x);                                  // neck → shoulder distance, for placement on any body
+  const row = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const pip = new THREE.Group(); const isSolid = i < solid;
+    const d = new THREE.Mesh(pipGeo.disc, isSolid ? pipMats.gold : pipMats.dark); d.rotation.x = Math.PI / 2; pip.add(d);
+    if (!isSolid) pip.add(new THREE.Mesh(pipGeo.rim, pipMats.gold));
+    pip.position.x = -i * 0.016; row.add(pip);
+  }
+  // world-space placement in the bind pose, then re-parented to the chest bone so it follows the animation
+  row.position.set(np.x - half * 0.3, np.y - 0.012 * s, np.z + 0.088 * s); row.rotation.set(-0.5, -0.35, 0.12); row.scale.setScalar(s * 1.25);
+  inner.parent ? inner.parent.attach(row) : inner.add(row); chest.attach(row);
+  row.traverse(o => { if (o.isMesh) o.castShadow = false; });
 }
 
 // ---- hologram material (fresnel rim + scanlines + tearing); works on skinned meshes ----
@@ -110,14 +136,17 @@ export function makeHuman(opts = {}) {
     const name = o.material.name || '';
     if (opts.material) { o.material = opts.material; if (name === 'eyelashes' || name === 'tongue') o.visible = false; return; }
     const m = o.material = o.material.clone(); mats[name.split('_')[0]] = m;
-    if (name === 'body' && kind !== 'suit') { m.color.copy(skin); m.roughness = 0.62; if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
-    else if (name === 'hair' || name === 'brows') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.75; }
+    if (name === 'body' && kind !== 'suit') { m.color.copy(skin); m.roughness = 0.58; m.emissive = skin.clone().multiply(new THREE.Color(0.9, 0.35, 0.25)); m.emissiveIntensity = 0.07;   // cheap subsurface warmth
+      if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
+    else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.75; }
+    else if (name === 'brows') { m.color.setRGB(hair[0] * 0.6, hair[1] * 0.6, hair[2] * 0.6); m.alphaTest = 0.02; m.transparent = true; m.depthWrite = false; m.roughness = 0.8; o.castShadow = false; }
     else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); }
     else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; }
     else if (name === 'eyes') { m.roughness = 0.08; if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
     else if (name === 'teeth') { m.alphaTest = 0.5; }
     if (opts.tint) m.color.multiply(new THREE.Color(opts.tint));
   });
+  if (opts.rank !== undefined && !opts.material && kind !== 'suit') { addPips(inner, opts.rank); g.userData.rank = RANKS[opts.rank][0]; }
   if (opts.shadow !== false) { const bs = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false })); bs.rotation.x = -Math.PI / 2; bs.position.y = 0.02; g.add(bs); g.userData.blob = bs; }
   const mixer = new THREE.AnimationMixer(inner); const acts = {}; let cur = null, curKey = '';
   const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
@@ -151,13 +180,13 @@ export function liveFace(H, t, seed = 0) {
 
 // ---- ready-made NPCs (return null when the models failed to load so callers can fall back) ----
 export function makeSurvivor(rnd = Math.random) {
-  const g = makeHuman({ rnd }); if (!g) return null; const H = g.userData.human;
+  const g = makeHuman({ rnd, rank: Math.floor(rnd() * rnd() * 6.99) }); if (!g) return null; const H = g.userData.human;
   const pose = pickOf(['idle', 'idle', 'idle_talking', 'crouch_idle', 'sitting_idle', 'idle_torch'], rnd);
   H.play(pose, { fade: 0 }); H.standing = pose.startsWith('idle'); H.face({ LeftInnerBrowUp: 0.8, RightInnerBrowUp: 0.8 });
   return g;
 }
 export function makeCorpse(rnd = Math.random) {
-  const g = makeHuman({ rnd, bloody: 1, pale: 0.5, shadow: false, kind: pickOf([...CREW_KINDS, 'crew_heavy'], rnd) }); if (!g) return null; const H = g.userData.human;
+  const g = makeHuman({ rnd, bloody: 1, pale: 0.5, shadow: false, rank: Math.floor(rnd() * 4), kind: pickOf([...CREW_KINDS, 'crew_heavy'], rnd) }); if (!g) return null; const H = g.userData.human;
   H.pose(pickOf(['death01', 'death01', 'sitting_idle'], rnd) === 'death01' ? 'death01' : 'death01', 0.86 + rnd() * 0.14);
   H.face({ JawDrop: 0.3 + rnd() * 0.5, LeftUpperLidClosed: rnd(), RightUpperLidClosed: rnd() }); H.mixer.update(0);
   g.rotation.y = rnd() * 6.28; return g;

@@ -119,8 +119,8 @@ export function textures() {
   if (pbr('wall')) {   // bulkhead = real metal plating (tiled 2×) with starship panel seams, kick plate and header band drawn over it
     const p = pbr('wall');
     texCache.wall = canvasTex(1024, (g, s) => {
-      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) g.drawImage(p.c.image, i * s / 2, j * s / 2, s / 2, s / 2);
-      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, 0, s, s);                                  // flatten plate contrast a little
+      g.drawImage(p.c.image, 0, 0, s, s);
+      g.fillStyle = 'rgba(232,232,232,0.42)'; g.fillRect(0, 0, s, s);                                  // flatten plate contrast: smooth panels, not blockwork
       g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, s * 0.925, s, s * 0.075);                          // kick plate
       g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(0, s * 0.92, s, 5);
       g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, 0, s, s * 0.05); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, s * 0.05, s, 4);   // header band
@@ -131,7 +131,7 @@ export function textures() {
       const gr = g.createLinearGradient(0, s * 0.75, 0, s); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(20,14,8,0.28)'); g.fillStyle = gr; g.fillRect(0, s * 0.75, s, s * 0.25);   // grime towards the floor
     });
     texCache.wall.anisotropy = 8;
-    const n = p.n.clone(), r = p.r.clone(); n.repeat.set(2, 2); r.repeat.set(2, 2); n.needsUpdate = r.needsUpdate = true; texCache.d.wall = { normal: n, rough: r };
+    const n = p.n.clone(), r = p.r.clone(); n.repeat.set(1, 1); r.repeat.set(2, 2); n.needsUpdate = r.needsUpdate = true; texCache.d.wall = { normal: n, rough: r };
   }
   return texCache;
 }
@@ -346,7 +346,7 @@ function model(name, height, x = 0, z = 0, ry = 0, y = 0) {
 export function buildProp(kind) {
   const m = mats(); const g = new THREE.Group(); const R = Math.random;
   switch (kind) {
-    case 'console': {
+    case 'console': { g.userData.top = 0.92;
       g.add(rbox(1.7, 0.86, 0.75, m.dark, 0, 0, 0, 0.06)); g.add(rbox(1.78, 0.06, 0.82, m.metal, 0, 0.86, 0, 0.02));
       const desk = rbox(1.6, 0.04, 0.6, m.screenB, 0, 0.93, 0.06, 0.01); desk.rotation.x = 0.22; g.add(desk);
       const back = rbox(1.6, 0.62, 0.08, m.dark, 0, 0.95, -0.33, 0.03); back.rotation.x = -0.12; g.add(back);
@@ -368,7 +368,7 @@ export function buildProp(kind) {
       for (let i = 0; i < 6; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.045, 8, 28), m.metal); r.rotation.x = Math.PI / 2; r.position.y = 0.72 + i * 0.4; g.add(r); }
       for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.78; g.add(cyl(0.05, 0.05, WH, m.pipe, Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72, 8)); g.add(rbox(0.16, 0.5, 0.16, m.dark, Math.cos(a) * 0.72, 1.3, Math.sin(a) * 0.72, 0.03)); }
       break; }
-    case 'shuttle': {
+    case 'shuttle': { g.userData.top = 1.24;
       const hull = rbox(2.1, 0.95, 1.5, m.white, 0, 0.28, 0, 0.22); g.add(hull);
       const nose = rbox(0.9, 0.62, 1.3, m.white, 1.2, 0.28, 0, 0.25); g.add(nose);
       const win = rbox(0.5, 0.3, 1.1, m.glass, 1.32, 0.66, 0, 0.1); win.material = m.dark; g.add(win);
@@ -380,16 +380,16 @@ export function buildProp(kind) {
       g.add(cyl(1.0, 1.08, 0.14, m.dark, 0, 0, 0, 28)); g.add(cyl(0.98, 0.98, 0.02, m.metal, 0, 0.14, 0, 28));
       const p = cyl(0.7, 0.7, 0.03, m.pad, 0, 0.155, 0, 28); g.add(p); const top = cyl(0.7, 0.7, 0.05, m.pad, 0, WH - 0.2, 0, 28); g.add(top); g.add(cyl(0.9, 0.8, 0.14, m.dark, 0, WH - 0.14, 0, 28));
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.03, 6, 32), m.glowB); ring.rotation.x = Math.PI / 2; ring.position.y = 0.17; g.add(ring); break; }
-    case 'bunk': {
+    case 'bunk': { g.userData.top = 0.52;
       g.add(rbox(1.9, 0.34, 0.95, m.dark, 0, 0, 0, 0.05)); g.add(rbox(1.84, 0.16, 0.88, m.sheet, 0, 0.34, 0, 0.07)); g.add(rbox(0.42, 0.12, 0.6, m.white, -0.66, 0.48, 0, 0.06));
       const blanket = rbox(1.1, 0.06, 0.92, m.fabric, 0.36, 0.47, 0, 0.03); g.add(blanket);
       g.add(rbox(1.9, 0.9, 0.08, m.panel, 0, 0.34, -0.47, 0.03)); g.add(box(0.5, 0.03, 0.02, m.glowO, -0.6, 1.1, -0.42));
       g.add(model('ph_utilbox', 1.15, 0.6, 0.85, Math.PI) || rbox(0.6, 0.9, 0.5, m.metal, 0.75, 0, 0.8)); break; }
-    case 'table': {
+    case 'table': { g.userData.top = 0.78;
       g.add(rbox(1.5, 0.06, 1.0, m.white, 0, 0.72, 0, 0.03)); g.add(cyl(0.06, 0.06, 0.7, m.metal, 0, 0.02, 0)); g.add(cyl(0.36, 0.4, 0.03, m.metal));
       for (const sz of [-1, 1]) { g.add(cyl(0.2, 0.2, 0.06, m.fabric, 0, 0.42, sz * 0.95)); g.add(cyl(0.04, 0.04, 0.42, m.metal, 0, 0, sz * 0.95)); g.add(cyl(0.2, 0.22, 0.02, m.metal, 0, 0, sz * 0.95)); }
       const tray = rbox(0.4, 0.02, 0.28, m.metal, 0.3, 0.78, 0.1, 0.008); tray.rotation.y = 0.3; g.add(tray); g.add(cyl(0.035, 0.03, 0.1, m.glass, 0.34, 0.8, 0.08, 10)); g.add(cyl(0.035, 0.03, 0.1, m.white, -0.35, 0.78, -0.2, 10)); break; }
-    case 'biobed': {
+    case 'biobed': { g.userData.top = 0.7;
       g.add(rbox(0.7, 0.5, 1.5, m.metal, 0, 0, 0, 0.1)); g.add(rbox(0.95, 0.1, 2.0, m.white, 0, 0.5, 0, 0.04)); g.add(rbox(0.85, 0.08, 1.85, m.sheet, 0, 0.6, 0.02, 0.04)); g.add(rbox(0.5, 0.08, 0.34, m.white, 0, 0.67, -0.72, 0.04));
       const arch = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.05, 8, 20, Math.PI), m.white); arch.position.set(0, 0.6, 0.1); g.add(arch);
       g.add(rbox(0.12, 1.5, 0.1, m.dark, 0, 0, -1.02, 0.03)); const mon = rbox(0.9, 0.5, 0.06, m.dark, 0, 1.25, -1.0, 0.03); mon.rotation.x = 0.15; g.add(mon);
@@ -399,13 +399,14 @@ export function buildProp(kind) {
       if (roll < 0.55 && hasModel('ph_crate')) {   // stacked ammunition-style cargo cases
         const n = 2 + Math.floor(R() * 3); let y = 0;
         for (let i = 0; i < n; i++) { const c = model('ph_crate', 0.34, (R() - 0.5) * 0.12, (R() - 0.5) * 0.12, (R() - 0.5) * 0.25 + (R() < 0.2 ? Math.PI / 2 : 0), y); g.add(c); y += 0.335; }
+        g.userData.top = y;
         if (R() < 0.6) g.add(model('ph_barrel', 0.95, 0.75, 0.75, R() * 6));
       } else if (roll < 0.8 && hasModel('ph_barrel')) {
         for (const [x, z] of [[-0.4, -0.35], [0.42, -0.3], [0.0, 0.42]]) if (R() < 0.85) g.add(model('ph_barrel', 0.95, x, z, R() * 6));
-        g.add(box(1.7, 0.08, 1.7, m.crate2, 0, -0.02, 0));
+        g.add(box(1.7, 0.08, 1.7, m.crate2, 0, -0.02, 0)); g.userData.top = 0.95;
       } else {
         const mt = R() < 0.5 ? m.crate : m.crate2; const h = 0.8 + R() * 0.9;
-        g.add(rbox(1.5, h, 1.5, mt, 0, 0, 0, 0.05)); if (R() < 0.5) g.add(rbox(0.8, 0.6, 0.8, m.crate2, 0.1, h, 0.1, 0.04));
+        g.userData.top = h; g.add(rbox(1.5, h, 1.5, mt, 0, 0, 0, 0.05)); if (R() < 0.5) g.add(rbox(0.8, 0.6, 0.8, m.crate2, 0.1, h, 0.1, 0.04));
         g.add(box(1.53, 0.1, 1.53, m.dark, 0, h * 0.5, 0)); g.add(box(0.5, 0.2, 0.02, m.hazard, 0, h * 0.7, 0.756));
       }
       break; }
@@ -417,7 +418,7 @@ export function buildProp(kind) {
     case 'lonechair': { const c = model('ph_armchair', 0.95, 0, 0, Math.PI); if (c) g.add(c); else { g.add(box(0.5, 0.08, 0.5, m.fabric, 0, 0.45, 0)); g.add(box(0.5, 0.55, 0.08, m.fabric, 0, 0.55, 0.23)); g.add(box(0.06, 0.4, 0.06, m.metal, 0, 0.08, 0)); } break; }
     case 'plant': { const p = model('ph_plant', 1.25, 0, 0, R() * 6); if (p) g.add(p); else { g.add(box(0.5, 0.45, 0.5, m.dark)); for (let i = 0; i < 7; i++) { const l = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.8, 5), m.leaf); l.position.set((R() - 0.5) * 0.2, 0.9, (R() - 0.5) * 0.2); l.rotation.set((R() - 0.5) * 1.2, 0, (R() - 0.5) * 1.2); g.add(l); } } break; }
     case 'cart':
-      g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.33, 0, 0.015)); g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.8, 0, 0.015));
+      g.userData.top = 0.86; g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.33, 0, 0.015)); g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.8, 0, 0.015));
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) { g.add(cyl(0.018, 0.018, 0.8, m.pipe, sx * 0.42, 0.06, sz * 0.25, 8)); g.add(cyl(0.045, 0.045, 0.03, m.rubber, sx * 0.42, 0.0, sz * 0.25, 10)).rotation.z = Math.PI / 2; }
       g.add(rbox(0.3, 0.2, 0.3, m.crate2, 0.15, 0.37, 0, 0.02)); g.add(rbox(0.22, 0.14, 0.3, m.white, -0.2, 0.84, 0, 0.03)); g.add(cyl(0.04, 0.04, 0.16, m.glowB, 0.2, 0.84, 0.1, 10)); break;
     case 'replicator':
@@ -457,6 +458,7 @@ export class World {
     this.wallFaces = []; this.sparkers = []; this.steamers = []; this.alertAmt = 0;
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
+    this.tops = {}; this.propHalf = TS * 0.36;
     this._furnish();
     this._build();
     this._details();
@@ -487,6 +489,24 @@ export class World {
   center(tx, ty) { return [(tx + 0.5) * TS, (ty + 0.5) * TS]; }
   solid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.W || ty >= this.H || this.grid[ty][tx] !== 0; }
   solidAt(x, z) { const [tx, ty] = this.tile(x, z); return this.solid(tx, ty); }
+  // parkour helpers: climbable prop height on a tile (Infinity = not climbable / not a prop)
+  topAt(tx, ty) { return this.grid[ty]?.[tx] === 2 ? (this.tops[tx + ty * this.W] ?? Infinity) : Infinity; }
+  groundAt(x, z, feetY = 0) {
+    const [tx, ty] = this.tile(x, z); const top = this.topAt(tx, ty); if (!isFinite(top) || feetY < top - 0.3) return 0;
+    const h = this.propHalf + 0.12; return Math.abs(x - (tx + 0.5) * TS) <= h && Math.abs(z - (ty + 0.5) * TS) <= h ? top : 0;
+  }
+  // march a ray through the deck: returns { x, y, z, dist, kind: 'wall'|'ceiling'|'floor'|'prop', tx, ty } or null
+  raycast(ox, oy, oz, dx, dy, dz, max = 20) {
+    const st = 0.08;
+    for (let t = 0.3; t <= max; t += st) {
+      const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t; const [tx, ty] = this.tile(x, z); const c = this.grid[ty]?.[tx];
+      let kind = null;
+      if (c === undefined || c === 1) kind = 'wall'; else if (y <= 0) kind = 'floor'; else if (y >= this.ceilAt(tx, ty)) kind = 'ceiling';
+      else if (c === 2) { const top = this.topAt(tx, ty), h = this.propHalf; if (y <= (isFinite(top) ? top : 2.2) && Math.abs(x - (tx + 0.5) * TS) <= h && Math.abs(z - (ty + 0.5) * TS) <= h) kind = 'prop'; }
+      if (kind) { const b = t - st; return { x: ox + dx * b, y: Math.max(0.05, oy + dy * b), z: oz + dz * b, dist: b, kind, tx, ty }; }
+    }
+    return null;
+  }
 
   // push circle out of solid tiles
   resolve(p, r) {
@@ -495,6 +515,7 @@ export class World {
       for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) {
         if (!this.solid(x, y)) continue;
         const prop = this.grid[y]?.[x] === 2;
+        if (prop && (p.y || 0) >= this.topAt(x, y) - 0.03) continue;   // standing on / passing over a climbable prop
         const half = prop ? TS * 0.36 : TS / 2;
         const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS;
         const nx = Math.max(cx - half, Math.min(p.x, cx + half));
@@ -617,7 +638,7 @@ export class World {
     // walls
     {
       const geo = new THREE.BoxGeometry(TS, WH, TS);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, normalScale: new THREE.Vector2(1, 1), roughnessMap: T.d.wall.rough, roughness: T.real ? 0.85 : 1, metalness: T.real ? 0.3 : 0.05 }), walls.length);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, normalScale: new THREE.Vector2(T.real ? 0.55 : 1, T.real ? 0.55 : 1), roughnessMap: T.d.wall.rough, roughness: T.real ? 0.8 : 1, metalness: T.real ? 0.3 : 0.05 }), walls.length);
       walls.forEach(([x, y], i) => {
         dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
         im.setColorAt(i, wallCol.clone().multiplyScalar(0.82 + rndv() * 0.22));
@@ -664,7 +685,7 @@ export class World {
       const [cx, cz] = this.center(p.tx, p.ty);
       m.position.set(cx, 0, cz); m.rotation.y = p.kind === 'viewscreen' ? 0 : p.rot;
       if (p.kind === 'viewscreen') { m.position.z -= TS * 0.35; }
-      g.add(m);
+      g.add(m); if (m.userData.top) this.tops[p.tx + p.ty * this.W] = m.userData.top;
       m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
     }
     // lift

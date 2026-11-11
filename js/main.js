@@ -8,6 +8,7 @@ import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmod
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
+import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
 const $ = (id) => document.getElementById(id);
 const WIN_DECK = 8;
@@ -102,7 +103,8 @@ const G = {
   shield: false, endless: false, best: +(localStorage.getItem('fb_best') || 0),
 };
 const P = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0, pitch: 0, crouch: false, sprint: false, bob: 0, stepD: 0, torch: true, shake: 0, kbx: 0, kbz: 0 };
-const keys = {};
+resetMover(P);
+const keys = {}, pressed = { jump: false, crouch: false, grappleCancel: false };
 let beamCone = null, wasChased = false, world = null, gorns = [], ents = [], ship = null, shot = 0, noiseNow = 0, mapOn = true, locked = false, lastHeart = 0, invuln = 0;
 
 const perk = (id) => G.perks[id] || 0;
@@ -142,6 +144,7 @@ function clearLevel() {
 
 function loadDeck(n) {
   clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
+  resetMover(P); rope.visible = hook.visible = false;
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = SHIPS[G.shipOrder[(n - 1) % G.shipOrder.length]];
   const data = generate(n - 1, G.runSeed + n * 7919);
@@ -192,16 +195,19 @@ function loadDeck(n) {
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
   G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
+  if (n === 1) setTimeout(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
 }
 
 function spawnThreats(data, n, rnd) {
   const pool = shuffle(['gronk', 'drone', 'phantom', 'crazed']);
-  const chosen = n === 1 ? [pick(['gronk', 'drone', 'crazed'])] : pool.slice(0, n < 3 ? 1 : n < 6 ? 2 : 3);
+  const chosen = n === 1 ? ['crazed'] :   // the first thing you ever meet is a redshirt who has lost it
+    pool.slice(0, n < 3 ? 1 : n < 6 ? 2 : 3);
   G.threats = [];
   const far = (f) => data.pickTile(([x, y]) => data.dist[x + y * data.W] >= data.maxD * f) || data.gornSpawn;
   chosen.forEach((type, i) => {
     const delay = Math.max(10, 28 - n * 2) + i * 22, count = type === 'crazed' ? 1 + (n > 2 ? 1 : 0) + (n > 5 ? 1 : 0) : 1;
-    for (let k = 0; k < count; k++) gorns.push(makeEnemy(type, world, i === 0 && k === 0 ? data.gornSpawn : far(0.4), n, delay + k * 7, scene, sound));
+    const redshirt = n === 1 ? { human: { uniform: 0xa3231c, rank: 1, kind: 'crew_m' }, cfg: { name: 'Crazed Redshirt', spawnMsg: 'Somewhere nearby an ensign in red is laughing. It is not a happy laugh.' } } : {};
+    for (let k = 0; k < count; k++) gorns.push(makeEnemy(type, world, i === 0 && k === 0 ? data.gornSpawn : far(0.4), n, delay + k * 7, scene, sound, redshirt));
     G.threats.push(type);
   });
   const nc = n >= 2 ? Math.min(4, 1 + Math.floor(rnd() * (1 + n / 3))) : 0; let made = 0;
@@ -316,6 +322,7 @@ G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
 G.glitch = (sec) => { G.glitchT = sec; };
 G.clingOn = (c) => { P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
+G.dragDown = (e) => { const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9; P.kbz = -dz / d * 9; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
 G.hitPlayer = (gorn, dmg) => {
   if (invuln > 0 || G.phase !== 'play') return;
   if (G.shield) { G.shield = false; G.say('Deflector absorbed the hit!', 'good'); flash('#39f', 0.5); sound.hit(); }
@@ -331,13 +338,14 @@ G.hitPlayer = (gorn, dmg) => {
 
 // ---------------- input ----------------
 addEventListener('keydown', (e) => {
+  if (!e.repeat) { if (e.code === 'Space') pressed.jump = true; if (e.code === 'KeyC' || e.code === 'ControlLeft') pressed.crouch = true; }
   keys[e.code] = true;
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
   if (G.phase === 'play') {
     if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
     if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
-    if (e.code === 'Space') { e.preventDefault(); fire(); }
+    if (e.code === 'KeyQ' && !e.repeat) fireGrapple();
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
@@ -347,7 +355,8 @@ addEventListener('mousemove', (e) => {
   if (!locked || G.phase !== 'play') return;
   P.yaw -= e.movementX * 0.0022 * CFG.sens; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022 * CFG.sens));
 });
-addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings')) resumeGame(); });
+addEventListener('contextmenu', (e) => e.preventDefault());
+addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings')) resumeGame(); });
 function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
@@ -472,23 +481,15 @@ function step(dt, t) {
   let fx = 0, fz = 0;
   if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
   const moving = fx || fz;
-  P.crouch = !!(keys.KeyC || keys.ControlLeft);
-  const wantSprint = !!(keys.ShiftLeft || keys.ShiftRight) && moving && !P.crouch && G.stamina > 3;
-  P.sprint = wantSprint;
-  const base = P.crouch ? 1.7 : 3.3, spd = (P.sprint ? 5.6 : base) * (P.clung > 0 ? 0.4 : 1);
-  const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l;
-  const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
-  const tvx = (fx * cy + fz * sy) * spd, tvz = (-fx * sy + fz * cy) * spd;
-  const k = Math.min(1, dt * 10);
-  P.vx += (tvx - P.vx) * k; P.vz += (tvz - P.vz) * k;
-  P.kbx *= Math.max(0, 1 - dt * 5); P.kbz *= Math.max(0, 1 - dt * 5);
-  P.x += (P.vx + P.kbx) * dt; P.z += (P.vz + P.kbz) * dt;
-  world.resolve(P, 0.35);
+  P.slow = P.clung > 0 ? 0.4 : 1;
+  movePlayer(dt, P, world, { fx, fz, sprint: !!(keys.ShiftLeft || keys.ShiftRight), crouch: !!(keys.KeyC || keys.ControlLeft), crouchPressed: pressed.crouch, jump: pressed.jump && !(P.clung > 0), grappleCancel: pressed.grappleCancel }, moveApi);
+  pressed.jump = pressed.crouch = pressed.grappleCancel = false;
+  updateRope(dt);
   const speedNow = Math.hypot(P.vx, P.vz);
 
   // stamina
   const legs = perk('legs');
-  if (P.sprint) G.stamina -= dt * (22 - legs * 3.5); else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2));
+  if (P.sprint && P.grounded) G.stamina -= dt * (20 - legs * 3.5) * (1 - P.flow * 0.35); else if (P.mode === 'wallrun' || P.mode === 'grapple' || P.mode === 'mantle') { } else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2));
   if (G.stamina < 0) G.stamina = 0;
   if (P.clung > 0) { P.clung -= dt; G.hp -= 2.5 * dt; $('clung').style.transform = `translate(${(Math.random() - 0.5) * 6}px,${(Math.random() - 0.5) * 6}px)`; if (P.clung <= 0) { $('clung').style.opacity = 0; G.say('You tear it off and hurl it away!', 'good'); bloodBurst(P.x, 1.5, P.z, 25, 3); if (G.hp <= 0) { die(gorns.find(g => g.kind === 'clinger') || gorns[0]); return; } } updateHUD(); }
   if (G.glitchT > 0) G.glitchT -= dt;
@@ -496,16 +497,17 @@ function step(dt, t) {
   // footsteps / noise
   P.stepD += speedNow * dt;
   const stride = P.sprint ? 1.5 : 1.9;
-  if (P.stepD > stride && speedNow > 0.8) {
+  if (P.stepD > stride && speedNow > 0.8 && (P.grounded || P.mode === 'wallrun') && P.mode !== 'slide') {
     P.stepD = 0;
     if (world.flooded) { sound.splash(P.crouch ? 0.05 : P.sprint ? 0.2 : 0.11); for (let i = 0; i < (P.sprint ? 10 : 5); i++) water.add(P.x + (Math.random() - 0.5) * 0.4, 0.08, P.z + (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 1.4, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 1.4, WATER, 0.6); }
     else sound.step(P.crouch ? 0.05 : P.sprint ? 0.22 : 0.13);
   }
   const boots = 1 - perk('boots') * 0.3;
-  const sneakNoise = speedNow < 0.5 ? 0 : P.crouch ? 2.5 : P.sprint ? 15 : 7;
+  const sneakNoise = !P.grounded ? 0 : speedNow < 0.5 ? 0 : P.mode === 'slide' ? 9 : P.crouch ? 2.5 : P.sprint ? 15 : 7;
   noiseNow = Math.max(noiseNow * (1 - dt * 3), sneakNoise * boots);
   P.bob += speedNow * dt * (P.sprint ? 1.8 : 1.5);
 
+  slideTackle(dt);
   // gorn
   let tension = 0;
   for (const g of gorns) {
@@ -559,7 +561,7 @@ function step(dt, t) {
   // prompt
   let prompt = '';
   const npc = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
-  if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : '[E] Talk to crewman';
+  if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   $('prompt').textContent = prompt;
 
@@ -607,16 +609,87 @@ function step(dt, t) {
   if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
 
-  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0), -0.4 + gunKick * 0.05);
+  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
     { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play'; }
   // camera
-  const eyeH = P.crouch ? 1.05 : 1.65;
   P.shake = Math.max(0, P.shake - dt * 1.5);
-  const bobY = Math.sin(P.bob * 2.2) * 0.045 * Math.min(1, speedNow / 3);
-  camera.position.set(P.x, eyeH + bobY, P.z);
+  const onFoot = P.grounded && P.mode !== 'slide';
+  const bobY = onFoot ? Math.sin(P.bob * 2.2) * (0.04 + P.flow * 0.02) * Math.min(1, speedNow / 3) : 0;
+  const dip = Math.sin(Math.min(1, P.land) * Math.PI) * 0.14 * Math.min(1, P.land * 2);
+  camera.position.set(P.x, P.y + P.eye + bobY - dip, P.z);
   camera.rotation.order = 'YXZ';
-  camera.rotation.set(P.pitch + (Math.random() - 0.5) * P.shake * 0.05, P.yaw + Math.sin(P.bob * 1.1) * 0.004 + (Math.random() - 0.5) * P.shake * 0.05, Math.sin(P.bob * 1.1) * 0.006);
-  camera.fov += ((P.sprint ? 82 : 75) - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix();
+  camera.rotation.set(P.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * 0.05, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * 0.05, P.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
+  const fovT = 75 + Math.max(0, Math.min(1, (speedNow - 3.6) / 6)) * 15 + (P.mode === 'grapple' ? 7 : 0) + (P.mode === 'slide' ? 4 : 0);
+  camera.fov += (fovT - camera.fov) * Math.min(1, dt * 5); camera.updateProjectionMatrix();
+  $('grap').className = P.mode === 'grapple' ? 'on' : P.grapCd > 0 ? 'cd' : ''; $('grap').firstElementChild.style.width = (100 - Math.min(1, P.grapCd / MOVE.grapCooldown) * 100) + '%';
+  $('speed').style.opacity = Math.max(0, Math.min(0.5, (speedNow - 6) / 8));
+}
+
+// ---------------- traversal glue: sound, noise, enemies ----------------
+const moveApi = {
+  stamina: () => G.stamina,
+  spend: (n) => { G.stamina = Math.max(0, G.stamina - n); },
+  onEvent(name, d) {
+    if (name === 'jump') { sound.step(0.16); noiseNow = Math.max(noiseNow, 6); }
+    else if (name === 'land') { const hard = d.impact > 8; sound.thud(Math.min(0.45, 0.08 + d.impact * 0.03)); noiseNow = Math.max(noiseNow, hard ? 14 : 7); if (hard) P.shake = Math.max(P.shake, 0.25); }
+    else if (name === 'mantle' || name === 'vault') { sound.noise(0.12, 0.09, 500, 0.8, 'lowpass'); sound.step(0.12); noiseNow = Math.max(noiseNow, 6); }
+    else if (name === 'slide') { sound.noise(0.55, 0.12, 900, 0.7, 'bandpass'); slideHit = 0.9; }
+    else if (name === 'wallrun') { sound.step(0.2); }
+    else if (name === 'walljump') { sound.step(0.22); noiseNow = Math.max(noiseNow, 8); }
+    else if (name === 'release') { sound.noise(0.18, 0.08, 2600, 2, 'bandpass'); }
+  },
+};
+let slideHit = 0;
+// slide-tackle: sweeps the legs of man-sized hostiles
+function slideTackle(dt) {
+  if (P.mode !== 'slide') { slideHit = 0; return; }
+  slideHit -= dt; if (slideHit <= 0) return;
+  for (const g of gorns) {
+    if (!g.active || g.state === S.STUNNED || !['crazed', 'slimeling'].includes(g.kind)) continue;
+    if (Math.hypot(g.x - P.x, g.z - P.z) < 1.15) { g.stunFor(1.6); G.stuns++; slideHit = 0; P.shake = 0.3; sound.hit(); G.say('Slide tackle!', 'good'); P.flow = 1; break; }
+  }
+}
+
+// grapple line: Q or right mouse. Reels you to walls, ceilings and prop tops; yanks small hostiles.
+const ropeGeo = new THREE.BufferGeometry(); ropeGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+const rope = new THREE.Line(ropeGeo, new THREE.LineBasicMaterial({ color: 0xd8e2ea })); rope.frustumCulled = false; rope.visible = false; scene.add(rope);
+const hook = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 6), new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 1, roughness: 0.3, emissive: 0x40c8ff, emissiveIntensity: 0.6 })); hook.visible = false; scene.add(hook);
+const _h = new THREE.Vector3();
+function fireGrapple() {
+  if (G.phase !== 'play' || P.clung > 0) return;
+  if (P.mode === 'grapple') { pressed.grappleCancel = true; return; }
+  if (P.grapCd > 0 || P.mode === 'mantle') { sound.empty(); return; }
+  camera.getWorldDirection(_f); const eye = camera.position;
+  const hit = world.raycast(eye.x, eye.y, eye.z, _f.x, _f.y, _f.z, MOVE.grapRange);
+  const maxD = hit ? hit.dist : MOVE.grapRange;
+  // living targets in the way?
+  let tgt = null, tD = maxD;
+  for (const g of gorns) {
+    if (g.dead || g.state === S.DORMANT || g.kind === 'phantom') continue;
+    const gy = g.kind === 'clinger' && g.mode === 'lurk' ? g.ceil - 0.2 : g.hitY;
+    _v.set(g.x - eye.x, gy - eye.y, g.z - eye.z); const d = _v.length(); _v.normalize();
+    if (d < tD && Math.acos(Math.max(-1, Math.min(1, _v.dot(_f)))) < Math.atan2(g.hitR, d) + 0.03) { tgt = g; tD = d; }
+  }
+  sound.noise(0.1, 0.16, 3200, 3, 'bandpass'); sound.tone(520, 0.12, 'square', 0.05, 900); noiseNow = Math.max(noiseNow, 9);
+  if (tgt) {
+    P.grapCd = MOVE.grapCooldown; ropeFlash = 0.25; ropeEnd.set(tgt.x, tgt.kind === 'clinger' && tgt.mode === 'lurk' ? tgt.ceil - 0.2 : tgt.hitY, tgt.z);
+    if (tgt.kind === 'clinger') { tgt.kill(); G.kills++; G.say('Hooked it off the ceiling!', 'good'); }
+    else if (tgt.kind === 'crazed' || tgt.kind === 'slimeling') { tgt.stunFor(1.4); G.stuns++; const dx = P.x - tgt.x, dz = P.z - tgt.z, d = Math.hypot(dx, dz) || 1, pull = Math.min(2.5, Math.max(0, d - 1.6)); tgt.x += dx / d * pull; tgt.z += dz / d * pull; if (world.solidAt(tgt.x, tgt.z)) { tgt.x -= dx / d * pull; tgt.z -= dz / d * pull; } G.say('Hooked! It stumbles.', 'good'); }
+    else G.say('The hook skitters off the ' + tgt.name + '.', 'warn');
+    return;
+  }
+  if (!hit || hit.dist < 1.6) { ropeFlash = 0.18; ropeEnd.copy(eye).addScaledVector(_f, hit ? hit.dist : MOVE.grapRange); P.grapCd = 0.5; if (!hit) G.say('Nothing in range for the grapple line.', ''); return; }
+  startGrapple(P, hit); ropeEnd.set(hit.x, hit.y, hit.z); sound.clang(0.1);
+}
+const ropeEnd = new THREE.Vector3(); let ropeFlash = 0;
+function updateRope(dt) {
+  ropeFlash = Math.max(0, ropeFlash - dt);
+  const on = P.mode === 'grapple' || ropeFlash > 0; rope.visible = hook.visible = on; if (!on) return;
+  // from the left hand (lower-left of the view) to the anchor, with a little slack that tightens
+  _h.set(-0.22, -0.2, -0.45).applyQuaternion(camera.quaternion).add(camera.position);
+  const a = ropeGeo.attributes.position, slack = P.mode === 'grapple' ? Math.max(0, 0.5 - P.grap.t * 2) : 0.3, n = a.count;
+  for (let i = 0; i < n; i++) { const k = i / (n - 1); a.setXYZ(i, _h.x + (ropeEnd.x - _h.x) * k, _h.y + (ropeEnd.y - _h.y) * k - Math.sin(k * Math.PI) * slack + Math.sin(k * 14 + performance.now() * 0.03) * slack * 0.08, _h.z + (ropeEnd.z - _h.z) * k); }
+  a.needsUpdate = true; hook.position.copy(ropeEnd); hook.lookAt(_h); hook.rotateX(-Math.PI / 2);
 }
 
 let slow = 0;

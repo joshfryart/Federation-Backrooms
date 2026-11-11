@@ -32,6 +32,9 @@ export const ROOMS = {
   jefferies:   { label: 'Maintenance Duct',    floor: 0x333333, weight: 0, size: [1, 1] },
 };
 
+// Fleet ranks: [title, solid pips, hollow pips] — worn on the right side of the collar
+export const RANKS = [['Crewman', 0, 0], ['Ensign', 1, 0], ['Lieutenant J.G.', 1, 1], ['Lieutenant', 2, 0], ['Lt. Commander', 2, 1], ['Commander', 3, 0], ['Captain', 4, 0]];
+
 export const PERKS = [
   { id: 'boots',    name: 'Soft-Soled Boots',     desc: 'Your footsteps are much quieter.', max: 2 },
   { id: 'hypo',     name: 'Hypospray Upgrade',    desc: '+25 max health and heal 25 now.', max: 3 },
