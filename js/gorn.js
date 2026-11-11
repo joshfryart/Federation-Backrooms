@@ -89,6 +89,13 @@ export class Gorn {
         this.timer -= dt;
         if (this.timer <= 0) { this.state = S.SEARCH; this.timer = 6; }
       }
+      // the Gorn periodically "smells" you out so camping in a corner never works
+      this.pulse = (this.pulse ?? (18 + Math.random() * 8)) - dt;
+      if (this.pulse <= 0 && (this.state === S.PATROL)) {
+        this.pulse = 22 + Math.random() * 10; this.state = S.INVESTIGATE; this.timer = 10;
+        const [tx, ty] = this.w.tile(p.x + (Math.random() - 0.5) * 10, p.z + (Math.random() - 0.5) * 10);
+        if (this.w.grid[ty]?.[tx] === 0) this.setTarget(tx, ty); else { const [a, b] = this.w.tile(p.x, p.z); this.setTarget(a, b); }
+      }
       // noise
       if (this.state !== S.CHASE && noiseR > 0) {
         const eff = this.w.los(this.x, this.z, p.x, p.z) ? noiseR : noiseR * 0.65;

@@ -15,9 +15,9 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 80);
 scene.add(camera);
-const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 2.2); scene.add(hemi);
-const lamp = new THREE.PointLight(0xfff0d0, 14, 14, 1.6); scene.add(lamp);
-const torch = new THREE.SpotLight(0xfff6e0, 90, 32, 0.52, 0.55, 1.4); torch.position.set(0.15, -0.1, 0); camera.add(torch);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi);
+const lamp = new THREE.PointLight(0xfff0d0, 9, 14, 1.8); scene.add(lamp);
+const torch = new THREE.SpotLight(0xfff6e0, 38, 30, 0.5, 0.6, 1.6); torch.position.set(0.15, -0.1, 0); camera.add(torch);
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
@@ -307,7 +307,7 @@ function drawMap() {
 }
 
 // ---------------- main loop ----------------
-const clock = new THREE.Clock(); let acc = 0, mapT = 0, flickT = 0;
+let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
 function step(dt, t) {
   if (shot > 0) shot -= dt;
   if (invuln > 0) invuln -= dt;
@@ -406,7 +406,7 @@ function step(dt, t) {
   world.update(dt, t);
   lamp.position.set(P.x, 2.4, P.z);
   flickT -= dt;
-  if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = bad ? 0.5 : 2.2 + (Math.random() < 0.02 ? -1.2 : 0); }
+  if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0); }
 
   // camera
   const eyeH = P.crouch ? 1.05 : 1.65;
@@ -420,7 +420,7 @@ function step(dt, t) {
 
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, clock.getDelta()); const t = clock.elapsedTime;
+  const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; elapsed += dt; const t = elapsed;
   if (G.phase === 'play' && world) step(dt, t);
   else if (world) { world.update(dt, t); }
   renderer.render(scene, camera);
