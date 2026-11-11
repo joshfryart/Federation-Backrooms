@@ -41,7 +41,7 @@ export class Post {
     this.final = new ShaderPass(FinalShader);
     this.composer.addPass(this.final);
     this.composer.addPass(new OutputPass());
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.4;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.25;
     this.setSize(size.x, size.y);
   }
   setSize(w, h) { this.composer.setSize(w, h); this.final.uniforms.res.value.set(w, h); }
@@ -121,6 +121,9 @@ function bloodTex(kind) {
       blobs(g, s, 8, 12, 8, 14, 'rgba(100,6,6,');
       for (let i = 0; i < 14; i++) { const a = Math.random() * 6.28, len = 14 + Math.random() * 42; g.strokeStyle = 'rgba(95,5,5,0.9)'; g.lineWidth = 1 + Math.random() * 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(s / 2, s / 2); g.lineTo(s / 2 + Math.cos(a) * len, s / 2 + Math.sin(a) * len); g.stroke(); blobs(g, s, 1, 0, 2, 4, 'rgba(100,6,6,'); }
       for (let i = 0; i < 12; i++) { const a = Math.random() * 6.28, len = 30 + Math.random() * 30; const x = s / 2 + Math.cos(a) * len, y = s / 2 + Math.sin(a) * len; g.fillStyle = 'rgba(100,6,6,0.95)'; g.beginPath(); g.arc(x, y, 1 + Math.random() * 2.5, 0, 7); g.fill(); }
+    } else if (kind === 3) {                                                                                         // wall drips
+      blobs(g, s, 10, 22, 6, 14, 'rgba(95,5,5,');
+      for (let i = 0; i < 6; i++) { const x = s / 2 + (Math.random() - 0.5) * 50, len = 25 + Math.random() * 70; g.strokeStyle = 'rgba(90,4,4,0.92)'; g.lineWidth = 2 + Math.random() * 4; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, s * 0.35); g.lineTo(x + (Math.random() - 0.5) * 4, s * 0.35 + len); g.stroke(); g.fillStyle = 'rgba(100,5,5,0.95)'; g.beginPath(); g.ellipse(x, s * 0.35 + len + 3, 3.5, 5.5, 0, 0, 7); g.fill(); }
     } else {                                                                                                         // smear / drag mark
       g.strokeStyle = 'rgba(85,5,5,0.9)'; g.lineCap = 'round';
       for (let i = 0; i < 5; i++) { g.lineWidth = 8 + Math.random() * 18; g.beginPath(); g.moveTo(10, s / 2 + (Math.random() - 0.5) * 30); g.bezierCurveTo(40, s / 2 + (Math.random() - 0.5) * 20, 80, s / 2 + (Math.random() - 0.5) * 20, s - 10, s / 2 + (Math.random() - 0.5) * 24); g.stroke(); }
@@ -137,7 +140,7 @@ export class Decals {
       const im = new THREE.InstancedMesh(geo, mat, cap); im.count = 0; im.frustumCulled = false; im.receiveShadow = true;
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(im); this.sets[name] = { im, cap, n: 0 };
     };
-    mk('blood0', bloodTex(0), 260); mk('blood1', bloodTex(1), 260); mk('blood2', bloodTex(2), 160);
+    mk('blood0', bloodTex(0), 260); mk('blood1', bloodTex(1), 260); mk('blood2', bloodTex(2), 160); mk('blood3', bloodTex(3), 140);
     mk('scorch', tex(128, (g, s) => { g.clearRect(0, 0, s, s); blobs(g, s, 14, 26, 14, 34, 'rgba(14,12,10,'); }), 60);
     mk('claw', tex(128, (g, s) => {
       g.clearRect(0, 0, s, s);
@@ -158,7 +161,7 @@ export class Decals {
     this._put(name, x, 0.012 + Math.random() * 0.004, z, -Math.PI / 2, 0, Math.random() * 6.28, size, size * (0.8 + Math.random() * 0.4), 0.55 + fresh * 0.5);
   }
   wall(kind, x, y, z, ry, size) {
-    const name = kind.startsWith('blood') ? 'blood' + (kind === 'blood' ? Math.floor(Math.random() * 2) : kind.slice(5)) : kind;
+    const name = kind.startsWith('blood') ? 'blood' + (kind === 'blood' ? (Math.random() < 0.5 ? 1 : 3) : kind.slice(5)) : kind;
     this._put(name, x, y, z, 0, ry, kind === 'claw' ? (Math.random() - 0.5) * 0.6 : Math.random() * 6.28, size, size, 0.7 + Math.random() * 0.3);
   }
 }

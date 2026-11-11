@@ -150,6 +150,7 @@ export class Gorn {
         const sp = this.roar > 0 ? speed * 0.25 : speed;
         const step = Math.min(sp * dt, md);
         this.x += mdx / md * step; this.z += mdz / md * step;
+        this.stepD = (this.stepD || 0) + step; if (this.stepD > 1.5) { this.stepD = 0; game.onGornStep?.(this, dist); }
         this.speed = sp;
         const want = Math.atan2(mdx, mdz);
         let da = want - this.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));

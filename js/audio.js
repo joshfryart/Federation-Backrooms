@@ -87,6 +87,7 @@ export class Sound {
   heartbeat(vol = 0.3) { this.tone(60, 0.12, 'sine', vol, -20); this.tone(52, 0.14, 'sine', vol * 0.8, -15, 0.16); }
   lift() { this.tone(110, 1.6, 'sawtooth', 0.12, 50); this.noise(1.6, 0.1, 150, 0.6, 'lowpass'); }
   death() { this.noise(1.6, 0.5, 120, 0.5, 'lowpass'); this.tone(300, 1.6, 'sawtooth', 0.3, -270); }
+  thud(vol = 0.3) { this.tone(55, 0.25, 'sine', vol, -20); this.noise(0.12, vol * 0.5, 150, 0.7, 'lowpass'); }
   klaxon() { for (let i = 0; i < 3; i++) { this.tone(520, 0.35, 'sawtooth', 0.08, 120, i * 0.5); this.tone(380, 0.35, 'square', 0.04, 80, i * 0.5); } }
   clang(vol = 0.25) { this.tone(160 + Math.random() * 80, 0.9, 'triangle', vol, -60); this.noise(0.3, vol * 0.6, 900, 4, 'bandpass'); }
   zap() { this.noise(0.25, 0.22, 2500, 1.5, 'bandpass'); this.tone(1200, 0.12, 'sawtooth', 0.06, -900); }

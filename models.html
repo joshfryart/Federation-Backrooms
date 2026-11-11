@@ -1,25 +1,28 @@
 <!doctype html><meta charset="utf-8"><title>Model viewer</title>
 <style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}#l{position:fixed;bottom:8px;left:0;right:0;display:flex;justify-content:space-around;font-size:13px;letter-spacing:.1em;text-transform:uppercase;pointer-events:none}</style>
 <canvas id="c"></canvas><div id="l"></div>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <script type="module">
 import * as THREE from 'three';
-import { makeGorn, animateGorn, makeCrew, makeTribble, makeItem } from './js/actors.js';
+import { makeGorn, animateGorn, makeCrew, makeHologram, animateCrew, makeTribble, makeItem } from './js/actors.js';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
 r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true;
 const s = new THREE.Scene(); s.background = new THREE.Color(0x151a28);
-const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.1, 100); cam.position.set(0, 2.1, 13); cam.lookAt(0, 1.2, 0);
+const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.1, 100); cam.position.set(0, 1.9, 11); cam.lookAt(0, 1.2, 0);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.5; }
 s.add(new THREE.HemisphereLight(0xffffff, 0x445, 1.8));
 const key = new THREE.DirectionalLight(0xfff0d8, 2.2); key.position.set(3, 6, 6); key.castShadow = true; s.add(key);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshLambertMaterial({ color: 0x2a3040 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
 const list = [
   ['Gorn', makeGorn(), -5.6], ['Redshirt', makeCrew(0xb02a20), -3.4], ['Command (gold)', makeCrew(0xd0a020), -2.0], ['Science (blue)', makeCrew(0x2a5fb0), -0.6],
-  ['Medical hologram', makeCrew(0x2fa0d0, false, 0xaee6ff), 0.8], ['Fallen crewman', makeCrew(0xb02a20, true), 2.6], ['Tribble', makeTribble(), 4.4], ['Items', new THREE.Group(), 5.9]];
+  ['Medical hologram', makeHologram(), 0.8], ['Fallen crewman', makeCrew(0xb02a20, true), 2.6], ['Tribble', makeTribble(), 4.4], ['Items', new THREE.Group(), 5.9]];
 const items = list[7][1]; ['chip', 'battery', 'medkit'].forEach((k, i) => { const m = makeItem(k); m.position.set(-0.4 + i * 0.4, 0.9 - i * 0, 0); m.scale.setScalar(1.2); items.add(m); items.children[i].position.set(0, 0.4 + i * 0.5, 0); });
 for (const [n, m, x] of list) { m.position.x = x; m.traverse(o => { if (o.isMesh) o.castShadow = true; }); s.add(m); }
 list[0][1].position.x = -6.6; list[0][1].rotation.y = 0.5; list[1][1].rotation.y = 0.4; list[1][1].position.x = -3.6; list[2][1].position.x = -2.2; list[3][1].position.x = -0.8;
 list[5][1].rotation.y = -0.5; list[6][1].scale.setScalar(2.2);
 document.getElementById('l').innerHTML = list.map(l => `<span>${l[0]}</span>`).join('');
-let t = 0; function f() { requestAnimationFrame(f); t += 0.016; animateGorn(list[0][1], 1.2, t, Math.sin(t * 0.5) > 0.7); list[0][1].rotation.y = 0.5 + Math.sin(t * 0.4) * 0.5; for (const i of [1, 2, 3, 4]) list[i][1].rotation.y = 0.3 + Math.sin(t * 0.5 + i) * 0.4; items.rotation.y = t; r.render(s, cam); } f();
+const H = location.hash; if (H === '#gorn') { cam.position.set(-6.2, 2.2, 5.2); cam.lookAt(-6.6, 1.7, 0); } if (H === '#face') { cam.position.set(-3.5, 1.9, 3.6); cam.lookAt(-3.2, 1.6, 0); }
+let t = 0; function f() { requestAnimationFrame(f); t += 0.016; animateGorn(list[0][1], 1.2, t, Math.sin(t * 0.5) > 0.7); list[0][1].rotation.y = 0.5 + Math.sin(t * 0.4) * 0.5; for (const i of [1, 2, 3, 4]) animateCrew(list[i][1], t); for (const i of [1, 2, 3, 4]) list[i][1].rotation.y = 0.3 + Math.sin(t * 0.5 + i) * 0.4; items.rotation.y = t; r.render(s, cam); } f();
 window.__ready = true;
 </script>

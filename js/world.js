@@ -421,7 +421,7 @@ export class World {
     const mkFloor = (list, map, colorFn) => {
       if (!list.length) return;
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(-Math.PI / 2);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ map }), list.length);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map, bumpMap: map, bumpScale: 1.2, roughness: map === T.holo ? 0.25 : 0.62, metalness: 0.0 }), list.length);
       list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, colorFn(x, y)); });
       im.receiveShadow = true; g.add(im);
     };
@@ -466,7 +466,7 @@ export class World {
     // walls
     {
       const geo = new THREE.BoxGeometry(TS, WH, TS);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ map: T.wall }), walls.length);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, bumpMap: T.wall, bumpScale: 1.5, roughness: 0.78, metalness: 0.05 }), walls.length);
       walls.forEach(([x, y], i) => {
         dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
         im.setColorAt(i, wallCol.clone().multiplyScalar(0.82 + rndv() * 0.22));
@@ -555,6 +555,22 @@ export class World {
     }
     const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'JEFFERIES\nTUBE ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TURBOLIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
     for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) place(f, corr[Math.floor(rnd() * corr.length)], 2.55, 1.2);
+    // --- handrails and floor light strips along walls
+    {
+      const rails = [], strips = [];
+      for (const f of this.wallFaces) { const r = rnd(); if (r < 0.28) rails.push(f); else if (r < 0.5) strips.push(f); }
+      if (rails.length) {
+        const im = new THREE.InstancedMesh(new THREE.BoxGeometry(TS, 0.05, 0.07), new THREE.MeshStandardMaterial({ color: 0x9aa0aa, metalness: 0.8, roughness: 0.3 }), rails.length);
+        rails.forEach((f, i) => { dummy.position.set(f.px + f.dx * 0.06, 0.95, f.pz + f.dy * 0.06); dummy.rotation.set(0, f.ry, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+        im.castShadow = true; g.add(im);
+      }
+      if (strips.length) {
+        const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(TS * 0.92, 0.05), new THREE.MeshBasicMaterial({ color: accent.clone().multiplyScalar(1.6) }), strips.length);
+        strips.forEach((f, i) => { dummy.position.set(f.px + f.dx * 0.005, 0.12, f.pz + f.dy * 0.005); dummy.rotation.set(0, f.ry, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+        g.add(im);
+      }
+      dummy.rotation.set(0, 0, 0);
+    }
     // --- door frames between rooms and corridors
     const frames = [];
     for (const r of d.rooms) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) for (const [dx, dy] of DIRS) {

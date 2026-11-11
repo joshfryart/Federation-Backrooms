@@ -3,7 +3,8 @@ import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.j
 import { generate, World, TS } from './world.js';
 import { Sound } from './audio.js';
 import { Gorn, S } from './gorn.js';
-import { makeCrew, makeTribble, makeItem } from './actors.js';
+import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem } from './actors.js';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +29,7 @@ let post = null;
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post?.setSize(innerWidth, innerHeight); }
 addEventListener('resize', resize); resize();
 post = new Post(renderer, scene, camera);
+{ const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.3; }
 const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
 const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
@@ -144,7 +146,7 @@ function loadDeck(n) {
   { const t = data.pickTile(() => true); if (t) add('body', t, makeCrew(0xb02a20, true), { used: false }); }
   { const t = data.rooms.find(r => r.type === 'sickbay'); if (t) {
       const tile = data.pickTile(([x, y]) => data.room[y][x] === 'sickbay');
-      if (tile) add('emh', tile, makeCrew(0x2fa0d0, false, 0xaee6ff), { used: false });
+      if (tile) add('emh', tile, makeHologram(), { used: false });
   } }
 
   // gorn(s)
@@ -256,6 +258,7 @@ function die(by) {
 }
 
 // callbacks used by Gorn AI
+G.onGornStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
 G.onGornSpotted = () => { flash('#600', 0.35); G.say('IT SEES YOU — RUN', 'warn'); };
 G.hitPlayer = (gorn, dmg) => {
   if (invuln > 0 || G.phase !== 'play') return;
@@ -455,7 +458,8 @@ function step(dt, t) {
       const b = e.mesh.userData.body; b.scale.y = 0.85 + Math.sin(e.t * 4) * 0.04; e.mesh.position.y = Math.abs(Math.sin(e.t * 1.6)) * 0.03;
       if (d < 0.9) { G.tribbles++; G.hp = Math.min(G.maxHp, G.hp + 3); remove(e); sound.purr(); G.say(['Coo-coo… a tribble!', 'It purrs. Your stress level drops.', 'Tribble acquired. Do NOT feed it.'][G.tribbles % 3], 'npc'); updateHUD(); }
     } else if (e.kind === 'crew' || e.kind === 'emh') {
-      e.mesh.lookAt(P.x, 0, P.z); // face the player
+      const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
+      animateCrew(e.mesh, e.t);
     }
   }
   function remove(e) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
