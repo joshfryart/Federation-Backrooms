@@ -21,7 +21,7 @@ const FinalShader = {
       vec2 uv = vUv + vec2(wob, 0.0);
       vec3 c = vec3(texture2D(tDiffuse, uv + ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - ca).b);
       float g = rnd(vUv * res + fract(time) * 100.0) - 0.5;
-      c += g * 0.028;
+      c += g * 0.02;
       float l = dot(c, vec3(0.299,0.587,0.114));
       c = mix(c, vec3(l), hurt * 0.5 + danger * 0.15);
       c *= vec3(1.045, 1.02, 0.93); c = c * 0.95 + 0.012;
@@ -41,12 +41,13 @@ const CompressShader = {
     void main(){ vec4 c = texture2D(tDiffuse, vUv); c.rgb = clamp(c.rgb, 0.0, 1000.0); c.rgb = comp(c.rgb); gl_FragColor = c; }`,
 };
 export class Post {
-  constructor(renderer, scene, camera) {
+  constructor(renderer, scene, camera, overlay = null) {
     this.renderer = renderer; this.enabled = true;
     const size = renderer.getSize(new THREE.Vector2());
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.composer.addPass(new RenderPass(scene, camera));
+    if (overlay) { const vp = new RenderPass(overlay.scene, overlay.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }   // first-person viewmodel
     this.composer.addPass(new ShaderPass(CompressShader));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.3, 0.5, 1.9);
     this.composer.addPass(this.bloom);

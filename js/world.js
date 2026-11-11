@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ROOMS, mulberry32 } from './data.js';
+import { pbr, has as hasModel, instance } from './assets.js';
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
@@ -111,6 +112,26 @@ export function textures() {
     noise(g, s, 400, 0.2);
   });
   texCache.d = { wall: derive(texCache.wall, 3.2, 0.78, 0.2), floor: derive(texCache.floor, 2.2, 0.8, 0.2), carpet: derive(texCache.carpet, 3.0, 0.9, 0.1), holo: derive(texCache.holo, 1.0, 0.2, 0.2) };
+  texCache.deck = texCache.tile = texCache.floor; texCache.d.deck = texCache.d.tile = texCache.d.floor;
+  // real CC0 PBR sets replace the procedural ones when they loaded (call textures() only after assets are ready)
+  for (const k of ['wall', 'deck', 'carpet', 'tile', 'ceil']) { const p = pbr(k); if (p) { texCache[k] = p.c; texCache.d[k] = { normal: p.n, rough: p.r }; texCache.real = true; } }
+  if (pbr('wall')) {   // bulkhead = real metal plating (tiled 2×) with starship panel seams, kick plate and header band drawn over it
+    const p = pbr('wall');
+    texCache.wall = canvasTex(1024, (g, s) => {
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) g.drawImage(p.c.image, i * s / 2, j * s / 2, s / 2, s / 2);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, 0, s, s);                                  // flatten plate contrast a little
+      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, s * 0.925, s, s * 0.075);                          // kick plate
+      g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(0, s * 0.92, s, 5);
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, 0, s, s * 0.05); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, s * 0.05, s, 4);   // header band
+      g.fillStyle = 'rgba(0,0,0,0.42)'; g.fillRect(0, 0, 5, s); g.fillRect(s - 5, 0, 5, s); g.fillRect(s / 2 - 2, s * 0.05, 4, s * 0.87);   // vertical seams
+      g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(5, 0, 3, s); g.fillRect(s / 2 + 2, s * 0.05, 3, s * 0.87);
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, s * 0.6, s, 4); g.fillStyle = 'rgba(255,255,255,0.1)'; g.fillRect(0, s * 0.6 + 4, s, 2);   // chair-rail seam
+      g.fillStyle = 'rgba(0,0,0,0.5)'; for (const x of [22, s / 2 - 20, s / 2 + 20, s - 22]) for (const y of [s * 0.08, s * 0.57, s * 0.64, s * 0.9]) { g.beginPath(); g.arc(x, y, 4, 0, 7); g.fill(); }
+      const gr = g.createLinearGradient(0, s * 0.75, 0, s); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(20,14,8,0.28)'); g.fillStyle = gr; g.fillRect(0, s * 0.75, s, s * 0.25);   // grime towards the floor
+    });
+    texCache.wall.anisotropy = 8;
+    const n = p.n.clone(), r = p.r.clone(); n.repeat.set(2, 2); r.repeat.set(2, 2); n.needsUpdate = r.needsUpdate = true; texCache.d.wall = { normal: n, rough: r };
+  }
   return texCache;
 }
 
@@ -482,29 +503,31 @@ export class World {
       }
     }
     // floors
-    const corridor = open.filter(([x, y]) => !d.room[y][x]);
-    const normal = open.filter(([x, y]) => d.room[y][x] && d.room[y][x] !== 'holodeck');
-    const holo = open.filter(([x, y]) => d.room[y][x] === 'holodeck');
+    const FLOOR_OF = { engineering: 'deck', shuttlebay: 'deck', cargo: 'deck', transporter: 'deck', jefferies: 'deck', sickbay: 'tile', mess: 'tile', holodeck: 'holo' };
+    const FLOOR_MAT = { deck: { metalness: 0.55, roughness: 0.9, ns: 1.3 }, tile: { metalness: 0.0, roughness: 0.55, ns: 0.8 }, carpet: { metalness: 0, roughness: 1, ns: T.real ? 1.6 : 0.9 }, holo: { metalness: 0, roughness: 0.3, ns: 0.9 } };
+    const byKind = { deck: [], tile: [], carpet: [], holo: [] };
+    for (const t of open) byKind[FLOOR_OF[d.room[t[1]][t[0]]] || 'carpet'].push(t);
     const dummy = new THREE.Object3D();
-    const mkFloor = (list, map, colorFn) => {
-      if (!list.length) return;
+    for (const [kind, list] of Object.entries(byKind)) {
+      if (!list.length) continue;
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(-Math.PI / 2);
-      const dm = map === T.holo ? T.d.holo : map === T.carpet ? T.d.carpet : T.d.floor;
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map, normalMap: dm.normal, normalScale: new THREE.Vector2(0.9, 0.9), roughnessMap: dm.rough, roughness: map === T.holo ? 0.3 : 1, metalness: 0.0 }), list.length);
-      list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, colorFn(x, y)); });
+      const fm = FLOOR_MAT[kind], dm = T.d[kind];
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(fm.ns, fm.ns), roughnessMap: dm.rough, roughness: fm.roughness, metalness: fm.metalness }), list.length);
+      list.forEach(([x, y], i) => {
+        dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.rotation.y = kind === 'holo' ? 0 : Math.floor(rndv() * 4) * Math.PI / 2; dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
+        const r = d.room[y][x]; const c = kind === 'holo' ? new THREE.Color(0xffffff) : floorCol.clone();
+        if (r && kind !== 'holo') c.lerp(new THREE.Color(ROOMS[r].floor), 0.6);
+        if (kind === 'tile') c.lerp(new THREE.Color(0xffffff), 0.35);
+        if (kind !== 'holo') c.multiplyScalar((r ? 0.9 : 0.82) + rndv() * 0.2);
+        im.setColorAt(i, c);
+      });
       im.receiveShadow = true; g.add(im);
-    };
-    mkFloor(normal, T.floor, (x, y) => {
-      const r = d.room[y][x]; const c = floorCol.clone();
-      if (r) c.lerp(new THREE.Color(ROOMS[r].floor), 0.6);
-      const v = 0.88 + rndv() * 0.18; return c.multiplyScalar(v);
-    });
-    mkFloor(corridor, T.carpet, (x, y) => floorCol.clone().multiplyScalar(0.8 + rndv() * 0.22));
-    mkFloor(holo, T.holo, () => new THREE.Color(0xffffff));
+    }
+    dummy.rotation.set(0, 0, 0);
     // ceiling
     {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ map: T.ceil }), open.length);
+      const im = new THREE.InstancedMesh(geo, T.d.ceil ? new THREE.MeshStandardMaterial({ map: T.ceil, normalMap: T.d.ceil.normal, roughnessMap: T.d.ceil.rough, roughness: 1, metalness: 0 }) : new THREE.MeshLambertMaterial({ map: T.ceil }), open.length);
       open.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(0.8)); });
       g.add(im);
     }
@@ -537,7 +560,7 @@ export class World {
     // walls
     {
       const geo = new THREE.BoxGeometry(TS, WH, TS);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, normalScale: new THREE.Vector2(1, 1), roughnessMap: T.d.wall.rough, roughness: 1, metalness: 0.05 }), walls.length);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, normalScale: new THREE.Vector2(1, 1), roughnessMap: T.d.wall.rough, roughness: T.real ? 0.85 : 1, metalness: T.real ? 0.3 : 0.05 }), walls.length);
       walls.forEach(([x, y], i) => {
         dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
         im.setColorAt(i, wallCol.clone().multiplyScalar(0.82 + rndv() * 0.22));
@@ -824,3 +847,4 @@ export class World {
   }
 }
 function yy(y, H) { return y < 0 || y >= H; }
+export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttle', 'holocube', 'pad', 'bunk', 'table', 'biobed', 'crate', 'tree', 'lonechair', 'plant', 'cart', 'replicator'];

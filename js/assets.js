@@ -8,7 +8,7 @@ import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
 const cache = {};
 
-export const MODEL_FILES = ['robot_large', 'zombie', 'ghost', 'alien_big', 'slime_spiky', 'weapon_gun', 'desk_chairArms', 'barrels', 'desk_computer'];
+export const MODEL_FILES = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy', 'suit', 'human_anims', 'weapon_gun', 'desk_chairArms', 'barrels', 'desk_computer'];
 
 export function loadModels(names = MODEL_FILES) {
   return Promise.all(names.map(n => new Promise(res => {
@@ -16,6 +16,7 @@ export function loadModels(names = MODEL_FILES) {
   })));
 }
 export const has = (n) => !!cache[n];
+export const get = (n) => cache[n];
 
 export function loadEnv(renderer, name = 'lobby') {
   return new Promise(res => {
@@ -60,3 +61,16 @@ export class Anim {
   }
   update(dt) { this.mixer.update(dt); }
 }
+
+// CC0 PBR texture sets (ambientCG), see CREDITS.md. Missing files just leave the procedural fallback in place.
+const pbrSets = {};
+export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil'];
+export function loadTextures(names = PBR_SETS) {
+  const tl = new THREE.TextureLoader();
+  const one = (url, srgb) => new Promise(res => tl.load(url, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, () => res(null)));
+  return Promise.all(names.map(async n => {
+    const [c, nm, r] = await Promise.all([one(`./assets/textures/${n}_c.webp`, true), one(`./assets/textures/${n}_n.webp`), one(`./assets/textures/${n}_r.webp`)]);
+    if (c && nm && r) pbrSets[n] = { c, n: nm, r };
+  }));
+}
+export const pbr = (n) => pbrSets[n];

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { TS } from './world.js';
 import { makeGorn, animateGorn, makeCrew, makeSpider, animateSpider } from './actors.js';
-import { has, instance, Anim } from './assets.js';
+import { makeHuman, humansReady, holoMaterial, CREW_KINDS } from './humans.js';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export const S = { DORMANT: 0, PATROL: 1, INVESTIGATE: 2, CHASE: 3, SEARCH: 4, STUNNED: 5 };
@@ -14,24 +14,65 @@ function gronkModel() {
   const mesh = makeGorn(); let t = 0;
   return { mesh, tick(dt, speed, f) { t += dt; animateGorn(mesh, f.stunned ? 0 : speed, t, f.roaring); mesh.rotation.z = f.stunned ? Math.sin(t * 40) * 0.05 : 0; mesh.userData.body.rotation.x = f.stunned ? 0.35 : 0; } };
 }
-function glbModel(name, opts, fallback) {
-  const inst = has(name) ? instance(name, opts) : null;
-  if (!inst) return fallback();
-  const anim = new Anim(inst.inner, inst.clips); anim.play(['idle']);
-  const m = opts.map || {};
+function crewFallback(color) { const mesh = makeCrew(color, false, null, { species: 'human' }); return { mesh, tick(dt, speed, f) { mesh.userData.torso.rotation.x = Math.min(0.5, speed * 0.1); } }; }
+
+// rigged human (see humans.js) with a locomotion state machine
+function humanModel(opts, cfg, fallback) {
+  const mesh = humansReady() ? makeHuman(opts) : null; if (!mesh) return fallback();
+  const H = mesh.userData.human; let stunT = 0, atk = false, t = 0;
+  if (cfg.face) H.face(cfg.face);
+  cfg.init?.(mesh, H);
   return {
-    mesh: inst.root, anim,
+    mesh, H,
     tick(dt, speed, f) {
-      if (f.stunned) anim.play(m.stun || ['death'], { loop: false, fade: 0.1 });
-      else if (f.attacking) anim.play(m.attack || ['punch', 'attack'], { fade: 0.08 });
-      else if (speed > (m.runAt ?? 3.4)) anim.play(m.run || ['run'], { speed: Math.max(0.8, speed / 4.5) });
-      else if (speed > 0.25) anim.play(m.walk || ['walk'], { speed: Math.max(0.6, speed / (m.walkRef ?? 2)) });
-      else anim.play(m.idle || ['idle']);
-      anim.update(dt);
+      t += dt;
+      if (f.frozen) { H.mixer.timeScale = 0; H.update(dt); cfg.tick?.(mesh, H, t, f); return; }
+      H.mixer.timeScale = 1;
+      if (f.stunned) { stunT += dt; if (stunT < 0.7) H.play(cfg.stun || 'hit_chest', { loop: false, fade: 0.08 }); else H.play(cfg.stunHold || 'crouch_idle', { fade: 0.35 }); }
+      else {
+        stunT = 0;
+        if (f.attacking) { if (!atk) H.play(cfg.attack || 'punch_cross', { loop: false, fade: 0.06, restart: true, speed: cfg.attackSpeed || 1.3 }); atk = true; }
+        else {
+          atk = false;
+          if (speed > (cfg.runAt ?? 3.4)) H.play(cfg.run || 'sprint', { speed: Math.max(0.7, speed / (cfg.runRef ?? 5.2)), fade: 0.2 });
+          else if (speed > (cfg.jogAt ?? 2.4)) H.play(cfg.jog || 'jog', { speed: Math.max(0.7, speed / (cfg.jogRef ?? 3.0)), fade: 0.25 });
+          else if (speed > 0.25) H.play(cfg.walk || 'walk', { speed: Math.max(0.6, speed / (cfg.walkRef ?? 1.5)), fade: 0.25 });
+          else H.play(cfg.idle || 'idle', { fade: 0.3 });
+        }
+      }
+      H.update(dt); cfg.tick?.(mesh, H, t, f);
     },
   };
 }
-function crewFallback(color) { const mesh = makeCrew(color, false, null, { species: 'human' }); return { mesh, tick(dt, speed, f) { mesh.userData.torso.rotation.x = Math.min(0.5, speed * 0.1); } }; }
+const CRAZED_FACE = { JawDrop: 0.75, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 0.9, NoseWrinkler: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 };
+export const MODELS = {
+  gronk: () => gronkModel(),
+  crazed: () => humanModel({ bloody: 0.8, pale: 0.55 }, { face: CRAZED_FACE, attack: 'punch_cross', tick(mesh, H, t) { H.lookYaw = Math.sin(t * 7) * 0.25 + Math.sin(t * 2.3) * 0.3; H.face({ JawDrop: 0.55 + Math.abs(Math.sin(t * 5)) * 0.45 }); } }, () => crewFallback(0xb02a20)),
+  slimeling: () => humanModel({ slime: true, bloody: 0.35 }, { face: { ...CRAZED_FACE, JawDrop: 1 }, attack: 'punch_jab', walk: 'jog', walkRef: 3, tick(mesh, H, t) { H.inner.scale.x = H.inner.scale.z * (1 + Math.sin(t * 9) * 0.03); } }, () => crewFallback(0x30a050)),
+  drone: () => humanModel({ kind: 'suit', height: 2.02, tint: 0x4e5a56 }, { walk: 'walk_formal', walkRef: 1.25, jogAt: 99, runAt: 99, attack: 'punch_jab', attackSpeed: 0.9, stun: 'hit_head', stunHold: 'idle', init: droneKit }, () => crewFallback(0x5a6660)),
+  phantom: () => humanModel({ kind: 'crew_m', height: 1.86, material: phantomMaterial(), shadow: false }, { idle: 'dance', walk: 'dance', jog: 'dance', run: 'dance', attack: 'punch_jab', face: { MouthLeftPullUp: 1, RightBrowDown: 0, MouthRightPullUp: 1, JawDrop: 0.35, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 } }, () => crewFallback(0xff3fd0)),
+  clinger: () => { const mesh = makeSpider(); let t = 0; return { mesh, tick(dt, speed, f) { t += dt; animateSpider(mesh, t, speed, f.latched); } }; },
+};
+// assimilation hardware bolted onto the suit: eye lens, cabling, tool arm
+function droneKit(mesh, H) {
+  const metal = new THREE.MeshStandardMaterial({ color: 0x1c2022, metalness: 0.9, roughness: 0.35 });
+  const glow = new THREE.MeshBasicMaterial({ color: 0x50ff70 });
+  const s = 1 / H.inner.scale.x; const add = (bone, m, x, y, z) => { m.position.set(x * s, y * s, z * s); m.scale.multiplyScalar(s); H.bones[bone]?.add(m); return m; };
+  const head = new THREE.Group();
+  const plate = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 10, 0, Math.PI), metal); plate.scale.set(1, 1.15, 0.8); plate.rotation.y = -0.5; head.add(plate);
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.034, 0.07, 12), metal); lens.rotation.x = Math.PI / 2; lens.position.set(0.033, 0.06, 0.1); head.add(lens);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), glow); dot.position.set(0.033, 0.06, 0.138); head.add(dot);
+  for (let i = 0; i < 3; i++) { const c = new THREE.Mesh(new THREE.TorusGeometry(0.1 + i * 0.012, 0.009, 5, 14, Math.PI * 1.1), metal); c.rotation.set(0.4 + i * 0.5, 1.2, 0.3 * i); c.position.set(0.02, -0.06, -0.02); head.add(c); }
+  add('Head', head, 0, 0.09, 0.03);
+  const arm = new THREE.Group();
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.07, 0.26, 10), metal); sleeve.position.y = 0.16; arm.add(sleeve);
+  for (let i = 0; i < 3; i++) { const p = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.2, 6), metal); const a = i / 3 * Math.PI * 2; p.position.set(Math.cos(a) * 0.035, 0.38, Math.sin(a) * 0.035); p.rotation.set(Math.sin(a) * -0.25, 0, Math.cos(a) * 0.25); arm.add(p); }
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.008, 5, 16), glow); ring.rotation.x = Math.PI / 2; ring.position.y = 0.27; arm.add(ring);
+  add('lowerarm_r', arm, 0, 0, 0);
+  const pack = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.1), metal); add('spine_03', pack, 0, 0.05, -0.17);
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.2, 0.012), glow); add('spine_03', strip, 0, 0.05, -0.225);
+  mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
+}
 
 // ------------------------------------------------------------------
 // Base class
@@ -91,9 +132,9 @@ export class Enemy {
 // Hunter: patrol / investigate noise / chase by sight / search. Used by Gronk, crazed crew, slimelings.
 // ------------------------------------------------------------------
 const HUNTERS = {
-  gronk: { name: 'Gronk', model: () => gronkModel(), base: 2.3, baseDeck: 0.12, chase: 4.1, chaseDeck: 0.16, chaseMax: 5.2, sight: 20, sightCrouch: 13, hear: 1, dmg: 34, atkCd: 2.5, atkRange: 1.25, hitY: 1.5, hitR: 0.8, roarOnSpot: true, spawnMsg: 'The ship shudders. Something heavy is moving on this deck…' },
-  crazed: { name: 'Space-Madness Crewman', model: () => glbModel('zombie', { height: 1.85, tint: 0xd8b8b8, emissive: { color: 0x300000, intensity: 0.4 }, map: { run: ['run'], walk: ['walk'], attack: ['punch'], stun: ['death'], runAt: 3.2, walkRef: 2 } }, () => crewFallback(0xb02a20)), base: 2.0, baseDeck: 0.06, chase: 4.4, chaseDeck: 0.08, chaseMax: 5.3, sight: 14, sightCrouch: 9, hear: 1.2, dmg: 16, atkCd: 1.0, atkRange: 1.15, hitY: 1.2, hitR: 0.55, roarOnSpot: 'shriek', spawnMsg: 'Somewhere nearby, someone is laughing. It is not a happy laugh.' },
-  slimeling: { name: 'Slimeling Impostor', model: () => glbModel('alien_big', { height: 2.1, tint: 0x66ff88, emissive: { color: 0x0a4a1a, intensity: 0.8 }, map: { run: ['run'], walk: ['walk'], attack: ['punch'], stun: ['death'], runAt: 3 } }, () => crewFallback(0x30a050)), base: 2.6, baseDeck: 0.05, chase: 4.6, chaseDeck: 0.05, chaseMax: 5.2, sight: 16, sightCrouch: 10, hear: 1.2, dmg: 20, atkCd: 1.4, atkRange: 1.3, hitY: 1.2, hitR: 0.7, roarOnSpot: 'shriek', spawnMsg: '' },
+  gronk: { name: 'Gronk', model: () => MODELS.gronk(), base: 2.3, baseDeck: 0.12, chase: 4.1, chaseDeck: 0.16, chaseMax: 5.2, sight: 20, sightCrouch: 13, hear: 1, dmg: 34, atkCd: 2.5, atkRange: 1.25, hitY: 1.5, hitR: 0.8, roarOnSpot: true, spawnMsg: 'The ship shudders. Something heavy is moving on this deck…' },
+  crazed: { name: 'Space-Madness Crewman', model: () => MODELS.crazed(), base: 2.0, baseDeck: 0.06, chase: 4.4, chaseDeck: 0.08, chaseMax: 5.3, sight: 14, sightCrouch: 9, hear: 1.2, dmg: 16, atkCd: 1.0, atkRange: 1.15, hitY: 1.2, hitR: 0.55, roarOnSpot: 'shriek', spawnMsg: 'Somewhere nearby, someone is laughing. It is not a happy laugh.' },
+  slimeling: { name: 'Slimeling Impostor', model: () => MODELS.slimeling(), base: 2.6, baseDeck: 0.05, chase: 4.6, chaseDeck: 0.05, chaseMax: 5.2, sight: 16, sightCrouch: 10, hear: 1.2, dmg: 20, atkCd: 1.4, atkRange: 1.3, hitY: 1.2, hitR: 0.7, roarOnSpot: 'shriek', spawnMsg: '' },
 };
 
 export class Hunter extends Enemy {
@@ -168,10 +209,10 @@ export class Hunter extends Enemy {
 // ------------------------------------------------------------------
 export class Drone extends Enemy {
   constructor(world, spawnTile, deck, delay, scene, sound) {
-    super(world, spawnTile, deck, delay, scene, sound, glbModel('robot_large', { height: 2.5, tint: 0x6a7a74, emissive: { color: 0x40ff60, intensity: 0.35 }, map: { run: ['walk'], walk: ['walk'], attack: ['attack'], stun: ['death'], walkRef: 1.6 } }, () => crewFallback(0x5a6660)));
+    super(world, spawnTile, deck, delay, scene, sound, MODELS.drone());
     this.kind = 'drone'; this.name = 'Compliance Drone'; this.hitY = 1.4; this.hitR = 0.9; this.adapted = false;
     this.speedV = 1.7 + Math.min(deck, 8) * 0.07; this.whirT = 2; this.retarget = 0;
-    const eye = new THREE.PointLight(0x40ff60, 1.5, 6, 2); eye.position.set(0, 2.0, 0.35); this.mesh.add(eye); this.eye = eye;
+    const eye = new THREE.PointLight(0x40ff60, 1.5, 6, 2); eye.position.set(0.06, 1.82, 0.3); this.mesh.add(eye); this.eye = eye;
   }
   stunFor(sec, game) {
     if (this.adapted) { this.sound.denied(); this.state = S.STUNNED; this.stun = 0.5; return 'adapted'; }
@@ -198,22 +239,13 @@ export class Drone extends Enemy {
 // ------------------------------------------------------------------
 // Rogue Hologram "Mr. Grinsworth": walks through walls, but freezes while you are looking at it.
 // ------------------------------------------------------------------
-let holoMat = null, scanTex = null;
-function phantomMaterial() {
-  if (holoMat) return holoMat;
-  const c = document.createElement('canvas'); c.width = 4; c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 4, 64); g.fillStyle = '#000'; g.fillRect(0, 0, 4, 22);
-  scanTex = new THREE.CanvasTexture(c); scanTex.wrapS = scanTex.wrapT = THREE.RepeatWrapping; scanTex.repeat.set(1, 18);
-  holoMat = new THREE.MeshBasicMaterial({ color: 0xff3fd0, transparent: true, opacity: 0.65, alphaMap: scanTex, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-  return holoMat;
-}
+let holoMat = null;
+function phantomMaterial() { return holoMat || (holoMat = holoMaterial(0xff3fd0, 0.8)); }
 export class Phantom extends Enemy {
   constructor(world, spawnTile, deck, delay, scene, sound) {
-    const mat = phantomMaterial();
-    super(world, spawnTile, deck, delay, scene, sound, glbModel('ghost', { height: 1.9, material: mat, map: { run: ['fast_flying'], walk: ['flying_idle'], idle: ['flying_idle'], attack: ['headbutt'], stun: ['death'], runAt: 99, walkRef: 99 } }, () => crewFallback(0xff3fd0)));
+    super(world, spawnTile, deck, delay, scene, sound, MODELS.phantom());
     this.kind = 'phantom'; this.name = 'Mr. Grinsworth (rogue hologram)'; this.hitY = 1.3; this.hitR = 0.8;
-    this.seen = false; this.unseenT = 0; this.mesh.userData.floatY = 0.35; this.giggleT = 3;
-    const grin = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 6, 16, Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff })); grin.rotation.z = Math.PI; grin.position.set(0, 1.45, 0.3); this.mesh.add(grin);
-    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff })); e.position.set(sx * 0.14, 1.62, 0.3); this.mesh.add(e); }
+    this.seen = false; this.unseenT = 0; this.mesh.userData.floatY = 0.06; this.giggleT = 3;
     this.glow = new THREE.PointLight(0xff3fd0, 3, 8, 2); this.glow.position.set(0, 1.2, 0); this.mesh.add(this.glow);
   }
   stunFor(sec) { // banished back into the projector for a while
@@ -241,10 +273,10 @@ export class Phantom extends Enemy {
     this.giggleT -= dt; if (this.giggleT <= 0) { this.giggleT = 5 + Math.random() * 6; if (dist < 22) this.sound.giggle(Math.max(0.05, 0.2 - dist * 0.008)); }
     // flicker like a bad projection; frozen & grinning when watched
     this.mesh.visible = this.seen ? true : (Math.random() > 0.08);
-    holoMat.opacity = this.seen ? 0.85 : 0.5 + Math.sin(this.t * 30) * 0.1; scanTex.offset.y = -this.t * 0.5;
+    phantomMaterial().uniforms.uOpacity.value = this.seen ? 0.95 : 0.6 + Math.sin(this.t * 30) * 0.1; phantomMaterial().uniforms.uGlitch.value = this.seen ? 0 : 1;
     this.glow.intensity = this.seen ? 4.5 : 2.2;
-    this.place(); this.mesh.position.y = 0.35 + Math.sin(this.t * 1.7) * 0.08;
-    this.model.tick(dt, this.seen ? 0 : 1, { attacking: this.attacking > 0 });
+    this.place(); this.mesh.position.y = 0.06 + Math.sin(this.t * 1.7) * 0.04;
+    this.model.tick(dt, this.seen ? 0 : 1, { attacking: this.attacking > 0, frozen: this.seen && this.attacking <= 0 });
   }
   relocate(p, rmin, rmax) {
     const open = this.w.d.openTiles.filter(([x, y]) => { if (this.w.grid[y][x] !== 0) return false; const [cx, cz] = this.w.center(x, y); const d = Math.hypot(cx - p.x, cz - p.z); return d > rmin && d < rmax && !this.w.los(cx, cz, p.x, p.z); });
@@ -257,7 +289,7 @@ export class Phantom extends Enemy {
 // ------------------------------------------------------------------
 export class Clinger extends Enemy {
   constructor(world, tile, deck, scene, sound) {
-    super(world, tile, deck, 0, scene, sound, (() => { const mesh = makeSpider(); let t = 0; return { mesh, tick(dt, speed, f) { t += dt; animateSpider(mesh, t, speed, f.latched); } }; })());
+    super(world, tile, deck, 0, scene, sound, MODELS.clinger());
     this.kind = 'clinger'; this.name = 'Clingon Crawler'; this.hitY = 2.4; this.hitR = 0.55; this.quiet = true;
     this.state = S.PATROL; this.mesh.visible = true; this.mode = 'lurk';
     const [tx, ty] = world.tile(this.x, this.z); this.ceil = world.ceilAt(tx, ty);

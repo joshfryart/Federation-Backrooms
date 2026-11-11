@@ -393,3 +393,50 @@ export function animateSpider(g, t, speed, latched) {
   u.legs.forEach((l, i) => { const f = latched ? 3 : speed > 0.5 ? 12 : 2.2; l.knee.rotation.x = Math.sin(t * f + l.ph) * (speed > 0.5 || latched ? 0.5 : 0.12); l.hip.rotation.z = Math.sin(t * f * 0.7 + l.ph) * (speed > 0.5 || latched ? 0.2 : 0.04); });
   u.abd.scale.y = 0.85 + Math.sin(t * 3) * 0.05;
 }
+
+// =====================================================================
+//  FIRST-PERSON ZAPPER (hand + sidearm). Points down -Z. Returns { group, muzzle, flash, cells[] }
+// =====================================================================
+export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.75, roughness: 0.38 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x101216, metalness: 0.4, roughness: 0.6 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x8d949c, metalness: 1, roughness: 0.22 });
+  const grip = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.95 });
+  const skinM = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6 });
+  const cloth = new THREE.MeshStandardMaterial({ color: sleeve, roughness: 0.9 });
+  const glow = (c) => new THREE.MeshBasicMaterial({ color: c });
+  const P = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+  // body: long rounded receiver
+  const rec = P(new THREE.CapsuleGeometry(0.021, 0.15, 4, 12), shell, 0, 0, -0.03, Math.PI / 2); rec.scale.set(1.15, 1, 1.25);
+  P(new THREE.BoxGeometry(0.034, 0.012, 0.16), dark, 0, 0.026, -0.03);                                   // top rail
+  for (let i = 0; i < 5; i++) P(new THREE.BoxGeometry(0.05, 0.006, 0.006), dark, 0, 0.0, 0.02 - i * 0.014, 0, 0, 0).scale.set(1, 6, 1);   // cooling fins
+  // emitter
+  P(new THREE.CylinderGeometry(0.017, 0.022, 0.05, 14), steel, 0, 0, -0.145, Math.PI / 2);
+  P(new THREE.CylinderGeometry(0.024, 0.024, 0.008, 14), dark, 0, 0, -0.118, Math.PI / 2);
+  const ring = P(new THREE.TorusGeometry(0.019, 0.0035, 6, 18), glow(0xff9a3a), 0, 0, -0.168);
+  const lens = P(new THREE.CylinderGeometry(0.012, 0.012, 0.004, 12), glow(0xffd9a0), 0, 0, -0.171, Math.PI / 2);
+  // charge display on the back, facing the player: three cells
+  P(new THREE.BoxGeometry(0.04, 0.03, 0.006), dark, 0, 0.012, 0.073, -0.35);
+  const cells = [-1, 0, 1].map(i => P(new THREE.BoxGeometry(0.008, 0.018, 0.003), glow(0x40c8ff), i * 0.011, 0.013, 0.0765, -0.35));
+  // side power conduit
+  P(new THREE.CylinderGeometry(0.004, 0.004, 0.12, 6), steel, 0.027, -0.008, -0.04, Math.PI / 2);
+  P(new THREE.BoxGeometry(0.004, 0.012, 0.05), glow(0x40c8ff), -0.0265, 0.004, -0.05);
+  // grip + trigger guard
+  P(new THREE.BoxGeometry(0.03, 0.095, 0.04), grip, 0, -0.06, 0.035, 0.28).geometry.translate(0, 0, 0);
+  P(new THREE.TorusGeometry(0.018, 0.003, 5, 12, Math.PI), dark, 0, -0.03, -0.005, 0, Math.PI / 2, Math.PI);
+  // hand: palm, four fingers wrapped round the grip, index on the trigger, thumb along the body
+  const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 3, 8);
+  P(new THREE.BoxGeometry(0.02, 0.085, 0.075), skinM, 0.024, -0.065, 0.05, 0.28).geometry.translate(0, 0, 0);
+  for (let i = 0; i < 3; i++) { P(cap(0.0095, 0.04), skinM, -0.004, -0.05 - i * 0.021, 0.012 - i * 0.006, 0, 0, Math.PI / 2); P(cap(0.009, 0.022), skinM, -0.024, -0.05 - i * 0.021, 0.03 - i * 0.006, Math.PI / 2 - 0.2, 0, 0); }
+  P(cap(0.009, 0.038), skinM, 0.006, -0.028, -0.004, 0, 0.4, Math.PI / 2);                                 // trigger finger
+  P(cap(0.011, 0.045), skinM, 0.03, -0.012, 0.03, Math.PI / 2 - 0.1, 0, 0.1);                              // thumb
+  // wrist + forearm running off the bottom-right of the screen
+  const arm = P(cap(0.032, 0.34), skinM, 0.05, -0.2, 0.2, 0.95, 0, -0.22); arm.scale.set(1, 1, 0.85);
+  const slv = P(new THREE.CylinderGeometry(0.043, 0.05, 0.3, 12), cloth, 0.063, -0.262, 0.285, 0.95, 0, -0.22);
+  P(new THREE.CylinderGeometry(0.0445, 0.0445, 0.012, 12), new THREE.MeshStandardMaterial({ color: 0xd8b24a, metalness: 0.8, roughness: 0.3 }), 0.047, -0.178, 0.168, 0.95, 0, -0.22); // rank braid
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -0.18); g.add(muzzle);
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); flash.position.copy(muzzle.position); flash.scale.set(1, 1, 2.2); g.add(flash);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+  return { group: g, muzzle, flash, cells, ring, lens };
+}

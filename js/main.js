@@ -3,8 +3,9 @@ import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.j
 import { generate, World, TS } from './world.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
-import { loadModels, loadEnv, has as hasModel, instance } from './assets.js';
-import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem } from './actors.js';
+import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
+import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 
@@ -24,12 +25,17 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi)
 const lamp = new THREE.PointLight(0xfff0d0, 9, 14, 1.8); scene.add(lamp);
 const torch = new THREE.SpotLight(0xfff6e0, 22, 30, 0.5, 0.65, 1.7); torch.position.set(0.15, -0.1, 0); camera.add(torch);
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
 torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.camera.near = 0.2; torch.shadow.camera.far = 30; torch.shadow.bias = -0.0004; torch.shadow.normalBias = 0.04;
 let post = null;
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); post?.setSize(innerWidth, innerHeight); }
+// the first-person viewmodel lives in its own scene (own lights, drawn over the world) so it never clips walls or gets blown out by the torch
+const vmScene = new THREE.Scene(), vmCam = new THREE.PerspectiveCamera(55, 1, 0.01, 5);
+const vmHemi = new THREE.HemisphereLight(0xffffff, 0x30343c, 1); vmScene.add(vmHemi);
+const vmKey = new THREE.DirectionalLight(0xfff2dc, 1); vmKey.position.set(-0.6, 0.9, 0.5); vmScene.add(vmKey);
+const vmRim = new THREE.DirectionalLight(0xfff6e0, 0); vmRim.position.set(0.3, 0.1, -1); vmScene.add(vmRim);
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = vmCam.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); vmCam.updateProjectionMatrix(); post?.setSize(innerWidth, innerHeight); }
 addEventListener('resize', resize); resize();
-post = new Post(renderer, scene, camera);
+post = new Post(renderer, scene, camera, { scene: vmScene, camera: vmCam });
 { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.3; }
 const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
@@ -117,6 +123,7 @@ function updateHUD() {
   $('stbar').style.width = Math.max(0, G.stamina) + '%';
   const cells = $('cells'); let h = '';
   for (let i = 0; i < G.maxPhaser; i++) h += `<span class="${i < G.phaser ? '' : 'off'}"></span>`; cells.innerHTML = h;
+  if (vm) { vm.cells.forEach((c, i) => c.material.color.set(i < Math.ceil(G.phaser / G.maxPhaser * 3) ? 0x40c8ff : 0x10222c)); vm.ring.material.color.set(G.phaser > 0 ? 0xff9a3a : 0x30180a); }
   const need = world ? world.d.chips.length : 0;
   $('objective').innerHTML = G.chips >= need
     ? `<b>Tubelift online</b> — reach the lift<br>Chips ${G.chips}/${need}`
@@ -165,13 +172,14 @@ function loadDeck(n) {
   // survivors + bodies
   for (let i = 0; i < 2; i++) {
     const t = data.pickTile(() => true); if (!t) continue;
-    const m = makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
+    const m = makeSurvivor(rnd) || makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
     add('crew', t, m, { used: false, fake: n >= 2 && rnd() < 0.3 });
   }
-  { const t = data.pickTile(() => true); if (t) add('body', t, makeCrew(0xb02a20, true), { used: false }); }
+  { const t = data.pickTile(() => true); if (t) add('body', t, makeCorpse(rnd) || makeCrew(0xb02a20, true), { used: false }); }
+  if (n >= 3) { const t = data.pickTile(() => true); if (t) add('body', t, makeCorpse(rnd) || makeCrew(0xd0a020, true), { used: false }); }
   { const t = data.rooms.find(r => r.type === 'sickbay'); if (t) {
       const tile = data.pickTile(([x, y]) => data.room[y][x] === 'sickbay');
-      if (tile) add('emh', tile, makeHologram(), { used: false });
+      if (tile) add('emh', tile, makeMedHolo() || makeHologram(), { used: false });
   } }
 
   spawnThreats(data, n, rnd);
@@ -441,14 +449,13 @@ beamCone = (() => {
   const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xfff1d0, transparent: true, opacity: 0.02, alphaMap: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   m.position.set(0.12, -0.1, 0); m.frustumCulled = false; camera.add(m); return m;
 })();
-// first-person zapper (Kenney Space Kit blaster, CC0)
-let gunVM = null, gunKick = 0, muzzle = null;
+// first-person zapper: procedural sidearm + hand (js/actors.js makeViewmodel)
+let gunVM = null, gunKick = 0, muzzle = null, vm = null;
 function buildViewmodel() {
-  const inst = hasModel('weapon_gun') ? instance('weapon_gun', { height: 0.2, byMax: true, tint: 0x888a90 }) : null; if (!inst) return;
-  inst.root.traverse(o => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 10; o.material.depthTest = true; } });
-  gunVM = new THREE.Group(); gunVM.add(inst.root); inst.root.rotation.y = Math.PI; gunVM.position.set(0.17, -0.17, -0.5); gunVM.rotation.set(0.05, -0.12, 0);
-  muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0 })); muzzle.position.set(0, 0.02, -0.28); gunVM.add(muzzle);
-  camera.add(gunVM);
+  vm = makeViewmodel(); gunVM = vm.group; muzzle = vm.flash;
+  gunVM.traverse(o => { if (o.isMesh) o.renderOrder = 10; });
+  gunVM.rotation.set(0.05, 0.1, 0); gunVM.scale.setScalar(0.9);
+  vmScene.add(gunVM); vmScene.environment = scene.environment; vmScene.environmentIntensity = 0.25; updateHUD();
 }
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
 function step(dt, t) {
@@ -536,8 +543,15 @@ function step(dt, t) {
       const b = e.mesh.userData.body; b.scale.y = 0.85 + Math.sin(e.t * 4) * 0.04; e.mesh.position.y = Math.abs(Math.sin(e.t * 1.6)) * 0.03;
       if (d < 0.9) { G.tribbles++; G.hp = Math.min(G.maxHp, G.hp + 3); remove(e); sound.purr(); G.say(['Coo-coo… a furble!', 'It purrs. Your stress level drops.', 'Furble acquired. Do NOT feed it.'][G.tribbles % 3], 'npc'); updateHUD(); }
     } else if (e.kind === 'crew' || e.kind === 'emh') {
-      const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
-      animateCrew(e.mesh, e.t);
+      const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
+      const H = e.mesh.userData.human;
+      if (H) {
+        if (d > 22) continue;                       // far away: skip skinning updates
+        if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
+        H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
+        if (!e.fake) liveFace(H, e.t, e.mesh.id);   // impostors never blink
+        H.update(dt * (e.fake ? 0.82 : 1));
+      } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
   }
   function remove(e) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
@@ -593,7 +607,8 @@ function step(dt, t) {
   if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
 
-  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); gunVM.position.set(0.17 + Math.sin(P.bob * 1.1) * 0.006, -0.17 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0), -0.5 + gunKick * 0.06); gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play'; }
+  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0), -0.4 + gunKick * 0.05);
+    { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play'; }
   // camera
   const eyeH = P.crouch ? 1.05 : 1.65;
   P.shake = Math.max(0, P.shake - dt * 1.5);
@@ -623,12 +638,12 @@ function frame() {
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
     post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
-  } else renderer.render(scene, camera);
+  } else { renderer.render(scene, camera); renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true; }
 }
 
 // expose for debugging/tests
-const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby')]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();
