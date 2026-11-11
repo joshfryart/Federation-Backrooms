@@ -185,7 +185,13 @@ function loadDeck(n) {
       if (tile) add('emh', tile, makeMedHolo() || makeHologram(), { used: false });
   } }
 
+  // Jiffy tubes: something worth crawling for in the middle, and sometimes something waiting
+  for (const t of data.tubes) {
+    const mid = t.tiles[t.tiles.length >> 1];
+    const kind = rnd() < 0.5 ? 'battery' : 'medkit'; add(kind, mid, makeItem(kind));
+  }
   spawnThreats(data, n, rnd);
+  for (const t of data.tubes) if (n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[1], n, 0, scene, sound));
   placeGore(data, rnd, n);
   world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
   G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.distT = 20 + Math.random() * 20; G.hints = {};
@@ -569,6 +575,7 @@ function step(dt, t) {
   const [tx, ty] = world.tile(P.x, P.z);
   const rt = world.d.room[ty]?.[tx];
   $('roomname').textContent = rt ? ROOMS[rt].label : 'Corridor';
+  if (rt === 'jefferies' && !G.hints.tube) { G.hints.tube = 1; G.say('You squeeze into a Jiffy tube. The big ones cannot follow — the small ones can.', 'npc'); }
   mapT += dt; if (mapT > 0.12) { mapT = 0; world.reveal(P.x, P.z, 3); drawMap(); updateHUD(); }
 
   // environment flicker / lights

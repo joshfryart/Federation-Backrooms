@@ -65,7 +65,7 @@ async function buildCharacter(src, dst, { suit = false } = {}) {
 }
 
 // ---- animation library: same rest pose as the characters, so it is a straight copy with renamed bones ----
-const CLIPS = ['Idle_Loop', 'Idle_Talking_Loop', 'Walk_Loop', 'Walk_Formal_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Crouch_Idle_Loop', 'Punch_Jab', 'Punch_Cross', 'Hit_Chest', 'Hit_Head', 'Death01', 'Sitting_Idle_Loop', 'Fixing_Kneeling', 'Interact', 'Idle_Torch_Loop', 'Spell_Simple_Idle_Loop', 'Dance_Loop', 'Push_Loop'];
+const CLIPS = ['Idle_Loop', 'Idle_Talking_Loop', 'Walk_Loop', 'Walk_Formal_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Crouch_Idle_Loop', 'Crouch_Fwd_Loop', 'Punch_Jab', 'Punch_Cross', 'Hit_Chest', 'Hit_Head', 'Death01', 'Sitting_Idle_Loop', 'Fixing_Kneeling', 'Interact', 'Idle_Torch_Loop', 'Spell_Simple_Idle_Loop', 'Dance_Loop', 'Push_Loop'];
 const rename = (n) => {
   const m = { 'DEF-hips': 'pelvis', 'DEF-spine.001': 'spine_01', 'DEF-spine.002': 'spine_02', 'DEF-spine.003': 'spine_03', 'DEF-neck': 'neck_01', 'DEF-head': 'Head' }; if (m[n]) return m[n];
   const r = /^DEF-(.+)\.([LR])$/.exec(n); if (!r) return n; const s = r[2].toLowerCase(); let b = r[1];

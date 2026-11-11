@@ -5,6 +5,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
+export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
+const TUBE_SIDE = 0.65;     // thickness of the tube's own side walls: leaves a 1.2 m wide crawlway in a 2.5 m tile
 
 // ------------------------------------------------------------------
 // Procedural textures
@@ -232,6 +234,31 @@ export function generate(deck, seed) {
   };
   const openNeighbors = (x, y) => DIRS.filter(([dx, dy]) => grid[y + dy]?.[x + dx] === 0).length;
 
+  // Jiffy tubes: crawl-height maintenance ducts bored straight through solid bulkhead between two open tiles.
+  // Only worth having when they are a real shortcut (or the only link). Movement inside is along the axis only.
+  const tubeAxis = {}, tubes = [];
+  {
+    const wantT = Math.min(3, 1 + Math.floor(deck / 2)), cands = [];
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      if (grid[y][x] !== 0 || (x === 1 && y === 1)) continue;
+      for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        let n = 0; while (n < 7 && grid[y + dy * (n + 1)]?.[x + dx * (n + 1)] === 1) n++;
+        const ex = x + dx * (n + 1), ey = y + dy * (n + 1);
+        if (n < 1 || n > 6 || ex > W - 2 || ey > H - 2 || grid[ey]?.[ex] !== 0) continue;
+        cands.push({ x, y, dx, dy, n, ex, ey, s: n + rnd() * 1.5 });
+      }
+    }
+    cands.sort((a, b) => b.s - a.s);
+    for (const c of cands.slice(0, 80)) {
+      if (tubes.length >= wantT) break;
+      const tiles = []; for (let i = 1; i <= c.n; i++) tiles.push([c.x + c.dx * i, c.y + c.dy * i]);
+      if (tiles.some(([tx, ty]) => [[0, 0], ...DIRS].some(([a, b]) => tubeAxis[(tx + a) + (ty + b) * W]))) continue;   // keep tubes apart
+      const dAB = bfsFrom(c.x, c.y)[c.ex + c.ey * W]; if (dAB >= 0 && dAB < (c.n >= 2 ? 8 : 14)) continue;                // not a shortcut
+      for (const [tx, ty] of tiles) { grid[ty][tx] = 0; room[ty][tx] = 'jefferies'; tubeAxis[tx + ty * W] = c.dx ? 'x' : 'y'; }
+      tubes.push({ tiles, a: [c.x, c.y], b: [c.ex, c.ey], axis: c.dx ? 'x' : 'y' });
+    }
+  }
+
   // start tile: a normal maze cell near one corner
   let start = [1, 1];
   const d0 = bfsFrom(1, 1);
@@ -254,6 +281,7 @@ export function generate(deck, seed) {
   if (exitBlocks) grid[exit[1]][exit[0]] = 2;
 
   const used = new Set([start.join(','), exit.join(',')]);
+  for (const t of tubes) for (const [x, y] of t.tiles) used.add(x + ',' + y);   // nothing spawns in a tube by accident
   const free = () => openTiles.filter(([x, y]) => grid[y][x] === 0 && !used.has(x + ',' + y));
   const pickTile = (pred) => {
     const c = free().filter(pred);
@@ -276,7 +304,7 @@ export function generate(deck, seed) {
   const gornSpawn = (pickTile(([x, y]) => dist(x, y) >= maxD * 0.55 && !(Math.abs(x - exit[0]) + Math.abs(y - exit[1]) < 4)) || exit).slice();
   used.delete(gornSpawn.join(','));
 
-  return { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn,
+  return { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis,
            openTiles, maxD, dist: reach, rnd, used, pickTile, bfsFrom };
 }
 
@@ -458,14 +486,16 @@ export class World {
     this.wallFaces = []; this.sparkers = []; this.steamers = []; this.alertAmt = 0;
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
-    this.tops = {}; this.propHalf = TS * 0.36;
+    this.tops = {}; this.propHalf = TS * 0.36; this.tubeMouths = [];
     this._furnish();
     this._build();
     this._details();
     this._liminal();
   }
 
+  isTube(x, y) { return !!this.d.tubeAxis[x + y * this.W]; }
   ceilAt(x, y) {
+    if (this.d.room[y]?.[x] === 'jefferies') return TUBE_H;
     if (this.d.room[y]?.[x]) return WH;
     const h = Math.sin((x >> 1) * 12.9898 + (y >> 1) * 78.233 + this.d.deck * 3.1) * 43758.5453; const f = h - Math.floor(h);
     return f < 0.3 ? 2.45 : WH;
@@ -508,53 +538,58 @@ export class World {
     return null;
   }
 
-  // push circle out of solid tiles
+  // push circle out of solid tiles (and out of the side walls of Jiffy tubes)
   resolve(p, r) {
     const [tx, ty] = this.tile(p.x, p.z);
+    const push = (cx, cz, hx, hz) => {
+      const nx = Math.max(cx - hx, Math.min(p.x, cx + hx)), nz = Math.max(cz - hz, Math.min(p.z, cz + hz));
+      const dx = p.x - nx, dz = p.z - nz, d2 = dx * dx + dz * dz; if (d2 >= r * r) return;
+      if (d2 < 1e-8) { // center inside box: push along smallest axis
+        const ox = hx - Math.abs(p.x - cx), oz = hz - Math.abs(p.z - cz);
+        if (ox < oz) p.x += Math.sign(p.x - cx || 1) * (ox + r); else p.z += Math.sign(p.z - cz || 1) * (oz + r);
+      } else { const d = Math.sqrt(d2); p.x += dx / d * (r - d); p.z += dz / d * (r - d); }
+    };
     for (let iter = 0; iter < 2; iter++) {
       for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) {
+        const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS;
+        const ax = this.d.tubeAxis[x + y * this.W];
+        if (ax) { const o = TS / 2 - TUBE_SIDE / 2; for (const sgn of [-1, 1]) ax === 'x' ? push(cx, cz + sgn * o, TS / 2, TUBE_SIDE / 2) : push(cx + sgn * o, cz, TUBE_SIDE / 2, TS / 2); continue; }
         if (!this.solid(x, y)) continue;
         const prop = this.grid[y]?.[x] === 2;
         if (prop && (p.y || 0) >= this.topAt(x, y) - 0.03) continue;   // standing on / passing over a climbable prop
-        const half = prop ? TS * 0.36 : TS / 2;
-        const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS;
-        const nx = Math.max(cx - half, Math.min(p.x, cx + half));
-        const nz = Math.max(cz - half, Math.min(p.z, cz + half));
-        let dx = p.x - nx, dz = p.z - nz; const d2 = dx * dx + dz * dz;
-        if (d2 < r * r) {
-          if (d2 < 1e-8) { // center inside box: push along smallest axis
-            const ox = half - Math.abs(p.x - cx), oz = half - Math.abs(p.z - cz);
-            if (ox < oz) p.x += Math.sign(p.x - cx || 1) * (ox + r); else p.z += Math.sign(p.z - cz || 1) * (oz + r);
-          } else { const d = Math.sqrt(d2); p.x += dx / d * (r - d); p.z += dz / d * (r - d); }
-        }
+        const half = prop ? TS * 0.36 : TS / 2; push(cx, cz, half, half);
       }
     }
   }
 
+  // line of sight; a tube's side walls block it unless one end is inside a tube
   los(ax, az, bx, bz) {
     const dx = bx - ax, dz = bz - az, dist = Math.hypot(dx, dz);
     const n = Math.ceil(dist / 0.4);
-    for (let i = 1; i < n; i++) { if (this.solidAt(ax + dx * i / n, az + dz * i / n)) return false; }
+    const inTube = this.isTube(...this.tile(ax, az)) || this.isTube(...this.tile(bx, bz));
+    for (let i = 1; i < n; i++) { const x = ax + dx * i / n, z = az + dz * i / n; if (this.solidAt(x, z) || (!inTube && this.isTube(...this.tile(x, z)))) return false; }
     return true;
   }
 
-  // distance field (BFS) from a tile, over walkable tiles (grid==0)
-  field(tx, ty) {
-    const W = this.W, H = this.H, g = this.grid;
+  // distance field (BFS) from a tile, over walkable tiles (grid==0). Tubes are entered end-on only; noTube = too big to crawl.
+  field(tx, ty, noTube = false) {
+    const W = this.W, H = this.H, g = this.grid, T = this.d.tubeAxis;
     const d = new Int16Array(W * H).fill(-1);
     if (tx < 0 || ty < 0 || tx >= W || ty >= H) return d;
     const q = [tx + ty * W]; d[q[0]] = 0;
     for (let i = 0; i < q.length; i++) {
-      const x = q[i] % W, y = (q[i] / W) | 0;
+      const x = q[i] % W, y = (q[i] / W) | 0, ta = T[q[i]];
       for (const [dx, dy] of DIRS) {
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= W || ny >= H || g[ny][nx] !== 0 || d[nx + ny * W] >= 0) continue;
+        const tb = T[nx + ny * W];
+        if (tb && noTube) continue;
+        if ((ta === 'x' || tb === 'x') && dy !== 0) continue; if ((ta === 'y' || tb === 'y') && dx !== 0) continue;
         d[nx + ny * W] = d[q[i]] + 1; q.push(nx + ny * W);
       }
     }
     return d;
   }
-
   reveal(x, z, r = 2) {
     const [tx, ty] = this.tile(x, z);
     for (let y = ty - r; y <= ty + r; y++) for (let xx = tx - r; xx <= tx + r; xx++) {
@@ -609,6 +644,43 @@ export class World {
       open.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(0.8)); });
       g.add(im);
     }
+    // Jiffy tubes: header block above the crawlway, the tube's own side walls, ribs, conduit and amber guide strips
+    if (d.tubes?.length) {
+      const m = mats(); const tiles = d.tubes.flatMap(t => t.tiles.map(([x, y]) => [x, y, t.axis]));
+      const shell = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.8) });
+      const inner = new THREE.MeshStandardMaterial({ color: 0x4a4f57, metalness: 0.7, roughness: 0.5, normalMap: T.d.deck.normal, normalScale: new THREE.Vector2(0.4, 0.4) });
+      const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2) });
+      const inst = (geo, mat, list) => { const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([px, py, pz, ry], i) => { dummy.position.set(px, py, pz); dummy.rotation.set(0, ry || 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); im.castShadow = im.receiveShadow = true; g.add(im); return im; };
+      const head = [], side = [], rib = [], strip = [], pipe = [], post = [], bar = [];
+      const o = TS / 2 - TUBE_SIDE / 2, hw = TS / 2 - TUBE_SIDE;   // side-wall offset, half width of the crawlway
+      for (const [x, y, ax] of tiles) {
+        const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS, ry = ax === 'x' ? Math.PI / 2 : 0, P = (along, across) => ax === 'x' ? [cx + along, cz + across] : [cx + across, cz + along];
+        head.push([cx, (WH + TUBE_H) / 2, cz, 0]);
+        for (const sg of [-1, 1]) {
+          let q = P(0, sg * o); side.push([q[0], TUBE_H / 2, q[1], ry]);
+          q = P(0, sg * (hw - 0.02)); strip.push([q[0], 0.025, q[1], ry]);
+          q = P(0, sg * (hw - 0.07)); pipe.push([q[0], TUBE_H - 0.08, q[1], ry]);
+          for (const al of [-TS / 4, TS / 4]) { q = P(al, sg * (hw - 0.03)); rib.push([q[0], TUBE_H / 2, q[1], ry]); }
+        }
+        for (const al of [-TS / 4, TS / 4]) { const q = P(al, 0); bar.push([q[0], TUBE_H - 0.03, q[1], ry]); }
+      }
+      // hazard-striped hatch frame on each mouth
+      for (const t of d.tubes) for (const [end, first] of [[t.a, t.tiles[0]], [t.b, t.tiles[t.tiles.length - 1]]]) {
+        const bx = ((end[0] + first[0]) / 2 + 0.5) * TS, bz = ((end[1] + first[1]) / 2 + 0.5) * TS, ry = t.axis === 'x' ? Math.PI / 2 : 0;
+        const ox = t.axis === 'x' ? 0 : 1, oz = t.axis === 'x' ? 1 : 0, sx = Math.sign(end[0] - first[0]) * 0.05, sz = Math.sign(end[1] - first[1]) * 0.05;
+        for (const sg of [-1, 1]) post.push([bx + sx + ox * sg * (hw + 0.07), TUBE_H / 2, bz + sz + oz * sg * (hw + 0.07), ry]);
+        const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.28, 0.14, 0.14), m.hazard); top.position.set(bx + sx, TUBE_H + 0.07, bz + sz); top.rotation.y = ry; g.add(top);
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), amber); lamp.position.set(bx + sx * 3, TUBE_H + 0.24, bz + sz * 3); lamp.rotation.y = ry; g.add(lamp);
+        this.tubeMouths.push({ x: bx, z: bz });
+      }
+      inst(new THREE.BoxGeometry(TS, WH - TUBE_H, TS), shell, head);
+      inst(new THREE.BoxGeometry(TUBE_SIDE, TUBE_H, TS), shell, side);
+      inst(new THREE.BoxGeometry(0.06, TUBE_H, 0.1), inner, rib);
+      inst(new THREE.BoxGeometry(hw * 2, 0.06, 0.1), inner, bar);
+      inst(new THREE.BoxGeometry(0.14, TUBE_H, 0.14), m.hazard, post);
+      const pg = new THREE.CylinderGeometry(0.045, 0.045, TS, 8); pg.rotateX(Math.PI / 2); inst(pg, m.pipe, pipe);
+      inst(new THREE.BoxGeometry(0.03, 0.03, TS), amber, strip).castShadow = false;
+    }
     // light panels (steady + flickering + dead)
     {
       const lightCol = new THREE.Color(ship.light).multiplyScalar(3.4);
@@ -616,6 +688,7 @@ export class World {
       const steady = [], flick = [];
       for (const [x, y] of open) {
         const r = d.room[y][x];
+        if (r === 'jefferies') continue;   // tubes are lit only by their floor strips
         const lit = r ? true : ((x + y) % 2 === 0);
         if (!lit) continue;
         { const hz = Math.sin((x >> 2) * 91.7 + (y >> 2) * 17.3 + d.deck * 5.7) * 9871.3; if (!r && hz - Math.floor(hz) < 0.2) continue; } // pitch-black stretches

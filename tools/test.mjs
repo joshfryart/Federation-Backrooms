@@ -24,7 +24,7 @@ await page.goto(`http://localhost:${port}/index.html`);
 await page.evaluate(async () => { await __game.ready; __game.setQuality('low'); });
 
 const gen = await page.evaluate(async () => {
-  const { generate } = await import('./js/world.js'); const bad = []; let n = 0;
+  const { generate } = await import('./js/world.js'); const bad = []; let n = 0, tubes = 0, withTubes = 0;
   for (let deck = 0; deck < 12; deck++) for (let seed = 1; seed <= 25; seed++) {
     const d = generate(deck, seed * 7919 + deck); n++;
     const W = d.W, H = d.H, seen = new Uint8Array(W * H), q = [d.start]; seen[d.start[0] + d.start[1] * W] = 1;
@@ -32,10 +32,11 @@ const gen = await page.evaluate(async () => {
     // the exit tile itself may be a special tile; accept it if a neighbour is reachable
     const ok = ([x, y]) => seen[x + y * W] || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => seen[x + a + (y + b) * W]);
     if (!d.chips.every(ok) || !ok(d.exit)) bad.push(`deck ${deck} seed ${seed}`);
+    tubes += d.tubes.length; if (d.tubes.length) withTubes++;
   }
-  return { n, bad };
+  return { n, bad, tubes, withTubes };
 });
-console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable`); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
+console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
 
 const run = await page.evaluate(async () => {
   const g = __game, kinds = new Set(); g.newRun(); g.setQuality('low');
@@ -81,9 +82,16 @@ const park = await page.evaluate(async () => {
   for (const [dx, dy, yaw] of [[1, 0, -Math.PI / 2], [-1, 0, Math.PI / 2], [0, 1, Math.PI], [0, -1, 0]]) { let n = 0; while (w.grid[sy + dy * (n + 1)]?.[sx + dx * (n + 1)] === 0) n++; if (!best || n > best.n) best = { n, yaw }; }
   reset(); P.x = c[0]; P.z = c[1]; P.yaw = best.yaw; P.pitch = 0.12; tick(3); key('KeyQ'); let gp = 0, modes = new Set();
   for (let i = 0; i < 150; i++) { tick(1); gp = Math.max(gp, P.y); modes.add(P.mode); } r.grapplePeak = +gp.toFixed(2); r.modes = [...modes]; r.run = best.n; P.pitch = 0;
+  // Jiffy tube: walk in from one mouth holding W; must auto-crouch and come out the other end
+  let tw = null; for (let d = 2; d < 9 && !tw; d++) { g.loadDeck(d); if (g.world.d.tubes.length) tw = g.world; }
+  if (tw) { for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
+    const t = tw.d.tubes[0], ca = tw.center(t.a[0], t.a[1]), cb = tw.center(t.b[0], t.b[1]); reset(); P.x = ca[0]; P.z = ca[1]; P.yaw = Math.atan2(ca[0] - cb[0], ca[1] - cb[1]); g.G.phase = 'play';
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })); let ducked = false, minD = 1e9;
+    for (let i = 0; i < 60 * 12; i++) { tick(1); g.G.phase = 'play'; P.clung = 0; if (tw.isTube(...tw.tile(P.x, P.z)) && P.crouch) ducked = true; minD = Math.min(minD, Math.hypot(P.x - cb[0], P.z - cb[1])); }
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })); r.tube = { len: t.tiles.length, ducked, reached: minD < 0.8 }; }
   return r;
 });
-console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple'))) fail('parkour');
+console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)))) fail('parkour');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

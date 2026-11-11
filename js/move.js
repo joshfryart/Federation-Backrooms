@@ -50,6 +50,9 @@ export function movePlayer(dt, P, world, input, api) {
   let wl = Math.hypot(input.fx, input.fz); const wfx = wl ? input.fx / wl : 0, wfz = wl ? input.fz / wl : 0;
   const wx = wfx * cy + wfz * sy, wz = -wfx * sy + wfz * cy;                       // wish direction (world)
   const fwdX = -sy, fwdZ = -cy;                                                   // facing
+  // low headroom (Jiffy tubes): duck automatically on the way in, and no standing up or jumping inside
+  { const here = world.ceilAt(...world.tile(P.x, P.z)), dl = Math.hypot(P.vx, P.vz) || 1, ahead = world.ceilAt(...world.tile(P.x + P.vx / dl * 0.7, P.z + P.vz / dl * 0.7));
+    P.low = here < 1.7 || (ahead < 1.7 && P.grounded); if (P.low) { input = { ...input, crouch: true, jump: false, sprint: false }; if (P.mode === 'slide' && here < 1.7) P.slideT = Math.min(P.slideT, 0.6); } }
   P.jumpBuf = input.jump ? 0.14 : Math.max(0, P.jumpBuf - dt);
   P.slideCd = Math.max(0, P.slideCd - dt); P.wallCd = Math.max(0, P.wallCd - dt); P.grapCd = Math.max(0, P.grapCd - dt);
   P.land = Math.max(0, P.land - dt * 3.2);
@@ -106,7 +109,7 @@ export function movePlayer(dt, P, world, input, api) {
     // a little steering
     P.vx += wx * 2.5 * dt; P.vz += wz * 2.5 * dt; P.crouch = true; P.sprint = false;
     if (P.jumpBuf > 0 && P.grounded) { P.jumpBuf = 0; P.vy = M.jump * 0.92; P.grounded = false; P.mode = 'air'; P.slideCd = 0.4; P.flow = Math.min(1, P.flow + 0.2); ev('jump', { slide: true }); }
-    else if (sp < 2.4 || P.slideT > M.slideTime || (!input.crouch && P.slideT > 0.35)) { P.mode = 'ground'; P.slideCd = 0.5; }
+    else if (sp < 2.4 || P.slideT > M.slideTime || (!input.crouch && P.slideT > 0.35)) { P.mode = 'ground'; P.slideCd = 0.5; P.crouch = !!P.low; }
     integrate(); return finish();
   }
 

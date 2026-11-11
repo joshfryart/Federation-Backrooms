@@ -29,7 +29,7 @@ export const ROOMS = {
   holodeck:    { label: 'Holo-Playroom',          floor: 0x111111, weight: 2, size: [5, 5] },
   quarters:    { label: 'Crew Quarters',     floor: 0x6a5a58, weight: 3, size: [3, 3] },
   arboretum:   { label: 'Arboretum',         floor: 0x3d5a35, weight: 1, size: [5, 5] },
-  jefferies:   { label: 'Maintenance Duct',    floor: 0x333333, weight: 0, size: [1, 1] },
+  jefferies:   { label: 'Jiffy Tube',          floor: 0x3a3d42, weight: 0, size: [1, 1] },   // crawl ducts; carved by generate(), never rolled as a room
 };
 
 // Fleet ranks: [title, solid pips, hollow pips] — worn on the right side of the collar
