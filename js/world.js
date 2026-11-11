@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ROOMS, mulberry32 } from './data.js';
 import { pbr, has as hasModel, instance } from './assets.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
@@ -283,90 +284,146 @@ export function generate(deck, seed) {
 // Prop meshes
 // ------------------------------------------------------------------
 const M = {};
+function screenTex(kind) {
+  return canvasTex(256, (g, s) => {
+    g.fillStyle = '#04070c'; g.fillRect(0, 0, s, s);
+    const cols = kind === 'med' ? ['#58f0a0', '#2aa870', '#e8f8f0'] : kind === 'eng' ? ['#ffa040', '#ff5a30', '#ffd890'] : ['#58b8ff', '#f0a050', '#c890f0'];
+    const rr = (x, y, w, h, r, c) => { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); };
+    rr(8, 8, 60, 96, [28, 0, 0, 28], cols[0]); rr(74, 8, 174, 18, 9, cols[1]); rr(8, 110, 60, 138, [28, 0, 0, 28], cols[2]); rr(74, 230, 174, 18, 9, cols[0]);
+    for (let i = 0; i < 6; i++) rr(74 + (i % 3) * 60, 36 + Math.floor(i / 3) * 30, 52, 22, 11, cols[(i * 7) % 3]);
+    g.fillStyle = cols[0]; g.font = 'bold 13px monospace';
+    for (let i = 0; i < 7; i++) g.fillText(String(Math.floor(Math.random() * 9e5)).padStart(6, '0') + '  ' + (Math.random() * 99).toFixed(1), 80, 118 + i * 15);
+    g.strokeStyle = cols[2]; g.lineWidth = 2; g.beginPath();
+    for (let x = 0; x < 60; x++) { const y = kind === 'med' ? ((x % 20 === 8) ? -26 : (x % 20 === 10) ? 14 : 0) : Math.sin(x * 0.5) * 9 * Math.sin(x * 0.13); g.lineTo(182 + x, 150 + y); } g.stroke();
+    g.fillStyle = 'rgba(0,0,0,0.25)'; for (let y = 0; y < s; y += 3) g.fillRect(0, y, s, 1);
+  });
+}
 function mats() {
   if (M.metal) return M;
-  M.metal = new THREE.MeshLambertMaterial({ color: 0x8a8f99 });
-  M.dark = new THREE.MeshLambertMaterial({ color: 0x2a2d35 });
-  M.fabric = new THREE.MeshLambertMaterial({ color: 0x7a3a3a });
-  M.white = new THREE.MeshLambertMaterial({ color: 0xdfe6ea });
-  M.wood = new THREE.MeshLambertMaterial({ color: 0x6b4a32 });
-  M.crate = new THREE.MeshLambertMaterial({ color: 0x6a6f5a });
-  M.crate2 = new THREE.MeshLambertMaterial({ color: 0x8a6a3a });
-  M.leaf = new THREE.MeshLambertMaterial({ color: 0x2f7a38 });
-  M.trunk = new THREE.MeshLambertMaterial({ color: 0x5a3f2a });
-  M.screenB = new THREE.MeshBasicMaterial({ color: 0x4ac0ff });
-  M.screenO = new THREE.MeshBasicMaterial({ color: 0xffa040 });
-  M.screenG = new THREE.MeshBasicMaterial({ color: 0x60ff90 });
+  const T = textures(), w = T.d.wall, dk = T.d.deck, cp = T.d.carpet;
+  const std = (o) => new THREE.MeshStandardMaterial(o);
+  M.metal = std({ color: 0x8f959e, metalness: 0.85, roughness: 0.42, normalMap: dk.normal, normalScale: new THREE.Vector2(0.25, 0.25) });
+  M.panel = std({ color: 0xb9bec6, metalness: 0.5, roughness: 0.5, normalMap: w.normal, roughnessMap: w.rough });
+  M.dark = std({ color: 0x23262d, metalness: 0.6, roughness: 0.5 });
+  M.fabric = std({ color: 0x7a2f2f, roughness: 0.95, normalMap: cp.normal, normalScale: new THREE.Vector2(1.5, 1.5) });
+  M.sheet = std({ color: 0x9aa7b8, roughness: 0.95, normalMap: cp.normal });
+  M.white = std({ color: 0xdfe6ea, roughness: 0.32, metalness: 0.05 });
+  M.wood = std({ color: 0x6b4a32, roughness: 0.6 });
+  M.crate = std({ color: 0x6a6f5a, roughness: 0.7, metalness: 0.3, normalMap: w.normal });
+  M.crate2 = std({ color: 0x8a6a3a, roughness: 0.75, metalness: 0.2, normalMap: w.normal });
+  M.leaf = std({ color: 0x2f7a38, roughness: 0.8 });
+  M.trunk = std({ color: 0x5a3f2a, roughness: 0.9 });
+  M.glass = std({ color: 0x9fd0ff, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.25 });
+  M.rubber = std({ color: 0x0c0c0e, roughness: 0.9 });
+  M.hazard = std({ color: 0xd8a818, roughness: 0.6, metalness: 0.2 });
+  M.screenB = new THREE.MeshBasicMaterial({ map: screenTex('ops'), color: new THREE.Color(1.5, 1.5, 1.5) });
+  M.screenO = new THREE.MeshBasicMaterial({ map: screenTex('eng'), color: new THREE.Color(1.5, 1.5, 1.5) });
+  M.screenG = new THREE.MeshBasicMaterial({ map: screenTex('med'), color: new THREE.Color(1.5, 1.5, 1.5) });
+  M.glowB = new THREE.MeshBasicMaterial({ color: 0x4ac0ff }); M.glowO = new THREE.MeshBasicMaterial({ color: 0xffa040 });
   M.core = new THREE.MeshBasicMaterial({ color: 0x66aaff, transparent: true, opacity: 0.85 });
   M.holo = new THREE.MeshBasicMaterial({ color: 0xffcc33, wireframe: true });
   M.pad = new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.6 });
   M.view = new THREE.MeshBasicMaterial({ map: textures().stars });
   M.blinkR = new THREE.MeshBasicMaterial({ color: 0xff3020 });
   M.blinkG = new THREE.MeshBasicMaterial({ color: 0x30ff60 });
-  M.pipe = new THREE.MeshLambertMaterial({ color: 0x70757d });
+  M.pipe = std({ color: 0x70757d, metalness: 0.9, roughness: 0.35 });
   return M;
+}
+const geoCache = {};
+function rbox(w, h, d, mat, x = 0, y = 0, z = 0, r = 0.04) {
+  const k = `${w},${h},${d},${r}`; const geo = geoCache[k] || (geoCache[k] = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.01, h / 2.01, d / 2.01)));
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y + h / 2, z); return m;
 }
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y + h / 2, z); return m;
 }
+function cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 16) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat); m.position.set(x, y + h / 2, z); return m; }
+// CC0 scanned prop (Poly Haven) scaled to `height`; null if the file did not load
+function model(name, height, x = 0, z = 0, ry = 0, y = 0) {
+  if (!hasModel(name)) return null; const i = instance(name, { height }); i.root.position.set(x, y, z); i.root.rotation.y = ry;
+  i.root.traverse(o => { if (o.isMesh) { o.frustumCulled = true; o.material.envMapIntensity = 0.6; } }); return i.root;
+}
 export function buildProp(kind) {
-  const m = mats(); const g = new THREE.Group();
+  const m = mats(); const g = new THREE.Group(); const R = Math.random;
   switch (kind) {
-    case 'console':
-      g.add(box(1.6, 1.0, 0.7, m.dark)); const s = box(1.4, 0.05, 0.5, m.screenB, 0, 1.0, 0); s.rotation.x = -0.3; g.add(s);
-      g.add(box(0.2, 0.05, 0.2, m.screenO, 0.4, 1.02, 0.1));
-      g.add(box(0.07, 0.07, 0.07, m.blinkR, -0.6, 1.04, 0.25)); g.add(box(0.07, 0.07, 0.07, m.blinkG, -0.45, 1.04, 0.25));
-      for (let i = 0; i < 4; i++) g.add(box(0.14, 0.14, 0.02, i % 2 ? m.screenO : m.screenB, -0.5 + i * 0.33, 0.35, 0.36));
-      g.add(box(0.5, 0.9, 0.5, m.dark, 0.0, 1.0, -0.2)); break;
-    case 'chair':
-      g.add(box(0.8, 0.45, 0.8, m.fabric)); g.add(box(0.8, 0.9, 0.15, m.fabric, 0, 0.45, 0.35)); g.add(box(0.3, 0.3, 0.3, m.metal, 0, -0.0, 0)); g.add(box(0.1, 0.3, 0.8, m.dark, 0.55, 0.45, 0)); g.add(box(0.1, 0.3, 0.8, m.dark, -0.55, 0.45, 0)); break;
+    case 'console': {
+      g.add(rbox(1.7, 0.86, 0.75, m.dark, 0, 0, 0, 0.06)); g.add(rbox(1.78, 0.06, 0.82, m.metal, 0, 0.86, 0, 0.02));
+      const desk = rbox(1.6, 0.04, 0.6, m.screenB, 0, 0.93, 0.06, 0.01); desk.rotation.x = 0.22; g.add(desk);
+      const back = rbox(1.6, 0.62, 0.08, m.dark, 0, 0.95, -0.33, 0.03); back.rotation.x = -0.12; g.add(back);
+      const scr = box(1.46, 0.5, 0.01, m.screenO, 0, 1.01, -0.275); scr.rotation.x = -0.12; g.add(scr);
+      g.add(box(0.07, 0.03, 0.07, m.blinkR, -0.72, 0.93, 0.33)); g.add(box(0.07, 0.03, 0.07, m.blinkG, -0.6, 0.93, 0.33));
+      g.add(box(1.5, 0.03, 0.02, m.glowB, 0, 0.1, 0.38)); g.add(rbox(1.3, 0.5, 0.02, m.panel, 0, 0.22, 0.375, 0.01)); break; }
+    case 'chair': {   // command chair on a swivel pedestal
+      g.add(cyl(0.34, 0.4, 0.06, m.metal)); g.add(cyl(0.07, 0.09, 0.36, m.dark, 0, 0.06, 0));
+      g.add(rbox(0.72, 0.16, 0.7, m.fabric, 0, 0.42, 0, 0.07)); const bk = rbox(0.7, 0.95, 0.16, m.fabric, 0, 0.5, 0.33, 0.07); bk.rotation.x = 0.12; g.add(bk);
+      g.add(rbox(0.5, 0.22, 0.12, m.dark, 0, 1.4, 0.4, 0.05));
+      for (const sx of [-1, 1]) { g.add(rbox(0.12, 0.28, 0.66, m.dark, sx * 0.43, 0.46, 0.0, 0.05)); g.add(rbox(0.13, 0.03, 0.3, m.screenB, sx * 0.43, 0.745, -0.14, 0.01)); }
+      break; }
     case 'viewscreen': {
-      const v = box(2.2, 1.4, 0.1, m.view, 0, 0.8, 0); g.add(v); g.add(box(2.4, 0.8, 0.5, m.dark)); break; }
+      g.add(rbox(2.5, 1.56, 0.12, m.dark, 0, 0.72, 0, 0.05)); g.add(box(2.3, 1.36, 0.02, m.view, 0, 0.82, 0.062));
+      g.add(rbox(2.6, 0.72, 0.5, m.dark, 0, 0, 0, 0.06)); g.add(box(2.2, 0.03, 0.02, m.glowB, 0, 0.6, 0.26)); g.add(rbox(2.2, 0.3, 0.02, m.screenB, 0, 0.2, 0.255, 0.01)); break; }
     case 'warpcore': {
-      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, WH, 12), m.core); c.position.y = WH / 2; c.name = 'core'; g.add(c);
-      g.add(box(1.1, 0.4, 1.1, m.metal)); g.add(box(1.1, 0.3, 1.1, m.metal, 0, WH - 0.3, 0));
-      for (let i = 0; i < 5; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.04, 6, 16), m.metal); r.rotation.x = Math.PI / 2; r.position.y = 0.7 + i * 0.5; g.add(r); }
-      for (const [px, pz] of [[0.8, 0.8], [-0.8, 0.8], [0.8, -0.8], [-0.8, -0.8]]) { const pp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, WH, 6), m.pipe); pp.position.set(px * 0.7, WH / 2, pz * 0.7); g.add(pp); }
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, WH, 20), m.core); c.position.y = WH / 2; c.name = 'core'; g.add(c);
+      g.add(cyl(0.75, 0.9, 0.42, m.metal, 0, 0, 0, 24)); g.add(cyl(0.9, 0.75, 0.36, m.metal, 0, WH - 0.36, 0, 24)); g.add(cyl(0.56, 0.56, 0.1, m.hazard, 0, 0.42, 0, 24));
+      for (let i = 0; i < 6; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.045, 8, 28), m.metal); r.rotation.x = Math.PI / 2; r.position.y = 0.72 + i * 0.4; g.add(r); }
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.78; g.add(cyl(0.05, 0.05, WH, m.pipe, Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72, 8)); g.add(rbox(0.16, 0.5, 0.16, m.dark, Math.cos(a) * 0.72, 1.3, Math.sin(a) * 0.72, 0.03)); }
       break; }
-    case 'shuttle':
-      g.add(box(2.0, 0.9, 1.5, m.white, 0, 0.2, 0)); g.add(box(0.8, 0.5, 1.2, m.metal, 1.1, 0.2, 0)); g.add(box(0.6, 0.35, 0.05, m.screenB, 1.0, 0.75, 0.0)); g.add(box(0.5, 0.15, 1.8, m.metal, -0.3, 0.55, 0)); break;
+    case 'shuttle': {
+      const hull = rbox(2.1, 0.95, 1.5, m.white, 0, 0.28, 0, 0.22); g.add(hull);
+      const nose = rbox(0.9, 0.62, 1.3, m.white, 1.2, 0.28, 0, 0.25); g.add(nose);
+      const win = rbox(0.5, 0.3, 1.1, m.glass, 1.32, 0.66, 0, 0.1); win.material = m.dark; g.add(win);
+      for (const sz of [-1, 1]) { const nac = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 1.5, 6, 12), m.metal); nac.rotation.z = Math.PI / 2; nac.position.set(-0.25, 0.3, sz * 0.92); g.add(nac); g.add(box(0.5, 0.06, 0.02, m.glowB, -0.25, 0.27, sz * 1.085)); g.add(rbox(0.5, 0.08, 0.3, m.metal, -0.2, 0.26, sz * 0.78, 0.02)); }
+      g.add(box(1.2, 0.05, 0.02, m.hazard, -0.1, 0.72, 0.755)); g.add(rbox(0.7, 0.72, 0.02, m.panel, -0.6, 0.36, 0.752, 0.01)); break; }
     case 'holocube': {
-      const c = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), m.holo); c.position.y = 1.0; c.name = 'spin'; g.add(c); g.add(box(0.3, 0.3, 0.3, m.dark)); break; }
+      const c = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), m.holo); c.position.y = 1.0; c.name = 'spin'; g.add(c); g.add(cyl(0.22, 0.3, 0.3, m.dark)); g.add(cyl(0.18, 0.18, 0.02, m.glowO, 0, 0.3, 0)); break; }
     case 'pad': {
-      g.add(box(1.9, 0.12, 1.9, m.dark));
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.05, 20), m.pad); p.position.y = 0.15; g.add(p);
-      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.05, 20), m.pad); top.position.y = WH - 0.2; g.add(top); break; }
-    case 'bunk':
-      g.add(box(1.6, 0.4, 0.9, m.dark, 0, 0, 0)); g.add(box(1.5, 0.2, 0.8, m.fabric, 0, 0.4, 0)); g.add(box(0.4, 0.15, 0.6, m.white, -0.5, 0.6, 0)); g.add(box(0.6, 0.9, 0.5, m.metal, 0.75, 0, 0.8)); break;
-    case 'table':
-      g.add(box(1.5, 0.08, 1.0, m.wood, 0, 0.75, 0)); g.add(box(0.15, 0.75, 0.15, m.dark, 0.5, 0, 0.3)); g.add(box(0.15, 0.75, 0.15, m.dark, -0.5, 0, -0.3));
-      g.add(box(0.4, 0.45, 0.4, m.dark, 0, 0, 0.95)); g.add(box(0.4, 0.45, 0.4, m.dark, 0, 0, -0.95)); break;
-    case 'biobed':
-      g.add(box(0.9, 0.5, 1.8, m.metal)); g.add(box(0.8, 0.12, 1.6, m.white, 0, 0.5, 0)); g.add(box(0.7, 0.15, 0.05, m.screenG, 0, 1.4, -0.9)); g.add(box(0.1, 1.4, 0.1, m.dark, 0, 0, -0.9)); break;
+      g.add(cyl(1.0, 1.08, 0.14, m.dark, 0, 0, 0, 28)); g.add(cyl(0.98, 0.98, 0.02, m.metal, 0, 0.14, 0, 28));
+      const p = cyl(0.7, 0.7, 0.03, m.pad, 0, 0.155, 0, 28); g.add(p); const top = cyl(0.7, 0.7, 0.05, m.pad, 0, WH - 0.2, 0, 28); g.add(top); g.add(cyl(0.9, 0.8, 0.14, m.dark, 0, WH - 0.14, 0, 28));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.03, 6, 32), m.glowB); ring.rotation.x = Math.PI / 2; ring.position.y = 0.17; g.add(ring); break; }
+    case 'bunk': {
+      g.add(rbox(1.9, 0.34, 0.95, m.dark, 0, 0, 0, 0.05)); g.add(rbox(1.84, 0.16, 0.88, m.sheet, 0, 0.34, 0, 0.07)); g.add(rbox(0.42, 0.12, 0.6, m.white, -0.66, 0.48, 0, 0.06));
+      const blanket = rbox(1.1, 0.06, 0.92, m.fabric, 0.36, 0.47, 0, 0.03); g.add(blanket);
+      g.add(rbox(1.9, 0.9, 0.08, m.panel, 0, 0.34, -0.47, 0.03)); g.add(box(0.5, 0.03, 0.02, m.glowO, -0.6, 1.1, -0.42));
+      g.add(model('ph_utilbox', 1.15, 0.6, 0.85, Math.PI) || rbox(0.6, 0.9, 0.5, m.metal, 0.75, 0, 0.8)); break; }
+    case 'table': {
+      g.add(rbox(1.5, 0.06, 1.0, m.white, 0, 0.72, 0, 0.03)); g.add(cyl(0.06, 0.06, 0.7, m.metal, 0, 0.02, 0)); g.add(cyl(0.36, 0.4, 0.03, m.metal));
+      for (const sz of [-1, 1]) { g.add(cyl(0.2, 0.2, 0.06, m.fabric, 0, 0.42, sz * 0.95)); g.add(cyl(0.04, 0.04, 0.42, m.metal, 0, 0, sz * 0.95)); g.add(cyl(0.2, 0.22, 0.02, m.metal, 0, 0, sz * 0.95)); }
+      const tray = rbox(0.4, 0.02, 0.28, m.metal, 0.3, 0.78, 0.1, 0.008); tray.rotation.y = 0.3; g.add(tray); g.add(cyl(0.035, 0.03, 0.1, m.glass, 0.34, 0.8, 0.08, 10)); g.add(cyl(0.035, 0.03, 0.1, m.white, -0.35, 0.78, -0.2, 10)); break; }
+    case 'biobed': {
+      g.add(rbox(0.7, 0.5, 1.5, m.metal, 0, 0, 0, 0.1)); g.add(rbox(0.95, 0.1, 2.0, m.white, 0, 0.5, 0, 0.04)); g.add(rbox(0.85, 0.08, 1.85, m.sheet, 0, 0.6, 0.02, 0.04)); g.add(rbox(0.5, 0.08, 0.34, m.white, 0, 0.67, -0.72, 0.04));
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.05, 8, 20, Math.PI), m.white); arch.position.set(0, 0.6, 0.1); g.add(arch);
+      g.add(rbox(0.12, 1.5, 0.1, m.dark, 0, 0, -1.02, 0.03)); const mon = rbox(0.9, 0.5, 0.06, m.dark, 0, 1.25, -1.0, 0.03); mon.rotation.x = 0.15; g.add(mon);
+      const scr = box(0.82, 0.42, 0.01, m.screenG, 0, 1.29, -0.962); scr.rotation.x = 0.15; g.add(scr); break; }
     case 'crate': {
-      const mt = Math.random() < 0.5 ? m.crate : m.crate2; const h = 0.8 + Math.random() * 0.9;
-      g.add(box(1.5, h, 1.5, mt)); if (Math.random() < 0.5) g.add(box(0.8, 0.6, 0.8, m.crate2, 0.1, h, 0.1)); g.add(box(1.52, 0.1, 1.52, m.dark, 0, h * 0.5, 0)); break; }
+      const roll = R();
+      if (roll < 0.55 && hasModel('ph_crate')) {   // stacked ammunition-style cargo cases
+        const n = 2 + Math.floor(R() * 3); let y = 0;
+        for (let i = 0; i < n; i++) { const c = model('ph_crate', 0.34, (R() - 0.5) * 0.12, (R() - 0.5) * 0.12, (R() - 0.5) * 0.25 + (R() < 0.2 ? Math.PI / 2 : 0), y); g.add(c); y += 0.335; }
+        if (R() < 0.6) g.add(model('ph_barrel', 0.95, 0.75, 0.75, R() * 6));
+      } else if (roll < 0.8 && hasModel('ph_barrel')) {
+        for (const [x, z] of [[-0.4, -0.35], [0.42, -0.3], [0.0, 0.42]]) if (R() < 0.85) g.add(model('ph_barrel', 0.95, x, z, R() * 6));
+        g.add(box(1.7, 0.08, 1.7, m.crate2, 0, -0.02, 0));
+      } else {
+        const mt = R() < 0.5 ? m.crate : m.crate2; const h = 0.8 + R() * 0.9;
+        g.add(rbox(1.5, h, 1.5, mt, 0, 0, 0, 0.05)); if (R() < 0.5) g.add(rbox(0.8, 0.6, 0.8, m.crate2, 0.1, h, 0.1, 0.04));
+        g.add(box(1.53, 0.1, 1.53, m.dark, 0, h * 0.5, 0)); g.add(box(0.5, 0.2, 0.02, m.hazard, 0, h * 0.7, 0.756));
+      }
+      break; }
     case 'tree': {
-      g.add(box(0.25, 1.5, 0.25, m.trunk));
-      for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6 + Math.random() * 0.3, 0), m.leaf); l.position.set((Math.random() - 0.5) * 0.7, 1.7 + Math.random() * 0.8, (Math.random() - 0.5) * 0.7); g.add(l); }
-      g.add(box(1.1, 0.35, 1.1, m.dark)); break; }
-    case 'lonechair': {
-      const wheel = m.dark;
-      g.add(box(0.5, 0.08, 0.5, m.fabric, 0, 0.45, 0)); g.add(box(0.5, 0.55, 0.08, m.fabric, 0, 0.55, 0.23)); g.add(box(0.06, 0.4, 0.06, m.metal, 0, 0.08, 0));
-      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; g.add(box(0.28, 0.04, 0.04, wheel, Math.cos(a) * 0.14, 0.05, Math.sin(a) * 0.14)).rotation.y = -a; }
+      g.add(rbox(1.2, 0.4, 1.2, m.dark, 0, 0, 0, 0.06)); g.add(box(1.05, 0.02, 1.05, m.trunk, 0, 0.4, 0));
+      const t = model('ph_plant', 2.6, 0, 0, R() * 6, 0.1);
+      if (t) g.add(t); else { g.add(box(0.25, 1.5, 0.25, m.trunk)); for (let i = 0; i < 4; i++) { const l = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6 + R() * 0.3, 1), m.leaf); l.position.set((R() - 0.5) * 0.7, 1.7 + R() * 0.8, (R() - 0.5) * 0.7); g.add(l); } }
       break; }
-    case 'plant': {
-      g.add(box(0.5, 0.45, 0.5, m.dark)); g.add(box(0.4, 0.05, 0.4, m.trunk, 0, 0.45, 0));
-      for (let i = 0; i < 7; i++) { const l = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.8, 5), m.leaf); l.position.set((Math.random() - 0.5) * 0.2, 0.9, (Math.random() - 0.5) * 0.2); l.rotation.set((Math.random() - 0.5) * 1.2, 0, (Math.random() - 0.5) * 1.2); g.add(l); }
-      break; }
+    case 'lonechair': { const c = model('ph_armchair', 0.95, 0, 0, Math.PI); if (c) g.add(c); else { g.add(box(0.5, 0.08, 0.5, m.fabric, 0, 0.45, 0)); g.add(box(0.5, 0.55, 0.08, m.fabric, 0, 0.55, 0.23)); g.add(box(0.06, 0.4, 0.06, m.metal, 0, 0.08, 0)); } break; }
+    case 'plant': { const p = model('ph_plant', 1.25, 0, 0, R() * 6); if (p) g.add(p); else { g.add(box(0.5, 0.45, 0.5, m.dark)); for (let i = 0; i < 7; i++) { const l = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.8, 5), m.leaf); l.position.set((R() - 0.5) * 0.2, 0.9, (R() - 0.5) * 0.2); l.rotation.set((R() - 0.5) * 1.2, 0, (R() - 0.5) * 1.2); g.add(l); } } break; }
     case 'cart':
-      g.add(box(0.9, 0.06, 0.55, m.metal, 0, 0.35, 0)); g.add(box(0.9, 0.04, 0.55, m.metal, 0, 0.8, 0));
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.04, 0.8, 0.04, m.metal, sx * 0.42, 0, sz * 0.25));
-      g.add(box(0.3, 0.2, 0.3, m.crate2, 0.15, 0.4, 0)); g.add(box(0.2, 0.3, 0.2, m.white, -0.2, 0.84, 0)); break;
+      g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.33, 0, 0.015)); g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.8, 0, 0.015));
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) { g.add(cyl(0.018, 0.018, 0.8, m.pipe, sx * 0.42, 0.06, sz * 0.25, 8)); g.add(cyl(0.045, 0.045, 0.03, m.rubber, sx * 0.42, 0.0, sz * 0.25, 10)).rotation.z = Math.PI / 2; }
+      g.add(rbox(0.3, 0.2, 0.3, m.crate2, 0.15, 0.37, 0, 0.02)); g.add(rbox(0.22, 0.14, 0.3, m.white, -0.2, 0.84, 0, 0.03)); g.add(cyl(0.04, 0.04, 0.16, m.glowB, 0.2, 0.84, 0.1, 10)); break;
     case 'replicator':
-      g.add(box(1.5, 2.0, 0.4, m.dark, 0, 0, 0.4)); g.add(box(0.9, 0.6, 0.05, m.screenO, 0, 1.0, 0.18)); g.add(box(0.6, 0.35, 0.3, m.metal, 0, 0.8, 0.28));
-      g.add(box(0.2, 0.2, 0.04, m.screenB, 0.5, 1.5, 0.18)); break;
-    default: g.add(box(0.8, 0.8, 0.8, m.metal));
+      g.add(rbox(1.5, 2.1, 0.42, m.panel, 0, 0, 0.4, 0.05)); g.add(rbox(0.9, 0.62, 0.3, m.dark, 0, 0.85, 0.3, 0.06)); g.add(box(0.8, 0.5, 0.02, m.glowO, 0, 0.9, 0.42)).material = m.screenO;
+      g.add(cyl(0.3, 0.3, 0.02, m.glowO, 0, 0.86, 0.26, 20)); g.add(rbox(0.3, 0.22, 0.03, m.dark, 0.5, 1.6, 0.18, 0.02)); g.add(box(0.25, 0.17, 0.01, m.screenB, 0.5, 1.625, 0.163)); g.add(box(1.3, 0.03, 0.02, m.glowB, 0, 1.95, 0.185)); break;
+    default: g.add(rbox(0.8, 0.8, 0.8, m.metal));
   }
   return g;
 }

@@ -8,7 +8,7 @@ import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
 const cache = {};
 
-export const MODEL_FILES = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy', 'suit', 'human_anims', 'weapon_gun', 'desk_chairArms', 'barrels', 'desk_computer'];
+export const MODEL_FILES = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy', 'suit', 'human_anims', 'ph_crate', 'ph_barrel', 'ph_plant', 'ph_utilbox', 'ph_armchair'];
 
 export function loadModels(names = MODEL_FILES) {
   return Promise.all(names.map(n => new Promise(res => {

@@ -33,7 +33,7 @@ function gMats() {
     skin: new THREE.MeshStandardMaterial({ color: 0x6f8040, map: scales, bumpMap: scales, bumpScale: 2.2, roughness: 0.52, metalness: 0.05 }),
     belly: new THREE.MeshStandardMaterial({ color: 0xb2a965, map: scales, bumpMap: scales, bumpScale: 1.5, roughness: 0.6 }),
     dark: new THREE.MeshStandardMaterial({ color: 0x3a4520, map: scales, bumpMap: scales, bumpScale: 2, roughness: 0.6 }),
-    eye: new THREE.MeshStandardMaterial({ color: 0xffb020, emissive: 0xff8a10, emissiveIntensity: 1.4, roughness: 0.15, metalness: 0.1 }),
+    eye: new THREE.MeshStandardMaterial({ color: 0xd88a10, emissive: 0xff7a08, emissiveIntensity: 0.55, roughness: 0.08, metalness: 0.0 }),
     pupil: new THREE.MeshBasicMaterial({ color: 0x120a00 }),
     tooth: new THREE.MeshStandardMaterial({ color: 0xe9e1c0, roughness: 0.3 }),
     claw: new THREE.MeshStandardMaterial({ color: 0x25251f, roughness: 0.3, metalness: 0.2 }),
@@ -67,8 +67,9 @@ export function makeGorn() {
   for (const sx of [-1, 1]) {
     head.add(mk(new THREE.SphereGeometry(0.025, 6, 4), M.pupil, sx * 0.05, -0.02, 0.77));
     // compound eyes on the sides
-    const eye = mk(new THREE.SphereGeometry(0.115, 14, 10), M.eye, sx * 0.31, 0.1, 0.2); eye.scale.set(0.8, 1, 1); head.add(eye);
-    const slit = mk(new THREE.SphereGeometry(0.05, 8, 6), M.pupil, sx * 0.4, 0.1, 0.22); slit.scale.set(0.3, 1.6, 0.9); head.add(slit);
+    const eye = mk(new THREE.SphereGeometry(0.075, 16, 12), M.eye, sx * 0.29, 0.1, 0.22); eye.scale.set(0.8, 1, 1.1); head.add(eye);
+    const slit = mk(new THREE.SphereGeometry(0.04, 10, 8), M.pupil, sx * 0.338, 0.1, 0.245); slit.scale.set(0.35, 1.5, 0.5); head.add(slit);
+    const lid = mk(new THREE.SphereGeometry(0.085, 12, 8, 0, Math.PI * 2, 0, 1.2), M.dark, sx * 0.285, 0.115, 0.22); lid.scale.set(0.85, 1, 1.15); lid.rotation.z = -sx * 0.5; head.add(lid);
     const brow = mk(cap(0.06, 0.3, 6), M.dark, sx * 0.27, 0.23, 0.2); brow.rotation.set(0, 0, Math.PI / 2 + sx * 0.4); brow.rotation.order = 'XYZ'; head.add(brow);
     for (let i = 0; i < 3; i++) { const cs = mk(new THREE.ConeGeometry(0.035, 0.16, 5), M.dark, sx * (0.28 - i * 0.02), -0.12 - i * 0.05, 0.02 - i * 0.07); cs.rotation.z = -sx * 1.2; head.add(cs); }
   }

@@ -11,10 +11,15 @@ Serve the folder statically (ES modules need http):
 
     python3 -m http.server 8000   # then open http://localhost:8000
 
-No build step; three.js and its addons are vendored in `vendor/`. Models/HDRI are in `assets/`.
+No build step; three.js and its addons are vendored in `vendor/`. Models, textures and the HDRI are in `assets/`.
 
 ## Controls
 WASD move · Shift sprint (loud) · C creep (quiet) · Mouse look · Click/Space fire zapper (stuns) · E interact / shake off a Clingon · F flashlight · M map
 
 ## Credits
-Third-party CC0 models and HDRI, with thanks: **Quaternius**, **Kenney**, **Poly Haven**. Full list and licenses in [CREDITS.md](CREDITS.md).
+Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **MakeHuman**, **dramatis3d** (Tonio Loewald), **Quaternius**, **Poly Haven**, **ambientCG**. Full list and licenses in [CREDITS.md](CREDITS.md).
+
+## Art review & tests
+- `models.html` — model viewer (`?set=crew|enemies|misc|props`, `?clip=<name>`, drag to orbit).
+- `node tools/test.mjs` — headless smoke test (needs Playwright + Chromium): checks the level generator and plays a bot run through every deck.
+- `tools/build-*.mjs` — offline scripts that re-pack the upstream CC0 assets (not needed to run the game).
