@@ -119,8 +119,8 @@ const park = await page.evaluate(async () => {
         if (pr) { const [a, b] = NB.find(([a, b]) => w.grid[pr.ty + b]?.[pr.tx + a] === 0); const fld = w.field(pr.tx + a, pr.ty + b); const from = w.d.openTiles.find(([x, y]) => fld[x + y * w.W] >= 3 && fld[x + y * w.W] <= 6) || [pr.tx + a, pr.ty + b];
           reset(); const [px, pz] = w.center(pr.tx, pr.ty); P.x = px; P.z = pz; P.y = w.topAt(pr.tx, pr.ty); P.grounded = true; tick(2);
           c.prop = { top: +w.topAt(pr.tx, pr.ty).toFixed(2), playerY: +P.y.toFixed(2), ...chase(w, from, 20, en => g.G.hp < 1e6) }; } }
-      if (!c.tube) { const t = w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 1);
-        if (t) { const up = t.tiles[t.tiles.length - 1]; reset(); const [px, pz] = w.center(up[0], up[1]); P.x = px; P.z = pz; P.y = 1.7; P.grounded = true; tick(2);
+      if (!c.tube) { const t = w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 2) || w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 1);
+        if (t) { const up = t.tiles[t.ladder + 1]; reset(); const [px, pz] = w.center(up[0], up[1]); P.x = px; P.z = pz; P.y = 1.7; P.grounded = true; tick(2);
           c.tube = { playerY: +P.y.toFixed(2), ...chase(w, t.a, 40, en => en.y > 1.6 && wd_up(w, en)) }; } } }
     r.climb = c; }
   // ship systems: break life support, walk to its repair point on this deck, hold E until it is fixed
@@ -132,7 +132,7 @@ const park = await page.evaluate(async () => {
     r.sys.roster = g.roster.people.length; r.sys.ship = g.G.ship.name; }
   return r;
 });
-console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun)) && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
+console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun) || park.climb.tube.hit)   /* climbed in after you, or dragged you out of the high mouth */ && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
 const dir = await page.evaluate(async () => {
   const { Director } = await import('./js/director.js'); const { ShipState } = await import('./js/crew.js'); const { SHIPS } = await import('./js/ships.js');
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);

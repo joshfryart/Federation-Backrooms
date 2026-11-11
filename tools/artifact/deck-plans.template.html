@@ -1,0 +1,349 @@
+<title>Provincial Squadron Deck Plans</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a drafting-table console — ship and deck selectors on the left rail, the live deck plan centre stage, the deck's manifest beside it. */
+:root {
+  --paper: #edf0f4; --panel: #ffffff; --ink: #17213a; --muted: #5b6781; --line: #cdd4df;
+  --hull: #27324d; --deck: #f9fafc; --space: #dfe4ec; --accent: #d9622a; --tube: #b07a0e; --chip: #1b9a63;
+  --cmd: #a8820f; --ops: #b23a2e; --sci: #2b5bb0; --focus: #2b5bb0;
+  --f-display: "Antonio", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0a0f1d; --panel: #111a2d; --ink: #e5eaf4; --muted: #8e99b3; --line: #26314c;
+  --hull: #04060c; --deck: #1b2439; --space: #0d1324; --accent: #ff9966; --tube: #f0b43c; --chip: #47d695;
+  --cmd: #e2bb4d; --ops: #ec6e60; --sci: #78a2f2; --focus: #9fbcf7; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0a0f1d; --panel: #111a2d; --ink: #e5eaf4; --muted: #8e99b3; --line: #26314c;
+  --hull: #04060c; --deck: #1b2439; --space: #0d1324; --accent: #ff9966; --tube: #f0b43c; --chip: #47d695;
+  --cmd: #e2bb4d; --ops: #ec6e60; --sci: #78a2f2; --focus: #9fbcf7; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 18px }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin: 0; text-wrap: balance }
+h1 { font-size: clamp(30px, 5vw, 54px); line-height: 1; letter-spacing: .03em }
+h2 { font-size: 20px } h3 { font-size: 15px; letter-spacing: .1em; color: var(--muted); font-weight: 400 }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
+header { display: grid; gap: 10px }
+.reg { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--f-mono); font-size: 12px; color: var(--muted) }
+.reg b { color: var(--ink); font-weight: 500 }
+.ships { display: flex; flex-wrap: wrap; gap: 6px }
+button { font: inherit; color: inherit; cursor: pointer }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
+.ship-btn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 12px; font-size: 13px; display: inline-flex; gap: 6px; align-items: baseline }
+.ship-btn small { font-family: var(--f-mono); font-size: 10px; color: var(--muted) }
+.ship-btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink) }
+.ship-btn[aria-pressed="true"] small { color: var(--paper); opacity: .7 }
+.tools { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px }
+.tools label { display: inline-flex; gap: 6px; align-items: center }
+.tools input[type="number"] { width: 92px; font: inherit; font-family: var(--f-mono); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink) }
+.btn { border: 1px solid var(--line); background: var(--panel); padding: 5px 12px; border-radius: 6px }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
+.seg button { border: 0; background: var(--panel); padding: 5px 12px } .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper) }
+main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 18px; align-items: start }
+@media (max-width: 1100px) { main { grid-template-columns: 220px minmax(0, 1fr) } aside.info { grid-column: 1 / -1 } }
+@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr) } }
+.rail { display: grid; gap: 4px }
+.deck-row { display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: center; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; width: 100% }
+.deck-row:hover { border-color: var(--line) }
+.deck-row[aria-pressed="true"] { background: var(--panel); border-color: var(--accent) }
+.deck-row .n { font-family: var(--f-display); font-size: 20px; line-height: 1 }
+.deck-row .z { font-family: var(--f-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: block }
+.deck-row canvas { width: 100%; height: 12px; display: block; margin-top: 3px }
+.zone-sep { font-family: var(--f-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 2px; border-top: 1px solid var(--line) }
+.zone-sep:first-child { border-top: 0; padding-top: 0 }
+.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; min-width: 0 }
+.stage-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline }
+.layers { display: flex; flex-wrap: wrap; gap: 6px }
+.layer { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center }
+.layer i { width: 9px; height: 9px; border-radius: 2px; display: inline-block }
+.layer[aria-pressed="false"] { opacity: .45 }
+.plan-box { position: relative; min-width: 0 }
+#plan { width: 100%; max-width: 620px; margin: 0 auto; height: auto; display: block; border-radius: 6px; touch-action: manipulation }
+#tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); font-size: 12px; padding: 7px 9px; border-radius: 6px; max-width: 260px; line-height: 1.4; transform: translate(12px, 12px); z-index: 2 }
+#tip b { font-family: var(--f-display); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; font-size: 14px; display: block }
+#tip small { opacity: .75; display: block }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted) }
+.legend span { display: inline-flex; gap: 6px; align-items: center }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid var(--line) }
+.info { display: grid; gap: 14px; min-width: 0 }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; min-width: 0 }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 13px }
+.kv dt { color: var(--muted) } .kv dd { margin: 0; font-family: var(--f-mono); text-align: right }
+.list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; font-size: 13px }
+.list li { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; transform: translateY(-1px) }
+.list .r { font-family: var(--f-mono); font-size: 11px; color: var(--muted) }
+.note { font-size: 12px; color: var(--muted) }
+.overview { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px }
+.ov { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px; display: grid; gap: 6px; text-align: left }
+.ov:hover { border-color: var(--accent) }
+.ov canvas { width: 100%; height: auto; display: block }
+.ov .t { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px }
+.ov .t b { font-family: var(--f-display); font-size: 18px; font-weight: 600 }
+.ov .t span { font-family: var(--f-mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em }
+@media (prefers-reduced-motion: no-preference) { .deck-row, .ship-btn, .ov { transition: border-color .15s, background .15s } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">United Starfarers' Fleet · Provincial Squadron · deck plans</div>
+    <h1 id="shipName">USF Ontario</h1>
+    <div class="reg" id="shipReg"></div>
+    <div class="ships" id="ships" role="group" aria-label="Ship"></div>
+    <div class="tools">
+      <label for="seed">Run seed <input id="seed" type="number" min="1" max="999999" value="1867"></label>
+      <button class="btn" id="reroll" type="button">New layout</button>
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" id="vDeck" aria-pressed="true">One deck</button><button type="button" id="vAll" aria-pressed="false">All decks</button>
+      </div>
+      <span class="note">Layouts come from the game's own level generator. Same ship + seed = the same run.</span>
+    </div>
+  </header>
+
+  <main id="main">
+    <nav class="rail" id="rail" aria-label="Decks"></nav>
+    <section class="stage" id="stage">
+      <div class="stage-head">
+        <div><h2 id="deckTitle">Deck 01</h2><h3 id="deckSub">Command</h3></div>
+        <div class="layers" id="layers" role="group" aria-label="Map layers"></div>
+      </div>
+      <div class="plan-box" id="planBox"><canvas id="plan" width="800" height="800" aria-label="Deck plan"></canvas><div id="tip" hidden></div></div>
+      <div class="legend" id="legend"></div>
+    </section>
+    <aside class="info" id="info"></aside>
+  </main>
+  <section id="overviewSec" hidden>
+    <div class="overview" id="overview"></div>
+  </section>
+</div>
+
+<script>/*SHIPLIB*/</script>
+<script>
+(() => {
+const L = ShipLib, $ = (id) => document.getElementById(id);
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const RMAP = { bridge: ['command', 'flight'], engineering: ['engineering'], sickbay: ['medical'], mess: ['services'], transporter: ['operations'], shuttlebay: ['flight'], cargo: ['services'], holodeck: ['services'], quarters: ['services'], arboretum: ['sciences'], jefferies: ['engineering'] };
+const DIVVAR = { command: '--cmd', operations: '--ops', sciences: '--sci' };
+const divOfRoom = (r) => L.DEPT[RMAP[r][0]].division;
+const PROP_NAME = { console: 'Console', chair: 'Command chair', viewscreen: 'Viewscreen', warpcore: 'Reactor core', shuttle: 'Shuttle', holocube: 'Holo-grid emitter', pad: 'Transporter pad', bunk: 'Bunk', table: 'Galley table', biobed: 'Biobed', crate: 'Cargo', tree: 'Grow bed', lonechair: 'Chair', plant: 'Planter', cart: 'Cart', replicator: 'Replicator' };
+const CLIMB = new Set(['console', 'table', 'bunk', 'biobed', 'shuttle', 'cart', 'crate']);
+const S = { ship: 0, deck: 0, seed: 1867, view: 'deck', layers: { rooms: true, props: true, tubes: true, hardware: true, route: true } };
+try { const v = JSON.parse(localStorage.getItem('deckplans') || '{}'); Object.assign(S.layers, v.layers || {}); } catch (e) {}
+const save = () => { try { localStorage.setItem('deckplans', JSON.stringify({ layers: S.layers })); } catch (e) {} };
+
+// ---------- data for one deck, exactly as the game builds it ----------
+const cache = {};
+function deckData(si, d, seed) {
+  const k = si + ':' + d + ':' + seed; if (cache[k]) return cache[k];
+  const ship = L.SHIPS[si], n = d + 1, opts = L.deckOptions(ship, d);
+  const data = L.generate(n - 1, seed + n * 7919, opts);
+  const N0 = Math.min(6 + Math.floor((n - 1) * 0.7), 11), masked = data.W > 2 * N0 + 1;
+  data.inHull = (x, y) => !masked || opts.inside((x - (data.W - 1) / 2) / ((data.W - 3) / 2), (y - (data.H - 1) / 2) / ((data.H - 3) / 2));
+  data.masked = masked; data.f = ship.decks > 1 ? d / (ship.decks - 1) : 0; data.zone = L.zoneOf(data.f).label;
+  return cache[k] = data;
+}
+// systems whose main hardware sits on a prop present on this deck
+function hardwareOn(data) {
+  const out = [];
+  for (const s of L.SYSTEMS) {
+    if (s.host === 'junction') continue;
+    if (s.host === 'lift') { out.push({ s, x: data.exit[0], y: data.exit[1] }); continue; }
+    const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : [kind];
+    const p = data.props.find(p => kinds.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !out.some(o => o.x === p.tx && o.y === p.ty));
+    if (p) out.push({ s, x: p.tx, y: p.ty });
+  }
+  return out;
+}
+const SHORT = { alert: 'AL', helm: 'HN', computer: 'CC', transport: 'TR', reactor: 'RX', lifts: 'TL', sensors: 'SN', hydro: 'HY', sickbay: 'SB', emh: 'MH', replicators: 'RP', holo: 'HS' };
+
+// ---------- drawing ----------
+function drawPlan(cv, data, { small = false, hover = null } = {}) {
+  const W = data.W, H = data.H, ship = L.SHIPS[S.ship];
+  const box = cv.parentElement.clientWidth || 600, px = small ? Math.max(4, Math.floor(box / W)) : Math.max(10, Math.floor(Math.min(box, 620) / W));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = W * px * dpr; cv.height = H * px * dpr; cv.style.aspectRatio = `${W} / ${H}`;
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); cv._px = px;
+  const C = { space: css('--space'), hull: css('--hull'), deck: css('--deck'), ink: css('--ink'), muted: css('--muted'), accent: css('--accent'), tube: css('--tube'), chip: css('--chip'), line: css('--line'), panel: css('--panel') };
+  g.fillStyle = C.space; g.fillRect(0, 0, W * px, H * px);
+  // hull: everything inside the hull outline that isn't open floor is bulkhead
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (data.inHull(x, y) || data.grid[y][x] !== 1) { g.fillStyle = C.hull; g.fillRect(x * px, y * px, px, px); }
+  // floors
+  const lay = S.layers;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = data.grid[y][x], r = data.room[y][x]; if (c === 1) continue;
+    if (r === 'jefferies') continue;
+    g.fillStyle = C.deck; g.fillRect(x * px, y * px, px, px);
+    if (r && lay.rooms) { g.globalAlpha = r === 'holodeck' ? 0.3 : 0.2; g.fillStyle = css(DIVVAR[divOfRoom(r)]); g.fillRect(x * px, y * px, px, px); g.globalAlpha = 1; }
+  }
+  // room outlines + labels
+  if (lay.rooms && !small) for (const rm of data.rooms) {
+    const col = css(DIVVAR[divOfRoom(rm.type)]); g.strokeStyle = col; g.lineWidth = 1.5; g.strokeRect(rm.x * px + 1, rm.y * px + 1, rm.w * px - 2, rm.h * px - 2);
+    if (rm.w * px > 70) { g.fillStyle = col; g.font = `600 ${Math.min(14, Math.max(10, px * 0.5))}px Antonio, "Arial Narrow", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(L.ROOMS[rm.type].label.toUpperCase() + (rm.big ? ' · LARGE' : ''), (rm.x + rm.w / 2) * px, rm.y * px + 4); }
+  }
+  // Jiffy tubes
+  if (lay.tubes) for (const t of data.tubes) t.tiles.forEach(([x, y], i) => {
+    const k = data.tubeLevel[x + y * W], cx = (x + 0.5) * px, cy = (y + 0.5) * px, ax = t.axis === 'x', w = Math.max(3, px * 0.42);
+    g.fillStyle = C.deck; ax ? g.fillRect(x * px, cy - w / 2, px, w) : g.fillRect(cx - w / 2, y * px, w, px);
+    g.strokeStyle = C.tube; g.lineWidth = Math.max(1, px * 0.08);
+    if (k === 'up') { g.setLineDash([]); g.globalAlpha = 0.35; g.fillStyle = C.tube; ax ? g.fillRect(x * px, cy - w / 2, px, w) : g.fillRect(cx - w / 2, y * px, w, px); g.globalAlpha = 1; }
+    else g.setLineDash(k === 'lo' ? [px * 0.18, px * 0.14] : []);
+    g.beginPath(); if (ax) { g.moveTo(x * px, cy - w / 2); g.lineTo((x + 1) * px, cy - w / 2); g.moveTo(x * px, cy + w / 2); g.lineTo((x + 1) * px, cy + w / 2); } else { g.moveTo(cx - w / 2, y * px); g.lineTo(cx - w / 2, (y + 1) * px); g.moveTo(cx + w / 2, y * px); g.lineTo(cx + w / 2, (y + 1) * px); } g.stroke(); g.setLineDash([]);
+    if (k === 'lad') { g.strokeStyle = C.tube; g.lineWidth = Math.max(1, px * 0.06); for (let j = 1; j < 5; j++) { g.beginPath(); if (ax) { g.moveTo(x * px + j * px / 5, cy - w / 2); g.lineTo(x * px + j * px / 5, cy + w / 2); } else { g.moveTo(cx - w / 2, y * px + j * px / 5); g.lineTo(cx + w / 2, y * px + j * px / 5); } g.stroke(); } }
+  });
+  // props
+  if (lay.props) for (const p of data.props) {
+    const cx = (p.tx + 0.5) * px, cy = (p.ty + 0.5) * px, s = px * 0.62; g.save(); g.translate(cx, cy);
+    g.fillStyle = C.panel; g.strokeStyle = C.ink; g.lineWidth = Math.max(1, px * 0.06);
+    const rr = (w, h, r = 2) => { g.beginPath(); g.roundRect(-w / 2, -h / 2, w, h, r); g.fill(); g.stroke(); };
+    switch (p.kind) {
+      case 'warpcore': g.beginPath(); g.arc(0, 0, s / 2, 0, 7); g.fill(); g.stroke(); g.fillStyle = css('--sci'); g.beginPath(); g.arc(0, 0, s / 4, 0, 7); g.fill(); break;
+      case 'pad': case 'table': g.beginPath(); g.arc(0, 0, s / 2.4, 0, 7); g.fill(); g.stroke(); break;
+      case 'holocube': g.rotate(Math.PI / 4); rr(s * 0.6, s * 0.6, 1); break;
+      case 'tree': case 'plant': g.fillStyle = C.chip; g.globalAlpha = 0.75; for (const [a, b] of [[-0.18, -0.1], [0.16, -0.14], [0, 0.16]]) { g.beginPath(); g.arc(a * s, b * s, s * 0.24, 0, 7); g.fill(); } g.globalAlpha = 1; break;
+      case 'crate': rr(s * 0.8, s * 0.8, 1); g.beginPath(); g.moveTo(-s * 0.4, -s * 0.4); g.lineTo(s * 0.4, s * 0.4); g.moveTo(s * 0.4, -s * 0.4); g.lineTo(-s * 0.4, s * 0.4); g.stroke(); break;
+      case 'biobed': case 'bunk': rr(s * 0.5, s * 0.9); break;
+      case 'shuttle': g.beginPath(); g.moveTo(-s * 0.5, -s * 0.35); g.lineTo(s * 0.55, 0); g.lineTo(-s * 0.5, s * 0.35); g.closePath(); g.fill(); g.stroke(); break;
+      case 'console': case 'replicator': case 'viewscreen': rr(s * 0.9, s * 0.45); break;
+      default: rr(s * 0.45, s * 0.45, 2);
+    }
+    g.restore();
+  }
+  // hardware badges (systems whose main hardware is here)
+  if (lay.hardware && !small) {
+    g.font = `500 ${Math.max(8, px * 0.32)}px "IBM Plex Mono", monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const h of hardwareOn(data)) {
+      if (h.s.id === 'lifts') continue; const col = css(DIVVAR[L.DEPT[h.s.dept].division]), tx = (h.x + 0.85) * px, ty = (h.y + 0.15) * px;
+      const off = data._badge = data._badge || {}; const k = h.x + ',' + h.y; const n = off[k] = (off[k] || 0) + 1; const bx = tx, by = ty + (n - 1) * px * 0.42;
+      g.fillStyle = col; g.beginPath(); g.roundRect(bx - px * 0.3, by - px * 0.19, px * 0.6, px * 0.38, 3); g.fill(); g.fillStyle = '#fff'; g.fillText(SHORT[h.s.id] || '?', bx, by + 0.5);
+    }
+    data._badge = null;
+  }
+  // route markers: start, chips, tubelift
+  if (lay.route) {
+    const [sx, sy] = data.start; g.fillStyle = C.accent; g.beginPath(); g.moveTo((sx + 0.5) * px, (sy + 0.18) * px); g.lineTo((sx + 0.82) * px, (sy + 0.8) * px); g.lineTo((sx + 0.18) * px, (sy + 0.8) * px); g.closePath(); g.fill();
+    for (const [x, y] of data.chips) { g.fillStyle = C.chip; g.save(); g.translate((x + 0.5) * px, (y + 0.5) * px); g.rotate(Math.PI / 4); g.fillRect(-px * 0.16, -px * 0.16, px * 0.32, px * 0.32); g.restore(); }
+    const [ex, ey] = data.exit; g.fillStyle = C.ink; g.beginPath(); g.roundRect((ex + 0.15) * px, (ey + 0.15) * px, px * 0.7, px * 0.7, 3); g.fill(); g.strokeStyle = C.panel; g.lineWidth = Math.max(1, px * 0.07);
+    g.beginPath(); g.moveTo((ex + 0.5) * px, (ey + 0.3) * px); g.lineTo((ex + 0.5) * px, (ey + 0.7) * px); g.moveTo((ex + 0.35) * px, (ey + 0.55) * px); g.lineTo((ex + 0.5) * px, (ey + 0.7) * px); g.lineTo((ex + 0.65) * px, (ey + 0.55) * px); g.stroke();
+  }
+  if (hover && !small) { g.strokeStyle = C.accent; g.lineWidth = 2; g.strokeRect(hover[0] * px + 1, hover[1] * px + 1, px - 2, px - 2); }
+}
+// hull silhouette of one deck for the rail (fore-aft spans seen from the side)
+function drawSpan(cv, ship, d, on) {
+  const c = L.CLASSES[ship.hull], f = ship.decks > 1 ? d / (ship.decks - 1) : 0, w = cv.clientWidth || 160, h = 12, dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = w * dpr; cv.height = h * dpr; const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = on ? css('--accent') : css('--muted'); g.globalAlpha = on ? 1 : 0.45;
+  const n = 48; for (let i = 0; i < n; i++) { const v = -1 + 2 * (i + 0.5) / n; let hit = false; for (let j = 0; j <= 24 && !hit; j++) hit = c.inside(-1 + j / 12, v, f); if (hit) g.fillRect(i / n * w, 2, w / n + 0.5, h - 4); }
+}
+
+// ---------- UI ----------
+function renderShips() {
+  $('ships').innerHTML = L.SHIPS.map((s, i) => `<button type="button" class="ship-btn" data-ship="${i}" aria-pressed="${i === S.ship}">${s.province}<small>${s.cls}</small></button>`).join('');
+}
+function renderHeader() {
+  const s = L.SHIPS[S.ship], c = L.CLASSES[s.hull];
+  $('shipName').textContent = s.name;
+  $('shipReg').innerHTML = `<span>Registry <b>${s.reg}</b></span><span>Class <b>${c.name}</b> · ${c.role}</span><span>Length <b>${c.length} m</b></span><span>Decks <b>${s.decks}</b></span><span>Crew <b>${L.makeComplement(s, S.seed).people.length}</b></span>`;
+}
+function renderRail() {
+  const s = L.SHIPS[S.ship]; let html = '', last = '';
+  for (let d = 0; d < s.decks; d++) {
+    const z = L.zoneOf(s.decks > 1 ? d / (s.decks - 1) : 0).label;
+    if (z !== last) { html += `<div class="zone-sep">${z}</div>`; last = z; }
+    html += `<button type="button" class="deck-row" data-deck="${d}" aria-pressed="${d === S.deck && S.view === 'deck'}"><span class="n">${String(d + 1).padStart(2, '0')}</span><span><span class="z">${roomsSummary(deckData(S.ship, d, S.seed))}</span><canvas data-span="${d}"></canvas></span></button>`;
+  }
+  $('rail').innerHTML = html;
+  $('rail').querySelectorAll('canvas[data-span]').forEach(cv => drawSpan(cv, s, +cv.dataset.span, +cv.dataset.span === S.deck && S.view === 'deck'));
+}
+function roomsSummary(data) { const t = [...new Set(data.rooms.map(r => L.ROOMS[r.type].label))]; return t.slice(0, 2).join(' · ') + (t.length > 2 ? ` +${t.length - 2}` : '') || 'Corridors'; }
+const LAYERS = [['rooms', 'Rooms', '--ops'], ['props', 'Props', '--ink'], ['tubes', 'Jiffy tubes', '--tube'], ['hardware', 'System hardware', '--sci'], ['route', 'Start · chips · lift', '--accent']];
+function renderLayers() { $('layers').innerHTML = LAYERS.map(([k, n, v]) => `<button type="button" class="layer" data-layer="${k}" aria-pressed="${S.layers[k]}"><i style="background:var(${v})"></i>${n}</button>`).join(''); }
+function renderLegend() {
+  $('legend').innerHTML = [['--cmd', 'Command-division rooms'], ['--ops', 'Operations-division rooms'], ['--sci', 'Sciences-division rooms'], ['--hull', 'Bulkhead'], ['--tube', 'Jiffy tube (dashed lower · solid upper · rungs = ladder)'], ['--accent', '▲ start'], ['--chip', '◆ logic chip'], ['--ink', 'Tubelift']].map(([v, t]) => `<span><i style="background:var(${v})"></i>${t}</span>`).join('');
+}
+function renderDeck() {
+  const s = L.SHIPS[S.ship], data = deckData(S.ship, S.deck, S.seed);
+  $('deckTitle').textContent = `Deck ${String(S.deck + 1).padStart(2, '0')} of ${s.decks}`;
+  $('deckSub').textContent = `${data.zone} · ${data.masked ? `${s.cls}-class hull section` : 'full-width deck (hull section too small)'}`;
+  drawPlan($('plan'), data, { hover: S.hover });
+  renderInfo(data);
+}
+function renderInfo(data) {
+  const s = L.SHIPS[S.ship], roster = L.makeComplement(s, S.seed), open = data.openTiles.length;
+  const types = {}; for (const r of data.rooms) types[r.type] = (types[r.type] || 0) + 1;
+  const hw = hardwareOn(data), ladders = data.tubes.filter(t => t.ladder > 0).length;
+  const depts = L.DEPARTMENTS.filter(d => d.zone === data.zone);
+  const props = {}; for (const p of data.props) props[p.kind] = (props[p.kind] || 0) + 1;
+  const climb = data.props.filter(p => CLIMB.has(p.kind)).length;
+  $('info').innerHTML = `
+  <div class="card"><div class="eyebrow">Deck manifest</div>
+    <dl class="kv"><dt>Walkable tiles</dt><dd>${open}</dd><dt>Rooms</dt><dd>${data.rooms.length}${data.rooms.some(r => r.big) ? ' (1 large)' : ''}</dd><dt>Logic chips to find</dt><dd>${data.chips.length}</dd><dt>Jiffy tubes</dt><dd>${data.tubes.length}${ladders ? ` · ${ladders} with ladder` : ''}</dd><dt>Climbable props</dt><dd>${climb}</dd><dt>Flooded</dt><dd>${data.deck === 2 || data.deck === 5 ? 'yes' : 'no'}</dd></dl></div>
+  <div class="card"><div class="eyebrow">Rooms</div><ul class="list">${Object.entries(types).map(([t, n]) => `<li><span class="dot" style="background:var(${DIVVAR[divOfRoom(t)]})"></span><span>${L.ROOMS[t].label}</span><span class="r">${n > 1 ? '×' + n : ''} ${RMAP[t].map(d => L.DEPT[d].name).join(' / ')}</span></li>`).join('') || '<li><span></span><span class="note">Corridors only</span><span></span></li>'}</ul></div>
+  <div class="card"><div class="eyebrow">System hardware on this deck</div><ul class="list">${hw.map(h => `<li><span class="dot" style="background:var(${DIVVAR[L.DEPT[h.s.dept].division]})"></span><span>${h.s.name}</span><span class="r">${SHORT[h.s.id] || 'lift'}</span></li>`).join('')}</ul>
+    <p class="note">Every other system is serviced from a yellow maintenance junction on a corridor wall. Repairs there take 1.5× as long.</p></div>
+  <div class="card"><div class="eyebrow">Who works on ${data.zone} decks</div><ul class="list">${depts.map(d => { const c = roster.people.filter(p => p.dept === d.id); const head = c[0]; return `<li><span class="dot" style="background:var(${DIVVAR[d.division]})"></span><span>${d.name}<br><span class="note">${head.rankTitle} ${head.given} ${head.family}</span></span><span class="r">${c.length} crew</span></li>`; }).join('') || '<li><span></span><span class="note">No department is based here.</span><span></span></li>'}</ul></div>`;
+}
+function renderOverview() {
+  const s = L.SHIPS[S.ship];
+  $('overview').innerHTML = Array.from({ length: s.decks }, (_, d) => { const data = deckData(S.ship, d, S.seed); return `<button type="button" class="ov" data-deck="${d}"><span class="t"><b>Deck ${String(d + 1).padStart(2, '0')}</b><span>${data.zone}</span></span><canvas data-ov="${d}"></canvas><span class="note">${roomsSummary(data)} · ${data.tubes.length} tubes</span></button>`; }).join('');
+  $('overview').querySelectorAll('canvas[data-ov]').forEach(cv => drawPlan(cv, deckData(S.ship, +cv.dataset.ov, S.seed), { small: true }));
+}
+function render() {
+  renderShips(); renderHeader(); renderLayers(); renderLegend(); renderRail();
+  const all = S.view === 'all'; $('main').hidden = all; $('overviewSec').hidden = !all;
+  $('vDeck').setAttribute('aria-pressed', !all); $('vAll').setAttribute('aria-pressed', all);
+  if (all) renderOverview(); else renderDeck();
+}
+
+// ---------- events ----------
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.ship !== undefined) { S.ship = +b.dataset.ship; S.deck = 0; render(); }
+  else if (b.dataset.deck !== undefined) { S.deck = +b.dataset.deck; S.view = 'deck'; S.hover = null; render(); }
+  else if (b.dataset.layer) { S.layers[b.dataset.layer] = !S.layers[b.dataset.layer]; save(); renderLayers(); renderDeck(); }
+  else if (b.id === 'reroll') { S.seed = 1 + Math.floor(Math.random() * 999998); $('seed').value = S.seed; render(); }
+  else if (b.id === 'vDeck') { S.view = 'deck'; render(); } else if (b.id === 'vAll') { S.view = 'all'; render(); }
+});
+$('seed').addEventListener('change', () => { const v = Math.max(1, Math.min(999999, Math.round(+$('seed').value) || 1)); S.seed = v; $('seed').value = v; render(); });
+const plan = $('plan'), tip = $('tip');
+function tileAt(ev) { const r = plan.getBoundingClientRect(), data = deckData(S.ship, S.deck, S.seed); const x = Math.floor((ev.clientX - r.left) / r.width * data.W), y = Math.floor((ev.clientY - r.top) / r.height * data.H); return x >= 0 && y >= 0 && x < data.W && y < data.H ? [x, y] : null; }
+function describe(data, x, y) {
+  const c = data.grid[y][x], r = data.room[y][x], k = data.tubeLevel[x + y * data.W];
+  if (k) return [`Jiffy tube · ${k === 'lo' ? 'lower run' : k === 'up' ? 'upper run, 1.7 m up' : 'ladder shaft'}`, 'Crawl height 1.25 m. Gronk and Drone can\'t follow; crazed crew can, slower.'];
+  if (x === data.exit[0] && y === data.exit[1]) return ['Tubelift', `Needs all ${data.chips.length} logic chips. Leads to deck ${String(S.deck + 2).padStart(2, '0')}.`];
+  if (c === 1) return [data.inHull(x, y) ? 'Bulkhead' : 'Open space', data.inHull(x, y) ? 'Solid. Wall-run along it.' : 'Outside the hull at this deck.'];
+  const extra = [];
+  if (x === data.start[0] && y === data.start[1]) extra.push('You start here.');
+  if (data.chips.some(([a, b]) => a === x && b === y)) extra.push('Logic chip.');
+  const hw = hardwareOn(data).filter(h => h.x === x && h.y === y); if (hw.length) extra.push('Hardware: ' + hw.map(h => h.s.name).join(', ') + '.');
+  if (c === 2) { const p = data.props.find(p => p.tx === x && p.ty === y); return [PROP_NAME[p?.kind] || 'Prop', (CLIMB.has(p?.kind) ? 'Climbable — vault onto it. ' : 'Blocks the way. ') + (r ? `In the ${L.ROOMS[r].label}. ` : '') + extra.join(' ')]; }
+  if (r) return [L.ROOMS[r].label, `Run by ${RMAP[r].map(d => L.DEPT[d].name).join(' / ')}. ` + extra.join(' ')];
+  return ['Corridor', extra.join(' ') || 'Carpeted, lit every other panel. Maybe.'];
+}
+function onMove(ev) {
+  const t = tileAt(ev); if (!t) { tip.hidden = true; return; }
+  const data = deckData(S.ship, S.deck, S.seed), [title, body] = describe(data, t[0], t[1]);
+  tip.innerHTML = `<b>${title}</b>${body}<small class="mono">tile ${t[0]},${t[1]}</small>`; tip.hidden = false;
+  const r = $('planBox').getBoundingClientRect(); let lx = ev.clientX - r.left, ly = ev.clientY - r.top; if (lx > r.width - 280) lx -= 290; tip.style.left = lx + 'px'; tip.style.top = ly + 'px';
+  if (!S.hover || S.hover[0] !== t[0] || S.hover[1] !== t[1]) { S.hover = t; drawPlan(plan, data, { hover: t }); }
+}
+plan.addEventListener('pointermove', onMove); plan.addEventListener('pointerdown', onMove);
+plan.addEventListener('pointerleave', () => { tip.hidden = true; S.hover = null; drawPlan(plan, deckData(S.ship, S.deck, S.seed)); });
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || S.view !== 'deck') return; const s = L.SHIPS[S.ship];
+  if (e.key === 'ArrowDown' || e.key === 'j') { S.deck = Math.min(s.decks - 1, S.deck + 1); render(); e.preventDefault(); }
+  if (e.key === 'ArrowUp' || e.key === 'k') { S.deck = Math.max(0, S.deck - 1); render(); e.preventDefault(); }
+});
+let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 120); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+if (document.fonts) document.fonts.ready.then(render);
+render();
+})();
+</script>
