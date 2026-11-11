@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ROOMS, mulberry32 } from './data.js';
-import { pbr, has as hasModel, instance } from './assets.js';
+import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -121,7 +121,7 @@ export function textures() {
   texCache.d = { wall: derive(texCache.wall, 3.2, 0.78, 0.2), floor: derive(texCache.floor, 2.2, 0.8, 0.2), carpet: derive(texCache.carpet, 3.0, 0.9, 0.1), holo: derive(texCache.holo, 1.0, 0.2, 0.2) };
   texCache.deck = texCache.tile = texCache.floor; texCache.d.deck = texCache.d.tile = texCache.d.floor;
   // real CC0 PBR sets replace the procedural ones when they loaded (call textures() only after assets are ready)
-  for (const k of ['wall', 'deck', 'carpet', 'tile', 'ceil']) { const p = pbr(k); if (p) { texCache[k] = p.c; texCache.d[k] = { normal: p.n, rough: p.r }; texCache.real = true; } }
+  for (const k of PBR_SETS) { const p = pbr(k); if (p) { texCache[k] = p.c; texCache.d[k] = { normal: p.n, rough: p.r, orm: p.orm }; texCache.real = true; } }
   if (pbr('wall')) {   // bulkhead = real metal plating (tiled 2×) with starship panel seams, kick plate and header band drawn over it
     const p = pbr('wall');
     texCache.wall = canvasTex(1024, (g, s) => {
@@ -326,6 +326,9 @@ export function buildLift(accent) {
 // ------------------------------------------------------------------
 // Set dressing: room light colours, grime textures and merged, vertex-coloured wall fixtures (instanced per kind)
 // ------------------------------------------------------------------
+// which bulkhead / deck variant a room gets (see tools/build-textures.mjs for the generated sets)
+const WALL_OF = { quarters: 'wallq', holodeck: 'wallq', sickbay: 'wallp', mess: 'wallp', bridge: 'wallp', arboretum: 'wallp', engineering: 'wallg', cargo: 'wallg', shuttlebay: 'wallg', transporter: 'wallg' };
+const CORRIDOR_WALL = { cairn: 'wall', longhouse: 'wallp', tandem: 'wall', cruller: 'wallp', plough: 'wall' };
 export const ROOM_LIGHT = { bridge: 0xbcd6ff, engineering: 0xffb060, sickbay: 0xd2fff2, mess: 0xffd49a, transporter: 0x9cc2ff, shuttlebay: 0xfff0b4, cargo: 0xffc472, holodeck: 0xffe070, quarters: 0xffc48c, arboretum: 0xd6ffae };
 let dressCache = null;
 function dressTex() {
@@ -583,22 +586,28 @@ export class World {
       }
     }
     // floors
-    const FLOOR_OF = { engineering: 'deck', shuttlebay: 'deck', cargo: 'deck', transporter: 'deck', jefferies: 'deck', sickbay: 'tile', mess: 'tile', holodeck: 'holo' };
-    const FLOOR_MAT = { deck: { metalness: 0.55, roughness: 0.9, ns: 1.3 }, tile: { metalness: 0.0, roughness: 0.55, ns: 0.8 }, carpet: { metalness: 0, roughness: 1, ns: T.real ? 1.6 : 0.9 }, holo: { metalness: 0, roughness: 0.3, ns: 0.9 } };
-    const byKind = { deck: [], tile: [], carpet: [], holo: [] };
-    for (const t of open) byKind[FLOOR_OF[d.room[t[1]][t[0]]] || 'carpet'].push(t);
+    // per-room floor material; corridors follow the ship's hull class. Generated sets (ORM-packed) fall back to the scans if missing.
+    const FLOOR_MAT = { deck: { metalness: 0.55, roughness: 0.9, ns: 1.3 }, tile: { metalness: 0.0, roughness: 0.55, ns: 0.8 }, carpet: { metalness: 0, roughness: 1, ns: T.real ? 1.6 : 0.9 }, holo: { metalness: 0, roughness: 0.3, ns: 0.9 },
+      grate: { ns: 1.2, gain: 1.15 }, rubber: { ns: 1.0, gain: 1.1 }, hex: { ns: 0.8, white: 0.4 }, paver: { ns: 1.3, gain: 1.15 } };
+    const fk = (k, fb) => T.d[k] ? k : fb;
+    const FLOOR_OF = { engineering: fk('grate', 'deck'), shuttlebay: 'deck', cargo: 'deck', transporter: fk('rubber', 'deck'), jefferies: fk('grate', 'deck'), sickbay: fk('hex', 'tile'), mess: 'tile', holodeck: 'holo', arboretum: fk('paver', 'carpet') };
+    const corridorFloor = fk({ longhouse: 'rubber', plough: 'rubber', cruller: 'tile' }[ship.hull] || 'carpet', 'carpet');
+    const byKind = {};
+    for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? FLOOR_OF[r] || 'carpet' : corridorFloor; (byKind[k] || (byKind[k] = [])).push(t); }
     const dummy = new THREE.Object3D();
     for (const [kind, list] of Object.entries(byKind)) {
       if (!list.length) continue;
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(-Math.PI / 2);
       const fm = FLOOR_MAT[kind], dm = T.d[kind];
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(fm.ns, fm.ns), roughnessMap: dm.rough, roughness: fm.roughness, metalness: fm.metalness }), list.length);
+      const fmat = new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(fm.ns, fm.ns), roughnessMap: dm.rough, roughness: dm.orm ? 1 : fm.roughness, metalness: dm.orm ? 1 : fm.metalness });
+      if (dm.orm) { fmat.aoMap = dm.rough; fmat.metalnessMap = dm.rough; }
+      const im = new THREE.InstancedMesh(geo, fmat, list.length);
       list.forEach(([x, y], i) => {
         dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.rotation.y = kind === 'holo' ? 0 : Math.floor(rndv() * 4) * Math.PI / 2; dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
         const r = d.room[y][x]; const c = kind === 'holo' ? new THREE.Color(0xffffff) : floorCol.clone();
         if (r && kind !== 'holo') c.lerp(new THREE.Color(ROOMS[r].floor), 0.6);
-        if (kind === 'tile') c.lerp(new THREE.Color(0xffffff), 0.35);
-        if (kind !== 'holo') c.multiplyScalar((r ? 0.9 : 0.82) + rndv() * 0.2);
+        if (kind === 'tile' || fm.white) c.lerp(new THREE.Color(0xffffff), fm.white || 0.35);
+        if (kind !== 'holo') c.multiplyScalar(((r ? 0.9 : 0.82) + rndv() * 0.2) * (fm.gain || 1));
         im.setColorAt(i, c);
       });
       im.receiveShadow = true; g.add(im);
@@ -696,13 +705,25 @@ export class World {
     }
     // walls
     {
+      // bulkhead variant per block: the room it faces decides (painted panel, padded, grille); corridors follow the hull class
       const geo = new THREE.BoxGeometry(TS, WH, TS);
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, normalScale: new THREE.Vector2(T.real ? 0.55 : 1, T.real ? 0.55 : 1), roughnessMap: T.d.wall.rough, roughness: T.real ? 0.8 : 1, metalness: T.real ? 0.3 : 0.05 }), walls.length);
-      walls.forEach(([x, y], i) => {
-        dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
-        im.setColorAt(i, wallCol.clone().multiplyScalar(0.82 + rndv() * 0.22));
-      });
-      im.castShadow = true; im.receiveShadow = true; g.add(im);
+      const corridorWall = T.d[CORRIDOR_WALL[ship.hull]] ? CORRIDOR_WALL[ship.hull] : 'wall', groups = {}; this.wallKind = {};
+      for (const [x, y] of walls) {
+        const cnt = {}; let best = null;
+        for (const [dx, dy] of DIRS) { const c = this.grid[y + dy]?.[x + dx]; if (c === undefined || c === 1) continue; const k = WALL_OF[d.room[y + dy][x + dx]]; if (k && T.d[k]) { cnt[k] = (cnt[k] || 0) + 1; if (!best || cnt[k] > cnt[best]) best = k; } }
+        const kind = best || corridorWall; this.wallKind[x + y * W] = kind; (groups[kind] || (groups[kind] = [])).push([x, y]);
+      }
+      for (const [kind, list] of Object.entries(groups)) {
+        const dm = T.d[kind], ns = kind === 'wall' ? (T.real ? 0.55 : 1) : 0.9;
+        const mat = new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(ns, ns), roughnessMap: dm.rough, roughness: dm.orm ? 1 : T.real ? 0.8 : 1, metalness: dm.orm ? 1 : T.real ? 0.3 : 0.05 });
+        if (dm.orm) { mat.aoMap = dm.rough; mat.metalnessMap = dm.rough; }
+        const im = new THREE.InstancedMesh(geo, mat, list.length), base = kind === 'wallq' ? wallCol.clone().lerp(new THREE.Color(ship.accent), 0.14) : kind === 'wallg' ? wallCol.clone().multiplyScalar(0.92) : wallCol;
+        list.forEach(([x, y], i) => {
+          dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
+          im.setColorAt(i, base.clone().multiplyScalar(0.82 + rndv() * 0.22));
+        });
+        im.castShadow = true; im.receiveShadow = true; g.add(im);
+      }
     }
     // wall decorations on faces adjoining open tiles
     {
@@ -713,7 +734,7 @@ export class World {
         const roomT = d.room[y + dy][x + dx];
         const roll = rndv();
         stripes.push({ px, pz, ry });
-        const face = { tx: x, ty: y, dx, dy, px, pz, ry, room: roomT }; this.wallFaces.push(face);   // .deco = something already hangs here
+        const face = { tx: x, ty: y, dx, dy, px, pz, ry, room: roomT, wall: this.wallKind[x + y * W] }; this.wallFaces.push(face);   // .deco = something already hangs here
         if (roll < 0.18) { lcars.push({ px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
         else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push({ px, pz, ry }); face.deco = true; face.win = true; }
       }
