@@ -280,7 +280,7 @@ export class Phantom extends Enemy {
     this.seen = dot > 0.55 && dist < 30 && this.w.los(p.x, p.z, this.x, this.z);
     let speed = 0;
     if (!this.seen) {
-      this.unseenT += dt; speed = 2.3 + Math.min(this.deck, 8) * 0.12 + (dist > 14 ? 1.4 : 0);
+      this.unseenT += dt; speed = (2.3 + Math.min(this.deck, 8) * 0.12 + (dist > 14 ? 1.4 : 0)) * (game.fx?.holoMul || 1);   // holo-playroom safeties
       const nx = dx / (dist || 1), nz = dz / (dist || 1), step = Math.min(speed * dt, dist);
       this.x += nx * step; this.z += nz * step; this.yaw += wrapA(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 6);
       if (this.unseenT > 14 && dist > 16) { this.relocate(p, 9, 13); this.unseenT = 0; }

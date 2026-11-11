@@ -9,10 +9,14 @@ import { makeSurvivor, makeCorpse, makeMedHolo, liveFace } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
+import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
+import { makeJunction, setLamp, makeBeacon } from './sysview.js';
+import { mulberry32 } from './data.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
 const $ = (id) => document.getElementById(id);
-const WIN_DECK = 8;
+{ const st = document.createElement('style'); st.textContent = STATUS_CSS; document.head.appendChild(st); }
+const winDeck = () => G.ship ? G.ship.decks : 8;   // a run is one ship, top deck to keel
 const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder alert.', 'Warning: structural integrity field fluctuating.', 'Beam room 3 reports unauthorized biosign.',
   'Please remain calm. All decks are safe.', 'Hull breach detected. Sealing bulkheads.', 'Unable to locate captain.', 'Gravity plating offline in section 12.', 'Security teams respond to the cargo bay.', 'Self-destruct sequence: cancelled.', 'There are no lifeforms aboard.'];
 
@@ -140,15 +144,16 @@ function clearLevel() {
   if (world) { scene.remove(world.group); world.dispose(); }
   for (const g of gorns) scene.remove(g.mesh);
   for (const e of ents) scene.remove(e.mesh);
-  gorns = []; ents = [];
+  for (const r of repairPts) if (r.obj) scene.remove(r.obj);
+  gorns = []; ents = []; repairPts = [];
 }
 
 function loadDeck(n) {
   clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
   resetMover(P); rope.visible = hook.visible = false;
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
-  ship = SHIPS[G.shipOrder[(n - 1) % G.shipOrder.length]];
-  G.shipDeck = shipDeckFor(ship, n, WIN_DECK);
+  ship = G.ship;
+  G.shipDeck = shipDeckFor(ship, n, winDeck());
   const data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck));
   data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25);
   world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
@@ -169,7 +174,8 @@ function loadDeck(n) {
     scene.add(mesh); const e = { kind, mesh, x: mesh.position.x, z: mesh.position.z, t: rnd() * 6, ...extra }; ents.push(e); return e;
   };
   for (const c of data.chips) add('chip', c, makeItem('chip'));
-  const nb = 1 + (n > 2 ? 1 : 0) + luck, nm = 1 + luck + (n > 3 ? 1 : 0);
+  const sup = G.fx ? G.fx.supplies : 0;   // broken replicators = emptier supply lockers
+  const nb = Math.max(0, 1 + (n > 2 ? 1 : 0) + luck + sup), nm = Math.max(1, 1 + luck + (n > 3 ? 1 : 0) + sup);
   for (let i = 0; i < nb; i++) { const t = data.pickTile(() => true); if (t) add('battery', t, makeItem('battery')); }
   for (let i = 0; i < nm; i++) { const t = data.pickTile(() => true); if (t) add('medkit', t, makeItem('medkit')); }
   const nt = 3 + Math.floor(rnd() * 4);
@@ -177,14 +183,15 @@ function loadDeck(n) {
   // survivors + bodies
   for (let i = 0; i < 2; i++) {
     const t = data.pickTile(() => true); if (!t) continue;
-    const m = makeSurvivor(rnd) || makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
-    add('crew', t, m, { used: false, fake: n >= 2 && rnd() < 0.3 });
+    const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen';
+    const m = makeSurvivor(rnd, person) || makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
+    if (person) m.userData.rank = person.short;
+    add('crew', t, m, { used: false, fake: n >= 2 && rnd() < 0.3, person });
   }
-  { const t = data.pickTile(() => true); if (t) add('body', t, makeCorpse(rnd) || makeCrew(0xb02a20, true), { used: false }); }
-  if (n >= 3) { const t = data.pickTile(() => true); if (t) add('body', t, makeCorpse(rnd) || makeCrew(0xd0a020, true), { used: false }); }
+  for (let i = 0; i < (n >= 3 ? 2 : 1); i++) { const t = data.pickTile(() => true); if (!t) continue; const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen'; add('body', t, makeCorpse(rnd, person) || makeCrew(0xb02a20, true), { used: false, person }); }
   { const t = data.rooms.find(r => r.type === 'sickbay'); if (t) {
       const tile = data.pickTile(([x, y]) => data.room[y][x] === 'sickbay');
-      if (tile) add('emh', tile, makeMedHolo() || makeHologram(), { used: false });
+      if (tile && (!G.fx || G.fx.emh)) add('emh', tile, makeMedHolo() || makeHologram(), { used: false });
   } }
 
   // Jiffy tubes: something worth crawling for in the middle, and sometimes something waiting
@@ -195,8 +202,9 @@ function loadDeck(n) {
   spawnThreats(data, n, rnd);
   for (const t of data.tubes) if (n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[t.ladder === 1 ? 0 : 1], n, 0, scene, sound));
   placeGore(data, rnd, n);
+  placeRepairPoints(data);
   world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
-  G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.distT = 20 + Math.random() * 20; G.hints = {};
+  G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.lurchT = 20 + Math.random() * 20; G.repairT = 0; G.distT = 20 + Math.random() * 20; G.hints = {};
   showCard(n, ship, data.flooded);
   $('decklbl').textContent = 'DECK ' + n;
   $('shipcls').textContent = ship.cls + '-class';
@@ -259,6 +267,9 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 function newRun() {
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: Math.floor(Math.random() * 1e6) });
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
+  G.ship = SHIPS[G.shipOrder[0]];
+  G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p);
+  G.shipState = new ShipState(G.ship, G.runSeed); G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
   hideScreens(); fade(0);
   loadDeck(1);
   requestLock();
@@ -278,9 +289,9 @@ function completeDeck() {
   G.phase = 'lift'; sound.lift(); fade(1, 900);
   G.hp = Math.min(G.maxHp, G.hp + 20);
   setTimeout(() => {
-    if (G.deck >= WIN_DECK && !G.endless) {
+    if (G.deck >= winDeck() && !G.endless) {
       document.exitPointerLock?.();
-      $('winstats').textContent = `${WIN_DECK} decks, ${G.tribbles} furbles, ${G.stuns} hostiles stunned. Time: ${fmtTime(G.time)}.`;
+      $('winstats').textContent = `${winDeck()} decks of the ${G.ship.name}, ${G.tribbles} furbles, ${G.stuns} hostiles stunned. Time: ${fmtTime(G.time)}.`;
       localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck);
       showScreen('win'); G.phase = 'win'; return;
     }
@@ -311,13 +322,13 @@ function choosePerk(id) {
 }
 function fmtTime(s) { s |= 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
-function die(by) {
+function die(by, line = null) {
   G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
   bloodBurst(P.x, 1.0, P.z, 120, 5); for (let i = 0; i < 6; i++) decals.floor('blood', P.x + (Math.random() - 0.5) * 2, P.z + (Math.random() - 0.5) * 2, 1.2 + Math.random(), 1);
   screenSplat(14, true); sound.roar(0.35); by.roar = 1.5; $('danger').style.opacity = 1; $('prompt').textContent = '';
   const deckReached = G.deck;
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
-  $('deathline').textContent = pick(DEATH_LINES);
+  $('deathline').textContent = line || pick(DEATH_LINES);
   $('stats').innerHTML = `Reached <b>Deck ${deckReached}</b> aboard the ${ship.name} (${ship.reg}).<br>Furbles rescued: ${G.tribbles} · Hostiles stunned: ${G.stuns} · Time: ${fmtTime(G.time)}<br>Best: Deck ${G.best}`;
   setTimeout(() => showScreen('dead'), 2400);
 }
@@ -331,7 +342,7 @@ G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
 G.glitch = (sec) => { G.glitchT = sec; };
 G.clingOn = (c) => { P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
-G.dragDown = (e) => { const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9; P.kbz = -dz / d * 9; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
+G.dragDown = (e) => { const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9 * G.fx.knockMul; P.kbz = -dz / d * 9 * G.fx.knockMul; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
 G.hitPlayer = (gorn, dmg) => {
   if (invuln > 0 || G.phase !== 'play') return;
   if (G.shield) { G.shield = false; G.say('Deflector absorbed the hit!', 'good'); flash('#39f', 0.5); sound.hit(); }
@@ -339,7 +350,7 @@ G.hitPlayer = (gorn, dmg) => {
   P.shake = 0.6; invuln = 1.2;
   if (!G.shield || G.hp < G.maxHp) { bloodBurst(P.x, 1.2, P.z, 60, 4, Math.sin(gorn.yaw) * 2, Math.cos(gorn.yaw) * 2); decals.floor('blood1', P.x, P.z, 1.4, 1); sound.squelch(); screenSplat(4); gorn.bloodTrail = 14; }
   const dx = P.x - gorn.x, dz = P.z - gorn.z, d = Math.hypot(dx, dz) || 1;
-  const kb = perk('dampener') ? 4 : 8; P.kbx = dx / d * kb; P.kbz = dz / d * kb;
+  const kb = (perk('dampener') ? 4 : 8) * G.fx.knockMul; P.kbx = dx / d * kb; P.kbz = dz / d * kb;
   if (gorn.cfg) { gorn.attackCd = Math.max(gorn.attackCd, gorn.cfg.atkCd); gorn.state = S.SEARCH; gorn.timer = 4; }
   if (G.hp <= 0) die(gorn);
   updateHUD();
@@ -347,6 +358,7 @@ G.hitPlayer = (gorn, dmg) => {
 
 // ---------------- input ----------------
 addEventListener('keydown', (e) => {
+  if (e.code === 'Tab') { e.preventDefault(); if (!e.repeat && G.phase === 'play') showStatus(true); }
   if (!e.repeat) { if (e.code === 'Space') pressed.jump = true; if (e.code === 'KeyC' || e.code === 'ControlLeft') pressed.crouch = true; }
   keys[e.code] = true;
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
@@ -359,13 +371,13 @@ addEventListener('keydown', (e) => {
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
 });
-addEventListener('keyup', (e) => keys[e.code] = false);
+addEventListener('keyup', (e) => { keys[e.code] = false; if (e.code === 'Tab') showStatus(false); });
 addEventListener('mousemove', (e) => {
   if (!locked || G.phase !== 'play') return;
   P.yaw -= e.movementX * 0.0022 * CFG.sens; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022 * CFG.sens));
 });
 addEventListener('contextmenu', (e) => e.preventDefault());
-addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings')) resumeGame(); });
+addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); });
 function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
@@ -373,7 +385,7 @@ $('qsel').onchange = (e) => setQuality(e.target.value);
 $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
 if (CFG.quality === 'low') setQuality('low');
 $('resume').onmousedown = (e) => e.stopPropagation();
-$('credbtn').onclick = () => showScreen('credits'); $('credback').onclick = () => showScreen('title');
+$('credbtn').onclick = () => showScreen('credits'); $('companybtn').onclick = (e) => { e.stopPropagation(); showCompany(); }; $('companyback').onclick = (e) => { e.stopPropagation(); showScreen('pause'); }; $('credback').onclick = () => showScreen('title');
 $('begin').onclick = newRun; $('again').onclick = newRun; $('again2').onclick = newRun; $('resume').onclick = resumeGame;
 $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offerPerks(); };
 
@@ -405,24 +417,32 @@ function fire() {
 }
 
 function interact() {
+  if (nearestRepair()) return;   // E is held to repair; handled in step()
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
   if (near) {
     near.used = true; sound.pickup();
     if (near.kind === 'crew' && near.fake) {
-      scene.remove(near.mesh); ents.splice(ents.indexOf(near), 1);
+      scene.remove(near.mesh); ents.splice(ents.indexOf(near), 1); if (near.person) near.person.status = 'dead';   // the real one is long gone
       const en = makeEnemy('slimeling', world, world.tile(near.x, near.z), G.deck, 0, scene, sound); en.state = S.PATROL; en.mesh.visible = true; en.x = near.x; en.z = near.z; en.pickPatrol(P); en.state = S.CHASE; en.timer = 6; en.setTarget(...world.tile(P.x, P.z)); gorns.push(en);
       G.say('"Hello fellow crewman! I am definitely not— *SCHLOOORP*"', 'warn'); sound.shriek(0.3); flash('#240', 0.4); P.shake = 0.5; return;
     }
     if (near.kind === 'crew') {
-      G.say(pick(REDSHIRT_LINES), 'npc');
-      if (Math.random() < 0.6) giveLoot();
-    } else if (near.kind === 'body') { G.say('You search the crewman\'s body…', 'npc'); giveLoot(true); }
+      const pr = near.person, who = pr ? `${pr.short}, ${pr.title}` : 'Crewman';
+      const line = pr && Math.random() < 0.7 ? pick(DEPT_LINES[pr.dept]) : pick(REDSHIRT_LINES);
+      if (G.fx.evac) {   // transporters up: beam them to safety
+        G.say(`${who}: ${line} — Transporter room, one to beam out!`, 'npc'); if (pr) pr.status = 'evacuated';
+        for (let i = 0; i < 40; i++) sparks.add(near.x + (Math.random() - 0.5) * 0.6, Math.random() * 1.9, near.z + (Math.random() - 0.5) * 0.6, 0, 0.4 + Math.random(), 0, BEAM, 0.9);
+        sound.tone(880, 0.9, 'sine', 0.06, 600); setTimeout(() => { scene.remove(near.mesh); const i = ents.indexOf(near); if (i >= 0) ents.splice(i, 1); }, 650); giveLoot();
+      } else { G.say(`${who}: ${line}`, 'npc'); if (pr) pr.status = 'alive'; if (Math.random() < 0.6) giveLoot(); }
+    } else if (near.kind === 'body') { const pr = near.person; if (pr) pr.status = 'dead'; G.say(pr ? `${pr.full}, ${pr.title} (${DEPT[pr.dept].name}). Dead. You take what they had.` : 'You search the crewman\'s body…', 'npc'); giveLoot(true); }
+    else if (near.kind === 'emh' && !G.fx.emh) { G.say('The emitter crackles. No hologram. (Medical Hologram offline)', 'warn'); near.used = false; }
     else if (near.kind === 'emh') { G.say('Hologram: "Please describe your medical emergency. Or don\'t. I\'m a projection, not a mind-reader." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
     updateHUD(); return;
   }
   // lift
   if (world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) {
-    if (G.chips >= world.d.chips.length) completeDeck();
+    if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — repair it at the lift controls (hold E)', 'warn'); }
+    else if (G.chips >= world.d.chips.length) completeDeck();
     else { sound.denied(); G.say(`Tubelift offline — ${world.d.chips.length - G.chips} logic chip(s) missing`, 'warn'); }
   }
 }
@@ -449,12 +469,14 @@ function drawMap() {
     mctx.fillStyle = world.grid[y][x] === 1 ? '#2a3050' : (world.d.room[y][x] ? '#4a5a8a' : '#6a7aa8');
     mctx.fillRect(x * s, y * s, Math.ceil(s), Math.ceil(s));
   }
-  const R = 7 + perk('tricorder') * 4;
+  if (G.fx.mapOff) { for (let i = 0; i < 260; i++) { const v = Math.random() * 90 | 0; mctx.fillStyle = `rgb(${v},${v},${v + 30})`; mctx.fillRect(Math.random() * mm.width, Math.random() * mm.height, 2, 2); } mctx.fillStyle = '#f66'; mctx.font = '8px monospace'; mctx.fillText('CORE OFFLINE', 4, 10); }
+  const R = (7 + perk('tricorder') * 4) * G.fx.scanMul;
   const blip = (x, z, c, r = 1.4) => { mctx.fillStyle = c; mctx.beginPath(); mctx.arc(x / TS * s, z / TS * s, r, 0, 7); mctx.fill(); };
-  for (const e of ents) if (e.kind === 'chip' && Math.hypot(e.x - P.x, e.z - P.z) < R * TS) blip(e.x, e.z, '#40ffa0');
+  if (G.fx.mapItems) for (const e of ents) if (e.kind === 'chip' && Math.hypot(e.x - P.x, e.z - P.z) < R * TS) blip(e.x, e.z, '#40ffa0');
   const lp = world.liftPos; const ld = Math.hypot(lp.x - P.x, lp.z - P.z);
-  if (ld < (R + 3) * TS || world.explored[world.d.exit[0] + world.d.exit[1] * W]) blip(lp.x, lp.z, G.chips >= world.d.chips.length ? '#6f6' : '#f55', 2);
-  if (perk('scan')) for (const g of gorns) if (g.active && Math.hypot(g.x - P.x, g.z - P.z) < 18) blip(g.x, g.z, '#f33', 2);
+  if ((G.fx.liftOnMap && ld < (R + 3) * TS) || world.explored[world.d.exit[0] + world.d.exit[1] * W]) blip(lp.x, lp.z, G.chips >= world.d.chips.length ? '#6f6' : '#f55', 2);
+  for (const r of repairPts) { const st = SHIP().status(r.sys); if (st === 'nominal') continue; const pulse = 1.6 + Math.sin(performance.now() / 160) * 0.8; mctx.fillStyle = st === 'offline' ? '#ff4a3a' : '#ffb347'; const x = r.x / TS * s, y = r.z / TS * s; mctx.beginPath(); mctx.moveTo(x, y - pulse - 1); mctx.lineTo(x + pulse + 1, y + pulse); mctx.lineTo(x - pulse - 1, y + pulse); mctx.fill(); }
+  if (perk('scan') && G.fx.lifeScan) for (const g of gorns) if (g.active && Math.hypot(g.x - P.x, g.z - P.z) < 18) blip(g.x, g.z, '#f33', 2);
   blip(P.x, P.z, '#fff', 1.8);
   mctx.strokeStyle = '#fff'; mctx.beginPath(); mctx.moveTo(P.x / TS * s, P.z / TS * s); mctx.lineTo(P.x / TS * s - Math.sin(P.yaw) * 5, P.z / TS * s - Math.cos(P.yaw) * 5); mctx.stroke();
 }
@@ -498,7 +520,7 @@ function step(dt, t) {
 
   // stamina
   const legs = perk('legs');
-  if (P.sprint && P.grounded) G.stamina -= dt * (20 - legs * 3.5) * (1 - P.flow * 0.35); else if (P.mode === 'wallrun' || P.mode === 'grapple' || P.mode === 'mantle') { } else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2));
+  if (P.sprint && P.grounded) G.stamina -= dt * (20 - legs * 3.5) * (1 - P.flow * 0.35); else if (P.mode === 'wallrun' || P.mode === 'grapple' || P.mode === 'mantle') { } else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2) * G.fx.staminaRegen);
   if (G.stamina < 0) G.stamina = 0;
   if (P.clung > 0) { P.clung -= dt; G.hp -= 2.5 * dt; $('clung').style.transform = `translate(${(Math.random() - 0.5) * 6}px,${(Math.random() - 0.5) * 6}px)`; if (P.clung <= 0) { $('clung').style.opacity = 0; G.say('You tear it off and hurl it away!', 'good'); bloodBurst(P.x, 1.5, P.z, 25, 3); if (G.hp <= 0) { die(gorns.find(g => g.kind === 'clinger') || gorns[0]); return; } } updateHUD(); }
   if (G.glitchT > 0) G.glitchT -= dt;
@@ -529,7 +551,8 @@ function step(dt, t) {
   }
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
-  if (chased !== wasChased) { world.setAlert(chased); if (chased) sound.klaxon(); wasChased = chased; }
+  if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
+  updateShipSystems(dt, tension);
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -546,10 +569,10 @@ function step(dt, t) {
         updateHUD(); }
     } else if (e.kind === 'battery') {
       e.mesh.rotation.y += dt * 2; e.mesh.position.y = 0.8 + Math.sin(e.t * 2) * 0.06;
-      if (d < 1.0 && G.phaser < G.maxPhaser) { G.phaser = Math.min(G.maxPhaser, G.phaser + 2); remove(e); sound.pickup(); G.say('Zapper power cell (+2)', 'good'); updateHUD(); }
+      if (d < 1.0 && G.phaser < G.maxPhaser) { const y = G.fx.cellYield; G.phaser = Math.min(G.maxPhaser, G.phaser + y); remove(e); sound.pickup(); G.say(`Zapper power cell (+${y})${y < 2 ? ' — armory chargers are down' : ''}`, 'good'); updateHUD(); }
     } else if (e.kind === 'medkit') {
       e.mesh.rotation.y += dt * 1.5; e.mesh.position.y = 0.8 + Math.sin(e.t * 2) * 0.06;
-      if (d < 1.0 && G.hp < G.maxHp) { G.hp = Math.min(G.maxHp, G.hp + 35); remove(e); sound.heal(); G.say('Medkit (+35 health)', 'good'); updateHUD(); }
+      if (d < 1.0 && G.hp < G.maxHp) { const h = G.fx.medkit; G.hp = Math.min(G.maxHp, G.hp + h); remove(e); sound.heal(); G.say(`Medkit (+${h} health)${h < 35 ? ' — sickbay supplies are failing' : ''}`, 'good'); updateHUD(); }
     } else if (e.kind === 'tribble') {
       const b = e.mesh.userData.body; b.scale.y = 0.85 + Math.sin(e.t * 4) * 0.04; e.mesh.position.y = Math.abs(Math.sin(e.t * 1.6)) * 0.03;
       if (d < 0.9) { G.tribbles++; G.hp = Math.min(G.maxHp, G.hp + 3); remove(e); sound.purr(); G.say(['Coo-coo… a furble!', 'It purrs. Your stress level drops.', 'Furble acquired. Do NOT feed it.'][G.tribbles % 3], 'npc'); updateHUD(); }
@@ -570,8 +593,11 @@ function step(dt, t) {
   // prompt
   let prompt = '';
   const npc = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
-  if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
+  const rp = nearestRepair(true);
+  if (rp && SHIP().status(rp.sys) !== 'nominal') prompt = G.repairT > 0 ? `Repairing ${SYS[rp.sys].name}… ${Math.floor(G.repairT / repairTime(rp) * 100)}%` : `[Hold E] Repair ${SYS[rp.sys].name} (${SHIP().status(rp.sys)})`;
+  else if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
+  else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
   $('prompt').textContent = prompt;
 
   // room label + exploration
@@ -593,7 +619,8 @@ function step(dt, t) {
   updatePanelLights(dt);
   // rolling blackouts: the hum stops, the lights die, something is still walking
   if (G.blackout > 0) { G.blackout -= dt; if (G.blackout <= 0) { world.setPower(true); sound.setPower(true); sound.powerUp(); } }
-  else { G.blackT -= dt; if (G.blackT <= 0 && G.deckTime > 25) { G.blackout = 5 + Math.random() * 5; G.blackT = 60 + Math.random() * 50; world.setPower(false); sound.setPower(false); sound.powerDown(); G.say('Computer: Main power failure. Emergency lighting only.', 'comp'); } }
+  else { G.blackT -= dt; if (G.blackT <= 0 && G.deckTime > 25) { G.blackout = 5 + Math.random() * 5; G.blackT = (G.fx.blackoutEvery || 170) * (0.7 + Math.random() * 0.6); world.setPower(false); sound.setPower(false); sound.powerDown(); G.say('Computer: Main power failure. Emergency lighting only.', 'comp'); } }
+  world.powerTarget = G.blackout > 0 ? 0 : G.fx.power; world.lightFault = G.fx.lightFlicker;
   G.distT -= dt; if (G.distT <= 0) { G.distT = 25 + Math.random() * 30; sound.distant(pick(['steps', 'steps', 'scrape', 'door', 'whisper'])); }
   for (const dr of world.drips) if (dr.fire) { dr.fire = false; if (Math.hypot(dr.x - P.x, dr.z - P.z) < 16) { for (let i = 0; i < 4; i++) water.add(dr.x, dr.y - 0.1, dr.z, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3, WATER, 1.2); sound.drip(); } }
   if (G.phase === 'play' && G.deck === 1) {
@@ -614,7 +641,7 @@ function step(dt, t) {
     if (st.t <= 0 && Math.hypot(st.x - P.x, st.z - P.z) < 20) { st.t = 0.08; steam.add(st.x, 0.3, st.z, (Math.random() - 0.5) * 0.4, 1.2 + Math.random(), (Math.random() - 0.5) * 0.4, STEAM, 2.2); }
   }
   G.annT = (G.annT ?? 40) - dt;
-  if (G.annT <= 0) { G.annT = 50 + Math.random() * 40; sound.chirp(); G.say('Computer: ' + pick(COMPUTER), 'comp'); }
+  if (G.annT <= 0) { G.annT = 50 + Math.random() * 40; if (G.fx.comms < 2) { sound.chirp(); G.say('Computer: ' + garble(pick(COMPUTER)), 'comp'); } }
   G.clangT = (G.clangT ?? 20) - dt;
   if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
@@ -704,6 +731,123 @@ function updateRope(dt) {
   a.needsUpdate = true; hook.position.copy(ropeEnd); hook.lookAt(_h); hook.rotateX(-Math.PI / 2);
 }
 
+// ---------------- ship systems: repair points, faults, effects ----------------
+let repairPts = [], statusOpen = false, statusT = 0;
+const SHIP = () => G.shipState;
+const BEAM = new THREE.Color(0x8fd8ff);
+const garble = (t) => G.fx.comms ? t.replace(/[a-z]/gi, c => Math.random() < 0.35 ? '▒' : c) : t;
+const repairTime = (r) => SYS[r.sys].repair * (r.main ? 1 : 1.5) * (1 + perk('boots') * 0);
+function nearestRepair(any = false) {
+  let best = null, bd = 1e9;
+  for (const r of repairPts) { const d = Math.hypot(r.x - P.x, r.z - P.z); if (d < r.reach && d < bd && (any || SHIP().status(r.sys) !== 'nominal')) { bd = d; best = r; } }
+  return best;
+}
+function placeRepairPoints(data) {
+  repairPts = []; const rnd = mulberry32(G.runSeed * 7 + G.deck * 131);
+  const faces = world.wallFaces.filter(f => { const ox = f.tx + f.dx, oy = f.ty + f.dy; return !f.deco && data.grid[oy]?.[ox] === 0 && !world.isTube(ox, oy) && !(ox === data.exit[0] && oy === data.exit[1]); });
+  for (let i = faces.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [faces[i], faces[j]] = [faces[j], faces[i]]; }
+  const taken = [], deckCode = String(G.shipDeck + 1).padStart(2, '0');
+  const takeFace = (dept) => {
+    const zone = DEPT[dept].zone, ok = (f, gap) => taken.every(t => Math.hypot(t.px - f.px, t.pz - f.pz) > gap);
+    for (const gap of [7, 4, 1.5]) { const f = faces.find(f => ok(f, gap) && f.room) || faces.find(f => ok(f, gap)); if (f) { taken.push(f); return f; } }
+    return null;
+  };
+  let jn = 0;
+  for (const s of SYSTEMS) {
+    let pt = null;
+    if (s.host === 'lift') pt = { x: world.liftPos.x, z: world.liftPos.z, main: true, reach: 2.8, y: 2.2, where: 'tubelift controls' };
+    else if (s.host !== 'junction') {
+      const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : [kind];
+      const pr = data.props.find(p => kinds.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !repairPts.some(r => r.tx === p.tx && r.ty === p.ty));
+      if (pr) { const [x, z] = world.center(pr.tx, pr.ty); pt = { x, z, tx: pr.tx, ty: pr.ty, main: true, reach: 2.2, y: pr.kind === 'warpcore' ? 2.0 : 1.6, where: HOST_LABEL[s.host] }; }
+    }
+    if (!pt) {
+      const f = takeFace(s.dept); if (!f) continue; jn++;
+      const j = makeJunction(s, `JCT ${deckCode}-${String(jn).padStart(2, '0')}`, DEPT[s.dept].name, DIVISION[DEPT[s.dept].division].color);
+      j.group.position.set(f.px + f.dx * 0.01, 0.85, f.pz + f.dy * 0.01); j.group.rotation.y = f.ry; scene.add(j.group);
+      j.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
+      pt = { x: f.px + f.dx * 0.55, z: f.pz + f.dy * 0.55, main: false, reach: 1.6, obj: j.group, lamp: j.lamp, y: 1.25, px: f.px, pz: f.pz, where: `junction ${deckCode}-${String(jn).padStart(2, '0')}` };
+    }
+    if (!pt.obj) { pt.obj = makeBeacon(); pt.obj.position.set(pt.x, pt.y + 0.3, pt.z); scene.add(pt.obj); }
+    pt.sys = s.id; repairPts.push(pt);
+  }
+  // coolant vents for when the plumbing goes
+  G.vents = []; for (let i = 0; i < 5; i++) { const t = data.openTiles[Math.floor(rnd() * data.openTiles.length)]; if (data.grid[t[1]][t[0]] === 0 && !world.isTube(t[0], t[1])) { const [x, z] = world.center(t[0], t[1]); G.vents.push({ x: x + (rnd() - 0.5), z: z + (rnd() - 0.5), t: rnd() }); } }
+}
+function onShipEvent(ev) {
+  if (ev.quiet || !world || G.phase !== 'play') return;
+  G.fx = SHIP().effects();
+  const r = repairPts.find(r => r.sys === ev.id);
+  if (ev.type === 'fault') {
+    const dist = r ? Math.round(Math.hypot(r.x - P.x, r.z - P.z)) : null;
+    if (G.fx.comms < 2 || ev.id === 'comms') G.say(garble(`Computer: ${ev.name} ${ev.status === 'offline' ? 'OFFLINE' : 'failing'} — ${ev.part}.`) + (r ? ` Repair at ${r.where}${dist != null ? ` (${dist} m)` : ''}.` : ''), 'warn');
+    sound.zap(); sound.chirp(); P.shake = Math.max(P.shake, 0.15);
+    if (r) for (let i = 0; i < 30; i++) sparks.add(r.x, r.y, r.z, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, SPARK, 0.6);
+    if (ev.id === 'eps' || ev.id === 'reactor') { G.blackT = Math.min(G.blackT, 0.5); sound.powerDown(); }
+    if (ev.id === 'emh' && ev.status === 'offline') for (const e of ents) if (e.kind === 'emh') e.mesh.visible = false;
+  } else if (ev.type === 'repair') {
+    G.say(`${ev.name} restored.`, 'good'); if (ev.id === 'reactor' || ev.id === 'eps') sound.powerUp(); else sound.ding();
+    if (ev.id === 'emh') for (const e of ents) if (e.kind === 'emh') e.mesh.visible = true;
+  }
+  updateFaultHud();
+}
+function updateShipSystems(dt, tension) {
+  const S = SHIP(); S.tick(dt, { deckTime: G.deckTime, tension, deck: G.deck }); G.fx = S.effects();
+  const t = performance.now() / 1000;
+  // repair: hold E at a faulted point. Noisy — whatever is hunting you will hear it.
+  const rp = nearestRepair();
+  if (rp && keys.KeyE && !(P.clung > 0) && P.grounded) {
+    G.repairT += dt; noiseNow = Math.max(noiseNow, 9);
+    G.repSparkT = (G.repSparkT || 0) - dt; if (G.repSparkT <= 0) { G.repSparkT = 0.35; for (let i = 0; i < 6; i++) sparks.add(rp.x, rp.y, rp.z, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, SPARK, 0.4); sound.zap(); }
+    if (G.repairT >= repairTime(rp)) { G.repairT = 0; S.repair(rp.sys); }
+  } else G.repairT = rp ? Math.max(0, G.repairT - dt * 0.3) : 0;
+  $('repbar').style.opacity = G.repairT > 0 && rp ? 1 : 0; if (rp) $('repbar').firstElementChild.style.width = Math.min(100, G.repairT / repairTime(rp) * 100) + '%';
+  // faulted hardware sparks, steams and blinks
+  for (const r of repairPts) {
+    const st = S.status(r.sys); if (r.lamp) setLamp(r.lamp, st, t);
+    if (!r.lamp) { r.obj.visible = st !== 'nominal'; r.obj.rotation.y = t * 2; r.obj.material.color.set(st === 'offline' ? 0xff3020 : 0xffa020); }
+    if (st === 'nominal') continue;
+    r.fxT = (r.fxT || Math.random() * 2) - dt;
+    if (r.fxT <= 0) { r.fxT = (st === 'offline' ? 1.2 : 2.8) + Math.random() * 2; const d = Math.hypot(r.x - P.x, r.z - P.z); if (d < 24) { const ox = r.px !== undefined ? r.px : r.x, oz = r.pz !== undefined ? r.pz : r.z; for (let i = 0; i < 10; i++) sparks.add(ox, r.y, oz, (Math.random() - 0.5) * 2.5, 0.5 + Math.random() * 2, (Math.random() - 0.5) * 2.5, SPARK, 0.5); if (d < 12) sound.zap(); } }
+  }
+  // coolant: steam from the junction (degraded) and scalding corridor vents (offline)
+  if (G.fx.steam) {
+    const cr = repairPts.find(r => r.sys === 'coolant');
+    for (const v of [...(cr ? [{ x: cr.x, z: cr.z, t: 0 }] : []), ...(G.fx.steam > 1 ? G.vents : [])]) { if (Math.hypot(v.x - P.x, v.z - P.z) < 20 && Math.random() < dt * 14) steam.add(v.x, 0.3, v.z, (Math.random() - 0.5) * 0.4, 1.4 + Math.random(), (Math.random() - 0.5) * 0.4, STEAM, 2.2); }
+    if (G.fx.steam > 1) for (const v of G.vents) if (Math.hypot(v.x - P.x, v.z - P.z) < 0.9 && G.phase === 'play') { G.hp -= 9 * dt; P.shake = Math.max(P.shake, 0.1); if (Math.random() < dt * 3) { flash('#fff', 0.15); G.say('Scalding steam!', 'warn'); } if (G.hp <= 0) return die({ name: 'Scalding steam', roar: 0 }, 'Boiled alive in a coolant leak. The plumbers were the real heroes.'); }
+  }
+  // gravity
+  P.gMul = G.fx.gravity;
+  // life support: thin air, then suffocation
+  if (G.fx.suffocate && G.phase === 'play') { G.hp -= G.fx.suffocate * dt; G.co2T = (G.co2T || 0) - dt; if (G.co2T <= 0) { G.co2T = 9; sound.breath(0.16); G.say('CO₂ levels critical — repair life support!', 'warn'); } updateHUD(); if (G.hp <= 0) return die({ name: 'Suffocation', roar: 0 }, 'The air ran out before the hostiles did.'); }
+  // helm: the deck lurches; dampers decide how hard
+  if (G.fx.lurchEvery) { G.lurchT -= dt; if (G.lurchT <= 0) { G.lurchT = G.fx.lurchEvery * (0.6 + Math.random() * 0.8); const a = Math.random() * 6.28, k = 3.2 * G.fx.lurchMul; P.kbx += Math.cos(a) * k; P.kbz += Math.sin(a) * k; P.shake = Math.max(P.shake, 0.35 * G.fx.lurchMul); sound.clang(0.3); sound.thud(0.35); noiseNow = Math.max(noiseNow, 6); if (G.fx.lurchHurts) { G.hp -= 4; flash('#c00', 0.25); } G.say('The deck lurches violently.', 'warn'); } }
+  statusT -= dt; if (statusOpen && statusT <= 0) { statusT = 0.5; renderStatus(); }
+  G.faultHudT = (G.faultHudT || 0) - dt; if (G.faultHudT <= 0) { G.faultHudT = 0.5; updateFaultHud(); }
+}
+function updateFaultHud() {
+  if (!G.shipState || !world) return;
+  const rows = G.shipState.faulted().map(s => { const st = G.shipState.status(s.id), r = repairPts.find(r => r.sys === s.id), d = r ? Math.round(Math.hypot(r.x - P.x, r.z - P.z)) : null; return `<div class="${st}">⚠ ${s.name.toUpperCase()} ${st === 'offline' ? 'OFFLINE' : 'DEGRADED'}${d != null ? ` · ${d} m` : ''}</div>`; });
+  $('faults').innerHTML = rows.join('');
+}
+function showStatus(on) { statusOpen = on; $('shipstatus').style.display = on ? 'block' : 'none'; if (on) renderStatus(); }
+function renderStatus() {
+  const S = G.shipState, R = G.roster, here = {};
+  for (const r of repairPts) here[r.sys] = `On this deck: ${r.where} · ${Math.round(Math.hypot(r.x - P.x, r.z - P.z))} m`;
+  const zone = zoneOf(G.shipDeck / Math.max(1, G.ship.decks - 1)).label;
+  const depts = DEPARTMENTS.map(d => {
+    const crew = R.people.filter(p => p.dept === d.id), c = (st) => crew.filter(p => p.status === st).length;
+    const sys = SYSTEMS.filter(s => s.dept === d.id).map(s => { const st = S.status(s.id); return `<div class="sr ${st}"><span>${s.name}</span>${statusPill(st)}${st !== 'nominal' ? `<em>${st === 'offline' ? s.eff.off : s.eff.deg}</em><small>${here[s.id] || ''}</small>` : ''}</div>`; }).join('');
+    return `<div class="sd" style="--u:#${DIVISION[d.division].color.toString(16).padStart(6, '0')}"><h4>${d.name}<span>${crew.length} crew · ${c('alive') + c('evacuated')} found alive · ${c('dead')} dead · ${crew.length - c('alive') - c('evacuated') - c('dead')} unaccounted for</span></h4>${sys}</div>`;
+  }).join('');
+  $('shipstatus').innerHTML = `<div class="ssh"><b>${G.ship.name}</b> ${G.ship.reg} · ${G.ship.cls}-class · deck ${String(G.shipDeck + 1).padStart(2, '0')} of ${G.ship.decks} · ${zone}<span>Hold TAB · faults marked ▲ on the scan-o-matic · hold E at the hardware to repair (noisy)</span></div><div class="ssg">${depts}</div>`;
+}
+function showCompany() {
+  const here = {}; for (const r of repairPts) here[r.sys] = `On this deck: ${r.where}`;
+  $('companybody').innerHTML = `<h3 class="ch">Chain of command — ${G.ship.name}</h3>${renderOrgChart(G.roster)}<h3 class="ch">Departments &amp; loadout</h3>${renderLoadout(G.shipState, G.roster, { here })}`;
+  showScreen('company');
+}
+
 let slow = 0;
 function dyingStep(dt, t) {
   G.dyingT += dt; world.update(dt, t); blood.update(dt); sparks.update(dt); steam.update(dt);
@@ -729,6 +873,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

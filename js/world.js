@@ -762,9 +762,9 @@ export class World {
         const roomT = d.room[y + dy][x + dx];
         const roll = rndv();
         stripes.push({ px, pz, ry });
-        this.wallFaces.push({ tx: x, ty: y, dx, dy, px, pz, ry, room: roomT });
-        if (roll < 0.18) lcars.push({ px, pz, ry, n: 1 + Math.floor(rndv() * 3) });
-        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) windows.push({ px, pz, ry });
+        const face = { tx: x, ty: y, dx, dy, px, pz, ry, room: roomT }; this.wallFaces.push(face);   // .deco = something already hangs here
+        if (roll < 0.18) { lcars.push({ px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
+        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push({ px, pz, ry }); face.deco = true; }
       }
       const sg = new THREE.PlaneGeometry(TS, 0.14);
       const sm = new THREE.InstancedMesh(sg, new THREE.MeshBasicMaterial({ color: 0xffffff }), stripes.length || 1);
@@ -940,7 +940,7 @@ export class World {
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
     });
     const doors = nums.map(() => []);
-    for (const f of this.wallFaces) if (!f.room && rnd() < 0.13) doors[Math.floor(rnd() * nums.length)].push(f);
+    for (const f of this.wallFaces) if (!f.room && rnd() < 0.13) { doors[Math.floor(rnd() * nums.length)].push(f); f.deco = true; }
     doors.forEach((list, k) => {
       if (!list.length) return;
       const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.15, 2.3), new THREE.MeshStandardMaterial({ map: doorTex[k], roughness: 0.5, metalness: 0.3 }), list.length);
@@ -951,7 +951,7 @@ export class World {
     const posters = ['REPORT ALL\nREPTILIAN\nACTIVITY', 'NO RUNNING\nIN\nCORRIDORS', 'ARE YOU\nSLEEPING\nENOUGH?', 'THE GRONK\nIS NOT\nYOUR FRIEND', 'WASH YOUR\nHANDS', 'SAFETY\nFIRST', 'STAY CALM.\nSTAY QUIET.', 'IF YOU SEE\nSOMETHING,\nSAY NOTHING'];
     const free = this.wallFaces.filter(f => !f.room);
     for (let i = 0; i < Math.min(10, free.length); i++) {
-      const f = free[Math.floor(rnd() * free.length)], txt = posters[Math.floor(rnd() * posters.length)];
+      const f = free[Math.floor(rnd() * free.length)], txt = posters[Math.floor(rnd() * posters.length)]; f.deco = true;
       const c = document.createElement('canvas'); c.width = 256; c.height = 340; const x = c.getContext('2d');
       x.fillStyle = ['#e8e0c8', '#c9d8e0', '#e0c9c9'][Math.floor(rnd() * 3)]; x.fillRect(0, 0, 256, 340);
       x.strokeStyle = '#' + new THREE.Color(ship.accent).getHexString(); x.lineWidth = 12; x.strokeRect(6, 6, 244, 328);
@@ -1020,7 +1020,8 @@ export class World {
     }
     if (this.steadyMat) {
       const a = this.alertAmt, pulse = 0.55 + 0.45 * Math.sin(t * 6);
-      this.steadyMat.color.copy(this.lightCol).lerp(this.alertCol, a * pulse).multiplyScalar((1 - a * 0.35) * this.powerAmt);
+      const lf = this.lightFault || 0, dip = lf && (Math.sin(t * 13.1) + Math.sin(t * 5.3) + Math.sin(t * 29.7)) > 2.2 - lf * 0.9 ? (lf > 1 ? 0.04 : 0.3) : 1;   // lighting grid faults
+      this.steadyMat.color.copy(this.lightCol).lerp(this.alertCol, a * pulse).multiplyScalar((1 - a * 0.35) * this.powerAmt * dip * (lf > 1 ? 0.45 : 1));
     }
     if (this.liftOpen) {
       const L = this.lift.getObjectByName('doorL'), R = this.lift.getObjectByName('doorR');

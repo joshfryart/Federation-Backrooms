@@ -179,14 +179,15 @@ export function liveFace(H, t, seed = 0) {
 }
 
 // ---- ready-made NPCs (return null when the models failed to load so callers can fall back) ----
-export function makeSurvivor(rnd = Math.random) {
-  const g = makeHuman({ rnd, rank: Math.floor(rnd() * rnd() * 6.99) }); if (!g) return null; const H = g.userData.human;
+// person (optional): a member of the ship's complement from js/crew.js — { body, rank, uniform }
+export function makeSurvivor(rnd = Math.random, person = null) {
+  const g = makeHuman(person ? { rnd, kind: person.body, rank: person.rank, uniform: person.uniform } : { rnd, rank: Math.floor(rnd() * rnd() * 6.99) }); if (!g) return null; const H = g.userData.human;
   const pose = pickOf(['idle', 'idle', 'idle_talking', 'crouch_idle', 'sitting_idle', 'idle_torch'], rnd);
   H.play(pose, { fade: 0 }); H.standing = pose.startsWith('idle'); H.face({ LeftInnerBrowUp: 0.8, RightInnerBrowUp: 0.8 });
   return g;
 }
-export function makeCorpse(rnd = Math.random) {
-  const g = makeHuman({ rnd, bloody: 1, pale: 0.5, shadow: false, rank: Math.floor(rnd() * 4), kind: pickOf([...CREW_KINDS, 'crew_heavy'], rnd) }); if (!g) return null; const H = g.userData.human;
+export function makeCorpse(rnd = Math.random, person = null) {
+  const g = makeHuman({ rnd, bloody: 1, pale: 0.5, shadow: false, rank: person ? person.rank : Math.floor(rnd() * 4), kind: person ? person.body : pickOf([...CREW_KINDS, 'crew_heavy'], rnd), ...(person ? { uniform: person.uniform } : {}) }); if (!g) return null; const H = g.userData.human;
   H.pose(pickOf(['death01', 'death01', 'sitting_idle'], rnd) === 'death01' ? 'death01' : 'death01', 0.86 + rnd() * 0.14);
   H.face({ JawDrop: 0.3 + rnd() * 0.5, LeftUpperLidClosed: rnd(), RightUpperLidClosed: rnd() }); H.mixer.update(0);
   g.rotation.y = rnd() * 6.28; return g;

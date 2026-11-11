@@ -175,7 +175,7 @@ export function movePlayer(dt, P, world, input, api) {
 
   // ---------------- shared integration + collision ----------------
   function integrate() {
-    if (!P.grounded) P.vy -= (P.mode === 'wallrun' ? 0 : P.mode === 'grapple' ? 0 : M.gravity) * dt;
+    if (!P.grounded) P.vy -= (P.mode === 'wallrun' ? 0 : P.mode === 'grapple' ? 0 : M.gravity * (P.gMul || 1)) * dt;
     P.kbx *= Math.max(0, 1 - dt * 5); P.kbz *= Math.max(0, 1 - dt * 5);
     const steps = Math.max(1, Math.ceil(Math.hypot(P.vx + P.kbx, P.vz + P.kbz) * dt / 0.25));
     for (let i = 0; i < steps; i++) { P.x += (P.vx + P.kbx) * dt / steps; P.z += (P.vz + P.kbz) * dt / steps; world.resolve(P, M.radius); }

@@ -54,6 +54,7 @@ const run = await page.evaluate(async () => {
     for (const e of g.gorns) kinds.add(e.kind);
     for (const c of g.world.d.chips) { const [x, z] = g.world.center(c[0], c[1]); g.P.x = x; g.P.z = z; tick(4); }
     const need = g.world.d.chips.length; if (g.G.chips < need) return { err: `deck ${deck}: chips ${g.G.chips}/${need}`, log };
+    if (g.shipState.status('lifts') === 'offline') g.shipState.repair('lifts');
     for (let k = 0; k < 4 && g.G.phase === 'play'; k++) { g.P.clung = 0; g.P.kbx = g.P.kbz = 0; g.P.x = g.world.liftPos.x; g.P.z = g.world.liftPos.z; tick(2); key('KeyE'); tick(1); }
     await new Promise(r => setTimeout(r, 2600)); tick(4);
     if (g.G.phase === 'perk') { key('Digit1'); await new Promise(r => setTimeout(r, 300)); }
@@ -90,9 +91,16 @@ const park = await page.evaluate(async () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })); let ducked = false, minD = 1e9, topY = 0;
     for (let i = 0; i < 60 * 12; i++) { tick(1); g.G.phase = 'play'; P.clung = 0; if (tw.isTube(...tw.tile(P.x, P.z)) && P.crouch) ducked = true; topY = Math.max(topY, P.y); minD = Math.min(minD, Math.hypot(P.x - cb[0], P.z - cb[1])); }
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })); r.tube = { len: t.tiles.length, ladder: t.ladder, ducked, climbed: +topY.toFixed(2), reached: minD < 0.8 && topY > 1.6 }; }
+  // ship systems: break life support, walk to its repair point on this deck, hold E until it is fixed
+  { const S = g.shipState; for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; reset(); g.G.hp = 100; g.G.phase = 'play';
+    S.damage('life', 0.9); tick(2); const fx = g.G.fx; const rp = g.repairPts.find(p => p.sys === 'life');
+    r.sys = { status: S.status('life'), suffocate: fx.suffocate, points: g.repairPts.length, junctions: g.repairPts.filter(p => !p.main).length };
+    if (rp) { P.x = rp.x; P.z = rp.z; const hp0 = g.G.hp; window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })); let i = 0; for (; i < 60 * 15 && S.status('life') !== 'nominal'; i++) { g.G.phase = 'play'; tick(1); } window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
+      r.sys.repaired = S.status('life') === 'nominal'; r.sys.secs = +(i / 60).toFixed(1); r.sys.hpLost = +(hp0 - g.G.hp).toFixed(1); }
+    r.sys.roster = g.roster.people.length; r.sys.ship = g.G.ship.name; }
   return r;
 });
-console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)))) fail('parkour');
+console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

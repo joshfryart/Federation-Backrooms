@@ -31,6 +31,21 @@
   #phaser { bottom:16px; right:16px; text-align:right; }
   #phaser .cells span { display:inline-block; width:14px; height:22px; margin-left:4px; background:#3cf; border-radius:2px; box-shadow:0 0 8px #3cf; }
   #phaser .cells span.off { background:#234; box-shadow:none; }
+  #faults { top:238px; right:14px; text-align:right; font-size:11px; line-height:1.6; letter-spacing:.08em; }
+  #faults .degraded { color:#ffb347; } #faults .offline { color:#ff5a4a; animation: fblink 1s steps(2) infinite; }
+  @keyframes fblink { 50% { opacity:.45 } }
+  #repbar { left:50%; top:58%; width:220px; height:6px; margin-left:-110px; background:rgba(255,255,255,.15); border-radius:3px; opacity:0; }
+  #repbar i { display:block; height:100%; width:0; background:#ffb347; border-radius:3px; box-shadow:0 0 8px #ffb347; }
+  #shipstatus { z-index:8; background:rgba(3,5,10,.86); padding:22px 26px; overflow:hidden; font-size:12px; text-transform:none; }
+  #shipstatus .ssh { font-size:14px; letter-spacing:.1em; margin-bottom:12px; } #shipstatus .ssh b { color:var(--lc1); font-size:18px; } #shipstatus .ssh span { display:block; font-size:11px; opacity:.55; margin-top:3px; }
+  #shipstatus .ssg { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:10px; }
+  #shipstatus .sd { background:rgba(13,18,32,.9); border-left:4px solid var(--u); border-radius:6px; padding:7px 10px; }
+  #shipstatus h4 { margin:0 0 5px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; } #shipstatus h4 span { display:block; font-size:10px; letter-spacing:.04em; opacity:.5; text-transform:none; font-weight:normal; }
+  #shipstatus .sr { display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:3px 0; border-top:1px solid rgba(255,255,255,.06); }
+  #shipstatus .sr em { grid-column:1/3; font-style:normal; font-size:11px; color:#ffcf99; } #shipstatus .sr small { grid-column:1/3; color:#8fd8ff; font-size:10px; }
+  #shipstatus .sr.offline span { color:#ff7a6a; } #shipstatus .sr.degraded span { color:#ffcf80; }
+  #company .ch { letter-spacing:.2em; text-transform:uppercase; font-weight:300; color:var(--lc4); margin:18px 0 8px; font-size:15px; }
+  #company { font-size:12px; text-transform:none; letter-spacing:normal; }
   #minimap { top:60px; right:14px; width:170px; height:170px; border:2px solid var(--lc3); background:rgba(0,0,10,.55); border-radius:6px; image-rendering:pixelated; }
   #prompt { bottom:34%; left:0; right:0; text-align:center; font-size:15px; color:#ffe9a8; text-shadow:0 0 6px #000; }
   #toast { top:70%; left:0; right:0; text-align:center; font-size:15px; text-shadow:0 0 6px #000, 0 0 2px #000; opacity:0; transition:opacity .4s; padding:0 20px; }
@@ -86,6 +101,9 @@
   <div id="shipname"></div><div id="roomname"></div></div>
 <div class="hud" id="objective"></div>
 <canvas class="hud" id="minimap" width="85" height="85"></canvas>
+<div class="hud" id="faults"></div>
+<div class="hud" id="repbar"><i></i></div>
+<div class="layer" id="shipstatus" style="display:none"></div>
 <div class="hud" id="bars"><div id="lbl">HULL INTEGRITY</div><div class="bar"><i id="hpbar"></i></div><div id="lbl2">STAMINA</div><div class="bar"><i id="stbar"></i></div></div>
 <div class="hud" id="perks"></div>
 <div class="hud" id="phaser"><div id="lbl3">MK-II ZAPPER</div><div class="cells" id="cells"></div></div>
@@ -103,7 +121,7 @@
     <span><b>W A S D</b> move</span><span><b>Shift</b> sprint (loud!)</span>
     <span><b>Space</b> jump · climb · wall-jump</span><span><b>C</b> creep · slide while sprinting</span>
     <span><b>Q / Right click</b> grapple line</span><span><b>Click</b> fire zapper (stuns)</span>
-    <span><b>E</b> interact / board lift</span><span><b>F</b> flashlight · <b>M</b> map</span>
+    <span><b>E</b> interact · <b>hold E</b> repair</span><span><b>Tab</b> ship status · <b>F</b> light · <b>M</b> map</span>
   </div>
   <button class="btn" id="begin">Begin shift</button> <button class="btn" id="credbtn" style="background:var(--lc3)">Credits</button>
   <div id="best"></div>
@@ -116,10 +134,11 @@
 <b>Libraries:</b> three.js (MIT) and addons, meshoptimizer decoder (MIT), fflate (MIT).<br>
 <b>Everything else</b> — levels, the Gronk and other creatures, sci-fi props, sound and code — is procedural / original. Full list: CREDITS.md.<br><br>
 <i>A parody and homage. Not affiliated with any franchise. All names are jokes.</i></p><button class="btn" id="credback">Back</button></div>
-<div class="screen" id="pause"><h2>Paused</h2><p>Click to resume. The hostiles do not pause.</p><button class="btn" id="resume">Resume</button>
+<div class="screen" id="pause"><h2>Paused</h2><p>Click to resume. The hostiles do not pause.</p><button class="btn" id="resume">Resume</button> <button class="btn noresume" id="companybtn" style="background:var(--lc3)">Ship's company</button>
   <div class="settings"><label>Mouse sensitivity <input id="sens" type="range" min="0.3" max="2.5" step="0.05" value="1"></label>
   <label>Volume <input id="vol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
   <label>Graphics <select id="qsel"><option value="high">High (bloom, shadows)</option><option value="low">Performance</option></select></label></div></div>
+<div class="screen noresume" id="company" style="justify-content:flex-start;overflow:auto;text-align:left;align-items:stretch"><div style="max-width:1200px;margin:0 auto;width:100%"><button class="btn" id="companyback">Back</button><div id="companybody"></div></div></div>
 <div class="screen" id="perkscreen"><h2>Deck cleared</h2><p id="perkinfo">Choose a requisition for the next deck.</p><div class="cards" id="cards"></div></div>
 <div class="screen" id="dead"><h1><b>Lost</b></h1><h2 id="deathline"></h2><p id="stats"></p><button class="btn" id="again">New run</button></div>
 <div class="screen" id="win"><h1>You <b>escaped</b></h1><h2>Escape pod away</h2><p id="winstats"></p><button class="btn" id="cont">Keep going (endless)</button> <button class="btn" id="again2">New run</button></div>
