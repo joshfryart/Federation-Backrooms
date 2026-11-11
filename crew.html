@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>Ship's company — Starfarers: The Backdecks</title>
+<style>body{margin:0;background:#070a12;color:#fff;font-family:Arial;padding:18px;font-size:13px}h1{font-weight:200;letter-spacing:.3em;font-size:20px;text-transform:uppercase;margin:0 0 4px}
+h2{font-weight:300;letter-spacing:.2em;text-transform:uppercase;font-size:14px;color:#ffcc99;margin:22px 0 8px}p{opacity:.65;max-width:980px;line-height:1.5}
+nav a{color:#9cf;margin-right:10px;text-decoration:none;font-size:12px}nav a.on{color:#fff;font-weight:bold}canvas{width:100%;max-width:960px;display:block;background:#0d1220;border-radius:8px}
+.fx{font-family:monospace;font-size:11px;background:#0d1220;border:1px solid #232b40;border-radius:8px;padding:8px;white-space:pre-wrap;max-width:960px}</style>
+<h1 id="t"></h1><nav id="nav"></nav>
+<p>Every department, its people and chain of command, and its full loadout: which systems it runs, the parts in each, which deck the main hardware sits on, how it is reached on other decks (maintenance junctions) and what the player feels when it is degraded or offline. The game's fault director breaks these systems over time; the player repairs them by holding E at the hardware. Use Break / Repair to try it — the live effects block shows exactly what the game reads.</p>
+<canvas id="sch" width="960" height="330"></canvas>
+<h2>Chain of command</h2><div id="org"></div>
+<h2>Departments &amp; loadout</h2><div id="load"></div>
+<h2>Live effects (ShipState.effects())</h2><div class="fx" id="fx"></div>
+<script type="module">
+import { SHIPS, drawSchematic } from './js/ships.js';
+import { makeComplement, ShipState, renderOrgChart, renderLoadout, STATUS_CSS } from './js/crew.js';
+const q = new URLSearchParams(location.search), i = Math.max(0, Math.min(SHIPS.length - 1, +(q.get('ship') || 0))), seed = +(q.get('seed') || 1), ship = SHIPS[i];
+document.head.insertAdjacentHTML('beforeend', `<style>${STATUS_CSS}</style>`);
+document.getElementById('t').textContent = `${ship.name} — ship's company`;
+document.getElementById('nav').innerHTML = SHIPS.map((s, k) => `<a class="${k === i ? 'on' : ''}" href="?ship=${k}&seed=${seed}">${s.province}</a>`).join('');
+const roster = makeComplement(ship, seed), state = new ShipState(ship, seed);
+drawSchematic(document.getElementById('sch'), ship, 0);
+document.getElementById('org').innerHTML = renderOrgChart(roster);
+const draw = () => { document.getElementById('load').innerHTML = renderLoadout(state, roster, { buttons: true }); document.getElementById('fx').textContent = JSON.stringify(state.effects(), null, 1).replace(/[{}"]/g, '').replace(/,\n/g, '\n'); };
+document.addEventListener('click', (e) => { const b = e.target.dataset; if (b.break) { state.damage(b.break, 0.45); draw(); } if (b.fix) { state.repair(b.fix); draw(); } });
+draw(); window.__ready = true;
+</script>

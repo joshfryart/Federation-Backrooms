@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>Fleet schematics — Starfarers: The Backdecks</title>
+<style>body{margin:0;background:#070a12;color:#fff;font-family:Arial;padding:18px}h1{font-weight:200;letter-spacing:.3em;font-size:20px;text-transform:uppercase}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:14px}.ship{background:#0d1220;border:1px solid #232b40;border-radius:10px;padding:10px}
+canvas{width:100%;display:block}input{width:100%}p{opacity:.6;font-size:13px;max-width:900px;line-height:1.5}</style>
+<h1>United Starfarers' Fleet — provincial squadron</h1>
+<p>Five original hull classes, two ships each. The lit deck in the profile is the deck whose plan is drawn on the right; that plan is the outline the level generator carves the maze into. Drag a slider to step through a ship's decks.</p>
+<div class="grid" id="g"></div>
+<script type="module">
+import { SHIPS, drawSchematic } from './js/ships.js';
+const q = new URLSearchParams(location.search), fixed = q.get('deck');
+for (const s of SHIPS) {
+  const d = document.createElement('div'); d.className = 'ship'; const c = document.createElement('canvas'); c.width = 960; c.height = 380; const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = s.decks - 1; r.value = fixed !== null ? Math.min(s.decks - 1, +fixed) : Math.floor(s.decks / 2);
+  const draw = () => drawSchematic(c, s, +r.value); r.oninput = draw; draw(); d.append(c, r); document.getElementById('g').append(d);
+}
+window.__ready = true;
+</script>

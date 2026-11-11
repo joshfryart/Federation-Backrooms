@@ -1,0 +1,48 @@
+# Credits & Licenses
+
+**Starfarers: The Backdecks** is a parody/homage project. It is not affiliated with, endorsed by, or connected to any
+television or film franchise; all ship, species and technology names are original jokes.
+
+Every third-party asset below is **CC0 1.0** (public domain dedication) unless noted. Credit is given with thanks.
+Keep this file and the in-game Credits screen (`index.html`) in sync when adding assets.
+
+## Characters
+
+| File (`assets/models/`) | Used for | Origin |
+|---|---|---|
+| `crew_m.glb`, `crew_f.glb`, `crew_f2.glb`, `crew_heavy.glb` | Crew survivors, corpses, Space-Madness Crewmen, Slimeling impostors, Mr. Grinsworth, medical hologram | **MakeHuman** (makehumancommunity.org) hm08 base mesh, face pose units, eyes, eyelashes, teeth, tongue, hair (short02, ponytail01, long01, afro01), eyebrows and clothes (casualsuit, sportsuit, worksuit, shoes) — CC0. Assembled and exported by **dramatis3d** (Tonio Loewald, https://github.com/tonioloewald/dramatis3d, `samples/out/`). Eye texture by Tonio Loewald (CC0). |
+| `suit.glb` | Compliance Drone | "eurasian-male-spacesuit" from the dramatis3d samples — an AI-assisted mesh (reference sheet by Gemini, mesh by Meshy, directed by Tonio Loewald), released by its author as CC0. |
+| `human_anims.glb` | All humanoid animation (idle, talk, walk, jog, sprint, crouch, punch, hit, death, sit, kneel, dance…) | **Quaternius** — Universal Animation Library, Standard (https://quaternius.com/packs/universalanimationlibrary.html) — CC0, via https://github.com/J-Ponzo/gltf-universal-animation-library. The 65-joint skeleton layout is Quaternius' too. |
+
+Notes: the dramatis3d repository's code is Apache-2.0 (its README marks that as still to be confirmed by its owner); the
+sample characters carry per-asset licence records in their glTF `extras`, reproduced above. The body material's default
+tone comes from the Monk Skin Tone Scale (Dr. Ellis Monk / Google, CC BY 4.0); the game replaces skin colours at runtime.
+The models were re-packed (textures resized to WebP, unused face morphs removed, meshopt compression, garment textures
+neutralised so uniforms can be tinted) by `tools/build-characters.mjs`.
+
+## Props (`assets/models/ph_*.glb`)
+
+**Poly Haven** (https://polyhaven.com) — CC0: `old_military_crate`, `barrel_03`, `potted_plant_01`, `utility_box_01`,
+`modern_arm_chair_01`. Re-packed by `tools/build-props.mjs` (512 px WebP textures, simplified, meshopt).
+
+## Surface textures (`assets/textures/`)
+
+**ambientCG** (https://ambientcg.com, Lennart Demes) — CC0: `MetalPlates008` (bulkheads), `DiamondPlate008C` (deck plating),
+`Carpet016` (corridor carpet), `Tiles141` (sickbay / mess floor), `OfficeCeiling006` (ceiling). Converted by
+`tools/build-textures.mjs` (albedo neutralised to grey so ships can tint it).
+
+## Environment lighting
+- HDRI **"Lobby"** — **Poly Haven** (CC0), resized/converted to EXR by the `@pmndrs/assets` package.
+
+## Code & libraries
+- **three.js** r187 (MIT) — https://threejs.org — including addons GLTFLoader, EXRLoader, EffectComposer, UnrealBloomPass,
+  SkeletonUtils, BufferGeometryUtils, RoundedBoxGeometry.
+- **meshoptimizer decoder** (MIT) — Arseny Kapoulkine.
+- **fflate** (MIT) — 101arrowz.
+- Build-time only (not shipped): glTF-Transform (MIT), sharp (Apache-2.0).
+
+License texts: `assets/licenses/`, `vendor/THREE-LICENSE`.
+
+## Original work
+Level generation, the Gronk, clingers, furbles, items, the zapper, sci-fi props, decals, sound (procedural WebAudio), shaders
+and game code are original to this project.
