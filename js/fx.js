@@ -26,7 +26,7 @@ const FinalShader = {
       c = mix(c, vec3(l), hurt * 0.5 + danger * 0.15);
       float lg = dot(c, vec3(0.299,0.587,0.114));
       c = mix(c * vec3(0.9, 0.98, 1.1), c * vec3(1.07, 1.02, 0.9), smoothstep(0.08, 0.6, lg));
-      c = mix(c, c * c * (3.0 - 2.0 * c), 0.28); c = c * 0.97 + 0.006;
+      vec3 cc = clamp(c, 0.0, 1.0); c = mix(c, cc * cc * (3.0 - 2.0 * cc) + (c - cc), 0.28); c = c * 0.97 + 0.006;   // S-curve on the LDR part only (values are still HDR here)
       c *= 1.0 - smoothstep(0.25, 0.95, r2 * 2.6) * (0.55 + danger * 0.3);
       c.r += danger * 0.08 * (1.0 - r2 * 2.0) + hurt * 0.25;
       c *= 1.0 - 0.012 * sin(vUv.y * res.y * 1.3);

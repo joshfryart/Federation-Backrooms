@@ -35,11 +35,11 @@
   #prompt { bottom:34%; left:0; right:0; text-align:center; font-size:15px; color:#ffe9a8; text-shadow:0 0 6px #000; }
   #toast { top:70%; left:0; right:0; text-align:center; font-size:15px; text-shadow:0 0 6px #000, 0 0 2px #000; opacity:0; transition:opacity .4s; padding:0 20px; }
   #toast.warn { color:#ff7766; } #toast.good { color:#8fffb0; } #toast.npc { color:#ffd69a; }
-  #grap { right:14px; bottom:64px; width:118px; height:5px; background:rgba(255,255,255,.14); border-radius:3px; }
+  #grap { position:fixed; z-index:5; right:16px; bottom:66px; width:118px; height:5px; background:rgba(255,255,255,.14); border-radius:3px; }
   #grap i { display:block; height:100%; width:100%; background:#8fd8ff; border-radius:3px; }
   #grap span { position:absolute; right:0; top:-15px; font-size:10px; letter-spacing:.14em; opacity:.75; white-space:nowrap; }
   #grap.cd i { background:#56707e; } #grap.on i { background:#fff; box-shadow:0 0 8px #8fd8ff; }
-  #speed { opacity:0; pointer-events:none; z-index:3; background:radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 45%, rgba(190,220,255,.16) 78%, rgba(255,255,255,.3) 100%); -webkit-mask-image:repeating-conic-gradient(from 0deg at 50% 50%, #000 0 1.2deg, transparent 1.2deg 4deg); mask-image:repeating-conic-gradient(from 0deg at 50% 50%, #000 0 1.2deg, transparent 1.2deg 4deg); }
+  #speed { opacity:0; pointer-events:none; z-index:3; background:radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 62%, rgba(190,220,255,.1) 85%, rgba(255,255,255,.22) 100%); -webkit-mask-image:repeating-conic-gradient(from 0deg at 50% 50%, #000 0 0.5deg, transparent 0.5deg 5deg); mask-image:repeating-conic-gradient(from 0deg at 50% 50%, #000 0 0.5deg, transparent 0.5deg 5deg); }
   #cross { top:50%; left:50%; width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%; background:rgba(255,255,255,.55); }
   #perks { bottom:52px; left:16px; font-size:11px; opacity:.75; max-width:340px; }
   .screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; background:rgba(2,3,8,.88); text-align:center; padding:20px; z-index:10; }

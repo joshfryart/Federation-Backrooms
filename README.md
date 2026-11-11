@@ -14,7 +14,9 @@ Serve the folder statically (ES modules need http):
 No build step; three.js and its addons are vendored in `vendor/`. Models, textures and the HDRI are in `assets/`.
 
 ## Controls
-WASD move · Shift sprint (loud) · C creep (quiet) · Mouse look · Click/Space fire zapper (stuns) · E interact / shake off a Clingon · F flashlight · M map
+WASD move · Shift sprint (loud) · Space jump / climb props / wall-jump · C creep, or slide while sprinting · Q or right click grapple line · Mouse look · Click fire zapper (stuns) · E interact / shake off a Clingon · F flashlight · M map
+
+Sprint and jump along a bulkhead to wall-run. Slide into man-sized hostiles to trip them. The grapple reels you to walls, ceilings and crate tops.
 
 ## Credits
 Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **MakeHuman**, **dramatis3d** (Tonio Loewald), **Quaternius**, **Poly Haven**, **ambientCG**. Full list and licenses in [CREDITS.md](CREDITS.md).

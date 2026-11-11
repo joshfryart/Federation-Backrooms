@@ -622,7 +622,7 @@ function step(dt, t) {
   const fovT = 75 + Math.max(0, Math.min(1, (speedNow - 3.6) / 6)) * 15 + (P.mode === 'grapple' ? 7 : 0) + (P.mode === 'slide' ? 4 : 0);
   camera.fov += (fovT - camera.fov) * Math.min(1, dt * 5); camera.updateProjectionMatrix();
   $('grap').className = P.mode === 'grapple' ? 'on' : P.grapCd > 0 ? 'cd' : ''; $('grap').firstElementChild.style.width = (100 - Math.min(1, P.grapCd / MOVE.grapCooldown) * 100) + '%';
-  $('speed').style.opacity = Math.max(0, Math.min(0.5, (speedNow - 6) / 8));
+  $('speed').style.opacity = Math.max(0, Math.min(0.6, (speedNow - 7) / 8));
 }
 
 // ---------------- traversal glue: sound, noise, enemies ----------------
