@@ -24,19 +24,20 @@ await page.goto(`http://localhost:${port}/index.html`);
 await page.evaluate(async () => { await __game.ready; __game.setQuality('low'); });
 
 const gen = await page.evaluate(async () => {
-  const { generate } = await import('./js/world.js'); const bad = []; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0;
+  const { generate } = await import('./js/world.js'); const { SHIPS, deckOptions } = await import('./js/ships.js'); const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0;
   for (let deck = 0; deck < 12; deck++) for (let seed = 1; seed <= 25; seed++) {
-    const d = generate(deck, seed * 7919 + deck); n++;
-    const W = d.W, H = d.H, seen = new Uint8Array(W * H), q = [d.start]; seen[d.start[0] + d.start[1] * W] = 1;
+    const ship = SHIPS[(deck + seed) % SHIPS.length], sd = Math.round(Math.min(deck, 7) / 7 * (ship.decks - 1)); const d = generate(deck, seed * 7919 + deck, deckOptions(ship, sd)); n++;
+    const wallCount = d.grid.reduce((a, r) => a + r.reduce((b, c) => b + (c === 1 ? 1 : 0), 0), 0); if (d.W > 2 * Math.min(6 + Math.floor(deck * 0.7), 11) + 1) masked++; minOpen = Math.min(minOpen, d.openTiles.length);
+    const W = d.W, H = d.H, seen = new Uint8Array(W * H), q = [d.start]; if (d.chips.length < 2) bad.push(`deck ${deck} seed ${seed}: only ${d.chips.length} chips`); seen[d.start[0] + d.start[1] * W] = 1;
     while (q.length) { const [x, y] = q.pop(); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + a, ny = y + b; if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[nx + ny * W] || d.grid[ny][nx] !== 0) continue; seen[nx + ny * W] = 1; q.push([nx, ny]); } }
     // the exit tile itself may be a special tile; accept it if a neighbour is reachable
     const ok = ([x, y]) => seen[x + y * W] || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => seen[x + a + (y + b) * W]);
     if (!d.chips.every(ok) || !ok(d.exit)) bad.push(`deck ${deck} seed ${seed}`);
     tubes += d.tubes.length; if (d.tubes.length) withTubes++; ladders += d.tubes.filter(t => t.ladder > 0).length; bigRooms += d.rooms.filter(r => r.big).length;
   }
-  return { n, bad, tubes, withTubes, ladders, bigRooms };
+  return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen };
 });
-console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders), ${gen.bigRooms} large rooms`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
+console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
 
 const run = await page.evaluate(async () => {
   const g = __game, kinds = new Set(); g.newRun(); g.setQuality('low');

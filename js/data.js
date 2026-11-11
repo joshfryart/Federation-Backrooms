@@ -1,21 +1,6 @@
 // Static game data: ships, room types, perks, NPC lines.
 
-export const SHIPS = [
-  { name: 'USF Ambition', reg: 'USF-1702', cls: 'Constipation', wall: 0xb9b2a0, floor: 0x5b6470, light: 0xfff1d6, accent: 0xd9733a, fog: 0x1a1612, fogD: 0.055 },
-  { name: 'USF Ambition-D', reg: 'USF-1702-D', cls: 'Gallimaufry', wall: 0xcbbfa6, floor: 0x6b5a4a, light: 0xffe9c4, accent: 0x6a7fd0, fog: 0x17130f, fogD: 0.05 },
-  { name: 'USF Defiance', reg: 'USF-74205', cls: 'Stubborn', wall: 0x5d6168, floor: 0x2d2f33, light: 0xd8e6ff, accent: 0xc44a3a, fog: 0x0c0e12, fogD: 0.07 },
-  { name: 'USF Wayfarer', reg: 'USF-74656', cls: 'Impudent', wall: 0x9aa4b0, floor: 0x3b4658, light: 0xe6f0ff, accent: 0x4d9fd6, fog: 0x0f1319, fogD: 0.055 },
-  { name: 'USF Exceeding', reg: 'USF-2000', cls: 'Exceeds', wall: 0xb4ad9a, floor: 0x4b4f5a, light: 0xfff0d2, accent: 0xc8a13c, fog: 0x15120d, fogD: 0.05 },
-  { name: 'USF Dependable', reg: 'USF-1864', cls: 'Veranda', wall: 0xa8a597, floor: 0x5a4f4f, light: 0xffe7c2, accent: 0xb34a3a, fog: 0x15110e, fogD: 0.06 },
-  { name: 'USF Ambition-E', reg: 'USF-1702-E', cls: 'Regent', wall: 0x8c8f97, floor: 0x2c3040, light: 0xdbe7ff, accent: 0x8f6fd6, fog: 0x0b0d14, fogD: 0.06 },
-  { name: 'USF Sacramento', reg: 'USF-75567', cls: 'Nevada', wall: 0xd7d2c4, floor: 0x7a8794, light: 0xf4f8ff, accent: 0xe08a2f, fog: 0x14161a, fogD: 0.045 },
-  { name: 'USF Rediscovery', reg: 'USF-1031', cls: 'Crossfade', wall: 0x6d7681, floor: 0x20262e, light: 0xcfe2ff, accent: 0x38c8c0, fog: 0x080b10, fogD: 0.065 },
-  { name: 'USF Promethium', reg: 'USF-59650', cls: 'Proton', wall: 0x808488, floor: 0x1f2125, light: 0xe0e6f0, accent: 0xd64a4a, fog: 0x0a0b0d, fogD: 0.07 },
-  { name: 'USF Pasteurized', reg: 'USF-58925', cls: 'Novelty', wall: 0xc2c9cf, floor: 0x587a8c, light: 0xeef8ff, accent: 0x3fae7a, fog: 0x101618, fogD: 0.05 },
-  { name: 'USF Gristle', reg: 'USF-638', cls: 'Overth', wall: 0xb1b6b0, floor: 0x4b5a4d, light: 0xf6f3dc, accent: 0x3a8ad0, fog: 0x12150f, fogD: 0.055 },
-  { name: 'USF Protocol', reg: 'USF-76884', cls: 'Prototype', wall: 0xdad2c0, floor: 0x7a5aa0, light: 0xfff6e0, accent: 0xf0a030, fog: 0x161216, fogD: 0.048 },
-  { name: 'USF Sarasota', reg: 'USF-31911', cls: 'Akimbo', wall: 0x9d9a94, floor: 0x3a3f4a, light: 0xffeed8, accent: 0xc83e3e, fog: 0x100f0f, fogD: 0.06 },
-];
+export { SHIPS } from './ships.js';   // ten province-named ships in five hull classes
 
 // Room types. weight = spawn weight, size = [minTiles, maxTiles]
 export const ROOMS = {

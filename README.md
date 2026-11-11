@@ -1,7 +1,7 @@
 # Starfarers: The Backdecks
 
 A liminal-space horror roguelike built with three.js (a parody/homage — see [CREDITS.md](CREDITS.md)).
-You are alone aboard an endless series of United Starfarers' Fleet vessels, hunted by something. Find the logic chips, power the tubelift, descend, pick a requisition, repeat. Permadeath.
+You are alone aboard the United Starfarers' Fleet provincial squadron — ten ships named for the Canadian provinces, in five hull classes (see `ships.html` for the schematics) — hunted by something. Find the logic chips, power the tubelift, descend, pick a requisition, repeat. Permadeath.
 
 ## Threats
 A **Gronk** (reptilian ambusher), a **Compliance Drone** (slow, relentless, adapts to your zapper), **Mr. Grinsworth** (a rogue hologram that only moves when you look away — and walks through walls), **Space-Madness Crewmen** (fast pack hunters), **Clingon Crawlers** (they wait on the ceiling), and **Slimeling** impostors posing as survivors. Each deck rolls a different mix.
@@ -24,6 +24,7 @@ Sprint and jump along a bulkhead to wall-run. Slide into man-sized hostiles to t
 Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **MakeHuman**, **dramatis3d** (Tonio Loewald), **Quaternius**, **Poly Haven**, **ambientCG**. Full list and licenses in [CREDITS.md](CREDITS.md).
 
 ## Art review & tests
+- `ships.html` — fleet schematics (profile + deck plans for all ten ships).
 - `models.html` — model viewer (`?set=crew|enemies|misc|props`, `?clip=<name>`, drag to orbit).
 - `node tools/test.mjs` — headless smoke test (needs Playwright + Chromium): checks the level generator and plays a bot run through every deck.
 - `tools/build-*.mjs` — offline scripts that re-pack the upstream CC0 assets (not needed to run the game).

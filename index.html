@@ -61,6 +61,7 @@
   .settings { margin-top:22px; display:grid; gap:10px; text-align:left; font-size:13px; letter-spacing:.06em; text-transform:uppercase; } .settings label { display:flex; justify-content:space-between; gap:20px; align-items:center; } .settings select { background:#101528; color:#fff; border:1px solid var(--lc3); padding:4px; }
   #toast.comp { color:#8fd8ff; }
   #card { z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; opacity:0; text-transform:uppercase; letter-spacing:.3em; text-shadow:0 0 18px #000; }
+  #card canvas { width:min(640px,86vw); margin-top:14px; letter-spacing:0; background:rgba(6,9,16,.72); border:1px solid rgba(255,255,255,.18); border-radius:10px; padding:8px 10px; }
   #card.show { animation: cardin 4.5s ease-out forwards; }
   #card small { font-size:13px; opacity:.7; } #card b { font-size:clamp(40px,9vw,110px); font-weight:200; letter-spacing:.35em; margin:6px 0; } #card span { font-size:14px; color:var(--lc4); } #card em { margin-top:16px; font-style:normal; color:#8fd8ff; font-size:13px; }
   #card .thr { margin-top:18px; font-size:12px; letter-spacing:.12em; color:#ffb0a0; line-height:1.7; opacity:.9; text-transform:none; }

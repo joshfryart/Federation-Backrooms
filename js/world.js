@@ -144,24 +144,29 @@ export function textures() {
 // ------------------------------------------------------------------
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-export function generate(deck, seed) {
+export function generate(deck, seed, opts = {}) {
   const rnd = mulberry32(seed);
   const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
-  const N = Math.min(6 + Math.floor(deck * 0.7), 11);
+  // opts.inside(u, v): hull outline for this deck (u port..starboard, v bow..stern, both -1..1); opts.weights: room-type weights
+  const N = Math.min(6 + Math.floor(deck * 0.7), 11) + (opts.inside ? 2 : 0);
   const W = 2 * N + 1, H = 2 * N + 1;
   const grid = Array.from({ length: H }, () => new Uint8Array(W).fill(1));
   const room = Array.from({ length: H }, () => Array(W).fill(null));
 
   // maze (iterative DFS)
-  const stack = [[1, 1]]; grid[1][1] = 0;
+  const hull = (x, y) => !opts.inside || opts.inside((x - (W - 1) / 2) / ((W - 3) / 2), (y - (H - 1) / 2) / ((H - 3) / 2));
+  // first maze cell inside the hull, scanning from the bow
+  let s0 = [1, 1]; if (opts.inside) { s0 = null; for (let y = 1; y < H - 1 && !s0; y += 2) for (let x = 1; x < W - 1; x += 2) if (hull(x, y)) { s0 = [x, y]; break; } if (!s0) return generate(deck, seed, { ...opts, inside: null }); }
+  const stack = [s0]; grid[s0[1]][s0[0]] = 0; let cells = 1;
   while (stack.length) {
     const [cx, cy] = stack[stack.length - 1];
     const opts = DIRS.map(([dx, dy]) => [cx + dx * 2, cy + dy * 2, dx, dy])
-      .filter(([nx, ny]) => nx > 0 && ny > 0 && nx < W - 1 && ny < H - 1 && grid[ny][nx] === 1);
+      .filter(([nx, ny]) => nx > 0 && ny > 0 && nx < W - 1 && ny < H - 1 && grid[ny][nx] === 1 && hull(nx, ny));
     if (!opts.length) { stack.pop(); continue; }
     const [nx, ny, dx, dy] = opts[Math.floor(rnd() * opts.length)];
-    grid[cy + dy][cx + dx] = 0; grid[ny][nx] = 0; stack.push([nx, ny]);
+    grid[cy + dy][cx + dx] = 0; grid[ny][nx] = 0; stack.push([nx, ny]); cells++;
   }
+  if (opts.inside && cells < 16) return generate(deck, seed, { ...opts, inside: null });   // hull section too small or split up at this size: fall back to a full deck
   // loops (braid some walls) so the maze isn't a pure tree
   let loops = Math.floor(N * 1.4);
   for (let tries = 0; tries < 300 && loops > 0; tries++) {
@@ -177,12 +182,12 @@ export function generate(deck, seed) {
   // rooms
   const rooms = [];
   const typeBag = [];
-  for (const [k, v] of Object.entries(ROOMS)) for (let i = 0; i < v.weight; i++) typeBag.push(k);
+  for (const [k, v] of Object.entries(ROOMS)) for (let i = 0; i < (opts.weights ? (opts.weights[k] || 0) : v.weight); i++) typeBag.push(k);
   const want = Math.floor(N * 0.9) + 1;
   let bridgeUsed = false, bigRooms = 0;
   for (let tries = 0; tries < 200 && rooms.length < want; tries++) {
     let type = typeBag[Math.floor(rnd() * typeBag.length)];
-    if (type === 'bridge' && (bridgeUsed || deck < 1)) continue;
+    if (type === 'bridge' && (bridgeUsed || (deck < 1 && !opts.weights))) continue;
     const def = ROOMS[type];
     // some rooms come in a large variant (galley, cargo bay, shuttlebay…): at most a couple per deck, and only where the deck is big enough
     const big = def.big && bigRooms < (N >= 9 ? 2 : 1) && W >= 15 && rnd() < def.bigP, sz = big ? def.big : def.size;
@@ -190,6 +195,7 @@ export function generate(deck, seed) {
     if (w >= W - 2 || h >= H - 2) continue;
     const x0 = ri(1, W - 1 - w), y0 = ri(1, H - 1 - h);
     if (rooms.some(r => x0 < r.x + r.w + 1 && x0 + w + 1 > r.x && y0 < r.y + r.h + 1 && y0 + h + 1 > r.y)) continue;
+    if (opts.inside) { let ok = true, touch = false; for (let y = y0; y < y0 + h && ok; y++) for (let x = x0; x < x0 + w; x++) { if (!hull(x, y)) { ok = false; break; } if (grid[y][x] === 0) touch = true; } if (!ok || !touch) continue; }   // whole room inside the hull and joined to the maze
     if (type === 'bridge') bridgeUsed = true; if (big) bigRooms++;
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) { grid[y][x] = 0; room[y][x] = type; }
     rooms.push({ type, x: x0, y: y0, w, h, big: !!big });
@@ -246,7 +252,7 @@ export function generate(deck, seed) {
   {
     const wantT = Math.min(3, 1 + Math.floor(deck / 2)), cands = [];
     for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
-      if (grid[y][x] !== 0 || (x === 1 && y === 1)) continue;
+      if (grid[y][x] !== 0 || (x === s0[0] && y === s0[1])) continue;
       for (const [dx, dy] of [[1, 0], [0, 1]]) {
         let n = 0; while (n < 7 && grid[y + dy * (n + 1)]?.[x + dx * (n + 1)] === 1) n++;
         const ex = x + dx * (n + 1), ey = y + dy * (n + 1);
@@ -258,6 +264,7 @@ export function generate(deck, seed) {
     for (const c of cands.slice(0, 80)) {
       if (tubes.length >= wantT) break;
       const tiles = []; for (let i = 1; i <= c.n; i++) tiles.push([c.x + c.dx * i, c.y + c.dy * i]);
+      if (tiles.some(([tx, ty]) => !hull(tx, ty))) continue;                                                             // never tunnel through open space
       if (tiles.some(([tx, ty]) => [[0, 0], ...DIRS].some(([a, b]) => tubeAxis[(tx + a) + (ty + b) * W]))) continue;   // keep tubes apart
       const dAB = bfsFrom(c.x, c.y)[c.ex + c.ey * W]; if (dAB >= 0 && dAB < (c.n >= 2 ? 8 : 14)) continue;                // not a shortcut
       // longer tubes usually climb: lower run from mouth a, a ladder shaft, then an upper run that opens high in the wall at b
@@ -268,8 +275,8 @@ export function generate(deck, seed) {
   }
 
   // start tile: a normal maze cell near one corner
-  let start = [1, 1];
-  const d0 = bfsFrom(1, 1);
+  let start = s0.slice();
+  const d0 = bfsFrom(s0[0], s0[1]);
   // Any open tile unreachable (blocked off by props)? Turn into walls (neat) so nothing spawns there.
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid[y][x] === 0 && d0[x + y * W] < 0) grid[y][x] = 1;
   const reach = d0;

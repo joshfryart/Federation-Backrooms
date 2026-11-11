@@ -8,6 +8,7 @@ import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmod
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
+import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
 const $ = (id) => document.getElementById(id);
@@ -147,7 +148,8 @@ function loadDeck(n) {
   resetMover(P); rope.visible = hook.visible = false;
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = SHIPS[G.shipOrder[(n - 1) % G.shipOrder.length]];
-  const data = generate(n - 1, G.runSeed + n * 7919);
+  G.shipDeck = shipDeckFor(ship, n, WIN_DECK);
+  const data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck));
   data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25);
   world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
@@ -222,7 +224,8 @@ function spawnThreats(data, n, rnd) {
   if (n >= 2 && ents.some(e => e.fake)) G.threats.push('slimeling');
 }
 function showCard(n, ship, flooded) {
-  const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}<div class="thr">${(G.threats || []).map(t => THREATS[t]).join('<br>')}</div>`;
+  const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg} · ship deck ${String(G.shipDeck + 1).padStart(2, '0')} of ${ship.decks}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}<div class="thr">${(G.threats || []).map(t => THREATS[t]).join('<br>')}</div>`;
+  { const cv = document.createElement('canvas'); cv.width = 640; cv.height = 250; drawSchematic(cv, ship, G.shipDeck); c.insertBefore(cv, c.querySelector('.thr')); }
   c.classList.remove('show'); void c.offsetWidth; c.classList.add('show');
 }
 function placeGore(data, rnd, n) {
