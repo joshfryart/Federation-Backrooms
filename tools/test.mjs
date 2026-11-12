@@ -24,6 +24,8 @@ import { simTests } from './test-sim.mjs';
 await simTests(fail);
 import { dutyTests } from './test-duty.mjs';
 await dutyTests(fail);
+import { socialTests } from './test-social.mjs';   // social tracker + sim/duty hooks (tools/test-social.mjs)
+await socialTests(fail);
 import { gaitTests } from './test-gait.mjs';
 await gaitTests(fail);
 import { movementTests } from './test-movement.mjs';

@@ -61,6 +61,7 @@ export function build() {
       al, ph,
       day: (d.daily_template || []).map(b => [b.from, b.to, b.room, b.spot, b.activity]),
       bark: { alert: d.barks?.alert || [], greet: d.barks?.greeting_player || [], greetHi: d.barks?.greeting_player_higher_rank || [], greetLo: d.barks?.greeting_player_lower_rank || [] },
+      rel: (d.relationships || []).filter(r => r.with_billet && r.kind).map(r => [r.with_billet, r.kind]),   // billet-to-billet attitudes, read by js/social.js
     };
   }
   return { out, problems };

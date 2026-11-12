@@ -8,7 +8,10 @@
 //   sim.where(person)       { deckNo, room, spot, activity, transit }  (deckNo null while riding the lift)
 //   sim.onDeck(deckNo)      [{ person, room, spot, activity, tx, ty }] people standing on that deck right now
 //   sim.setPlayer(p)        the player is not simulated
+//   sim.setSocial(graph)    js/social.js: free-time blocks follow friends and groups (same room instance, same spot, group gatherings),
+//                           spouses share quarters. Deterministic; without a graph the sim behaves exactly as before.
 import { hash, hash01 } from './clock.js';
+import { freeBlock } from './social.js';
 
 const DEAD = new Set(['dead', 'corpse', 'crazed', 'evacuated']);
 export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5;   // real seconds in transit
@@ -22,28 +25,43 @@ export class CrewSim {
   on(ev, fn) { (this.handlers[ev] ||= []).push(fn); return this; }
   _emit(ev, a) { for (const f of this.handlers[ev] || []) f(a); }
   setPlayer(p) { this.player = p; if (p) this.st.delete(p.id); }
+  setSocial(graph) { this.social = graph || null; for (const s of [...this.st.values()]) if (!s.transit) this._init(s.person); return this; }
 
   // The scheduled block for a person right now: { room, spot, activity } or null
   block(p) {
     const ov = this.over.get(p.id); if (ov && (ov.until === undefined || ov.until > this.t)) return { room: ov.room, spot: ov.spot || 'door', activity: ov.activity || 'evacuating' };
-    const day = this.data?.billets?.[p.billet]?.day; if (!day?.length) return null;
-    const h = this.clock.localHour(p), b = day.find(x => h >= x[0] && h < x[1]) || day[day.length - 1];
-    return { room: b[2], spot: b[3], activity: b[4] };
+    const b = this._day(p); if (!b) return null;
+    const out = { room: b[2], spot: b[3], activity: b[4] }, S = this.social;
+    if (!S || !freeBlock(b) || !S.isFree(p, this.clock.hour)) return out;
+    // free time (js/social.js): drop in on a group gathering; else, most of the time, go where your free-time lead goes; else at least
+    // stand at the same furniture as your closest same-watch friend when you are in the same room anyway
+    out.free = true; const hr = this.clock.hour, m = S.meetingFor(p, hr), live = (q) => q && q !== this.player && !DEAD.has(q.status);
+    if (m && this.plan[m.room]?.length) return { room: m.room, spot: m.spot, activity: m.activity, free: true, group: m.group, site: m.site };
+    const L = S.leadOf(p), lp = L !== p.id ? this.roster.people[L] : null;
+    if (live(lp) && lp.id === L && hash01('tag', this.seed, p.id, Math.floor(hr * 2)) < 0.7) { const lb = this._day(lp); if (lb && freeBlock(lb) && lb[2] !== 'quarters' && this.plan[lb[2]]?.length) return { room: lb[2], spot: lb[3], activity: lb[4], free: true, follow: L }; }
+    const c = S.companionOf(p), cp = c != null ? this.roster.people[c] : null;
+    if (live(cp) && cp.id === c) { const cb = this._day(cp); if (cb && cb[2] === out.room && cb[3] !== out.spot && freeBlock(cb)) out.spot = cb[3]; }
+    return out;
   }
+  _day(p) { const day = this.data?.billets?.[p.billet]?.day; if (!day?.length) return null; const h = this.clock.localHour(p); return day.find(x => h >= x[0] && h < x[1]) || day[day.length - 1]; }
   // Which instance of a room type this person uses. Quarters are personal; others prefer the person's own deck, then the nearest.
-  site(p, room, fromDeck = null) {
+  // b = the block (from block()): a group gathering names its own room instance; other free time follows the person's social anchor
+  site(p, room, fromDeck = null, b = null) {
     const list = this.plan[room]; if (!list?.length) { const any = this.plan.stores || this.plan.cargo; return any?.[0] || { deckNo: 1, tx: 0, ty: 0 }; }
-    if (room === 'quarters') return list[hash('quarters', this.seed, p.id) % list.length];
+    if (b?.site && b.room === room) return list.find(s => s.deckNo === b.site.deckNo && s.tx === b.site.tx && s.ty === b.site.ty) || b.site;
+    const S = this.social;
+    if (room === 'quarters') return list[hash('quarters', this.seed, S ? S.quartersOf(p) : p.id) % list.length];   // spouses share quarters
     if (room === 'bridge' || room === 'readyroom') return list[0];
-    const home = fromDeck ?? this._home(p);
-    let best = null, bd = 1e9; for (const s of list) { const d = Math.abs(s.deckNo - home) + hash01('site', this.seed, p.id, s.deckNo, s.tx, s.ty) * 0.9; if (d < bd) { bd = d; best = s; } }
+    let who = p.id, home = fromDeck ?? this._home(p);
+    if (S && b?.free) { who = S.anchorOf(p); const q = this.plan.quarters; home = q?.length ? q[hash('quarters', this.seed, S.quartersOf(who)) % q.length].deckNo : home; }   // friends converge on one instance
+    let best = null, bd = 1e9; for (const s of list) { const d = Math.abs(s.deckNo - home) + hash01('site', this.seed, who, s.deckNo, s.tx, s.ty) * 0.9; if (d < bd) { bd = d; best = s; } }
     return best;
   }
   _home(p) { const s = this.st.get(p.id); return s?.deckNo ?? (this.plan.quarters?.[hash('quarters', this.seed, p.id) % (this.plan.quarters.length || 1)]?.deckNo ?? 1); }
 
   _init(p) {
     if (p === this.player || DEAD.has(p.status)) return;
-    const b = this.block(p) || { room: 'quarters', spot: 'bunk', activity: 'idle' }, s = this.site(p, b.room);
+    const b = this.block(p) || { room: 'quarters', spot: 'bunk', activity: 'idle' }, s = this.site(p, b.room, null, b);
     this.st.set(p.id, { person: p, deckNo: s.deckNo, tx: s.tx, ty: s.ty, room: b.room, spot: b.spot, activity: b.activity, transit: null, target: null });
   }
   where(p) { const s = this.st.get(p.id); return s ? { deckNo: s.transit?.lift ? null : s.deckNo, room: s.transit ? (s.transit.lift ? 'lift' : 'corridor') : s.room, spot: s.spot, activity: s.activity, transit: !!s.transit } : null; }
@@ -71,8 +89,9 @@ export class CrewSim {
     for (const s of this.st.values()) {
       const p = s.person; if (s.transit || DEAD.has(p.status)) { if (DEAD.has(p.status)) this.st.delete(p.id); continue; }
       const b = this.block(p); if (!b) continue;
-      if (b.room === s.room && b.spot === s.spot) { s.activity = b.activity; continue; }
-      const dest = this.site(p, b.room, s.deckNo), lift = dest.deckNo !== s.deckNo;
+      const dest = this.site(p, b.room, s.deckNo, b);
+      if (b.room === s.room && b.spot === s.spot && (!this.social || (dest.deckNo === s.deckNo && dest.tx === s.tx && dest.ty === s.ty))) { s.activity = b.activity; continue; }
+      const lift = dest.deckNo !== s.deckNo;
       const eta = lift ? LIFT_BASE + LIFT_PER_DECK * Math.abs(dest.deckNo - s.deckNo) + hash01('eta', this.seed, p.id, b.room) * 2 : WALK_TIME * (0.6 + hash01('walk', this.seed, p.id, b.room));
       s.transit = { lift, eta, from: { deckNo: s.deckNo, room: s.room }, to: dest, room: b.room, spot: b.spot, activity: b.activity };
       this.log.push(`depart:${p.id}:${s.deckNo}->${dest.deckNo}:${b.room}`); this._emit('depart', { person: p, from: s.deckNo, to: dest.deckNo, room: b.room, lift });

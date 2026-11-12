@@ -47,8 +47,9 @@ export class Duty {
   on(fn) { this.listeners.push(fn); return this; }
   emit(ev) { this.events.push(ev); if (this.events.length > 60) this.events.shift(); for (const f of this.listeners) f(ev); }
   setPlace(deckNo, room) { this.place = { deckNo, room }; }
-  trust(p) { return this.trustMap.get(p.id ?? p) ?? (0.5 + (hash01('trust', this.seed, p.id) - 0.5) * 0.2); }
-  _bump(p, d) { const k = p.id; this.trustMap.set(k, Math.max(0, Math.min(1, this.trust(p) + d))); }
+  // base trust: seeded jitter, warmer for the player's friends and cooler for rivals (js/social.js via sim.social; 0 without a graph)
+  trust(p) { return this.trustMap.get(p.id ?? p) ?? Math.max(0, Math.min(1, 0.5 + (hash01('trust', this.seed, p.id) - 0.5) * 0.2 + (this.sim?.social?.trustBias(this.player, p) || 0))); }
+  _bump(p, d) { const k = p.id; this.trustMap.set(k, Math.max(0, Math.min(1, this.trust(p) + d))); this.sim?.social?.onTrustEvent(p, this.player, d, 'how you did your job'); }
   get avgTrust() { const l = this.roster.people.filter(p => LIVE(p) && p !== this.player); return l.reduce((a, p) => a + this.trust(p), 0) / Math.max(1, l.length); }
   loop(id) { return this.loops.find(l => l.id === id); }
   status(l) { return l.state === 'doing' ? 'doing' : l.state === 'due' ? (this.t - l.dueAt > 60 ? 'overdue' : 'due') : 'idle'; }
