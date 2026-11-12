@@ -21,6 +21,7 @@ import { createShipComms, loadCommsData, commsData } from './shipcomms.js';
 import { CrewSim } from './sim.js';
 import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALITIES } from './duty.js';
 import { DutyHUD } from './hud-duty.js';
+import { Phases, PHASES, FAILURE_MODES } from './phases.js';
 import { MISSIONS, party as commParty } from './bridge.js';
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -322,6 +323,8 @@ function setupDuty() {
   const say = (m) => { if (m.kind === 'report') G.comms?.sim?.say?.({ from: commParty(m.from), to: BRIDGE_PARTY, text: m.text, priority: 'routine', channel: 'comm', kind: 'report' }); };
   G.duty = new Duty({ player: G.player, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say, seed: G.runSeed, mission: G.mission });
   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
+  G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1' });
+  G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel.`, 'warn'); });
   G.duty.on((ev) => {
     const g = G.say;
     if (ev.type === 'due') g(`Duty: ${ev.label} (${ev.room}). [J]`, 'comp');
@@ -340,6 +343,7 @@ function nomTick(dt) {
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt);
+  if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }
   if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(D.busy ? `Working: ${D.busy.loop.label}…` : due ? `[J] ${due.label || due.task}` : ''); }
 }
 function dutyMenu() {
@@ -354,6 +358,34 @@ function dutyMenu() {
     { label: 'Show the whole board (B)', run: () => { H.big = !H.big; H.renderBoard(); } },
   ];
   H.openMenu('Duty menu', top);
+}
+
+
+// ---- death in Systems Nominal: you are not out of the run, you pick someone else to be. End of watch: summary.
+function summaryHTML(title, lead) {
+  const D = G.duty, sm = D.summary(), ph = G.phases?.status(), mp = D.missionProgress(ph?.index || 0), md = MISSIONS[G.mission] || G.mission;
+  const chain = [...D.chain]; if (ph?.label) chain.unshift(`${ph.label} reached ${ph.phase} (${Math.round(ph.severity * 100)}% severity)`);
+  return `<h2>${title}</h2><div>${lead}</div><h4>Mission</h4><div>${md} — crew tasks ${mp.pct}% on track, your duties ${sm.score}% (${sm.stats.proper} proper, ${sm.stats.rushed} rushed, ${sm.stats.faked} faked, ${sm.stats.skipped} skipped)</div>
+    <h4>What happened</h4>${chain.length ? chain.map(c => `<div class="c">${c.replace(/[&<>]/g, '')}</div>`).join('') : '<div class="c">Nothing went wrong that you could be blamed for.</div>'}
+    <h4>Crew opinion of you</h4><div>${Math.round(sm.trust * 100)}% trust · ${sm.stats.caught} times caught · ${sm.stats.orders} orders (${sm.stats.refused} refused) · ${sm.stats.delegated} delegated</div>`;
+}
+function nomDie(cause) {
+  if (G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomdead'; document.exitPointerLock?.(); sound.death?.(); G.hp = 0; $('danger').style.opacity = 0;
+  const old = G.player; old.status = 'dead'; G.duty.chain.push(`${old.short} (${old.title}) died: ${cause}`);
+  const near = G.roster.people.filter(p => !p.isPlayer && !['dead', 'corpse', 'crazed', 'evacuated'].includes(p.status));
+  const mine = near.filter(p => p.dept === old.dept), pool = [...mine.slice(0, 3), ...near.filter(p => !mine.includes(p)).sort((a, b) => b.rank - a.rank).slice(0, 3)].slice(0, 5);
+  G.hud2.showEnd(summaryHTML(`${old.short} is dead`, `${old.full || old.short}, ${old.title} — ${cause}.`) + '<h4>Carry on</h4>', [...pool.map(p => ({ label: `Continue as ${p.short} (${p.title})`, run: () => switchPlayer(p) })), { label: 'Back to the menu', run: () => toMenu() }]);
+}
+function nomEnd() {
+  if (G.phase === 'nomend' || G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomend'; document.exitPointerLock?.();
+  const ph = G.phases.status(); G.hud2.showEnd(summaryHTML('Watch ended', `Twenty minutes on ${G.ship.name}. The ship is ${ph.phase === 'nominal' ? 'in good order' : ph.phase}.`), [{ label: 'New watch', run: () => newRun() }, { label: 'Back to the menu', run: () => toMenu() }]);
+}
+function toMenu() { G.hud2?.hideEnd(); G.hud2?.destroy(); G.hud2 = null; G.phase = 'title'; showScreen('title'); }
+function switchPlayer(p) {
+  const at = G.sim.where(p), old = G.player; old.isPlayer = false; p.isPlayer = true; G.player = p; G.sim.setPlayer(p); G.comms?.sim.setPlayer(p);
+  const nd = new Duty({ player: p, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say: G.duty.say, seed: G.runSeed, mission: G.mission }).inherit(G.duty);
+  G.duty = nd; G.phases.duty = nd; G.hud2.attach(nd); G.hp = G.maxHp; G.stamina = 100; G.hud2.hideEnd(); hideScreens(); fade(0);
+  loadDeck(Math.min(G.ship.decks, Math.max(1, at?.deckNo ?? 1))); G.phase = 'play'; requestLock(); G.say(`You are now ${p.full || p.short}, ${p.title}.`, 'good');
 }
 
 // ---------------- run control ----------------
@@ -923,6 +955,7 @@ function placeRepairPoints(data) {
   G.vents = []; for (let i = 0; i < 5; i++) { const t = data.openTiles[Math.floor(rnd() * data.openTiles.length)]; if (data.grid[t[1]][t[0]] === 0 && !world.isTube(t[0], t[1])) { const [x, z] = world.center(t[0], t[1]); G.vents.push({ x: x + (rnd() - 0.5), z: z + (rnd() - 0.5), t: rnd() }); } }
 }
 function onShipEvent(ev) {
+  if (ev.type === 'repair') G.phases?.onRepair(ev.id);
   if (ev.quiet || !world || G.phase !== 'play') return;
   G.fx = SHIP().effects();
   const r = repairPts.find(r => r.sys === ev.id);
@@ -1241,6 +1274,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

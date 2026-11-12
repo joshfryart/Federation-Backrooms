@@ -250,12 +250,21 @@ const nom = await page2.evaluate(async () => {
   // locked while the lifts system is offline
   g.shipState.damage('lifts', 1); tick(5); out.locked = { fx: G.fx.liftLocked, panel: (G.phase = 'play', g.openLiftPanel(), G.phase) }; g.shipState.repair('lifts'); tick(5);
   out.unlocked = (g.openLiftPanel(), G.phase); key('Escape'); tick(2);
+  { // billet, duty, phases, death -> continue as someone else
+    G.phase = 'play'; const D = g.duty, ph = g.phases, old = G.player; out.billet = { isPlayer: old.isPlayer, billet: old.billet, loops: D.loops.length, mission: G.mission, hud: !!document.getElementById('bd-board') };
+    const l = D.loops[0]; D.setPlace(G.shipDeck + 1, l.room); l.state = 'due'; l.dueAt = D.t; const r = D.perform(l.id, 'proper'); tick(1); out.duty = { ok: r.ok, busy: !!D.busy };
+    for (let i = 0; i < 40; i++) { D.tick(1); } out.duty.board = D.board().length;
+    ph.enabled = true; for (let i = 0; i < 30; i++) ph.tick(30); out.phases = ph.status(); const hz = ph.hazard(G.shipDeck + 1, { zone: 'engineering' }); out.phases.hazard = !!hz || ph.modeDef?.lethal === null;
+    g.nomDie('test'); out.dead = { phase: G.phase, btns: document.querySelectorAll('#bd-end button').length, shown: document.getElementById('bd-end').classList.contains('show') };
+    document.querySelector('#bd-end button').click(); tick(5); out.cont = { phase: G.phase, changed: G.player !== old, newIsPlayer: G.player.isPlayer, oldDead: old.status, hp: G.hp, same: G.duty.debt === D.debt };
+    g.shipState.repair('lifts'); ph.enabled = false;
+  }
   out.tabs = { hud: ['phaser', 'perks'].map(i => getComputedStyle(document.getElementById(i)).display), gun: G.phase };
   return out;
 });
 console.log('nominal:', JSON.stringify(nom));
 { const n = nom, D = n.start.D, ok = n.start.mode === 'nominal' && n.start.deck === 1 && n.start.shipDeck === 0 && n.start.inCar && n.start.decks === D && n.start.director === null && n.start.auto === false && n.start.objective === 'none'
-    && !n.simBad && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
+    && !n.simBad && n.billet.isPlayer && n.billet.loops > 0 && n.billet.hud && n.duty.ok && n.phases.index >= 3 && n.phases.mode && n.dead.shown && n.dead.btns >= 2 && n.cont.phase === 'play' && n.cont.changed && n.cont.newIsPlayer && n.cont.oldDead === 'dead' && n.cont.hp > 0 && n.cont.same && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
     && n.doors.nearOpen && n.doors.farShut && n.walkIn.phase === 'select' && n.walkIn.rows.length === D && /^1Deck 1 — Command · Bridge/.test(n.walkIn.rows[0]) && n.cancel === 'play'
     && n.down.to === D - 1 && n.down.secs >= 7.5 && n.down.secs <= 9 && n.down.inCar && n.down.indicator >= D - 1 && n.down.shaken
     && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
