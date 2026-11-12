@@ -18,6 +18,8 @@ const server = createServer(async (req, res) => {
 }).listen(0);
 const port = server.address().port; const errors = []; let failed = false;
 const fail = (m) => { failed = true; console.log('FAIL', m); };
+import { unitTests as commsUnit, hudTests as commsHud } from './test-comms.mjs';   // alerts / comm bus / bridge model / HUD (tools/test-comms.mjs)
+await commsUnit(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -254,6 +256,7 @@ console.log('nominal:', JSON.stringify(nom));
     && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
     && n.locked.fx && n.locked.panel === 'play' && n.unlocked === 'select';
   if (!ok) fail('nominal ship / turbolift'); }
+await commsHud(page2, fail);
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();
 console.log(failed ? 'FAILED' : 'OK'); process.exit(failed ? 1 : 0);
