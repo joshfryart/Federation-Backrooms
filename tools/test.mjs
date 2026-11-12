@@ -193,7 +193,7 @@ const invRun = () => page.evaluate(async () => {
     const t = document.getElementById('prompt').textContent; if (t && !/\[E\]|nominal|Repair/.test(t)) { out.clutterPrompt = t; break find; } }
   return out;
 });
-let inv = await invRun(); for (let a = 0; a < 3 && !(inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt)); a++) inv = await invRun();   // random layouts: the look-at probe can miss on one ship, so retry on fresh runs
+let inv = await invRun(); for (let a = 0; a < 3 && !(inv.examine && inv.clutterPrompt && !/\[E\](?! Take)/.test(inv.clutterPrompt)); a++) inv = await invRun();   // random layouts: the look-at probe can miss on one ship, so retry on fresh runs
 console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.newRooms.length >= 12 && inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
 const propsOk = await page.evaluate(async () => {
   const { PROP_KINDS, buildProp } = await import('./js/world.js'), bad = [];
@@ -261,7 +261,7 @@ const nom = await page2.evaluate(async () => {
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
       if (dr) { w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2; }
       const c = w.clutter[0], n0 = w.clutter.length; out.clutter = { took: c ? w.takeClutter(c) : null, left: w.clutter.length === n0 - 1 };
-      G.phase = 'play'; g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
+      G.phase = 'play'; g.shipState.repair('computer'); g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
       const ppl = g.sim.onDeck(G.shipDeck + 1)[0]; if (ppl) { g.talkMenu({ person: ppl.person }); out.talk = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu(); }
     }
     g.shipState.repair('lifts'); ph.enabled = false;
