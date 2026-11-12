@@ -126,4 +126,31 @@ Fit to the hull: round decks with a central core (lift, tubes, services) and roo
 | 65 | Ladder wells, hatches and emergency stairs | Engineering | — | tubes/ladders |
 | 66 | Junction alcoves, fire stations and emergency locker bays (corridor furniture) | Engineering / Security | — | corridor decor |
 
-Count: 66 spaces in 12 groups. Existing game rooms covered: bridge, engineering, sickbay, mess, transporter, shuttlebay, cargo, holodeck, quarters, arboretum, jefferies.
+## Group M — Added from the first inventory pass (agents' gap reports)
+Spaces the first twelve agents found missing. M1–M4 are the work batches. More may be added as the remaining groups report.
+| # | Space | Dept | Size | Game | Batch |
+|---|---|---|---|---|---|
+| 67 | Guest / Diplomatic Quarters (suite) | Command / Services | M | quarters (variant) | M1 |
+| 68 | Ship's Office (yeoman, records, first officer's office) | Command / Operations | M | NEW | M1 |
+| 69 | Chapel / Reflection Room | Services | S | NEW | M1 |
+| 70 | Barber & Grooming Shop | Services | S | NEW | M1 |
+| 71 | Wardroom Pantry | Services | S | NEW | M1 |
+| 72 | Zapper Range (weapons qualification) | Security | M | NEW | M2 |
+| 73 | Deflector Screen Generator Room | Engineering / Security | M | NEW | M2 |
+| 74 | Zapper-Bank Emitter & Capacitor Compartments | Security / Engineering | S | NEW | M2 |
+| 75 | Security Interview & Forensics Lab | Security | S | NEW | M2 |
+| 76 | Ship's Store & Crew Bar | Services | M | NEW | M2 |
+| 77 | Medical Staff Locker Room & Break Room | Medical | S | NEW | M3 |
+| 78 | Outpatient Exam Room | Medical | S | NEW | M3 |
+| 79 | Central Sterile & Medical Stores | Medical | S | NEW | M3 |
+| 80 | Imaging Suite (full-body scanner) | Medical | S | NEW | M3 |
+| 81 | Medical Hologram Equipment Closet (emitter matrix hardware) | Medical | S | NEW | M3 |
+| 82 | Galley Waste Holding | Services | S | NEW | M4 |
+| 83 | Custodial Closet (one per deck) | Services | S | NEW | M4 |
+| 84 | Public Crew Head (one per deck, near the lift lobby) | Services | S | NEW | M4 |
+| 85 | EPS & Data Riser Room (one per deck) | Engineering / Operations | S | NEW | M4 |
+| 86 | Hull Access Alcove & Spare Locker Bay (deck-edge storage ring) | Engineering | S | NEW | M4 |
+| 87 | Family / Couple's Quarters | all | M | quarters (variant) | M1 |
+| 88 | Crew Baggage & Linen Store | Services | S | NEW | M4 |
+
+Count: 66 spaces in 12 groups (A–L) plus 22 added spaces in Group M (88 in all). Existing game rooms covered: bridge, engineering, sickbay, mess, transporter, shuttlebay, cargo, holodeck, quarters, arboretum, jefferies.
