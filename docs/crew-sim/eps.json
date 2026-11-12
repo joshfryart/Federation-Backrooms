@@ -1,0 +1,139 @@
+{
+  "billet": "eps",
+  "role_summary": "I'm an EPS technician, the lowest rung in engineering. I walk the conduits, check junction breakers and power taps, and keep the lights on across the decks. Nobody notices me when it works, and I like it that way; I care about clean load numbers and not getting blamed for a blackout.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "methodical"], "quirk": "Logs every tap reading in a worn notebook as well as the console", "routine_effect": "Never shortens a junction round; arrives early to handover; eats at fixed hours" },
+    { "id": "corner_cutter", "traits": ["easygoing", "chatty"], "quirk": "Hums off-key while working and trusts his ear over the meter", "routine_effect": "Rounds run rushed when the mess or rec bar is busy; stretches meals; skips the notebook" },
+    { "id": "anxious_newbie", "traits": ["nervous", "diligent"], "quirk": "Double checks every breaker twice and keeps a spare fuse in each pocket", "routine_effect": "Rounds take 50 percent longer; calls the reactor specialist often; sleeps badly" }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "engineering", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Get the load sheet and known faults from the outgoing tech" },
+    { "from": 0.5, "to": 2.5, "activity": "junction_round_fore", "room": "engineering", "spot": "junction", "anim": "interact", "interruptible": true, "social": "solo", "note": "Check taps and breakers, forward decks first" },
+    { "from": 2.5, "to": 3, "activity": "coffee_break", "room": "mess", "spot": "replicator", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Coffee and gossip with the galley" },
+    { "from": 3, "to": 5, "activity": "junction_round_aft", "room": "engineering", "spot": "junction", "anim": "interact", "interruptible": true, "social": "solo", "note": "Aft decks and gravity feeds" },
+    { "from": 5, "to": 6, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Duty meal with other engineering ratings" },
+    { "from": 6, "to": 7.5, "activity": "repairs_and_load_test", "room": "engineering", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Swap worn taps, bench-test relays, update sheet" },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "engineering", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the relief on anything marginal" },
+    { "from": 8, "to": 9, "activity": "wind_down", "room": "washroom", "spot": "door", "anim": "walk", "interruptible": true, "social": "solo", "note": "Wash off conduit grease" },
+    { "from": 9, "to": 10.5, "activity": "meal_off_duty", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Proper meal" },
+    { "from": 10.5, "to": 13, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Cards, a drink, grumbling about the grid" },
+    { "from": 13, "to": 14, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Keep fit for crawling in conduits" },
+    { "from": 14, "to": 22, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Main sleep block" },
+    { "from": 22, "to": 24, "activity": "pre_duty", "room": "mess", "spot": "replicator", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Breakfast and coffee before the next watch" }
+  ],
+  "activities": [
+    { "id": "meal", "label": "Eat at the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Always with someone" },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Cards with other ratings" },
+    { "id": "holo_playroom", "label": "Holo-Playroom", "rooms": ["holodeck"], "spot": "pad", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Racing sim, mostly" },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Gets cut short in a blackout" },
+    { "id": "gym", "label": "Treadmill and weights", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [20, 45], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "" },
+    { "id": "tinker", "label": "Tinker with a salvaged relay", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Job-specific hobby: rebuilding old power taps" },
+    { "id": "arboretum_walk", "label": "Walk among the trees", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [15, 30], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Quiet, no hum of conduits" },
+    { "id": "check_on_friend", "label": "Visit a friend on another deck", "rooms": ["quarters", "lounge"], "spot": "sofa", "anim": "sitting_idle", "minutes": [15, 40], "weight": 1, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "" }
+  ],
+  "duty_loops": [
+    { "id": "junction_round", "label": "Junction and tap inspection round", "room": "engineering", "spot": "junction", "every_min": 30, "duration_min": 6, "steps": ["collect tricorder", "walk to junction", "open panel", "read tap load", "reset tripped breakers", "close and log"], "system": "eps", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "load_balance", "label": "Balance grid load against reactor output", "room": "engineering", "spot": "console", "every_min": 45, "duration_min": 4, "steps": ["read load readout", "shift loads off hot conduits", "confirm with reactor spec", "note on sheet"], "system": "eps", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Engineering. Grid load balanced, no rolling taps." },
+    { "id": "swap_worn_tap", "label": "Replace worn power taps", "room": "engineering", "spot": "workbench", "every_min": 90, "duration_min": 8, "steps": ["pull spare from locker", "isolate conduit", "swap tap", "bench-test old unit", "restore feed"], "system": "eps", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.6, "debt": 2 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 4 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine junction round", "at_run_min": 2, "room": "engineering", "spot": "junction", "depends_on": "none", "reports_to": "reactor", "if_neglected": "Marginal taps drift and start tripping later" },
+      { "task": "Update load sheet", "at_run_min": 12, "room": "engineering", "spot": "console", "depends_on": "none", "reports_to": "reactor", "if_neglected": "Next shift works blind" }
+    ],
+    "survey": [
+      { "task": "Route extra power to science arrays", "at_run_min": 3, "room": "lab", "spot": "junction", "depends_on": "bridge order", "reports_to": "reactor", "if_neglected": "Arrays brown out and scans fail" },
+      { "task": "Watch tap load during long scans", "at_run_min": 10, "room": "engineering", "spot": "console", "depends_on": "other task", "reports_to": "reactor", "if_neglected": "Overloaded conduit trips mid-scan" }
+    ],
+    "cargo_run": [
+      { "task": "Power the cargo lifts and tractor gear", "at_run_min": 3, "room": "cargo", "spot": "junction", "depends_on": "bridge order", "reports_to": "reactor", "if_neglected": "Lifts stall with a load on" },
+      { "task": "Check transporter pad feed", "at_run_min": 9, "room": "transporter", "spot": "junction", "depends_on": "none", "reports_to": "reactor", "if_neglected": "Beam-down delayed" }
+    ],
+    "medical_relief": [
+      { "task": "Prioritise sickbay power", "at_run_min": 2, "room": "sickbay", "spot": "junction", "depends_on": "bridge order", "reports_to": "reactor", "if_neglected": "Biobeds flicker during treatment" },
+      { "task": "Add backup tap for sickbay", "at_run_min": 8, "room": "sickbay", "spot": "junction", "depends_on": "other task", "reports_to": "reactor", "if_neglected": "A single trip cuts all treatment" }
+    ],
+    "shakedown": [
+      { "task": "Stress-test grid under high load", "at_run_min": 4, "room": "engineering", "spot": "console", "depends_on": "bridge order", "reports_to": "ace", "if_neglected": "Weak junctions fail during the real drill" },
+      { "task": "Replace taps found hot", "at_run_min": 11, "room": "engineering", "spot": "workbench", "depends_on": "other task", "reports_to": "reactor", "if_neglected": "Faults carry into next phase" },
+      { "task": "Report junction margins", "at_run_min": 16, "room": "engineering", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Bridge unaware of weak points" }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Junction breaker keeps tripping", "message": "Bridge, Engineering. Deck four breaker keeps tripping. Looking at the tap.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Grid load near limit", "message": "Bridge, Engineering. Grid is running hot. Recommend shedding non-essential loads.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Conduit fire or arcing", "message": "Bridge, Engineering. Arcing in the EPS conduit, requesting damage control.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Blackout imminent and reactor spec unreachable", "message": "Bridge, Engineering. Rolling blackouts coming, I can't raise the reactor spec.", "priority": "urgent", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Reroute power to a named system", "response_line": "Engineering aye. Rerouting now, give me two minutes.", "time_to_comply_min": 2, "refuses_if": "Reroute would overload a conduit the reactor spec has locked out" },
+      { "order": "Status of the grid", "response_line": "Grid is steady, taps nominal. I'll flag anything that moves.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Shed non-essential loads", "response_line": "Shedding holodeck and lounge feeds. Done.", "time_to_comply_min": 1, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Finish the round early and check high-load junctions", "room": "engineering", "spot": "junction", "priority": 3, "comm_line": "Engineering, EPS ready. Checking priority taps." },
+    "red": { "action": "Report to engineering station and hold grid steady", "room": "engineering", "spot": "console", "priority": 1, "comm_line": "EPS at station, grid steady." },
+    "fire": { "action": "Isolate the burning conduit then help damage control", "room": "engineering", "spot": "junction", "priority": 1, "comm_line": "Isolating conduit power on the fire deck now." },
+    "hull_breach": { "action": "Cut power to breached section", "room": "engineering", "spot": "junction", "priority": 1, "comm_line": "Breach section isolated from the grid." },
+    "contamination": { "action": "Stay in engineering and seal in; reroute from within", "room": "engineering", "spot": "console", "priority": 2, "comm_line": "EPS sealed in, working remote only." },
+    "power_failure": { "action": "Run the cascade restart from the main junction panel", "room": "engineering", "spot": "junction", "priority": 1, "comm_line": "Grid down, working through the breakers, one section at a time." },
+    "gravity_failure": { "action": "Check graviton feeds and restore tap power", "room": "engineering", "spot": "junction", "priority": 2, "comm_line": "Checking gravity feeds, I'm strapped in." },
+    "intruder": { "action": "Stay in engineering, keep doors powered for security", "room": "engineering", "spot": "console", "priority": 3, "comm_line": "Engineering locked down, grid steady." },
+    "medical_emergency": { "action": "Make sure sickbay power is solid, then stand by", "room": "engineering", "spot": "console", "priority": 3, "comm_line": "Sickbay feed is priority, holding it." },
+    "abandon_ship": { "action": "Pull the grid for evacuation and head to airlock", "room": "airlock", "spot": "door", "priority": 1, "comm_line": "Leaving engineering. Heading to the airlock." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Follows the template, chats on rounds", "lines": ["Grid's sweet today.", "Tap four runs a little warm but fine."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Rounds shorten and repeat on flickering decks", "lines": ["Lights keep twitching on deck three.", "That's not normal drift."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips meals, cutting loads, calls bridge more", "lines": ["I can only patch so many taps.", "Something upstream is starving us."], "leaves_post_if": "Ordered to damage control" },
+    "crisis": { "mood": "stressed", "routine_change": "Works in a run from junction to junction, rarely sits", "lines": ["Rolling blackouts, I can't hold it.", "Tell the bridge to shed more."], "leaves_post_if": "Conduit fire forces evacuation of the junction room" },
+    "collapse": { "mood": "grim", "routine_change": "Focuses on keeping life support and doors powered", "lines": ["Just keep air on. I'll cut everything else.", "Grid's coming apart."], "leaves_post_if": "Abandon ship or no power left to route" }
+  },
+  "relationships": [
+    { "with_billet": "reactor", "kind": "mentor", "effect": "Asks the reactor specialist before any reroute; defers to their load calls" },
+    { "with_billet": "dc", "kind": "friend", "effect": "Shares mess table, swaps repair tips, calls them first for conduit fires" },
+    { "with_billet": "galley", "kind": "confidant", "effect": "Coffee gossip; hears rumours about the bridge" },
+    { "with_billet": "ace", "kind": "rival", "effect": "Assistant chief sometimes overrides rounds; the tech resents it quietly" }
+  ],
+  "barks": {
+    "idle": ["Quiet grid, quiet life.", "Anyone seen my spare fuse?", "Coffee's gone cold again."],
+    "working": ["Tap's reading warm.", "Reset the breaker, see what happens.", "Nearly through this panel."],
+    "greeting_player": ["Morning. Mind the panel.", "Need power somewhere?", "Everything's running, so far."],
+    "greeting_player_higher_rank": ["Sir. Grid's holding.", "Ma'am, want a status?", "Aye, sir. Anything you need."],
+    "greeting_player_lower_rank": ["Hey. Keep your hands off that panel.", "Watch the cables.", "Need something?"],
+    "tired": ["Been in this conduit too long.", "I need a bunk.", "Eyes are crossing on these readings."],
+    "hungry": ["Thinking about the mess.", "Skipped breakfast, regret it.", "Is the replicator working?"],
+    "stressed": ["Too many trips on this grid.", "I can't hold this much longer.", "Who keeps adding load?"],
+    "alert": ["Grid to station!", "Going to the junction.", "Stand by, rerouting."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Relaxes, trades jokes, offers coffee and tips on tricky taps",
+    "player_neglects_duty": "Quietly covers for a while, then mutters and escalates to the reactor specialist",
+    "player_fakes_report": "Spots mismatched tap readings and calls it out on comm",
+    "player_gives_order_ok": "Says aye and does it without fuss",
+    "player_gives_order_outranked": "Hesitates, checks with the reactor specialist, then complies if it checks out",
+    "player_out_of_place": "Politely asks the player to step away from the live panel",
+    "player_asks_favour": "Helps if it's quick and safe, grumbles if it means leaving his round"
+  },
+  "decision_rules": [
+    "IF a breaker trips twice in one round THEN replace the tap rather than reset it",
+    "IF load readout exceeds 90 percent THEN tell the reactor specialist and recommend shedding",
+    "IF a conduit arcs THEN isolate it first and call damage control second",
+    "IF the bridge orders a reroute that the reactor spec locked THEN refuse and explain",
+    "IF a round is rushed THEN note it in the log for the relief rather than lie",
+    "IF the grid goes down THEN restore life support, then doors, then lighting",
+    "IF a friend asks for a quick favour off duty THEN do it unless badly tired",
+    "IF off duty and hungry above 60 percent THEN go to the mess before anything else",
+    "IF stress above 70 percent THEN go to the bar for a drink and cards",
+    "IF alert goes red THEN drop the round and report to station"
+  ],
+  "information_view": "I see flickering lights, tripped breakers, warm taps and load readouts first. Lighting and gravity problems tell me the grid is failing before the bridge hears it.",
+  "temptations": [
+    "Skip the aft round when tired; a hidden hot tap later causes a blackout and blame",
+    "Fake the load sheet by copying the last reading; the relief finds out and trust drops",
+    "Reset a tripping breaker repeatedly instead of swapping the tap; works until it fails big",
+    "Leave a repair half finished to make the bar before it gets crowded"
+  ]
+}

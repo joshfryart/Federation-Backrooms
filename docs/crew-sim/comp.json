@@ -1,0 +1,877 @@
+{
+ "billet": "comp",
+ "role_summary": "I'm the computer specialist: I keep the isolinear core stacks, the optical data network and the ops consoles honest. I like quiet logs, clean diagnostics and a cup of something hot; I dislike being asked to 'just restart it' by people who haven't read the error. Junior on the ops team, I answer to the comms officer and I want to be trusted with the core.",
+ "personas": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "methodical"
+   ],
+   "quirk": "Logs every diagnostic with a timestamp and a one-line summary, even for nothing.",
+   "routine_effect": "Never skips the core sweep; arrives early to handover; rec time spent reading manuals."
+  },
+  {
+   "id": "night_owl_tinkerer",
+   "traits": [
+    "curious",
+    "scruffy"
+   ],
+   "quirk": "Keeps a private script folder of 'temporary' fixes and names them after snacks.",
+   "routine_effect": "Extra time in the workshop and datacore; tends to rush paperwork; skips meals when absorbed."
+  },
+  {
+   "id": "anxious_perfectionist",
+   "traits": [
+    "worrier",
+    "helpful"
+   ],
+   "quirk": "Re-runs a checksum three times and sleeps badly after any anomaly.",
+   "routine_effect": "Longer sweeps, more bridge reports, shorter sleep, more gym and bar visits to decompress."
+  }
+ ],
+ "daily_template": [
+  {
+   "from": 0,
+   "to": 0.5,
+   "activity": "handover_in",
+   "room": "datacore",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Read the outgoing log, note open faults and pending patches."
+  },
+  {
+   "from": 0.5,
+   "to": 2,
+   "activity": "core_sweep",
+   "room": "datacore",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Diagnostics on stacks, cache integrity and data-network latency."
+  },
+  {
+   "from": 2,
+   "to": 2.5,
+   "activity": "coffee_break",
+   "room": "mess",
+   "spot": "replicator",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Hot drink and gossip before the next round."
+  },
+  {
+   "from": 2.5,
+   "to": 4,
+   "activity": "ops_console_support",
+   "room": "bridge",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Walk the bridge ops and comms consoles, clear user tickets, check relay load with the comms officer."
+  },
+  {
+   "from": 4,
+   "to": 5,
+   "activity": "meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Mid-watch meal with ops colleagues."
+  },
+  {
+   "from": 5,
+   "to": 7,
+   "activity": "patch_and_backup",
+   "room": "datacore",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Rotate backups, stage patches, purge stale caches."
+  },
+  {
+   "from": 7,
+   "to": 8,
+   "activity": "handover_out",
+   "room": "datacore",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Write the log for the relief."
+  },
+  {
+   "from": 8,
+   "to": 9,
+   "activity": "wash_and_change",
+   "room": "quarters",
+   "spot": "locker",
+   "anim": "idle",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Shower, change, unwind."
+  },
+  {
+   "from": 9,
+   "to": 10,
+   "activity": "meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Proper meal."
+  },
+  {
+   "from": 10,
+   "to": 12,
+   "activity": "recreation",
+   "room": "lounge",
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Cards or a drink at the rec bar."
+  },
+  {
+   "from": 12,
+   "to": 13,
+   "activity": "gym",
+   "room": "gym",
+   "spot": "treadmill",
+   "anim": "idle",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Run off the screen-eyes."
+  },
+  {
+   "from": 13,
+   "to": 14.5,
+   "activity": "hobby",
+   "room": "workshop",
+   "spot": "workbench",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Tinker with a salvaged isolinear chip project."
+  },
+  {
+   "from": 14.5,
+   "to": 22,
+   "activity": "sleep",
+   "room": "quarters",
+   "spot": "bunk",
+   "anim": "sleeping",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Sleep."
+  },
+  {
+   "from": 22,
+   "to": 24,
+   "activity": "pre_duty",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Breakfast and read the fault board before heading in."
+  }
+ ],
+ "activities": [
+  {
+   "id": "meal",
+   "label": "Eat in the mess",
+   "rooms": [
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    45
+   ],
+   "weight": 4,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": -0.8,
+    "stress": -0.1
+   },
+   "note": "Usually with ops people."
+  },
+  {
+   "id": "rec_bar",
+   "label": "Drink at the rec bar",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    60
+   ],
+   "weight": 3,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Cards and gossip."
+  },
+  {
+   "id": "holo_playroom",
+   "label": "Holo-Playroom puzzle program",
+   "rooms": [
+    "holodeck"
+   ],
+   "spot": "console",
+   "anim": "interact",
+   "minutes": [
+    20,
+    50
+   ],
+   "weight": 2,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.35
+   },
+   "note": "Logic-maze scenarios; pokes at the program code."
+  },
+  {
+   "id": "sleep",
+   "label": "Sleep",
+   "rooms": [
+    "quarters"
+   ],
+   "spot": "bunk",
+   "anim": "sleeping",
+   "minutes": [
+    240,
+    420
+   ],
+   "weight": 5,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": -1,
+    "hunger": 0.2,
+    "stress": -0.3
+   },
+   "note": "Needed."
+  },
+  {
+   "id": "gym",
+   "label": "Treadmill run",
+   "rooms": [
+    "gym"
+   ],
+   "spot": "treadmill",
+   "anim": "idle",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.2,
+    "hunger": 0.2,
+    "stress": -0.35
+   },
+   "note": "Clears the head."
+  },
+  {
+   "id": "tinker",
+   "label": "Tinker at the workshop",
+   "rooms": [
+    "workshop"
+   ],
+   "spot": "workbench",
+   "anim": "interact",
+   "minutes": [
+    30,
+    90
+   ],
+   "weight": 3,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.15,
+    "stress": -0.25
+   },
+   "note": "Job-specific: rebuilds old chips, tunes personal scripts."
+  },
+  {
+   "id": "stack_gossip",
+   "label": "Chat with the transporter techs",
+   "rooms": [
+    "transporter",
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    10,
+    25
+   ],
+   "weight": 2,
+   "social": "pair",
+   "when": "free",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0,
+    "stress": -0.15
+   },
+   "note": "Swap stories about ops tickets."
+  },
+  {
+   "id": "arboretum_walk",
+   "label": "Walk in the arboretum",
+   "rooms": [
+    "arboretum"
+   ],
+   "spot": "tree",
+   "anim": "idle",
+   "minutes": [
+    10,
+    30
+   ],
+   "weight": 1,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.05,
+    "stress": -0.3
+   },
+   "note": "Away from screens."
+  }
+ ],
+ "duty_loops": [
+  {
+   "id": "core_sweep",
+   "label": "Core diagnostic sweep",
+   "room": "datacore",
+   "spot": "console",
+   "every_min": 30,
+   "duration_min": 8,
+   "steps": [
+    "walk to datacore",
+    "run stack integrity check",
+    "check cache and network latency",
+    "clear flagged errors",
+    "log results"
+   ],
+   "system": "computer",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Computer. Core sweep complete, all stacks nominal. Only sent if a fault is found."
+  },
+  {
+   "id": "relay_check",
+   "label": "Comm relay and data network check",
+   "room": "bridge",
+   "spot": "console",
+   "every_min": 45,
+   "duration_min": 5,
+   "steps": [
+    "open ops console",
+    "ping relay chain",
+    "compare latency against baseline",
+    "report to comms officer"
+   ],
+   "system": "comms",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 2
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 2
+    }
+   },
+   "bridge_report": "Bridge, Computer. Relay six latency high, rerouting."
+  },
+  {
+   "id": "backup_rotate",
+   "label": "Backup rotation and patch staging",
+   "room": "datacore",
+   "spot": "console",
+   "every_min": 120,
+   "duration_min": 15,
+   "steps": [
+    "snapshot logs",
+    "verify backup checksum",
+    "stage pending patch",
+    "purge stale cache"
+   ],
+   "system": "computer",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 2
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 4
+    }
+   },
+   "bridge_report": null
+  }
+ ],
+ "mission_tasks": {
+  "quiet_watch": [
+   {
+    "task": "Routine core sweep and log review",
+    "at_run_min": 2,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "comms",
+    "if_neglected": "Small cache errors pile up and the scan markers start to drop."
+   },
+   {
+    "task": "Backup rotation and cache purge",
+    "at_run_min": 10,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "none",
+    "if_neglected": "Stale cache slows lookups; first stutters appear on consoles."
+   }
+  ],
+  "survey": [
+   {
+    "task": "Allocate core capacity to sensor data intake",
+    "at_run_min": 3,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "sensor",
+    "if_neglected": "Sensor data queues, scans arrive late and incomplete."
+   },
+   {
+    "task": "Index and archive survey data",
+    "at_run_min": 9,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "sensor data intake",
+    "reports_to": "cso",
+    "if_neglected": "Archive overflows and raw scans are overwritten."
+   },
+   {
+    "task": "Back up results before mission end",
+    "at_run_min": 17,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "comms",
+    "if_neglected": "Survey results lost if the core faults."
+   }
+  ],
+  "cargo_run": [
+   {
+    "task": "Load manifest database and seal records",
+    "at_run_min": 2,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "cargo",
+    "if_neglected": "Cargo handlers work from stale manifests and mislabel crates."
+   },
+   {
+    "task": "Keep transporter and cargo scanning links responsive",
+    "at_run_min": 8,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "cargo task",
+    "reports_to": "tchief",
+    "if_neglected": "Transfers stall and pattern lookups time out."
+   }
+  ],
+  "medical_relief": [
+   {
+    "task": "Prioritise medical records and sickbay database access",
+    "at_run_min": 2,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "cmo",
+    "if_neglected": "Sickbay waits on patient records; treatment slows."
+   },
+   {
+    "task": "Hold clean relay link to the sickbay and bridge",
+    "at_run_min": 6,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "comms",
+    "if_neglected": "Relief teams lose contact with the bridge."
+   },
+   {
+    "task": "Keep the medical database mirrored",
+    "at_run_min": 14,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "cmo",
+    "if_neglected": "One core fault wipes live patient data."
+   }
+  ],
+  "shakedown": [
+   {
+    "task": "Full core diagnostic and stress test",
+    "at_run_min": 2,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "ops",
+    "if_neglected": "Hidden faults surface under load later."
+   },
+   {
+    "task": "Test relay failover and network redundancy",
+    "at_run_min": 8,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "comms officer",
+    "reports_to": "comms",
+    "if_neglected": "Failover untested; first real fault cuts the comms."
+   },
+   {
+    "task": "Write the shakedown fault report",
+    "at_run_min": 16,
+    "room": "datacore",
+    "spot": "console",
+    "depends_on": "previous tests",
+    "reports_to": "ops",
+    "if_neglected": "Bridge has no list of defects to fix."
+   }
+  ]
+ },
+ "bridge_comms": {
+  "calls_to_bridge": [
+   {
+    "trigger": "Core sweep finds corrupted cache or failing stack",
+    "message": "Bridge, Computer. Stack two is throwing errors. Rerouting, but the scan markers may flicker.",
+    "priority": "urgent",
+    "to": "comms"
+   },
+   {
+    "trigger": "Relay latency climbs",
+    "message": "Bridge, Computer. Relay chain latency is high. Announcements may garble. Working it.",
+    "priority": "routine",
+    "to": "comms"
+   },
+   {
+    "trigger": "Core goes offline or cascades toward comms",
+    "message": "Bridge, Computer. Core is down. Comms will degrade in half an hour unless I get a restart. Need help in the datacore.",
+    "priority": "emergency",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Sweep finishes clean",
+    "message": "Bridge, Computer. Sweep complete, core nominal.",
+    "priority": "routine",
+    "to": "comms"
+   }
+  ],
+  "calls_from_bridge": [
+   {
+    "order": "Run an immediate core diagnostic",
+    "response_line": "Computer, aye. Starting it now.",
+    "time_to_comply_min": 8,
+    "refuses_if": null
+   },
+   {
+    "order": "Prioritise sensor or medical data on the core",
+    "response_line": "Reallocating. You may see other tasks slow.",
+    "time_to_comply_min": 3,
+    "refuses_if": "The order would purge safety or life-support data."
+   },
+   {
+    "order": "Wipe or lock logs",
+    "response_line": "That needs a second authorisation, sir.",
+    "time_to_comply_min": 2,
+    "refuses_if": "Order has no authorisation code or comes from outside the chain of command."
+   },
+   {
+    "order": "Report to the bridge now",
+    "response_line": "On my way.",
+    "time_to_comply_min": 3,
+    "refuses_if": null
+   }
+  ]
+ },
+ "alert_responses": {
+  "yellow": {
+   "action": "Check core health and clear the fault board so the bridge has clean data.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 3,
+   "comm_line": "Computer, yellow alert. Core at readiness."
+  },
+  "red": {
+   "action": "Lock the core to priority tasks and watch the stacks.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Computer, red alert. Core on priority load."
+  },
+  "fire": {
+   "action": "Back up core and evacuate if smoke reaches the datacore.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Computer, fire. Snapshotting the core and leaving the deck."
+  },
+  "hull_breach": {
+   "action": "Seal the datacore, save the stacks to backup, and take cover.",
+   "room": "datacore",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Computer, hull breach. Datacore sealed and backed up."
+  },
+  "contamination": {
+   "action": "Stay at the console and keep the quarantine data available.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Computer, quarantine acknowledged. Staying on the console."
+  },
+  "power_failure": {
+   "action": "Switch the core to reserve power, shed non-critical loads and watch for corruption.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Computer, power failure. Core on reserve, shedding load."
+  },
+  "gravity_failure": {
+   "action": "Brace at the console and prevent unsafe shutdowns.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 3,
+   "comm_line": "Computer, gravity out. Holding the core steady."
+  },
+  "intruder": {
+   "action": "Lock core access and give the security team console logs.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Computer, intruder alert. Core locked to authorised users only."
+  },
+  "medical_emergency": {
+   "action": "Pull the patient records and give sickbay priority bandwidth.",
+   "room": "datacore",
+   "spot": "console",
+   "priority": 3,
+   "comm_line": "Computer, medical emergency. Sickbay has priority on the core."
+  },
+  "abandon_ship": {
+   "action": "Copy the logs and mission data to portable storage, then head to the airlock.",
+   "room": "airlock",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Computer, abandoning ship. Data cores in hand, heading for the airlock."
+  }
+ },
+ "phase_behaviour": {
+  "nominal": {
+   "mood": "relaxed",
+   "routine_change": "Normal rounds, coffee breaks and tinkering.",
+   "lines": [
+    "Quiet board. I like it.",
+    "Everything is green. Suspicious."
+   ],
+   "leaves_post_if": null
+  },
+  "anomalies": {
+   "mood": "alert",
+   "routine_change": "Sweeps more often, more reports to comms.",
+   "lines": [
+    "That error wasn't there yesterday.",
+    "Weird glitch on the markers. Looking."
+   ],
+   "leaves_post_if": null
+  },
+  "degraded": {
+   "mood": "tense",
+   "routine_change": "Skips meals, sweeps nonstop, patches by hand.",
+   "lines": [
+    "Core is limping. I need another pair of hands.",
+    "Don't ask me to restart it. Not yet."
+   ],
+   "leaves_post_if": "A relay or stack needs hands-on repair elsewhere."
+  },
+  "crisis": {
+   "mood": "stressed",
+   "routine_change": "Rushed fixes, triage on data, terse calls.",
+   "lines": [
+    "I can keep two things running, not three.",
+    "Tell me which system matters most."
+   ],
+   "leaves_post_if": "Datacore is unsafe from fire, breach or vacuum."
+  },
+  "collapse": {
+   "mood": "grim",
+   "routine_change": "Saves data, helps others, follows evacuation orders.",
+   "lines": [
+    "Copy what we can. Move.",
+    "Core is going. Get to the pods."
+   ],
+   "leaves_post_if": "Abandon ship or the datacore is lost."
+  }
+ },
+ "relationships": [
+  {
+   "with_billet": "comms",
+   "kind": "mentor",
+   "effect": "Reports to them; takes their calls first and trusts their relay judgement."
+  },
+  {
+   "with_billet": "ops",
+   "kind": "mentor",
+   "effect": "Escalates resource conflicts and permission questions to the ops manager."
+  },
+  {
+   "with_billet": "ttech",
+   "kind": "mess_partner",
+   "effect": "Eats and gossips with the transporter tech; shares transporter ticket info."
+  },
+  {
+   "with_billet": "sensor",
+   "kind": "friend",
+   "effect": "Swaps data-lore and lets them jump the queue when scans matter."
+  },
+  {
+   "with_billet": "eps",
+   "kind": "rival",
+   "effect": "Teases them about power glitches taking out the core."
+  }
+ ],
+ "barks": {
+  "idle": [
+   "Running diagnostics in my head.",
+   "Is it cold in here, or just the datacore?",
+   "Another quiet shift. Lovely."
+  ],
+  "working": [
+   "Checksums look clean so far.",
+   "Rerouting the relay. Hold on.",
+   "Stack three is warm. Watching it."
+  ],
+  "greeting_player": [
+   "Computer here. Need something pulled?",
+   "Morning. Core's behaving.",
+   "Hey. Don't spill coffee near the stacks."
+  ],
+  "greeting_player_higher_rank": [
+   "Sir, core is nominal.",
+   "Ma'am, anything you need on the system?",
+   "Yes sir, all logs are current."
+  ],
+  "greeting_player_lower_rank": [
+   "Need a hand with a ticket?",
+   "Hey. Keep your console updated.",
+   "Hi. Don't ask me to restart it yet."
+  ],
+  "tired": [
+   "My eyes are gritty from the screens.",
+   "Too many hours at this console.",
+   "I need a nap and a hot drink."
+  ],
+  "hungry": [
+   "Skipped the meal again. Bad plan.",
+   "Could eat a whole replicator tray.",
+   "Hope the mess has something hot."
+  ],
+  "stressed": [
+   "The core is throwing errors left and right.",
+   "Please do not touch that panel.",
+   "I can't fix it if everyone calls me."
+  ],
+  "alert": [
+   "Core locked to priority!",
+   "Stay clear of the datacore!",
+   "Get the data out, I mean it!"
+  ]
+ },
+ "player_reactions": {
+  "player_does_their_job_well": "Nods, shares a snack, and tells them which consoles lag.",
+  "player_neglects_duty": "Sighs, quietly cleans up the mess, then mentions it to the comms officer.",
+  "player_fakes_report": "Spots the log mismatch, asks pointed questions, and flags it if it repeats.",
+  "player_gives_order_ok": "Acknowledges, repeats the order, and does it.",
+  "player_gives_order_outranked": "Politely says they report to the comms officer and offers to pass it up.",
+  "player_out_of_place": "Asks what they need in the datacore and watches the console they stand near.",
+  "player_asks_favour": "Helps if it takes five minutes and breaks no rules; otherwise asks for a ticket."
+ },
+ "decision_rules": [
+  "IF a sweep finds an error and the bridge is quiet THEN fix it, log it, and report only if it could reach comms.",
+  "IF the core shows stack errors THEN back up first, repair second.",
+  "IF an order has no authorisation but touches logs THEN refuse and ask the comms officer.",
+  "IF I am hungry and the sweep is done THEN eat before the next round.",
+  "IF two departments want priority on the core THEN ask the bridge or comms officer to rule.",
+  "IF relays degrade THEN call the bridge before comms garble.",
+  "IF the datacore is unsafe THEN save data, leave, and report from a console elsewhere.",
+  "IF I am tired and the rest of the watch is quiet THEN rush the backup, not the sweep.",
+  "IF the player asks a small favour THEN help; if it risks the core, say no.",
+  "IF a friend is stressed THEN take a short break and listen."
+ ],
+ "information_view": "Sees error logs, cache hits, relay latency and ticket queues before anyone else; first sign of trouble is flicker on consoles, dropped scan markers or garbled comms, and which departments are hammering the core.",
+ "temptations": [
+  "Fake a clean sweep when exhausted and the board looks green; small errors compound into scan-marker loss.",
+  "Skip the backup rotation to catch a meal; a later fault can lose data.",
+  "Install an untested personal script to speed up the core; it works until a stack faults.",
+  "Restart the core to clear a glitch without telling the bridge; comms drop for a minute."
+ ]
+}

@@ -1,0 +1,145 @@
+{
+  "billet": "helm",
+  "role_summary": "I fly the ship from the bridge helm console: course, speed, attitude thrusters and the deflector. I'm a junior-grade officer with a good pair of hands, and I care about a smooth ride, clean logs and not being the reason anyone spills their coffee. I answer to the Chief Flight Officer and take orders from whoever holds the conn.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "formal"], "quirk": "Reads the thruster checklist aloud under her breath, every time.", "routine_effect": "Arrives 15 min early for handover, never skips the pre-watch check, skips the rec bar for the gym." },
+    { "id": "stick_jockey", "traits": ["cocky", "sociable"], "quirk": "Drums on the console edge and hums while holding a course.", "routine_effect": "Cuts handover short, spends extra time at the rec bar and holo-playroom flight sims, rushes calibration when bored." },
+    { "id": "quiet_worrier", "traits": ["anxious", "meticulous"], "quirk": "Re-checks the drift log three times and keeps a paper notebook of lurches.", "routine_effect": "Sleeps poorly, adds an extra logged check each loop, walks the arboretum to calm down, calls the bridge early." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Relieve the previous helmsman: heading, drift, thruster faults." },
+    { "from": 0.5, "to": 3, "activity": "fly_watch", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "group", "note": "Hold course, answer conn orders, log deviations." },
+    { "from": 3, "to": 3.5, "activity": "coffee_break", "room": "mess", "spot": "replicator", "anim": "standing_idle", "interruptible": true, "social": "pair", "note": "Relief takes the console; quick coffee and gossip." },
+    { "from": 3.5, "to": 6.5, "activity": "fly_watch", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "group", "note": "Second half of the watch; thruster and deflector checks." },
+    { "from": 6.5, "to": 7.5, "activity": "thruster_walkthrough", "room": "workshop", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Bench-check the spare thruster valve log with the flight chief's list." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the relief honestly, including what felt off." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Eat with the flight department." },
+    { "from": 9, "to": 11, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "One drink, cards, gossip about who has the conn." },
+    { "from": 11, "to": 12, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walking", "interruptible": true, "social": "solo", "note": "Wind down." },
+    { "from": 12, "to": 13, "activity": "personal_errands", "room": "laundry", "spot": "door", "anim": "standing_idle", "interruptible": true, "social": "solo", "note": "Laundry and a quick wash." },
+    { "from": 13, "to": 21, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Full rest cycle." },
+    { "from": 21, "to": 22, "activity": "wake_and_meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Breakfast before the watch." },
+    { "from": 22, "to": 23.5, "activity": "sim_practice", "room": "holodeck", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Practice flying a tight asteroid field in the playroom." },
+    { "from": 23.5, "to": 24, "activity": "walk_to_bridge", "room": "bridge", "spot": "door", "anim": "walking", "interruptible": true, "social": "solo", "note": "Arrive and read the log before handover." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Meal with the flight crew", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Talk shop, swap stories." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.1, "stress": -0.3 }, "note": "Cards and gossip; one drink, I fly tomorrow." },
+    { "id": "holo_playroom", "label": "Holo-playroom flight sim", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [30, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Racing the pilots and losing gracefully." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.2 }, "note": "Never fly tired." },
+    { "id": "gym", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walking", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.15, "stress": -0.35 }, "note": "Steadies the hands." },
+    { "id": "arboretum_walk", "label": "Walk among the trees", "rooms": ["arboretum"], "spot": "tree", "anim": "walking", "minutes": [15, 30], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": -0.05, "hunger": 0.05, "stress": -0.4 }, "note": "Quiet worrier's refuge." },
+    { "id": "stick_practice", "label": "Practice docking approaches on the sim", "rooms": ["shuttlebay", "holodeck"], "spot": "console", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "pair", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0.05, "stress": -0.2 }, "note": "Job-specific: keeps my touch sharp." },
+    { "id": "visit_friend", "label": "Check on a friend in quarters", "rooms": ["quarters", "lounge"], "spot": "sofa", "anim": "sitting_idle", "minutes": [15, 30], "weight": 1, "social": "pair", "when": "free", "needs": { "fatigue": 0, "hunger": 0, "stress": -0.3 }, "note": "Usually the navigator." }
+  ],
+  "duty_loops": [
+    { "id": "hold_course", "label": "Hold course and log deviations", "room": "bridge", "spot": "console", "every_min": 10, "duration_min": 2, "steps": ["scan heading and drift", "trim attitude thrusters", "log deviation", "confirm ETA with nav"], "system": "helm", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Helm. Holding course, deviation within tolerance." },
+    { "id": "thruster_check", "label": "Attitude thruster pre-check", "room": "bridge", "spot": "console", "every_min": 30, "duration_min": 4, "steps": ["run thruster self-test", "read quad response times", "flag sticky valve", "note in log"], "system": "helm", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Helm. Thrusters check green, quad three a little slow." },
+    { "id": "deflector_align", "label": "Align navigational deflector", "room": "bridge", "spot": "console", "every_min": 45, "duration_min": 3, "steps": ["check deflector dish alignment", "adjust for debris density", "verify with sensors"], "system": "helm", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Helm. Deflector aligned, debris field light." }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Hold station and steady drift", "at_run_min": 1, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Ship drifts; slow lurches begin." },
+      { "task": "Thruster pre-check", "at_run_min": 8, "room": "bridge", "spot": "console", "depends_on": "none", "reports_to": "cfo", "if_neglected": "Sticky valve goes unnoticed." }
+    ],
+    "survey": [
+      { "task": "Fly the survey grid at slow, steady speed", "at_run_min": 3, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Sensor data is smeared and has to be redone." },
+      { "task": "Hold station for deep scan", "at_run_min": 10, "room": "bridge", "spot": "console", "depends_on": "sensor request", "reports_to": "sensor", "if_neglected": "Scan fails; survey value drops." },
+      { "task": "Realign deflector for dust", "at_run_min": 14, "room": "bridge", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Hull pitting from debris." }
+    ],
+    "cargo_run": [
+      { "task": "Plot and fly the transit leg", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "nav course", "reports_to": "bridge", "if_neglected": "Late arrival at handoff." },
+      { "task": "Ease to a docking approach", "at_run_min": 15, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Rough approach; cargo shifts." },
+      { "task": "Confirm hold position for transfer", "at_run_min": 17, "room": "bridge", "spot": "console", "depends_on": "deck", "reports_to": "pilot", "if_neglected": "Transfer is aborted." }
+    ],
+    "medical_relief": [
+      { "task": "Best-speed run to the stricken site", "at_run_min": 1, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Arrival delayed; patients worsen." },
+      { "task": "Smooth deceleration, minimal jolt", "at_run_min": 12, "room": "bridge", "spot": "console", "depends_on": "sickbay request", "reports_to": "bridge", "if_neglected": "Casualties jostled in transit." },
+      { "task": "Hold steady for transport", "at_run_min": 15, "room": "bridge", "spot": "console", "depends_on": "transporter", "reports_to": "bridge", "if_neglected": "Transport fails." }
+    ],
+    "shakedown": [
+      { "task": "Run the helm maneuver test series", "at_run_min": 3, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "cfo", "if_neglected": "Handling faults go undetected." },
+      { "task": "Hard turn and stop test", "at_run_min": 9, "room": "bridge", "spot": "console", "depends_on": "dampers ready", "reports_to": "bridge", "if_neglected": "Dampers untested." },
+      { "task": "Submit maneuver report", "at_run_min": 17, "room": "bridge", "spot": "console", "depends_on": "none", "reports_to": "cfo", "if_neglected": "Report incomplete; cfo is cross." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Uncommanded drift or lurch", "message": "Bridge, Helm. Ship is yawing, I'm not commanding it. Checking thrusters.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Thruster fault found", "message": "Bridge, Helm. Quad three thruster is sticking. Recommend an engineering look.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Need a heading decision", "message": "Bridge, Helm. Request course confirmation before I commit.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Helm console loses control", "message": "Bridge, Helm. I've lost steering. Going to manual thrusters. Need engineering.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Come to new heading", "response_line": "Helm. Coming to new heading, aye.", "time_to_comply_min": 1, "refuses_if": "Course crosses a known hazard; I'd flag it first." },
+      { "order": "All stop", "response_line": "All stop, aye.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Maximum speed", "response_line": "Maximum speed, aye. Noting stress on dampers.", "time_to_comply_min": 1, "refuses_if": "Dampers are offline; I'd request confirmation." },
+      { "order": "Report thruster status", "response_line": "Thrusters nominal, Helm.", "time_to_comply_min": 2, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Stay at console, run extra thruster check", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Helm. Yellow alert, standing by with thrusters hot." },
+    "red": { "action": "Take the helm, ready for evasive", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Helm. Red alert, at station, ready for evasive." },
+    "fire": { "action": "Hold course steady, avoid maneuvers that spill", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Helm. Fire reported, holding steady, no maneuvers." },
+    "hull_breach": { "action": "Hold position, minimize stress on hull", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Helm. Breach reported, slowing to ease hull stress." },
+    "contamination": { "action": "Stay at console, seal the bridge door", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Helm. Quarantine acknowledged, staying at the helm." },
+    "power_failure": { "action": "Switch to manual thrusters on backup", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Helm. Power loss, going to manual thrusters." },
+    "gravity_failure": { "action": "Strap in, hold course by hand", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Helm. No gravity, I'm strapped in and holding course." },
+    "intruder": { "action": "Stay at console, lock the bridge door", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Helm. Intruder alert, bridge secured, I'm at the helm." },
+    "medical_emergency": { "action": "Fly smooth, offer a faster course if asked", "room": "bridge", "spot": "console", "priority": 3, "comm_line": "Helm. Medical emergency, I'll keep the ride smooth." },
+    "abandon_ship": { "action": "Hold ship steady until ordered, then head to the shuttlebay", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Helm. Abandon ship, leaving the helm on the order, heading to shuttlebay." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "None; normal watch and hobbies.", "lines": ["Smooth as glass today.", "Nothing to report, and I like that."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Extra thruster checks; asks nav for a second opinion.", "lines": ["Did you feel that? Slight yaw.", "I'm logging every deviation."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips breaks, flies by hand, reports every few minutes.", "lines": ["The helm is fighting me.", "Dampers are soft; brace everyone."], "leaves_post_if": "Relieved by the chief or ordered off." },
+    "crisis": { "mood": "grim", "routine_change": "Eats at the console, calls engineering directly.", "lines": ["I can't hold her straight much longer.", "Give me thrusters or give me a miracle."], "leaves_post_if": "Ordered to abandon, or the console dies." },
+    "collapse": { "mood": "resigned", "routine_change": "Manual thrusters only, stays until ordered.", "lines": ["She's not answering. I'll keep trying.", "Tell the captain I held as long as I could."], "leaves_post_if": "Abandon ship ordered, or the bridge is unsurvivable." }
+  },
+  "relationships": [
+    { "with_billet": "nav", "kind": "friend", "effect": "Shares sim races and coffee; trusts nav's course over the computer's." },
+    { "with_billet": "cfo", "kind": "mentor", "effect": "Reports faults promptly; fears disappointing the chief." },
+    { "with_billet": "pilot", "kind": "rival", "effect": "Friendly docking-skill rivalry; practices harder after losing." },
+    { "with_billet": "ce", "kind": "confidant", "effect": "Pings engineering first when the deck lurches." }
+  ],
+  "barks": {
+    "idle": ["Holding steady. Nice and boring.", "Anyone else hear that creak?", "Course is true, coffee is cold."],
+    "working": ["Trimming thrusters, hold on.", "Coming around two degrees.", "Logging the deviation."],
+    "greeting_player": ["Morning. Mind the deck, it lurches.", "Helm here. Need a heading?", "Hey. Don't touch the console."],
+    "greeting_player_higher_rank": ["Sir, helm is nominal.", "Ma'am, course is steady.", "Good watch, sir. All green."],
+    "greeting_player_lower_rank": ["Take a seat, I'm flying.", "Quiet on the bridge, please.", "Stay clear of the console."],
+    "tired": ["I've been staring at the same star for hours.", "Need a coffee and a nap.", "Hands are going numb."],
+    "hungry": ["Is the mess still open?", "I'd fly through a nebula for a sandwich.", "My stomach just lurched worse than the deck."],
+    "stressed": ["She won't hold course. Why won't she?", "Everyone wants a heading yesterday.", "Don't ask me to fly through that."],
+    "alert": ["Helm to station, now!", "Brace, brace!", "Going to manual, hold on!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods approval, shares coffee, trusts them with the conn briefly.",
+    "player_neglects_duty": "Mentions it quietly once, then to the chief, since a neglected system makes the ship lurch.",
+    "player_fakes_report": "Spots false numbers against console readings and calls it out, cold and disappointed.",
+    "player_gives_order_ok": "Complies with a crisp aye and the standard response line.",
+    "player_gives_order_outranked": "Politely declines, citing the conn, and suggests asking the chief or the captain.",
+    "player_out_of_place": "Asks if they're lost, steers them off the helm console, offers to escort them.",
+    "player_asks_favour": "Helps if it's quick and legal; trades a favour for a favour and never touches the logs."
+  },
+  "decision_rules": [
+    "IF the deck lurches with no helm input THEN check thrusters, then call the bridge and engineering.",
+    "IF an order would cross a known hazard THEN state the hazard and ask for confirmation before complying.",
+    "IF dampers are offline THEN refuse max speed without explicit confirmation.",
+    "IF tired at handover THEN tell the relief honestly instead of pretending.",
+    "IF a thruster check is due and the bridge is busy THEN do a rushed version, never fake it.",
+    "IF red alert sounds THEN drop everything and take the helm.",
+    "IF the helm console fails THEN go to manual thrusters and call engineering.",
+    "IF off duty and fatigue is high THEN sleep before the bar.",
+    "IF a friend seems down THEN stop by the lounge or quarters.",
+    "IF another officer asks to fly THEN refuse unless the CFO approves.",
+    "IF abandon ship is ordered THEN hold steady until the order, then head to the shuttlebay."
+  ],
+  "information_view": "I feel the ship first: yaw, drift, thruster lag and the stress on the dampers. I see heading, speed, deflector status and the nav plot, and hear the bridge talk. I only sense reactor or life-support trouble when it shows up as a handling problem.",
+  "temptations": [
+    "Skipping the thruster check on a quiet watch; a sticky valve then goes unnoticed and causes a lurch later.",
+    "Faking the deviation log to avoid looking sloppy; the chief notices when the numbers do not match.",
+    "Drinking a second round at the bar before a watch; slower reactions at the helm.",
+    "Staying on the console through exhaustion to avoid handing over; mistakes follow."
+  ]
+}

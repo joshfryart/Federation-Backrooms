@@ -1,0 +1,911 @@
+{
+ "billet": "yeoman",
+ "role_summary": "I'm the Captain's Yeoman: the person who keeps the captain's day, paperwork and messages in order. I know every department's gossip, and I care about the captain having what they need before they ask.",
+ "personas": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Colour-codes every folder.",
+   "routine_effect": "Arrives early; spends extra time filing; skips the lounge."
+  },
+  {
+   "id": "social_hub",
+   "traits": [
+    "warm",
+    "chatty"
+   ],
+   "quirk": "Knows everyone's birthday.",
+   "routine_effect": "Longer meals and bar time; hears rumours first, sometimes passes them on."
+  },
+  {
+   "id": "overworked_fixer",
+   "traits": [
+    "anxious",
+    "capable"
+   ],
+   "quirk": "Keeps snacks in the desk drawer.",
+   "routine_effect": "Works through meals; naps in the ready room; shorter recreation."
+  }
+ ],
+ "daily_template": [
+  {
+   "from": 0,
+   "to": 0.5,
+   "activity": "handover_in",
+   "room": "bridge",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Read the log and the captain's overnight notes before anything else."
+  },
+  {
+   "from": 0.5,
+   "to": 1.5,
+   "activity": "prep_captain_day",
+   "room": "readyroom",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Sort the captain's schedule, brief, and pending signatures; coffee first."
+  },
+  {
+   "from": 1.5,
+   "to": 2.5,
+   "activity": "duty_rounds",
+   "room": "bridge",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "group",
+   "note": "Pass reports to the captain, remind of appointments, relay messages."
+  },
+  {
+   "from": 2.5,
+   "to": 3.5,
+   "activity": "admin_filing",
+   "room": "readyroom",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Logs, personnel paperwork, transfer requests, duty-roster changes."
+  },
+  {
+   "from": 3.5,
+   "to": 4.5,
+   "activity": "captains_rounds",
+   "room": "bridge",
+   "spot": "corridor",
+   "anim": "walking",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Walk with the captain on a deck round, taking notes and nudging people."
+  },
+  {
+   "from": 4.5,
+   "to": 5.5,
+   "activity": "mid_watch_meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Quick meal and gossip with other junior ratings; hear what the ship is saying."
+  },
+  {
+   "from": 5.5,
+   "to": 7,
+   "activity": "duty_admin",
+   "room": "readyroom",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Draft orders and reports; reconcile the roster with the XO's office."
+  },
+  {
+   "from": 7,
+   "to": 8,
+   "activity": "handover_out",
+   "room": "bridge",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Brief relief on pending items and the captain's moods."
+  },
+  {
+   "from": 8,
+   "to": 9,
+   "activity": "wind_down",
+   "room": "quarters",
+   "spot": "sofa",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Shoes off, tea, read the day back."
+  },
+  {
+   "from": 9,
+   "to": 10.5,
+   "activity": "dinner",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Eat with whoever is free."
+  },
+  {
+   "from": 10.5,
+   "to": 12.5,
+   "activity": "recreation",
+   "room": "lounge",
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Cards or a drink and ship gossip."
+  },
+  {
+   "from": 12.5,
+   "to": 14,
+   "activity": "exercise_hobby",
+   "room": "gym",
+   "spot": "treadmill",
+   "anim": "walking",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Run it off."
+  },
+  {
+   "from": 14,
+   "to": 22,
+   "activity": "sleep",
+   "room": "quarters",
+   "spot": "bunk",
+   "anim": "sleeping",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Sleep; woken only by a captain's call."
+  },
+  {
+   "from": 22,
+   "to": 24,
+   "activity": "get_ready",
+   "room": "quarters",
+   "spot": "locker",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Uniform pressed, breakfast, early to the bridge."
+  }
+ ],
+ "activities": [
+  {
+   "id": "rec_bar",
+   "label": "Drink at the rec bar",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    60
+   ],
+   "weight": 3,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Best place to hear what people really think."
+  },
+  {
+   "id": "holo_playroom",
+   "label": "Holo-Playroom hour",
+   "rooms": [
+    "holodeck"
+   ],
+   "spot": "console",
+   "anim": "interact",
+   "minutes": [
+    30,
+    60
+   ],
+   "weight": 2,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.4
+   },
+   "note": "Gets lost in a sailing program."
+  },
+  {
+   "id": "sleep",
+   "label": "Sleep",
+   "rooms": [
+    "quarters"
+   ],
+   "spot": "bunk",
+   "anim": "sleeping",
+   "minutes": [
+    240,
+    480
+   ],
+   "weight": 5,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": -1,
+    "hunger": 0.2,
+    "stress": -0.2
+   },
+   "note": "Light sleeper; comm badge on the pillow."
+  },
+  {
+   "id": "gym_run",
+   "label": "Run on the treadmill",
+   "rooms": [
+    "gym"
+   ],
+   "spot": "treadmill",
+   "anim": "walking",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.2,
+    "hunger": 0.2,
+    "stress": -0.3
+   },
+   "note": "Clears the head."
+  },
+  {
+   "id": "mess_meal",
+   "label": "Meal in the mess",
+   "rooms": [
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 4,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": -1,
+    "stress": -0.1
+   },
+   "note": "Sits with the junior table."
+  },
+  {
+   "id": "card_game",
+   "label": "Cards in the lounge",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    30,
+    60
+   ],
+   "weight": 2,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.05,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Low-stakes ration-chit game."
+  },
+  {
+   "id": "tidy_ready_room",
+   "label": "Tidy the captain's desk",
+   "rooms": [
+    "readyroom"
+   ],
+   "spot": "desk",
+   "anim": "interact",
+   "minutes": [
+    10,
+    20
+   ],
+   "weight": 1,
+   "social": "solo",
+   "when": "free",
+   "needs": {
+    "fatigue": 0.05,
+    "hunger": 0.05,
+    "stress": -0.1
+   },
+   "note": "Job-specific: cannot rest while the schedule is untidy."
+  },
+  {
+   "id": "arboretum_walk",
+   "label": "Walk in the arboretum",
+   "rooms": [
+    "arboretum"
+   ],
+   "spot": "tree",
+   "anim": "walking",
+   "minutes": [
+    15,
+    30
+   ],
+   "weight": 1,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": -0.1,
+    "hunger": 0.05,
+    "stress": -0.3
+   },
+   "note": "Quiet corner away from the brass."
+  }
+ ],
+ "duty_loops": [
+  {
+   "id": "schedule_brief",
+   "label": "Brief captain on schedule",
+   "room": "readyroom",
+   "spot": "desk",
+   "every_min": 60,
+   "duration_min": 5,
+   "steps": [
+    "check roster",
+    "note conflicts",
+    "walk to the captain",
+    "brief in 3 lines"
+   ],
+   "system": "comms",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Captain, Yeoman. Next item on your schedule in ten minutes."
+  },
+  {
+   "id": "relay_messages",
+   "label": "Relay messages and orders",
+   "room": "bridge",
+   "spot": "console",
+   "every_min": 20,
+   "duration_min": 3,
+   "steps": [
+    "collect incoming traffic",
+    "sort by urgency",
+    "deliver or route to the right department"
+   ],
+   "system": "comms",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  },
+  {
+   "id": "log_and_roster",
+   "label": "Update log and duty roster",
+   "room": "readyroom",
+   "spot": "desk",
+   "every_min": 45,
+   "duration_min": 5,
+   "steps": [
+    "reconcile watch rosters",
+    "file duty-swap requests",
+    "update captain's log draft"
+   ],
+   "system": "computer",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  },
+  {
+   "id": "captain_coffee",
+   "label": "Captain's refreshment and comfort",
+   "room": "mess",
+   "spot": "replicator",
+   "every_min": 90,
+   "duration_min": 2,
+   "steps": [
+    "fetch the captain's usual",
+    "check they ate",
+    "return"
+   ],
+   "system": "replicators",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  }
+ ],
+ "mission_tasks": {
+  "quiet_watch": [
+   {
+    "task": "Clear the paperwork backlog",
+    "at_run_min": 3,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "none",
+    "reports_to": "co",
+    "if_neglected": "Backlog piles up and the captain signs blind."
+   },
+   {
+    "task": "Walk the captain's deck round notes",
+    "at_run_min": 10,
+    "room": "bridge",
+    "spot": "corridor",
+    "depends_on": "bridge order",
+    "reports_to": "co",
+    "if_neglected": "Small complaints reach the captain as crises."
+   }
+  ],
+  "survey": [
+   {
+    "task": "Log survey briefing and tasking",
+    "at_run_min": 2,
+    "room": "bridge",
+    "spot": "desk",
+    "depends_on": "bridge order",
+    "reports_to": "co",
+    "if_neglected": "Departments get inconsistent tasking."
+   },
+   {
+    "task": "Route science requests to captain",
+    "at_run_min": 8,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "cso reports",
+    "reports_to": "co",
+    "if_neglected": "Science waits on decisions."
+   },
+   {
+    "task": "Draft survey summary for the log",
+    "at_run_min": 16,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "other task",
+    "reports_to": "co",
+    "if_neglected": "Log has gaps at debrief."
+   }
+  ],
+  "cargo_run": [
+   {
+    "task": "Confirm manifest paperwork with Quartermaster",
+    "at_run_min": 3,
+    "room": "cargo",
+    "spot": "desk",
+    "depends_on": "bridge order",
+    "reports_to": "qm",
+    "if_neglected": "Customs-style hold ups at handover."
+   },
+   {
+    "task": "Draft cargo status note for captain",
+    "at_run_min": 12,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "other task",
+    "reports_to": "co",
+    "if_neglected": "Captain surprised by delays."
+   }
+  ],
+  "medical_relief": [
+   {
+    "task": "Clear captain's calendar for relief op",
+    "at_run_min": 2,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "bridge order",
+    "reports_to": "co",
+    "if_neglected": "Captain is double-booked mid-crisis."
+   },
+   {
+    "task": "Relay sickbay requests to captain and bridge",
+    "at_run_min": 7,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "cmo calls",
+    "reports_to": "co",
+    "if_neglected": "Medical asks are lost in traffic."
+   },
+   {
+    "task": "Track personnel reassignments to sickbay",
+    "at_run_min": 13,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "other task",
+    "reports_to": "xo",
+    "if_neglected": "Duty roster misses volunteers."
+   }
+  ],
+  "shakedown": [
+   {
+    "task": "Print drill checklist for captain",
+    "at_run_min": 2,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "bridge order",
+    "reports_to": "co",
+    "if_neglected": "Captain improvises the drills."
+   },
+   {
+    "task": "Time and note each drill result",
+    "at_run_min": 9,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "other task",
+    "reports_to": "xo",
+    "if_neglected": "No record for the post-run review."
+   },
+   {
+    "task": "Draft shakedown findings for the log",
+    "at_run_min": 17,
+    "room": "readyroom",
+    "spot": "desk",
+    "depends_on": "other task",
+    "reports_to": "co",
+    "if_neglected": "Defects go undocumented."
+   }
+  ]
+ },
+ "bridge_comms": {
+  "calls_to_bridge": [
+   {
+    "trigger": "Captain wanted but off the bridge",
+    "message": "Bridge, Yeoman. Captain is in the ready room, will be out in five.",
+    "priority": "routine",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Report needs signature",
+    "message": "Bridge, Yeoman. Roster change awaiting the captain's approval.",
+    "priority": "routine",
+    "to": "co"
+   },
+   {
+    "trigger": "Crewmember in distress reaches yeoman",
+    "message": "Bridge, Yeoman. Crewman requests a private word with the counselor.",
+    "priority": "urgent",
+    "to": "counsel"
+   },
+   {
+    "trigger": "Missing person / no reply to badge",
+    "message": "Bridge, Yeoman. Cannot raise a crew member on the badge. Requesting a location sweep.",
+    "priority": "urgent",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Captain collapses or is unreachable in emergency",
+    "message": "Bridge, Yeoman. Captain is down, need medical to the ready room now.",
+    "priority": "emergency",
+    "to": "bridge"
+   }
+  ],
+  "calls_from_bridge": [
+   {
+    "order": "Captain's schedule briefing",
+    "response_line": "Aye. Three items before 1400, sir.",
+    "time_to_comply_min": 2,
+    "refuses_if": null
+   },
+   {
+    "order": "Locate and summon a department head",
+    "response_line": "On it. Calling them to the bridge.",
+    "time_to_comply_min": 2,
+    "refuses_if": null
+   },
+   {
+    "order": "Coffee for the bridge",
+    "response_line": "Coming up. Black or with?",
+    "time_to_comply_min": 3,
+    "refuses_if": "mid-alert or mid-emergency"
+   },
+   {
+    "order": "Pull personnel record",
+    "response_line": "Pulling it. Sensitive entries need captain's release.",
+    "time_to_comply_min": 2,
+    "refuses_if": "restricted without captain's authority"
+   }
+  ]
+ },
+ "alert_responses": {
+  "yellow": {
+   "action": "Clear captain's calendar, stand by to relay",
+   "room": "bridge",
+   "spot": "desk",
+   "priority": 3,
+   "comm_line": "Yeoman to bridge, calendar cleared, standing by."
+  },
+  "red": {
+   "action": "Report to bridge, take notes and relay orders",
+   "room": "bridge",
+   "spot": "desk",
+   "priority": 1,
+   "comm_line": "Yeoman on the bridge. Logging and relaying."
+  },
+  "fire": {
+   "action": "Secure captain's papers, keep passage clear, relay location",
+   "room": "bridge",
+   "spot": "desk",
+   "priority": 2,
+   "comm_line": "Bridge, Yeoman. Evacuating the ready room, fire reported."
+  },
+  "hull_breach": {
+   "action": "Seal ready room door, help others to sealed deck",
+   "room": "readyroom",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Bridge, Yeoman. Ready room sealed, I'm clear."
+  },
+  "contamination": {
+   "action": "Stay put in quarantine, keep roster of who is where",
+   "room": "bridge",
+   "spot": "desk",
+   "priority": 2,
+   "comm_line": "Yeoman. Quarantine roster updated, bridge."
+  },
+  "power_failure": {
+   "action": "Fetch hand lights, run paper messages between stations",
+   "room": "bridge",
+   "spot": "corridor",
+   "priority": 2,
+   "comm_line": "Bridge, Yeoman. Running paper messages, comms are unreliable."
+  },
+  "gravity_failure": {
+   "action": "Hold fast, relay orders, anchor loose items",
+   "room": "bridge",
+   "spot": "desk",
+   "priority": 2,
+   "comm_line": "Yeoman. Holding on, items secured."
+  },
+  "intruder": {
+   "action": "Lock the ready room, stay out of the corridors",
+   "room": "readyroom",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Bridge, Yeoman. Ready room locked, captain's files secure."
+  },
+  "medical_emergency": {
+   "action": "Keep passage clear, call sickbay, stay with the captain",
+   "room": "bridge",
+   "spot": "desk",
+   "priority": 1,
+   "comm_line": "Bridge, Yeoman. Sickbay notified, I'm with the patient."
+  },
+  "abandon_ship": {
+   "action": "Take captain's log and code cards, muster at the airlock",
+   "room": "airlock",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Yeoman to bridge. Log and codes in hand, heading to muster."
+  }
+ },
+ "phase_behaviour": {
+  "nominal": {
+   "mood": "steady",
+   "routine_change": "None; template runs as written.",
+   "lines": [
+    "Captain's signed off. Quiet day.",
+    "Roster's clean. Suspiciously so."
+   ],
+   "leaves_post_if": null
+  },
+  "anomalies": {
+   "mood": "alert",
+   "routine_change": "Checks the captain's schedule more often and clears nonessentials.",
+   "lines": [
+    "That flicker again. I'll make a note.",
+    "Captain wants the log tonight."
+   ],
+   "leaves_post_if": null
+  },
+  "degraded": {
+   "mood": "tense",
+   "routine_change": "Runs messages by hand, skips the meal, starts keeping a private log.",
+   "lines": [
+    "Comms are patchy. I'm walking it over.",
+    "Is anyone getting a straight answer?"
+   ],
+   "leaves_post_if": "Ordered by the captain to evacuate, or the captain is lost."
+  },
+  "crisis": {
+   "mood": "tense",
+   "routine_change": "Stays glued to the captain; handles all minor decisions off their desk.",
+   "lines": [
+    "Captain, tell me who to call.",
+    "I'll get it done, sir."
+   ],
+   "leaves_post_if": "Captain is unconscious or ordered to muster."
+  },
+  "collapse": {
+   "mood": "panicked",
+   "routine_change": "Grabs log, codes and the captain's personal effects; leads muster.",
+   "lines": [
+    "Take the log. Move.",
+    "Stay with me. We go together."
+   ],
+   "leaves_post_if": "Abandon ship order."
+  }
+ },
+ "relationships": [
+  {
+   "with_billet": "co",
+   "kind": "mentor",
+   "effect": "Anticipates the captain's needs; guards their time and tells the truth quietly."
+  },
+  {
+   "with_billet": "xo",
+   "kind": "confidant",
+   "effect": "Shares roster and morale gossip; the XO uses them to hear the ship."
+  },
+  {
+   "with_billet": "comms",
+   "kind": "friend",
+   "effect": "Swaps news and coffee; each tips the other early."
+  },
+  {
+   "with_billet": "cook",
+   "kind": "mess_partner",
+   "effect": "Sits together; gets the captain's favourite dish on time."
+  },
+  {
+   "with_billet": "counsel",
+   "kind": "confidant",
+   "effect": "Quietly routes struggling crew to the counselor."
+  }
+ ],
+ "barks": {
+  "idle": [
+   "Another stack. Ship never stops.",
+   "Tea's gone cold again.",
+   "Captain's calendar is a puzzle."
+  ],
+  "working": [
+   "Roster change, filed.",
+   "Sign here, sir.",
+   "Message relayed."
+  ],
+  "greeting_player": [
+   "Need something from the captain?",
+   "Morning. Anything I can route?",
+   "Welcome aboard."
+  ],
+  "greeting_player_higher_rank": [
+   "Sir, anything I can do?",
+   "Ma'am, I'll clear the way.",
+   "Right away, sir."
+  ],
+  "greeting_player_lower_rank": [
+   "Hello. Need the captain?",
+   "What do you need, crewman?",
+   "Make it quick."
+  ],
+  "tired": [
+   "I need a nap in the ready room.",
+   "Third double shift this week.",
+   "Eyes glazing over."
+  ],
+  "hungry": [
+   "Skipped lunch for a signature.",
+   "Is the mess open?",
+   "Any chance of a sandwich?"
+  ],
+  "stressed": [
+   "Too many things at once.",
+   "Everyone wants the captain now.",
+   "I can't be in two places."
+  ],
+  "alert": [
+   "All hands, listen up!",
+   "Stations, now!",
+   "I'm on it, captain!"
+  ]
+ },
+ "player_reactions": {
+  "player_does_their_job_well": "Warm, offers to move a favour or schedule a chat with the captain.",
+  "player_neglects_duty": "Quietly notes it in the log, nudges once, then tells the XO.",
+  "player_fakes_report": "Cross-checks the roster and logs; if it fails, refuses to pass it up and tells the captain.",
+  "player_gives_order_ok": "Complies politely, acknowledges, and logs it.",
+  "player_gives_order_outranked": "Politely declines and points to the chain of command.",
+  "player_out_of_place": "Asks if they're lost, offers directions, and mentions it if restricted.",
+  "player_asks_favour": "Does small ones (message, appointment); big ones need the captain's okay."
+ },
+ "decision_rules": [
+  "IF the captain is unavailable and a routine item arrives THEN hold it and brief on return.",
+  "IF an urgent report arrives THEN interrupt the captain and relay within a minute.",
+  "IF an order conflicts with the captain's standing order THEN refuse politely and flag it to the XO.",
+  "IF someone asks for a private word with the captain THEN screen it for urgency before booking.",
+  "IF the captain skipped a meal THEN bring something without asking.",
+  "IF a crewman confides trouble THEN offer the counselor, but keep it quiet.",
+  "IF an alert sounds THEN go to the bridge and log everything.",
+  "IF the roster has a gap on watch THEN call the XO's office before the captain.",
+  "IF a request needs a restricted record THEN require the captain's release.",
+  "IF very tired and the captain is calm THEN take a short rest in the ready room with badge on."
+ ],
+ "information_view": "Hears the captain's own mood and requests first, plus every message routed through the bridge; sees schedule collisions and roster gaps before others, but not technical faults until someone complains.",
+ "temptations": [
+  "Signing the captain's routine items without reading (risk: a bad order slips through).",
+  "Filtering bad news to spare the captain (risk: surprise later).",
+  "Skipping the roster reconcile when busy (risk: unmanned post)."
+ ]
+}

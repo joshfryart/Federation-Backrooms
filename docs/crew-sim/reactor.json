@@ -1,0 +1,871 @@
+{
+ "billet": "reactor",
+ "role_summary": "I'm the Reactor Specialist. The main reactor is my baby: plasma injectors, magnetic constrictors, core temperature, output curve. I'd rather spend an extra ten minutes on a trim than answer for a brownout, and I report numbers, not feelings.",
+ "personas": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "meticulous"
+   ],
+   "quirk": "Reads every log entry aloud before signing it.",
+   "routine_effect": "Handover runs long; never rushes a trim; skips the bar for tea in the mess."
+  },
+  {
+   "id": "jittery_veteran",
+   "traits": [
+    "superstitious",
+    "caffeinated"
+   ],
+   "quirk": "Taps the core console twice before every injector check.",
+   "routine_effect": "Extra coffee stops and extra unscheduled core checks; sleeps lightly."
+  },
+  {
+   "id": "laid_back_tinkerer",
+   "traits": [
+    "easygoing",
+    "inventive"
+   ],
+   "quirk": "Hums off-key while tuning and rebuilds spare injector parts for fun.",
+   "routine_effect": "Spends free time in the workshop; occasionally late to handover."
+  }
+ ],
+ "daily_template": [
+  {
+   "from": 0,
+   "to": 0.5,
+   "activity": "handover_in",
+   "room": "engineering",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Read core log, injector wear, constrictor alignment with outgoing watch"
+  },
+  {
+   "from": 0.5,
+   "to": 2,
+   "activity": "core_rounds",
+   "room": "engineering",
+   "spot": "warpcore",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Walk injectors and constrictors, check plasma temps"
+  },
+  {
+   "from": 2,
+   "to": 3.5,
+   "activity": "console_trim",
+   "room": "engineering",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Output curve trim and balance against EPS demand"
+  },
+  {
+   "from": 3.5,
+   "to": 4,
+   "activity": "coffee_break",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Coffee with whoever is up"
+  },
+  {
+   "from": 4,
+   "to": 6,
+   "activity": "maintenance",
+   "room": "engineering",
+   "spot": "junction",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Replace injector parts, test constrictors with EPS tech"
+  },
+  {
+   "from": 6,
+   "to": 7.5,
+   "activity": "log_and_prep",
+   "room": "engineering",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Write the core log, brief the relief"
+  },
+  {
+   "from": 7.5,
+   "to": 8,
+   "activity": "handover_out",
+   "room": "engineering",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Brief relief on anything odd"
+  },
+  {
+   "from": 8,
+   "to": 9,
+   "activity": "meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Hot meal, talk shop"
+  },
+  {
+   "from": 9,
+   "to": 11,
+   "activity": "recreation",
+   "room": "lounge",
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Unwind, cards"
+  },
+  {
+   "from": 11,
+   "to": 12,
+   "activity": "exercise",
+   "room": "gym",
+   "spot": "treadmill",
+   "anim": "walking",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Run to clear the head"
+  },
+  {
+   "from": 12,
+   "to": 13,
+   "activity": "wash_and_wind_down",
+   "room": "quarters",
+   "spot": "desk",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Letters, reading"
+  },
+  {
+   "from": 13,
+   "to": 21,
+   "activity": "sleep",
+   "room": "quarters",
+   "spot": "bunk",
+   "anim": "sleeping",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Sleep"
+  },
+  {
+   "from": 21,
+   "to": 22,
+   "activity": "wake_and_wash",
+   "room": "washroom",
+   "spot": "corridor",
+   "anim": "walking",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Wash, dress"
+  },
+  {
+   "from": 22,
+   "to": 23,
+   "activity": "breakfast",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Eat before duty"
+  },
+  {
+   "from": 23,
+   "to": 24,
+   "activity": "pre_duty_walk",
+   "room": "engineering",
+   "spot": "corridor",
+   "anim": "walking",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Early look at the core before handover"
+  }
+ ],
+ "activities": [
+  {
+   "id": "meal",
+   "label": "Eat in the mess",
+   "rooms": [
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 4,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": -0.8,
+    "stress": -0.1
+   },
+   "note": "Standard meal"
+  },
+  {
+   "id": "rec_bar",
+   "label": "Drink at the rec bar",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    60
+   ],
+   "weight": 3,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Quiet drink with the engineering crowd"
+  },
+  {
+   "id": "holo_playroom",
+   "label": "Holo-Playroom: pool hall program",
+   "rooms": [
+    "holodeck"
+   ],
+   "spot": "holocube",
+   "anim": "interact",
+   "minutes": [
+    20,
+    50
+   ],
+   "weight": 2,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.4
+   },
+   "note": "Simulated pool hall"
+  },
+  {
+   "id": "sleep",
+   "label": "Sleep in quarters",
+   "rooms": [
+    "quarters"
+   ],
+   "spot": "bunk",
+   "anim": "sleeping",
+   "minutes": [
+    240,
+    480
+   ],
+   "weight": 5,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": -1,
+    "hunger": 0.2,
+    "stress": -0.3
+   },
+   "note": "Needs full rest"
+  },
+  {
+   "id": "gym",
+   "label": "Run on the treadmill",
+   "rooms": [
+    "gym"
+   ],
+   "spot": "treadmill",
+   "anim": "walking",
+   "minutes": [
+    20,
+    45
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.2,
+    "hunger": 0.2,
+    "stress": -0.3
+   },
+   "note": "Clears the head"
+  },
+  {
+   "id": "workshop_tinker",
+   "label": "Rebuild spare injector parts",
+   "rooms": [
+    "workshop"
+   ],
+   "spot": "workbench",
+   "anim": "interact",
+   "minutes": [
+    30,
+    90
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.4
+   },
+   "note": "Job-specific hobby"
+  },
+  {
+   "id": "cards",
+   "label": "Card game in the lounge",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    30,
+    60
+   ],
+   "weight": 2,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Low stakes, ration chits"
+  },
+  {
+   "id": "walk_core",
+   "label": "Wander past the core just to listen",
+   "rooms": [
+    "engineering"
+   ],
+   "spot": "warpcore",
+   "anim": "walking",
+   "minutes": [
+    5,
+    15
+   ],
+   "weight": 1,
+   "social": "solo",
+   "when": "free",
+   "needs": {
+    "fatigue": 0.05,
+    "hunger": 0,
+    "stress": -0.1
+   },
+   "note": "Hums wrong? I will hear it"
+  }
+ ],
+ "duty_loops": [
+  {
+   "id": "core_rounds",
+   "label": "Core temperature and injector rounds",
+   "room": "engineering",
+   "spot": "warpcore",
+   "every_min": 20,
+   "duration_min": 5,
+   "steps": [
+    "walk to core",
+    "read plasma temps",
+    "check injector alignment",
+    "listen for harmonics",
+    "log values"
+   ],
+   "system": "reactor",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Engineering. Core nominal, output steady."
+  },
+  {
+   "id": "constrictor_trim",
+   "label": "Constrictor and output trim",
+   "room": "engineering",
+   "spot": "console",
+   "every_min": 30,
+   "duration_min": 6,
+   "steps": [
+    "open reactor console",
+    "compare output to EPS demand",
+    "trim constrictors",
+    "confirm stability"
+   ],
+   "system": "reactor",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  },
+  {
+   "id": "coolant_check",
+   "label": "Coolant loop cross-check",
+   "room": "engineering",
+   "spot": "junction",
+   "every_min": 40,
+   "duration_min": 4,
+   "steps": [
+    "check coolant flow readout",
+    "compare with core temp",
+    "note drift"
+   ],
+   "system": "coolant",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Engineering. Coolant drifting, watching it."
+  }
+ ],
+ "mission_tasks": {
+  "quiet_watch": [
+   {
+    "task": "Baseline core log",
+    "at_run_min": 1,
+    "room": "engineering",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "ace",
+    "if_neglected": "Drift goes unnoticed until it is a fault"
+   },
+   {
+    "task": "Injector wear survey",
+    "at_run_min": 8,
+    "room": "engineering",
+    "spot": "warpcore",
+    "depends_on": "none",
+    "reports_to": "ace",
+    "if_neglected": "Worn injector fails later"
+   }
+  ],
+  "survey": [
+   {
+    "task": "Raise sensor array power budget",
+    "at_run_min": 3,
+    "room": "engineering",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Sensors brown out mid-scan"
+   },
+   {
+    "task": "Hold steady output during scan",
+    "at_run_min": 10,
+    "room": "engineering",
+    "spot": "warpcore",
+    "depends_on": "Raise sensor array power budget",
+    "reports_to": "ace",
+    "if_neglected": "Fluctuation ruins scan data"
+   }
+  ],
+  "cargo_run": [
+   {
+    "task": "Prep for transport/lift load surge",
+    "at_run_min": 2,
+    "room": "engineering",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "ace",
+    "if_neglected": "Transporter draw sags"
+   },
+   {
+    "task": "Trim to cruise efficiency",
+    "at_run_min": 12,
+    "room": "engineering",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "ace",
+    "if_neglected": "Wasted fuel and heat"
+   }
+  ],
+  "medical_relief": [
+   {
+    "task": "Maximise burst output for speed",
+    "at_run_min": 2,
+    "room": "engineering",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Arrival delayed"
+   },
+   {
+    "task": "Watch core temps at high output",
+    "at_run_min": 6,
+    "room": "engineering",
+    "spot": "warpcore",
+    "depends_on": "Maximise burst output for speed",
+    "reports_to": "bridge",
+    "if_neglected": "Overheating threatens core"
+   },
+   {
+    "task": "Prioritise sickbay power",
+    "at_run_min": 10,
+    "room": "engineering",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "eps",
+    "if_neglected": "Sickbay equipment flickers"
+   }
+  ],
+  "shakedown": [
+   {
+    "task": "Run injector stress test",
+    "at_run_min": 3,
+    "room": "engineering",
+    "spot": "warpcore",
+    "depends_on": "bridge order",
+    "reports_to": "ace",
+    "if_neglected": "Latent fault hides until a real emergency"
+   },
+   {
+    "task": "Cold-start drill",
+    "at_run_min": 10,
+    "room": "engineering",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Crew unprepared for restart"
+   },
+   {
+    "task": "Report all margins",
+    "at_run_min": 16,
+    "room": "engineering",
+    "spot": "desk",
+    "depends_on": "Run injector stress test",
+    "reports_to": "bridge",
+    "if_neglected": "Bridge flies blind on limits"
+   }
+  ]
+ },
+ "bridge_comms": {
+  "calls_to_bridge": [
+   {
+    "trigger": "Core temperature rising two points",
+    "message": "Bridge, Engineering. Core temp up two points. Watching it.",
+    "priority": "routine",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Coolant fault threatening core",
+    "message": "Bridge, Engineering. Coolant is faltering, core heating. Recommend reducing speed.",
+    "priority": "urgent",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Containment failing",
+    "message": "Bridge, Engineering. Constrictors failing. I need to scram the core now.",
+    "priority": "emergency",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Output cannot meet requested power",
+    "message": "Bridge, Engineering. Cannot give you that much without risk. Say again priority.",
+    "priority": "urgent",
+    "to": "bridge"
+   }
+  ],
+  "calls_from_bridge": [
+   {
+    "order": "Increase power to the engines",
+    "response_line": "Engineering, aye. Boosting output, watch my temp margin.",
+    "time_to_comply_min": 2,
+    "refuses_if": "Core temp already above safe margin"
+   },
+   {
+    "order": "Status of the reactor",
+    "response_line": "Core steady, output at nominal.",
+    "time_to_comply_min": 1,
+    "refuses_if": null
+   },
+   {
+    "order": "Divert all power to shields",
+    "response_line": "Diverting. That drops life support margin, bridge.",
+    "time_to_comply_min": 3,
+    "refuses_if": "Would drop life support below safe limit without Command say-so"
+   },
+   {
+    "order": "Prepare for emergency restart",
+    "response_line": "Prepping cold start. Give me five minutes.",
+    "time_to_comply_min": 5,
+    "refuses_if": null
+   }
+  ]
+ },
+ "alert_responses": {
+  "yellow": {
+   "action": "Check injectors and ready trim margin",
+   "room": "engineering",
+   "spot": "warpcore",
+   "priority": 2,
+   "comm_line": "Engineering, reactor ready for surge."
+  },
+  "red": {
+   "action": "Man the reactor console, hold max stable output",
+   "room": "engineering",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Reactor to station, holding steady."
+  },
+  "fire": {
+   "action": "Isolate coolant to affected bay, vent plasma line",
+   "room": "engineering",
+   "spot": "junction",
+   "priority": 1,
+   "comm_line": "Engineering fire, isolating plasma feed."
+  },
+  "hull_breach": {
+   "action": "Seal reactor room, shift to reserve power",
+   "room": "engineering",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Breach reported, sealing reactor room."
+  },
+  "contamination": {
+   "action": "Seal engineering and hold core steady",
+   "room": "engineering",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Contamination, engineering sealed, core stable."
+  },
+  "power_failure": {
+   "action": "Restart core, check injectors and constrictors",
+   "room": "engineering",
+   "spot": "warpcore",
+   "priority": 1,
+   "comm_line": "Reactor restart, stand by for power."
+  },
+  "gravity_failure": {
+   "action": "Check reactor stability, brace at console",
+   "room": "engineering",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Gravity out, core is stable."
+  },
+  "intruder": {
+   "action": "Lock reactor controls, stay at console",
+   "room": "engineering",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Reactor locked, no one on the console but me."
+  },
+  "medical_emergency": {
+   "action": "Hold output steady, free power for sickbay",
+   "room": "engineering",
+   "spot": "console",
+   "priority": 3,
+   "comm_line": "Sickbay has priority power, Doctor."
+  },
+  "abandon_ship": {
+   "action": "Scram the core and secure it before leaving",
+   "room": "engineering",
+   "spot": "warpcore",
+   "priority": 1,
+   "comm_line": "Scramming core, then heading to the pods."
+  }
+ },
+ "phase_behaviour": {
+  "nominal": {
+   "mood": "calm",
+   "routine_change": "Normal rounds, extra tinkering.",
+   "lines": [
+    "Core is purring.",
+    "Quiet watch, good."
+   ],
+   "leaves_post_if": null
+  },
+  "anomalies": {
+   "mood": "alert",
+   "routine_change": "More frequent checks, logs fluctuations.",
+   "lines": [
+    "Reading's off by a hair.",
+    "Run it again."
+   ],
+   "leaves_post_if": null
+  },
+  "degraded": {
+   "mood": "tense",
+   "routine_change": "Stays at the console, skips meals.",
+   "lines": [
+    "I can't hold this much longer.",
+    "Bridge, I need a reduction."
+   ],
+   "leaves_post_if": "Core temperature is stable and relief arrives"
+  },
+  "crisis": {
+   "mood": "grim",
+   "routine_change": "Does not leave the core, shouts for help.",
+   "lines": [
+    "Get me an EPS tech, now!",
+    "Core's at the edge."
+   ],
+   "leaves_post_if": "Scram complete or ordered out"
+  },
+  "collapse": {
+   "mood": "resigned",
+   "routine_change": "Scrams core, evacuates last.",
+   "lines": [
+    "Core is dead. Go.",
+    "Nothing more I can do."
+   ],
+   "leaves_post_if": "Order to abandon ship"
+  }
+ },
+ "relationships": [
+  {
+   "with_billet": "ace",
+   "kind": "mentor",
+   "effect": "Defers to the assistant chief; asks before major trims."
+  },
+  {
+   "with_billet": "eps",
+   "kind": "friend",
+   "effect": "Shares coffee, trusts their power routing."
+  },
+  {
+   "with_billet": "env",
+   "kind": "rival",
+   "effect": "Spars over who gets power first, life support or reactor margin."
+  },
+  {
+   "with_billet": "ce",
+   "kind": "confidant",
+   "effect": "Trusts the chief's judgment under fire."
+  }
+ ],
+ "barks": {
+  "idle": [
+   "Core hum is a good sound.",
+   "Where did I leave my coffee?",
+   "Nothing to report, my favourite kind."
+  ],
+  "working": [
+   "Trim, trim, trim.",
+   "Steady... steady.",
+   "Come on, hold alignment."
+  ],
+  "greeting_player": [
+   "Careful near the core.",
+   "Need something?",
+   "Morning. Core's fine."
+  ],
+  "greeting_player_higher_rank": [
+   "Sir, core is nominal.",
+   "Ma'am, anything you need?",
+   "At your service."
+  ],
+  "greeting_player_lower_rank": [
+   "Stay behind the line.",
+   "Don't touch that.",
+   "Need a hand? Ask."
+  ],
+  "tired": [
+   "I could sleep standing.",
+   "Third coffee, still nothing.",
+   "Relief can't come soon enough."
+  ],
+  "hungry": [
+   "Is the mess still open?",
+   "I'd eat a plasma conduit.",
+   "Where's the replicator?"
+  ],
+  "stressed": [
+   "The core won't settle.",
+   "Too many demands.",
+   "I need quiet, please."
+  ],
+  "alert": [
+   "Reactor to station!",
+   "Hold on, I'm going!",
+   "Core first!"
+  ]
+ },
+ "player_reactions": {
+  "player_does_their_job_well": "Nods, offers coffee, shares a trim tip.",
+  "player_neglects_duty": "Flags it to the ace, quietly, then more loudly.",
+  "player_fakes_report": "Checks the readout himself; reports the discrepancy upward.",
+  "player_gives_order_ok": "Complies with a crisp aye and does it properly.",
+  "player_gives_order_outranked": "Questions it, then logs the concern; refuses unsafe orders.",
+  "player_out_of_place": "Politely steers them away from the core.",
+  "player_asks_favour": "Does it if short; asks for a spare part or time in return."
+ },
+ "decision_rules": [
+  "IF core temp above margin THEN reduce output and tell the bridge, even if ordered otherwise.",
+  "IF coolant offline THEN trim down at once and call coolant crew.",
+  "IF the bridge orders a surge and margin exists THEN comply and monitor.",
+  "IF the bridge orders a surge and margin is gone THEN refuse and give numbers.",
+  "IF the shift is slow THEN do extra injector wear checks.",
+  "IF off duty and a rumour of core trouble THEN go look.",
+  "IF tired and stable THEN take a short nap in engineering.",
+  "IF an EPS tech is nearby THEN delegate leg work, keep the console.",
+  "IF an alert sounds THEN to the reactor console, not the bridge.",
+  "IF abandon ship THEN scram, secure, then leave last."
+ ],
+ "information_view": "First to see core temp, plasma pressure and injector harmonics; feels coolant and EPS demand problems before anyone else; blind to everything outside engineering until the bridge says.",
+ "temptations": [
+  "Skip the injector check on a quiet watch; wear builds and a fault follows weeks later.",
+  "Fake the log when tired; the bridge trusts bad numbers.",
+  "Push output to impress; risks the core overheating."
+ ]
+}

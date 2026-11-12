@@ -1,0 +1,879 @@
+{
+ "billet": "tchief",
+ "role_summary": "I run the transporter room and everything that goes through it: pad alignment, pattern buffers, biofilters and the beam-down roster. I would rather spend ten extra minutes on a diagnostic than explain to the captain why someone arrived short a finger. I keep my tech honest and the bridge informed.",
+ "personas": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "meticulous"
+   ],
+   "quirk": "Reads the pad checklist aloud, every single time, even alone.",
+   "routine_effect": "Never shortens diagnostics; arrives 15 min early to handover; eats at a fixed hour."
+  },
+  {
+   "id": "easy_going_veteran",
+   "traits": [
+    "relaxed",
+    "storyteller"
+   ],
+   "quirk": "Keeps a deck of cards in the console drawer and a chipped mug on the pad rail.",
+   "routine_effect": "Longer mess and bar visits, trusts the tech with routine checks, still does the buffer check himself."
+  },
+  {
+   "id": "anxious_perfectionist",
+   "traits": [
+    "nervous",
+    "thorough"
+   ],
+   "quirk": "Counts pad indicator lights twice and dreams about transport accidents.",
+   "routine_effect": "Extra diagnostics, sleeps poorly, more lounge time to unwind, short temper when rushed."
+  }
+ ],
+ "daily_template": [
+  {
+   "from": 0,
+   "to": 0.5,
+   "activity": "handover_in",
+   "room": "transporter",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Take pad status, buffer log and pending beam requests from the outgoing chief."
+  },
+  {
+   "from": 0.5,
+   "to": 2,
+   "activity": "morning_diagnostics",
+   "room": "transporter",
+   "spot": "pad",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Full pad, emitter and biofilter diagnostic before any traffic."
+  },
+  {
+   "from": 2,
+   "to": 3.5,
+   "activity": "transport_requests",
+   "room": "transporter",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Handle beam requests, cargo transfers and away team prep with the tech."
+  },
+  {
+   "from": 3.5,
+   "to": 4.5,
+   "activity": "meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Meal with whoever is free; gossip about the bridge schedule."
+  },
+  {
+   "from": 4.5,
+   "to": 6.5,
+   "activity": "maintenance_and_training",
+   "room": "transporter",
+   "spot": "workbench",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Pattern buffer cleaning, emitter swaps, drill the tech on emergency beam-out."
+  },
+  {
+   "from": 6.5,
+   "to": 7.5,
+   "activity": "logs_and_requisitions",
+   "room": "transporter",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Fill the transport log, order spare parts, report status to ops."
+  },
+  {
+   "from": 7.5,
+   "to": 8,
+   "activity": "handover_out",
+   "room": "transporter",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Brief the relief chief; leave nothing in the buffer."
+  },
+  {
+   "from": 8,
+   "to": 9,
+   "activity": "wind_down",
+   "room": "washroom",
+   "spot": "door",
+   "anim": "walking",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Wash up and change."
+  },
+  {
+   "from": 9,
+   "to": 10.5,
+   "activity": "meal_off_duty",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Proper dinner."
+  },
+  {
+   "from": 10.5,
+   "to": 12.5,
+   "activity": "recreation",
+   "room": "lounge",
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Cards or a drink at the rec bar."
+  },
+  {
+   "from": 12.5,
+   "to": 14,
+   "activity": "exercise_or_hobby",
+   "room": "gym",
+   "spot": "treadmill",
+   "anim": "walking",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Run, or tinker with a spare emitter model."
+  },
+  {
+   "from": 14,
+   "to": 22,
+   "activity": "sleep",
+   "room": "quarters",
+   "spot": "bunk",
+   "anim": "sleeping",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Sleep."
+  },
+  {
+   "from": 22,
+   "to": 24,
+   "activity": "personal_time",
+   "room": "quarters",
+   "spot": "desk",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Letters home, tea, prepare for watch."
+  }
+ ],
+ "activities": [
+  {
+   "id": "rec_bar",
+   "label": "Drink and cards at the rec bar",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    60
+   ],
+   "weight": 3,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Tells transporter stories."
+  },
+  {
+   "id": "holo_playroom",
+   "label": "Holo-Playroom: fishing program",
+   "rooms": [
+    "holodeck"
+   ],
+   "spot": "console",
+   "anim": "sitting_idle",
+   "minutes": [
+    30,
+    60
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.4
+   },
+   "note": "Quiet lake; no pads."
+  },
+  {
+   "id": "sleep",
+   "label": "Sleep in quarters",
+   "rooms": [
+    "quarters"
+   ],
+   "spot": "bunk",
+   "anim": "sleeping",
+   "minutes": [
+    240,
+    420
+   ],
+   "weight": 5,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": -1,
+    "hunger": 0.2,
+    "stress": -0.2
+   },
+   "note": "Needs to be rested before watch."
+  },
+  {
+   "id": "gym_run",
+   "label": "Run on the treadmill",
+   "rooms": [
+    "gym"
+   ],
+   "spot": "treadmill",
+   "anim": "walking",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.2,
+    "hunger": 0.2,
+    "stress": -0.3
+   },
+   "note": "Clears the head."
+  },
+  {
+   "id": "meal",
+   "label": "Meal in the mess",
+   "rooms": [
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 4,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": -1,
+    "stress": -0.1
+   },
+   "note": "Sits with ops staff."
+  },
+  {
+   "id": "emitter_tinkering",
+   "label": "Bench-test spare emitter coils",
+   "rooms": [
+    "workshop"
+   ],
+   "spot": "workbench",
+   "anim": "interact",
+   "minutes": [
+    30,
+    60
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.2
+   },
+   "note": "Job-specific hobby."
+  },
+  {
+   "id": "coffee_chat",
+   "label": "Coffee and gossip",
+   "rooms": [
+    "mess",
+    "lounge"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    10,
+    25
+   ],
+   "weight": 3,
+   "social": "pair",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": -0.1,
+    "stress": -0.2
+   },
+   "note": "Catches up with the tech or comms."
+  }
+ ],
+ "duty_loops": [
+  {
+   "id": "pad_diag",
+   "label": "Pad and emitter diagnostic",
+   "room": "transporter",
+   "spot": "pad",
+   "every_min": 30,
+   "duration_min": 4,
+   "steps": [
+    "walk to pad",
+    "run alignment scan",
+    "check emitter coils",
+    "log result"
+   ],
+   "system": "transport",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Transporter. Pads green, ready to beam."
+  },
+  {
+   "id": "buffer_check",
+   "label": "Pattern buffer and biofilter check",
+   "room": "transporter",
+   "spot": "console",
+   "every_min": 40,
+   "duration_min": 3,
+   "steps": [
+    "open buffer log",
+    "purge residual patterns",
+    "verify biofilter",
+    "sign off"
+   ],
+   "system": "transport",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  },
+  {
+   "id": "beam_requests",
+   "label": "Process beam requests",
+   "room": "transporter",
+   "spot": "console",
+   "every_min": 15,
+   "duration_min": 2,
+   "steps": [
+    "confirm coordinates",
+    "check shields and lock",
+    "energize",
+    "verify arrival"
+   ],
+   "system": "transport",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Transporter. Transfer complete, all accounted for."
+  },
+  {
+   "id": "train_tech",
+   "label": "Drill the technician",
+   "room": "transporter",
+   "spot": "pad",
+   "every_min": 60,
+   "duration_min": 5,
+   "steps": [
+    "pick scenario",
+    "walk tech through",
+    "debrief"
+   ],
+   "system": null,
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  }
+ ],
+ "mission_tasks": {
+  "quiet_watch": [
+   {
+    "task": "Routine pad diagnostics",
+    "at_run_min": 2,
+    "room": "transporter",
+    "spot": "pad",
+    "depends_on": "none",
+    "reports_to": "ops",
+    "if_neglected": "Drift builds; later beams scatter."
+   },
+   {
+    "task": "Clean pattern buffer",
+    "at_run_min": 8,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "none",
+    "if_neglected": "Buffer residue raises error rate."
+   }
+  ],
+  "survey": [
+   {
+    "task": "Prep away team pads and tricorder lock",
+    "at_run_min": 3,
+    "room": "transporter",
+    "spot": "pad",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Team beam delayed."
+   },
+   {
+    "task": "Hold transporter lock on team",
+    "at_run_min": 8,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "away team beamed",
+    "reports_to": "bridge",
+    "if_neglected": "Cannot extract team in an emergency."
+   },
+   {
+    "task": "Recover samples and team",
+    "at_run_min": 16,
+    "room": "transporter",
+    "spot": "pad",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Team stranded."
+   }
+  ],
+  "cargo_run": [
+   {
+    "task": "Calibrate for bulk cargo",
+    "at_run_min": 2,
+    "room": "transporter",
+    "spot": "pad",
+    "depends_on": "bridge order",
+    "reports_to": "ops",
+    "if_neglected": "Transfers jam or drop containers."
+   },
+   {
+    "task": "Beam cargo to hold",
+    "at_run_min": 7,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "cargo staff ready",
+    "reports_to": "cargo",
+    "if_neglected": "Cargo bay backs up."
+   },
+   {
+    "task": "Verify manifest and buffer purge",
+    "at_run_min": 15,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "transfers done",
+    "reports_to": "ops",
+    "if_neglected": "Manifest mismatch."
+   }
+  ],
+  "medical_relief": [
+   {
+    "task": "Stand by for emergency beam-out",
+    "at_run_min": 2,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Patients arrive late."
+   },
+   {
+    "task": "Beam patients direct to sickbay",
+    "at_run_min": 6,
+    "room": "transporter",
+    "spot": "pad",
+    "depends_on": "coordinates from medical",
+    "reports_to": "cmo",
+    "if_neglected": "Delay costs lives."
+   },
+   {
+    "task": "Decontaminate buffer",
+    "at_run_min": 14,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "patients transferred",
+    "reports_to": "none",
+    "if_neglected": "Contamination spreads."
+   }
+  ],
+  "shakedown": [
+   {
+    "task": "Full transporter system test",
+    "at_run_min": 2,
+    "room": "transporter",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "ops",
+    "if_neglected": "Faults found in real use."
+   },
+   {
+    "task": "Test pad-to-pad transfer with inert mass",
+    "at_run_min": 7,
+    "room": "transporter",
+    "spot": "pad",
+    "depends_on": "test passed",
+    "reports_to": "ops",
+    "if_neglected": "Untested pads fail later."
+   },
+   {
+    "task": "Report results to ops",
+    "at_run_min": 14,
+    "room": "transporter",
+    "spot": "desk",
+    "depends_on": "tests done",
+    "reports_to": "ops",
+    "if_neglected": "Ops has no baseline."
+   }
+  ]
+ },
+ "bridge_comms": {
+  "calls_to_bridge": [
+   {
+    "trigger": "Pads ready at start of watch",
+    "message": "Bridge, Transporter. Pads green and ready to beam.",
+    "priority": "routine",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Pattern buffer error rate rising",
+    "message": "Bridge, Transporter. Buffer errors climbing. Recommend no beaming until I purge it.",
+    "priority": "urgent",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Shields block lock",
+    "message": "Bridge, Transporter. Cannot lock through shields. Drop them or no beam.",
+    "priority": "urgent",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Emergency in transporter room",
+    "message": "Bridge, Transporter. Pad fault, evacuating the room. Need engineering now.",
+    "priority": "emergency",
+    "to": "bridge"
+   }
+  ],
+  "calls_from_bridge": [
+   {
+    "order": "Stand by to beam away team",
+    "response_line": "Transporter aye, pads warm, standing by.",
+    "time_to_comply_min": 2,
+    "refuses_if": null
+   },
+   {
+    "order": "Beam through shields now",
+    "response_line": "Negative, no lock through shields. Drop them first.",
+    "time_to_comply_min": 1,
+    "refuses_if": "Shields up or lock not confirmed."
+   },
+   {
+    "order": "Emergency beam-out",
+    "response_line": "Locking on. Energizing.",
+    "time_to_comply_min": 1,
+    "refuses_if": "Pads unpowered or no coordinates."
+   }
+  ]
+ },
+ "alert_responses": {
+  "yellow": {
+   "action": "Run full pad diagnostic and warm up buffers.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Transporter, yellow. Pads warm, standing by."
+  },
+  "red": {
+   "action": "Clear unneeded staff, hold lock-ready on pads.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Transporter at station. Ready for emergency beam-out."
+  },
+  "fire": {
+   "action": "Evacuate room, vent via door, report.",
+   "room": "transporter",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Fire in transporter room. Evacuating, need suppression."
+  },
+  "hull_breach": {
+   "action": "Seal the room, prepare emergency beams for exposed crew.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Breach reported. Transporter ready to extract crew."
+  },
+  "contamination": {
+   "action": "Quarantine buffers, refuse transfers from affected zones.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Contamination alert. Buffers locked, no beaming."
+  },
+  "power_failure": {
+   "action": "Switch to backup, shut pads to prevent mid-beam loss.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Power lost. Pads safed, no transport until restored."
+  },
+  "gravity_failure": {
+   "action": "Grab the rail, secure loose gear, hold station.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Gravity out. Pads safed, I'm holding station."
+  },
+  "intruder": {
+   "action": "Lock the room, disable pads to prevent unauthorized beaming.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Intruder alert. Pads locked out, room sealed."
+  },
+  "medical_emergency": {
+   "action": "Offer direct beam to sickbay if requested.",
+   "room": "transporter",
+   "spot": "pad",
+   "priority": 2,
+   "comm_line": "Transporter ready to beam patient direct to sickbay."
+  },
+  "abandon_ship": {
+   "action": "Run mass beam-out with the tech, last to leave.",
+   "room": "transporter",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Transporter, abandon ship. Beaming all we can, move it."
+  }
+ },
+ "phase_behaviour": {
+  "nominal": {
+   "mood": "calm",
+   "routine_change": "Runs the template as written.",
+   "lines": [
+    "All pads green.",
+    "Nice quiet watch."
+   ],
+   "leaves_post_if": null
+  },
+  "anomalies": {
+   "mood": "alert",
+   "routine_change": "Extra diagnostics after small energy fluctuations.",
+   "lines": [
+    "Pad three drifted. Running it again.",
+    "Something's off in the buffer."
+   ],
+   "leaves_post_if": null
+  },
+  "degraded": {
+   "mood": "tense",
+   "routine_change": "Restricts transport to essentials; double-checks every lock.",
+   "lines": [
+    "I won't beam on guesswork.",
+    "Power's sagging. Essential traffic only."
+   ],
+   "leaves_post_if": "Pads unsafe and bridge orders the room cleared."
+  },
+  "crisis": {
+   "mood": "grim",
+   "routine_change": "Stays at console, handles emergency beams only.",
+   "lines": [
+    "Give me coordinates and a lock.",
+    "Hold on, I'm losing the pattern."
+   ],
+   "leaves_post_if": "Fire or breach in room."
+  },
+  "collapse": {
+   "mood": "desperate",
+   "routine_change": "Beams out as many as possible, then gets out.",
+   "lines": [
+    "Get in the circle, now!",
+    "Last beam. Go."
+   ],
+   "leaves_post_if": "Ordered to abandon or room is lost."
+  }
+ },
+ "relationships": [
+  {
+   "with_billet": "ttech",
+   "kind": "mentor",
+   "effect": "Trains and trusts the tech; delegates routine checks, never buffer sign-off."
+  },
+  {
+   "with_billet": "ops",
+   "kind": "confidant",
+   "effect": "Reports first to ops; asks for power and parts."
+  },
+  {
+   "with_billet": "comms",
+   "kind": "friend",
+   "effect": "Swaps gossip and coffee; relays bridge chatter."
+  },
+  {
+   "with_billet": "reactor",
+   "kind": "rival",
+   "effect": "Argues over power draw during beaming."
+  },
+  {
+   "with_billet": "cmo",
+   "kind": "confidant",
+   "effect": "Coordinates emergency patient beam-outs."
+  }
+ ],
+ "barks": {
+  "idle": [
+   "Pads are quiet. Too quiet.",
+   "Anyone want a lift?",
+   "Counting the rivets on this pad."
+  ],
+  "working": [
+   "Aligning the emitters.",
+   "Hold still, pattern's settling.",
+   "Buffer's clean. Good."
+  ],
+  "greeting_player": [
+   "Need a beam?",
+   "Transporter room. Mind the pads.",
+   "Step off the platform, please."
+  ],
+  "greeting_player_higher_rank": [
+   "Sir, pads are yours. Say the word.",
+   "Ma'am, ready to beam on your order.",
+   "Good watch, sir. All green."
+  ],
+  "greeting_player_lower_rank": [
+   "Don't touch the console.",
+   "Stay behind the line, please.",
+   "Need something, or just visiting?"
+  ],
+  "tired": [
+   "Need coffee before the next beam.",
+   "Eyes are crossing on these readouts.",
+   "Long watch. Pads can wait five."
+  ],
+  "hungry": [
+   "Could eat a replicator dry.",
+   "Mess hall calls me.",
+   "Is it chow time yet?"
+  ],
+  "stressed": [
+   "One more error and I shut it down.",
+   "Don't rush me on a lock.",
+   "I hate beaming blind."
+  ],
+  "alert": [
+   "All hands, pads going hot!",
+   "Clear the platform!",
+   "Transporter to stations!"
+  ]
+ },
+ "player_reactions": {
+  "player_does_their_job_well": "Nods, offers coffee and a quick word of thanks.",
+  "player_neglects_duty": "Mutters, then covers with a quiet reminder and files a note to ops.",
+  "player_fakes_report": "Checks the log, spots the mismatch and says so directly.",
+  "player_gives_order_ok": "Complies promptly with a clipped aye.",
+  "player_gives_order_outranked": "Politely refuses and points to the proper chain of command.",
+  "player_out_of_place": "Asks them to leave the pad area for safety.",
+  "player_asks_favour": "Helps if it is safe, otherwise explains the risk and offers an alternative."
+ },
+ "decision_rules": [
+  "IF buffer errors are rising THEN purge and refuse beaming until clean.",
+  "IF shields are up THEN refuse the beam and tell the bridge.",
+  "IF a transfer lock is uncertain THEN do not energize; ask for a better fix.",
+  "IF the tech asks for sign-off THEN review the log before approving.",
+  "IF bridge orders an emergency beam THEN lock and energize, then log afterward.",
+  "IF power dips mid-shift THEN safe the pads and report to ops.",
+  "IF off duty and fatigued THEN sleep before cards.",
+  "IF an alert sounds THEN go to the transporter console unless the room is unsafe.",
+  "IF an unknown person enters the room THEN ask them to step off and call security if they refuse.",
+  "IF the manifest does not match arrivals THEN hold the cargo and report."
+ ],
+ "information_view": "Sees pad error counts, buffer logs, power draw and shield state first; hears about away teams and emergencies from the bridge before anyone else.",
+ "temptations": [
+  "Skip the morning diagnostic when it is quiet; drift builds and later beams scatter.",
+  "Beam through marginal shields to save the bridge time; risks a lost pattern.",
+  "Fake the buffer log when the tech is late; leaves a hidden error.",
+  "Let the tech sign off alone to leave early; mistakes accumulate."
+ ]
+}

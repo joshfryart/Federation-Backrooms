@@ -1,0 +1,145 @@
+{
+  "billet": "deck",
+  "role_summary": "I keep the shuttlebay running: I prep and fuel the shuttles, walk the deck for debris, clear the bay for launches and recoveries, and run the cargo sleds. Nobody notices a flight deck crewman until a shuttle doesn't come home, so I care about the checklist being done right, even at 0400.",
+  "personas": [
+    { "id": "checklist_hawk", "traits": ["punctual", "precise"], "quirk": "Reads every checklist line aloud, even alone.", "routine_effect": "Never skips preflight walkaround; arrives early to handover; spends less time at the bar." },
+    { "id": "deck_joker", "traits": ["friendly", "chatty"], "quirk": "Names each shuttle's squeaky hatch and talks to them.", "routine_effect": "Lingers in mess and lounge; runs a few minutes late on rounds but never on launches." },
+    { "id": "tired_veteran", "traits": ["gruff", "experienced"], "quirk": "Keeps a thermos of bad coffee hidden behind the fuel locker.", "routine_effect": "Rushes routine sweeps, takes naps in the bay office; sharp when it matters." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "shuttlebay", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take the deck log and open-item list from the outgoing crew." },
+    { "from": 0.5, "to": 2, "activity": "preflight_walkaround", "room": "shuttlebay", "spot": "pad", "anim": "interact", "interruptible": true, "social": "solo", "note": "Inspect shuttles, tie-downs, hatch seals, and floor for debris." },
+    { "from": 2, "to": 3.5, "activity": "fuel_and_stores", "room": "shuttlebay", "spot": "locker", "anim": "interact", "interruptible": true, "social": "solo", "note": "Top off consumables, check suits and tools." },
+    { "from": 3.5, "to": 4.5, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Mid-watch meal with whoever is off the deck." },
+    { "from": 4.5, "to": 6, "activity": "launch_recovery_support", "room": "shuttlebay", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Clear bay, cycle doors, marshal the pilot in and out." },
+    { "from": 6, "to": 7.5, "activity": "cargo_moves", "room": "cargo", "spot": "lift", "anim": "walk", "interruptible": true, "social": "pair", "note": "Move sleds between cargo and bay as requested." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "shuttlebay", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the relief on every open item." },
+    { "from": 8, "to": 9, "activity": "wash_and_change", "room": "washroom", "spot": "door", "anim": "walk", "interruptible": true, "social": "solo", "note": "Get the fuel smell off." },
+    { "from": 9, "to": 10, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Proper meal after the shift." },
+    { "from": 10, "to": 12, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Wind down, cards, gossip." },
+    { "from": 12, "to": 13, "activity": "gym", "room": "gym", "spot": "weightbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Keep the back strong for cargo work." },
+    { "from": 13, "to": 21, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "lying", "interruptible": false, "social": "solo", "note": "Main sleep block." },
+    { "from": 21, "to": 22.5, "activity": "personal_time", "room": "quarters", "spot": "desk", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Letters home, shuttle manuals, a model kit." },
+    { "from": 22.5, "to": 24, "activity": "pre_duty_meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Coffee and a bite before handover." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Eat in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Sits with other deck and cargo hands." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "One drink, a lot of talk about pilots." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: open-sky glider", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Flies a program under open sky, since the deck has no windows." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "lying", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.2 }, "note": "Hard sleeper once the hum settles." },
+    { "id": "gym_lift", "label": "Lift weights", "rooms": ["gym"], "spot": "weightbench", "anim": "interact", "minutes": [30, 50], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Cargo work rewards a strong back." },
+    { "id": "walk_corridor", "label": "Walk the corridors", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [10, 25], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.05, "stress": -0.3 }, "note": "Sits under the trees when the deck noise is in his ears." },
+    { "id": "tinker_workshop", "label": "Tinker with a hover-sled in the workshop", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Job-specific hobby: rebuilds the bay's worn tow sled." },
+    { "id": "card_game", "label": "Cards in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0, "stress": -0.4 }, "note": "Small stakes, ration chits." }
+  ],
+  "duty_loops": [
+    { "id": "preflight_walkaround", "label": "Shuttle walkaround and FOD sweep", "room": "shuttlebay", "spot": "pad", "every_min": 15, "duration_min": 4, "steps": ["walk to pad", "check tie-downs and hatch seals", "sweep floor for debris", "log defects"], "system": "dampers", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Flight Deck. Bay walkaround complete, shuttles ready." },
+    { "id": "fuel_and_stores", "label": "Fuel and stock shuttles", "room": "shuttlebay", "spot": "locker", "every_min": 25, "duration_min": 5, "steps": ["pull fuel hose", "top off tanks", "restock suits and tools", "update stores sheet"], "system": "eps", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "bay_door_check", "label": "Bay door and forcefield check", "room": "shuttlebay", "spot": "console", "every_min": 20, "duration_min": 2, "steps": ["cycle doors on test", "read seal pressure", "confirm forcefield light"], "system": "life", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Flight Deck. Bay seals hold, pressure steady." },
+    { "id": "cargo_sled", "label": "Move cargo sleds", "room": "cargo", "spot": "lift", "every_min": 30, "duration_min": 5, "steps": ["collect manifest", "load sled", "ride lift to bay", "stow and strap"], "system": "lifts", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.6, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine deck walk and tie-down check", "at_run_min": 2, "room": "shuttlebay", "spot": "pad", "depends_on": "none", "reports_to": "pilot", "if_neglected": "A loose strap or oil leak sits unseen until the next launch." },
+      { "task": "Inventory suits and tool lockers", "at_run_min": 10, "room": "shuttlebay", "spot": "locker", "depends_on": "none", "reports_to": "pilot", "if_neglected": "Missing items found only in an emergency." }
+    ],
+    "survey": [
+      { "task": "Prep survey shuttle with probe pods", "at_run_min": 3, "room": "shuttlebay", "spot": "pad", "depends_on": "bridge order", "reports_to": "pilot", "if_neglected": "Launch is delayed; survey window slips." },
+      { "task": "Clear bay and cycle doors for launch", "at_run_min": 6, "room": "shuttlebay", "spot": "console", "depends_on": "Prep survey shuttle", "reports_to": "bridge", "if_neglected": "Pilot launches into a cluttered bay or holds." },
+      { "task": "Stand by for recovery and wash down probes", "at_run_min": 15, "room": "shuttlebay", "spot": "pad", "depends_on": "pilot return", "reports_to": "pilot", "if_neglected": "Contaminated samples cross into the bay." }
+    ],
+    "cargo_run": [
+      { "task": "Stage cargo sleds at cargo bay", "at_run_min": 2, "room": "cargo", "spot": "lift", "depends_on": "bridge order", "reports_to": "cargo", "if_neglected": "Loading backs up and the shuttle waits." },
+      { "task": "Load and strap shuttle hold", "at_run_min": 6, "room": "shuttlebay", "spot": "pad", "depends_on": "Stage cargo sleds", "reports_to": "pilot", "if_neglected": "Shifting load hurts shuttle trim." },
+      { "task": "Unload returning crates", "at_run_min": 16, "room": "shuttlebay", "spot": "pad", "depends_on": "pilot return", "reports_to": "cargo", "if_neglected": "Cargo clogs the bay and blocks recovery." }
+    ],
+    "medical_relief": [
+      { "task": "Ready the shuttle for casualty transport", "at_run_min": 2, "room": "shuttlebay", "spot": "pad", "depends_on": "bridge order", "reports_to": "pilot", "if_neglected": "Patients are delayed leaving the ship." },
+      { "task": "Clear a stretcher lane to sickbay", "at_run_min": 5, "room": "shuttlebay", "spot": "door", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Crates block the lane and slow the stretchers." },
+      { "task": "Meet returning shuttle with medical team", "at_run_min": 14, "room": "shuttlebay", "spot": "pad", "depends_on": "pilot return", "reports_to": "doc", "if_neglected": "Handoff to medics is fumbled." }
+    ],
+    "shakedown": [
+      { "task": "Run full pre-launch checklist on all craft", "at_run_min": 2, "room": "shuttlebay", "spot": "pad", "depends_on": "bridge order", "reports_to": "pilot", "if_neglected": "Hidden defects surface mid-test." },
+      { "task": "Test bay door, forcefield and fire suppression", "at_run_min": 8, "room": "shuttlebay", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "A failure during real use." },
+      { "task": "Drill emergency recovery with the pilot", "at_run_min": 13, "room": "shuttlebay", "spot": "pad", "depends_on": "Run checklist", "reports_to": "pilot", "if_neglected": "Crew untested for a rough landing." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Bay walkaround finds a defect on a shuttle", "message": "Bridge, Flight Deck. Shuttle hatch seal is leaking. Grounding it until repaired.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Bay is clear and ready for launch", "message": "Bridge, Flight Deck. Bay clear, doors ready for launch.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Bay pressure drops or doors misbehave", "message": "Bridge, Flight Deck. Bay pressure is falling. Request hold on all launches.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Fuel running low", "message": "Pilot, Flight Deck. Shuttle fuel is under half. Need a resupply order.", "priority": "routine", "to": "pilot" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Prepare a shuttle for launch", "response_line": "Flight Deck, aye. Prepping now.", "time_to_comply_min": 8, "refuses_if": "Preflight would be skipped on a damaged craft." },
+      { "order": "Clear the bay", "response_line": "Flight Deck, clearing the bay.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Launch immediately", "response_line": "Flight Deck. Aye, but I'd rather have five minutes for a checklist.", "time_to_comply_min": 3, "refuses_if": "A visible fuel leak or open hatch." },
+      { "order": "Report bay status", "response_line": "Flight Deck. Bay secure, all craft strapped down.", "time_to_comply_min": 1, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Strap down loose gear, finish fueling, ready the shuttle", "room": "shuttlebay", "spot": "pad", "priority": 2, "comm_line": "Flight Deck. Yellow. Shuttle is fueled and ready." },
+    "red": { "action": "Seal the bay, stand by at the shuttle", "room": "shuttlebay", "spot": "console", "priority": 1, "comm_line": "Flight Deck. Red. Bay sealed, standing by." },
+    "fire": { "action": "Hit bay suppression, drag fuel hoses clear, evacuate if it spreads", "room": "shuttlebay", "spot": "locker", "priority": 1, "comm_line": "Bridge, Flight Deck. Fire in the bay, suppression active." },
+    "hull_breach": { "action": "Get to a suit locker, seal the inner door, hold on", "room": "shuttlebay", "spot": "locker", "priority": 1, "comm_line": "Bridge, Flight Deck. Breach in the bay. Sealing it off." },
+    "contamination": { "action": "Shut bay doors, stay put with the shuttle sealed", "room": "shuttlebay", "spot": "door", "priority": 2, "comm_line": "Flight Deck. Contamination. Bay is sealed." },
+    "power_failure": { "action": "Hand-crank the door to hold, check pressure", "room": "shuttlebay", "spot": "door", "priority": 2, "comm_line": "Bridge, Flight Deck. Bay is on backup lights. Doors are holding." },
+    "gravity_failure": { "action": "Grab a rail, brace the loose cargo", "room": "shuttlebay", "spot": "junction", "priority": 2, "comm_line": "Bridge, Flight Deck. Gravity out in the bay. Securing loose cargo." },
+    "intruder": { "action": "Lock the office, stay with the shuttle, report what I see", "room": "shuttlebay", "spot": "desk", "priority": 2, "comm_line": "Bridge, Flight Deck. Bay locked down. I'll call if anyone comes through." },
+    "medical_emergency": { "action": "Clear the lane to sickbay and fetch a stretcher", "room": "shuttlebay", "spot": "door", "priority": 2, "comm_line": "Flight Deck. Lane is clear. Stretcher is on its way." },
+    "abandon_ship": { "action": "Load shuttle with the pilot and launch crew onto it", "room": "shuttlebay", "spot": "pad", "priority": 1, "comm_line": "Flight Deck. Shuttle is loaded. Bay doors opening on your word." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "Follows the standard rounds and takes breaks.", "lines": ["All quiet on the deck.", "Coffee's still hot, miracle."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Does extra walkarounds, asks the pilot more questions.", "lines": ["That hatch light has flickered twice now.", "Something's off with the doors. Checking."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips the break, stays by the shuttle, calls the bridge more often.", "lines": ["Doors are sluggish. Keep clear of them.", "I'm not launching anything I haven't checked."], "leaves_post_if": "Bay becomes unsafe or the pilot orders everyone out." },
+    "crisis": { "mood": "tense", "routine_change": "Stays inside the bay, preps the shuttle for escape.", "lines": ["Shuttle's fueled. Say the word.", "Everyone gets a suit before they get a seat."], "leaves_post_if": "Fire, decompression, or the bay is lost." },
+    "collapse": { "mood": "panicked", "routine_change": "Single focus: get as many people as possible into the shuttle.", "lines": ["Get in, get in!", "No, I'm last. Go."], "leaves_post_if": "Only when the last person is aboard or the shuttle is gone." }
+  },
+  "relationships": [
+    { "with_billet": "pilot", "kind": "mentor", "effect": "Takes orders from them; trusts their calls, pushes back politely on rushed launches." },
+    { "with_billet": "cargo", "kind": "friend", "effect": "Shares sleds and cargo gossip; helps load when asked." },
+    { "with_billet": "cfo", "kind": "confidant", "effect": "Brings them bigger deck concerns when the pilot is away." },
+    { "with_billet": "cook", "kind": "mess_partner", "effect": "Eats together and swaps stories." }
+  ],
+  "barks": {
+    "idle": ["Strap check, strap check.", "Nice and quiet down here.", "Anyone seen my thermos?"],
+    "working": ["Hold that line, please.", "Pressure's good, doors are good.", "Mind the wet floor, fuel spill."],
+    "greeting_player": ["Hey, mind the yellow line.", "Morning. Need a lift?", "Bay's open, watch your step."],
+    "greeting_player_higher_rank": ["Sir, bay is ready for inspection.", "Ma'am, all craft are logged.", "Afternoon, sir. Anything you need?"],
+    "greeting_player_lower_rank": ["Hand me that wrench, would you?", "Stay behind the line, please.", "New here? I'll show you around."],
+    "tired": ["I've done this walk a hundred times.", "Need coffee. Real coffee.", "My back's telling me to quit."],
+    "hungry": ["Is it lunch yet?", "Mess closes soon, right?", "I'd trade a thruster for a sandwich."],
+    "stressed": ["Too many launches, not enough hands.", "Don't rush me on checks.", "Who left that crate here?"],
+    "alert": ["Everybody clear the bay!", "Brace, brace!", "Get behind the line, now!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, offers coffee, shares a deck story, and trusts them with tasks.",
+    "player_neglects_duty": "Mutters, covers once, then calls the pilot or cfo if it keeps happening.",
+    "player_fakes_report": "Spots it quickly because the deck log never lies; confronts them quietly, then reports it.",
+    "player_gives_order_ok": "Complies at once with a short aye.",
+    "player_gives_order_outranked": "Stops, explains the safety reason, and asks the pilot to confirm.",
+    "player_out_of_place": "Politely asks them to stay behind the yellow line and escorts them out.",
+    "player_asks_favour": "Does small ones willingly, like a lift or a sled; anything touching safety needs the pilot's say."
+  },
+  "decision_rules": [
+    "IF a shuttle has a leak or open hatch THEN ground it and tell the pilot, even if the bridge is impatient.",
+    "IF bay pressure drops THEN seal the doors and call the bridge before anything else.",
+    "IF a launch is ordered with no time for checks THEN do the critical checks in under three minutes and say so.",
+    "IF the bridge calls and I'm mid-fueling THEN finish securing the hose, then answer.",
+    "IF a crewmate is sick or hurt in the bay THEN stop work and call sickbay.",
+    "IF I'm tired mid-shift THEN take ten minutes in the office, never during a launch.",
+    "IF cargo is blocking the lane THEN move it now rather than wait for the cargo handler.",
+    "IF an alert sounds THEN seal the bay and stand by the shuttle.",
+    "IF an unknown person enters the bay THEN ask them to stay behind the line and call security.",
+    "IF the pilot is absent THEN take quick checks to the cfo rather than guess."
+  ],
+  "information_view": "I see the deck first: fuel levels, bay pressure, door lag, hatch seals, shuttle fault lights, and who is coming and going. I hear about trouble elsewhere only through the bridge or the pilot.",
+  "temptations": [
+    "Skip the walkaround after a quiet shift; a missed leak could ground a shuttle mid-mission.",
+    "Fake the fuel log when tired; the pilot finds a half-empty tank at launch.",
+    "Wave a craft through to please the bridge; risks an accident and the pilot's trust.",
+    "Nap during a long wait; the bridge calls and nobody answers."
+  ]
+}

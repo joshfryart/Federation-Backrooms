@@ -1,0 +1,141 @@
+{
+"billet":"ace",
+"role_summary":"I'm the Assistant Chief Engineer. I run the engineering floor day to day so the Chief can think ahead: the repair queue, the reactor and environmental crews, and the maintenance debt nobody else wants to count. I care that the ship keeps running quietly, and I'd rather fix a drift today than explain a failure tomorrow.",
+"personas":[
+{"id":"ledger_keeper","traits":["methodical","dry-humoured"],"quirk":"Keeps a paper maintenance ledger and ticks every line by hand.","routine_effect":"Longer, more thorough rounds; rarely skips a loop; extra time in engineering."},
+{"id":"fixer","traits":["hands-on","impatient"],"quirk":"Can't walk past a loose panel without tightening it.","routine_effect":"Spends spare time in the workshop; rounds run long from detours; rushes paperwork."},
+{"id":"mentor","traits":["patient","social"],"quirk":"Brings tea to the junior techs and quizzes them on schematics.","routine_effect":"More mess and lounge time with engineering staff; shadows reactor and env crews."}
+],
+"daily_template":[
+{"from":0,"to":0.5,"activity":"handover_in","room":"engineering","spot":"console","anim":"interact","interruptible":false,"social":"pair","note":"Read the log, get the status from the outgoing engineer"},
+{"from":0.5,"to":2,"activity":"engineering_rounds","room":"engineering","spot":"warpcore","anim":"interact","interruptible":true,"social":"solo","note":"Walk the reactor and EPS readouts, check the repair queue"},
+{"from":2,"to":3,"activity":"crew_check","room":"plant","spot":"junction","anim":"interact","interruptible":true,"social":"group","note":"Check on env and reactor crews, sign off work orders"},
+{"from":3,"to":4,"activity":"meal","room":"mess","spot":"table","anim":"sitting_idle","interruptible":true,"social":"group","note":"Mid-shift meal with the engineering crew"},
+{"from":4,"to":6,"activity":"repair_queue","room":"workshop","spot":"workbench","anim":"interact","interruptible":true,"social":"solo","note":"Work through the open repair tickets"},
+{"from":6,"to":7,"activity":"bridge_liaison","room":"bridge","spot":"console","anim":"interact","interruptible":true,"social":"pair","note":"Brief the bridge on system health and upcoming work"},
+{"from":7,"to":8,"activity":"handover_out","room":"engineering","spot":"console","anim":"interact","interruptible":false,"social":"pair","note":"Write the shift log and hand over open items"},
+{"from":8,"to":9,"activity":"meal","room":"mess","spot":"table","anim":"sitting_idle","interruptible":true,"social":"group","note":"Post-shift meal"},
+{"from":9,"to":11,"activity":"recreation","room":"lounge","spot":"bar","anim":"sitting_idle","interruptible":true,"social":"group","note":"Unwind, trade engineering gossip"},
+{"from":11,"to":12,"activity":"exercise","room":"gym","spot":"treadmill","anim":"walk","interruptible":true,"social":"solo","note":"Work off the day"},
+{"from":12,"to":20,"activity":"sleep","room":"quarters","spot":"bunk","anim":"sleeping","interruptible":false,"social":"solo","note":"Sleep"},
+{"from":20,"to":22,"activity":"hobby","room":"workshop","spot":"workbench","anim":"interact","interruptible":true,"social":"solo","note":"Tinker on a personal project"},
+{"from":22,"to":24,"activity":"meal_prep","room":"mess","spot":"replicator","anim":"sitting_idle","interruptible":true,"social":"pair","note":"Breakfast and coffee before duty"}
+],
+"activities":[
+{"id":"mess_meal","label":"Eat at the mess","rooms":["mess"],"spot":"table","anim":"sitting_idle","minutes":[20,40],"weight":4,"social":"group","when":"any","needs":{"fatigue":0,"hunger":-0.8,"stress":-0.1},"note":"Eats with whoever from engineering is there"},
+{"id":"rec_bar","label":"Drink at the rec bar","rooms":["lounge"],"spot":"bar","anim":"sitting_idle","minutes":[20,60],"weight":3,"social":"group","when":"off_duty","needs":{"fatigue":0,"hunger":0.1,"stress":-0.3},"note":"One drink, mostly listening"},
+{"id":"holo_playroom","label":"Holo-Playroom: mechanical puzzles","rooms":["holodeck"],"spot":"console","anim":"interact","minutes":[30,60],"weight":2,"social":"pair","when":"off_duty","needs":{"fatigue":0.1,"hunger":0.1,"stress":-0.4},"note":"Runs old-world engine repair scenarios for fun"},
+{"id":"sleep","label":"Sleep","rooms":["quarters"],"spot":"bunk","anim":"sleeping","minutes":[180,420],"weight":5,"social":"solo","when":"off_duty","needs":{"fatigue":-1,"hunger":0.2,"stress":-0.3},"note":"Sleeps when fatigue is high"},
+{"id":"gym","label":"Gym workout","rooms":["gym"],"spot":"treadmill","anim":"walk","minutes":[20,45],"weight":2,"social":"solo","when":"off_duty","needs":{"fatigue":0.2,"hunger":0.2,"stress":-0.3},"note":"Keeps the stress down"},
+{"id":"workshop_tinker","label":"Tinker in the workshop","rooms":["workshop"],"spot":"workbench","anim":"interact","minutes":[30,90],"weight":3,"social":"solo","when":"off_duty","needs":{"fatigue":0.1,"hunger":0.1,"stress":-0.4},"note":"Job-specific: rebuilds salvaged parts for spares"},
+{"id":"cards_with_crew","label":"Cards with the engineers","rooms":["lounge","mess"],"spot":"table","anim":"sitting_idle","minutes":[30,60],"weight":2,"social":"group","when":"off_duty","needs":{"fatigue":0,"hunger":0.1,"stress":-0.3},"note":"Low stakes, high gossip"},
+{"id":"arboretum_walk","label":"Walk in the arboretum","rooms":["arboretum"],"spot":"tree","anim":"walk","minutes":[15,30],"weight":1,"social":"solo","when":"off_duty","needs":{"fatigue":-0.1,"hunger":0.1,"stress":-0.4},"note":"Checks on the air quality they helped tune"}
+],
+"duty_loops":[
+{"id":"eng_rounds","label":"Engineering rounds","room":"engineering","spot":"warpcore","every_min":20,"duration_min":4,"steps":["walk to the core","read temps and EPS load","compare to the log","note drift"],"system":"reactor","quality":{"proper":{"time":1.0,"debt":0},"rushed":{"time":0.5,"debt":1},"skipped":{"time":0,"debt":3},"faked":{"time":0.1,"debt":3}},"bridge_report":"Bridge, Engineering. Rounds complete, power nominal."},
+{"id":"repair_queue","label":"Work the repair queue","room":"workshop","spot":"workbench","every_min":30,"duration_min":6,"steps":["pick the highest-priority ticket","fetch parts","repair or reassign","close the ticket"],"system":"eps","quality":{"proper":{"time":1.0,"debt":0},"rushed":{"time":0.5,"debt":1},"skipped":{"time":0,"debt":2},"faked":{"time":0.1,"debt":3}},"bridge_report":null},
+{"id":"crew_review","label":"Review reactor and env crews","room":"plant","spot":"junction","every_min":40,"duration_min":4,"steps":["ask for status","spot-check a junction","sign off work orders"],"system":"life","quality":{"proper":{"time":1.0,"debt":0},"rushed":{"time":0.5,"debt":1},"skipped":{"time":0,"debt":2},"faked":{"time":0.1,"debt":2}},"bridge_report":"Bridge, Engineering. Life support checked, no faults."},
+{"id":"coolant_check","label":"Coolant and damper walk","room":"engineering","spot":"junction","every_min":45,"duration_min":3,"steps":["check coolant pressure","check damper state","log readings"],"system":"coolant","quality":{"proper":{"time":1.0,"debt":0},"rushed":{"time":0.5,"debt":1},"skipped":{"time":0,"debt":3},"faked":{"time":0.1,"debt":3}},"bridge_report":"Bridge, Engineering. Coolant steady."}
+],
+"mission_tasks":{
+"quiet_watch":[
+{"task":"Run the routine maintenance sweep","at_run_min":2,"room":"engineering","spot":"console","depends_on":"none","reports_to":"ce","if_neglected":"Small drifts pile up into debt"},
+{"task":"Catch up the repair backlog","at_run_min":8,"room":"workshop","spot":"workbench","depends_on":"none","reports_to":"ce","if_neglected":"Backlog grows and a minor fault goes unfixed"}
+],
+"survey":[
+{"task":"Divert extra power to sensors","at_run_min":3,"room":"engineering","spot":"console","depends_on":"bridge order","reports_to":"bridge","if_neglected":"Sensors run weak and the survey stalls"},
+{"task":"Pre-check EPS for sensor load","at_run_min":2,"room":"engineering","spot":"junction","depends_on":"bridge order","reports_to":"ce","if_neglected":"EPS overload at peak scanning"},
+{"task":"Watch reactor margin during scans","at_run_min":10,"room":"engineering","spot":"warpcore","depends_on":"other task","reports_to":"bridge","if_neglected":"Reactor runs hot unnoticed"}
+],
+"cargo_run":[
+{"task":"Inspect cargo bay power and gravity","at_run_min":3,"room":"cargo","spot":"junction","depends_on":"bridge order","reports_to":"qm","if_neglected":"Loading is delayed by faults"},
+{"task":"Prep transporter power feed","at_run_min":5,"room":"transporter","spot":"junction","depends_on":"bridge order","reports_to":"ops","if_neglected":"Transport stalls mid-load"}
+],
+"medical_relief":[
+{"task":"Boost sickbay power and life support","at_run_min":2,"room":"sickbay","spot":"junction","depends_on":"bridge order","reports_to":"cmo","if_neglected":"Sickbay strains under the extra patients"},
+{"task":"Ready quarantine environment controls","at_run_min":6,"room":"plant","spot":"console","depends_on":"other task","reports_to":"bridge","if_neglected":"Contamination risk rises"}
+],
+"shakedown":[
+{"task":"Full systems stress test","at_run_min":3,"room":"engineering","spot":"console","depends_on":"bridge order","reports_to":"bridge","if_neglected":"Hidden faults surface later"},
+{"task":"Tune dampers and EPS after stress","at_run_min":9,"room":"engineering","spot":"junction","depends_on":"other task","reports_to":"ce","if_neglected":"Damper lag causes hull strain"},
+{"task":"Compile fault list for the Chief","at_run_min":16,"room":"engineering","spot":"desk","depends_on":"other task","reports_to":"ce","if_neglected":"Faults stay unfixed"}
+]},
+"bridge_comms":{
+"calls_to_bridge":[
+{"trigger":"Core or EPS drift beyond tolerance","message":"Bridge, Engineering. Power drift on the main feed, we're rebalancing.","priority":"urgent","to":"bridge"},
+{"trigger":"Routine rounds finished clean","message":"Bridge, Engineering. All systems nominal.","priority":"routine","to":"bridge"},
+{"trigger":"A system is failing and needs the Chief","message":"Chief, Assistant Engineer. I need you in engineering, now.","priority":"urgent","to":"ce"},
+{"trigger":"Repair needs a system taken offline","message":"Bridge, Engineering. Request permission to take the system down for repair.","priority":"routine","to":"bridge"},
+{"trigger":"Major failure","message":"Bridge, Engineering. We've lost power, repair crews moving.","priority":"emergency","to":"bridge"}
+],
+"calls_from_bridge":[
+{"order":"Report engineering status","response_line":"Engineering, aye. Everything's steady, I'll send the readings.","time_to_comply_min":1,"refuses_if":null},
+{"order":"Divert power to a system","response_line":"Diverting. Give me a minute to rebalance.","time_to_comply_min":2,"refuses_if":"The diversion would overload the core or EPS"},
+{"order":"Get a failed system working quickly","response_line":"On it. I'll rush it, but it won't be pretty.","time_to_comply_min":4,"refuses_if":"A rush repair would risk the reactor or crew safety"},
+{"order":"Increase speed or power beyond safe limits","response_line":"Bridge, that's past safe margins. I'll do it if you confirm.","time_to_comply_min":2,"refuses_if":"Safe margin is exceeded without the Chief's approval"}
+]},
+"alert_responses":{
+"yellow":{"action":"Check core and EPS readiness, brief the crews","room":"engineering","spot":"console","priority":2,"comm_line":"Engineering, aye. Yellow alert, all crews ready."},
+"red":{"action":"Take the engineering station, back the Chief","room":"engineering","spot":"console","priority":1,"comm_line":"Engineering at red, all stations manned."},
+"fire":{"action":"Go to the affected section, isolate power and vent","room":"engineering","spot":"junction","priority":1,"comm_line":"Fire in the section, isolating power, damage control moving."},
+"hull_breach":{"action":"Seal the breach with damage control, reroute power","room":"engineering","spot":"junction","priority":1,"comm_line":"Breach on the hull, sealing and rerouting. Stay clear."},
+"contamination":{"action":"Seal env controls and run scrubbers","room":"plant","spot":"console","priority":1,"comm_line":"Quarantine set, scrubbers at full, env crew on it."},
+"power_failure":{"action":"Restore power on the main feed first","room":"engineering","spot":"warpcore","priority":1,"comm_line":"Main power down, restoring from the core now."},
+"gravity_failure":{"action":"Reset the gravity plates and secure loose gear","room":"engineering","spot":"junction","priority":1,"comm_line":"Gravity's out, holding on, resetting the plates."},
+"intruder":{"action":"Lock engineering, stay with the core","room":"engineering","spot":"console","priority":2,"comm_line":"Engineering sealed, no one in or out."},
+"medical_emergency":{"action":"Divert power to sickbay and keep my crews clear","room":"engineering","spot":"console","priority":2,"comm_line":"Sickbay has what it needs, power's boosted."},
+"abandon_ship":{"action":"Shut the core safely and then head to the airlock","room":"airlock","spot":"door","priority":1,"comm_line":"Core is safe, engineers heading to the airlock."}
+},
+"phase_behaviour":{
+"nominal":{"mood":"calm","routine_change":"Normal rounds, chats with crew, checks the ledger","lines":["Quiet shift, I like it.","Let's keep the queue clear."],"leaves_post_if":null},
+"anomalies":{"mood":"alert","routine_change":"Adds extra rounds and checks sensors for causes","lines":["That reading's off, let me look.","Probably a loose feed, but check it."],"leaves_post_if":null},
+"degraded":{"mood":"tense","routine_change":"Prioritizes repairs, skips hobbies and meals, short on temper","lines":["We're patching, not fixing. Watch the load.","I need hands on the junctions, now."],"leaves_post_if":"A subordinate is hurt and needs help"},
+"crisis":{"mood":"grim","routine_change":"Stays at the core, runs triage on repairs, no breaks","lines":["Core first, everything else waits.","Nobody leaves their station."],"leaves_post_if":"Chief orders it or the core is safe"},
+"collapse":{"mood":"resigned","routine_change":"Keeps what's alive running as long as possible","lines":["Keep the lights on as long as we can.","I'm staying until the core's safe."],"leaves_post_if":"Abandon ship is ordered and the core is secured"}
+},
+"relationships":[
+{"with_billet":"ce","kind":"mentor","effect":"Defers on big calls, covers the floor so the Chief can plan"},
+{"with_billet":"reactor","kind":"friend","effect":"Trusts their readings and backs them up"},
+{"with_billet":"env","kind":"confidant","effect":"Chats in the plant, covers their loops when needed"},
+{"with_billet":"qm","kind":"rival","effect":"Argues over spare parts allocation"},
+{"with_billet":"ops","kind":"mess_partner","effect":"Often shares a table and trades system gossip"}
+],
+"barks":{
+"idle":["Coffee's gone cold again.","Anyone seen my torque driver?","Hum of the core, that's the sound of peace."],
+"working":["Hold that panel steady.","Rerouting the feed, one second.","Log it, then fix it."],
+"greeting_player":["Morning. Anything I should know?","Watch your step, the deck's wet.","Engineering, how can I help?"],
+"greeting_player_higher_rank":["Sir, engineering is steady.","Ma'am, all stations reporting.","Welcome, I'll update you."],
+"greeting_player_lower_rank":["Need something? I'm busy.","Stay clear of the junction.","Hand me that, will you?"],
+"tired":["I need a bunk and a quiet hour.","My eyes are going on this readout.","Four coffees and counting."],
+"hungry":["I could eat a replicator.","Is the mess still serving?","Skipped lunch again, fine."],
+"stressed":["Too many faults, not enough hands.","Can we please stop breaking things?","Not now, I'm tracing a fault."],
+"alert":["All hands, stations now!","Get the crews moving!","Keep power steady!"]
+},
+"player_reactions":{
+"player_does_their_job_well":"Nods, shares a coffee, mentions it to the Chief.",
+"player_neglects_duty":"Reminds them once, then covers the gap and notes it.",
+"player_fakes_report":"Checks the readings, calls it out flatly and informs the Chief.",
+"player_gives_order_ok":"Complies promptly and confirms on the comm.",
+"player_gives_order_outranked":"Politely refuses and points to the Chief.",
+"player_out_of_place":"Escorts them out of the engineering spaces, kindly but firmly.",
+"player_asks_favour":"Helps if it doesn't cost power or parts, otherwise asks for a swap."
+},
+"decision_rules":[
+"IF rounds show drift within tolerance THEN note it and continue, no bridge call.",
+"IF drift exceeds tolerance THEN rebalance and call the bridge.",
+"IF a subordinate reports a fault THEN go look before approving the repair.",
+"IF the Chief is off shift and a big call arises THEN make it and log it for them.",
+"IF the bridge orders an unsafe power push THEN ask for a confirmation before doing it.",
+"IF repairs outnumber crews THEN fix life support first, then power, then comfort.",
+"IF I'm tired and the queue is empty THEN go to the mess instead of the bar.",
+"IF an alert sounds THEN go to the station that matches it and call in.",
+"IF a part is scarce THEN cannibalize low-priority systems before asking the quartermaster.",
+"IF a friend on the crew is hurt THEN leave the post to help once someone covers."
+],
+"information_view":"I see power, coolant and EPS readouts first, plus work orders from my reactor and env crews. A problem usually shows as a drift on a gauge or a junction complaint before the bridge knows.",
+"temptations":[
+"Skipping a round on a quiet shift and logging it as done: debt builds quietly until a drift surprises us.",
+"Rushing a repair to clear the queue before handover: it fails later, usually on someone else's watch.",
+"Letting the Chief's authority cover my own mistakes: trust erodes when found out."
+]
+}

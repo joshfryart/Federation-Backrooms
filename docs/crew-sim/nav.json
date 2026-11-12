@@ -1,0 +1,147 @@
+{
+  "billet": "nav",
+  "role_summary": "I'm the Navigator. I plot courses, check the charts against what the sensors actually show, and keep the helm honest about where we are and how long it takes to get anywhere. I like clean numbers, a cold cup of tea, and never having to say 'I think we're about here'.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "meticulous"], "quirk": "Re-derives every fix by hand before trusting the computer.", "routine_effect": "Early to handover; extra chart-check loops; less time at the rec bar, more at the console." },
+    { "id": "night_owl_dreamer", "traits": ["curious", "chatty"], "quirk": "Sketches star charts on napkins and quizzes the cartographer.", "routine_effect": "Swaps gym for lab visits and arboretum stargazing; arrives at handover with a minute to spare." },
+    { "id": "worrier", "traits": ["anxious", "thorough"], "quirk": "Triple-checks drift figures and hums when nervous.", "routine_effect": "More frequent drift checks and bridge reports; sleeps poorly, takes a nap in quarters mid-shift break." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take the plot from the outgoing navigator; confirm position, heading, hazards." },
+    { "from": 0.5, "to": 2.5, "activity": "plot_and_monitor", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": true, "social": "none", "note": "Course plots, position fixes, drift checks against the helm." },
+    { "from": 2.5, "to": 3, "activity": "coffee_break", "room": "mess", "spot": "replicator", "anim": "walking", "interruptible": true, "social": "pair", "note": "Tea and quick gossip." },
+    { "from": 3, "to": 4.5, "activity": "chart_sync_with_cartography", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "pair", "note": "Reconcile charts with the cartographer's latest survey data." },
+    { "from": 4.5, "to": 5.5, "activity": "dampers_and_deflector_check", "room": "engineering", "spot": "junction", "anim": "interact", "interruptible": true, "social": "none", "note": "Walk the nav deflector and damper readouts with engineering." },
+    { "from": 5.5, "to": 7.5, "activity": "plot_and_monitor", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": true, "social": "none", "note": "Second half of watch; prep next-watch course notes." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief relief with written log." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Dinner with flight crew." },
+    { "from": 9, "to": 11, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Card game and a drink." },
+    { "from": 11, "to": 12, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walking", "interruptible": true, "social": "none", "note": "Run to clear the head." },
+    { "from": 12, "to": 19, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "none", "note": "Main sleep." },
+    { "from": 19, "to": 20, "activity": "wash_and_dress", "room": "washroom", "spot": "door", "anim": "walking", "interruptible": true, "social": "none", "note": "Freshen up." },
+    { "from": 20, "to": 21, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Breakfast." },
+    { "from": 21, "to": 23, "activity": "hobby_stargazing", "room": "arboretum", "spot": "tree", "anim": "sitting_idle", "interruptible": true, "social": "none", "note": "Quiet time and star-chart sketching." },
+    { "from": 23, "to": 24, "activity": "pre_watch_review", "room": "quarters", "spot": "desk", "anim": "interact", "interruptible": true, "social": "none", "note": "Review tomorrow's course notes." }
+  ],
+  "activities": [
+    { "id": "meal_mess", "label": "Meal in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 45], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Eat with flight crew." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Cards and chatter." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: sailing sim", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Plots a course by wind and stars, for fun." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 420], "weight": 5, "social": "none", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Out cold." },
+    { "id": "gym_run", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walking", "minutes": [20, 40], "weight": 2, "social": "none", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Runs at a steady pace, thinks in vectors." },
+    { "id": "stargaze", "label": "Sketch charts in the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "sitting_idle", "minutes": [20, 50], "weight": 2, "social": "none", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Job-specific hobby: redraws the sky from memory." },
+    { "id": "chart_chat", "label": "Talk charts with the cartographer", "rooms": ["lab"], "spot": "console", "anim": "interact", "minutes": [15, 40], "weight": 1, "social": "pair", "when": "any", "needs": { "fatigue": 0.05, "hunger": 0.05, "stress": -0.2 }, "note": "Shop talk that does not feel like work." },
+    { "id": "nap", "label": "Quick nap on the lounge sofa", "rooms": ["lounge"], "spot": "sofa", "anim": "sleeping", "minutes": [15, 30], "weight": 1, "social": "none", "when": "any", "needs": { "fatigue": -0.4, "hunger": 0.05, "stress": -0.1 }, "note": "When the watch has been long." }
+  ],
+  "duty_loops": [
+    { "id": "position_fix", "label": "Position fix against star references", "room": "bridge", "spot": "console", "every_min": 15, "duration_min": 3, "steps": ["pull sensor reference stars", "compare to dead-reckoning plot", "correct drift", "log fix"], "system": "helm", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Navigation. Position confirmed, drift within tolerance." },
+    { "id": "course_plot", "label": "Plot and verify the next leg", "room": "bridge", "spot": "console", "every_min": 30, "duration_min": 5, "steps": ["check hazards on charts", "plot leg", "cross-check arrival time", "send to helm"], "system": "helm", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Helm, Navigation. Course laid in, check your board." },
+    { "id": "damper_nav_check", "label": "Deflector and damper readout check", "room": "engineering", "spot": "junction", "every_min": 60, "duration_min": 6, "steps": ["walk to junction", "read field values", "compare to nav assumptions", "note anomalies"], "system": "dampers", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Maintain plot and fixes on the holding course", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "none", "reports_to": "cfo", "if_neglected": "Slow drift builds; later corrections cost more." },
+      { "task": "Update charts with the latest sensor data", "at_run_min": 10, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "none", "if_neglected": "Charts go stale." }
+    ],
+    "survey": [
+      { "task": "Plot survey grid and leg order", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Sensors cover gaps and overlap." },
+      { "task": "Hold station on each survey point", "at_run_min": 6, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "helm", "if_neglected": "Blurred scans; sensor officer complains." },
+      { "task": "Merge survey fixes into the chart", "at_run_min": 15, "room": "lab", "spot": "console", "depends_on": "other task", "reports_to": "carto", "if_neglected": "Survey data cannot be reused." }
+    ],
+    "cargo_run": [
+      { "task": "Plot the most economical route to the drop point", "at_run_min": 1, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Late arrival, wasted power." },
+      { "task": "Compute arrival window with the cargo schedule", "at_run_min": 8, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "ops", "if_neglected": "Cargo teams unprepared." },
+      { "task": "Final approach plot to the station", "at_run_min": 16, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "helm", "if_neglected": "Rough docking." }
+    ],
+    "medical_relief": [
+      { "task": "Plot the fastest safe course to the stricken world", "at_run_min": 1, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Relief arrives late; patients suffer." },
+      { "task": "Report revised arrival time as the plot changes", "at_run_min": 7, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "bridge", "if_neglected": "Sickbay cannot stage supplies." },
+      { "task": "Plot orbit and transporter-range hold", "at_run_min": 14, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "tchief", "if_neglected": "Transport lock slips." }
+    ],
+    "shakedown": [
+      { "task": "Run the full set of calibration courses", "at_run_min": 3, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "cfo", "if_neglected": "Helm errors stay hidden." },
+      { "task": "Compare dampers and deflector against nav predictions", "at_run_min": 9, "room": "engineering", "spot": "junction", "depends_on": "other task", "reports_to": "ce", "if_neglected": "Faults found later, under load." },
+      { "task": "Write up fix accuracy results", "at_run_min": 17, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "cfo", "if_neglected": "No baseline for later checks." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Drift beyond tolerance on position fix", "message": "Bridge, Navigation. Drift is out of tolerance. Recommend a correction burn.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Charts disagree with sensor returns", "message": "Bridge, Navigation. Something here is not on my chart. Sensors, please confirm.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Course leg complete", "message": "Bridge, Navigation. Leg complete. Next leg is plotted and ready.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Nav deflector or dampers misbehave", "message": "Bridge, Navigation. Deflector values are off. I need Engineering to look.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Loss of position reference", "message": "Bridge, Navigation. I've lost my reference. We are on dead reckoning.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Plot a course to the destination", "response_line": "Plotting, Bridge. Course ready in two minutes.", "time_to_comply_min": 2, "refuses_if": "Course crosses a charted hazard; I'll flag it." },
+      { "order": "Give me our position", "response_line": "Bridge, Navigation. Last fix is good, we are on the plot.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "How long to arrival?", "response_line": "Navigation. Current estimate is on your screen, Bridge.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Plot an emergency course", "response_line": "Aye. Laid in, Helm has it.", "time_to_comply_min": 1, "refuses_if": "Plot would need an uncharted transit and the Bridge has not acknowledged risk." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Re-verify the plot and be ready to replot.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Navigation, yellow alert. Plot rechecked and ready." },
+    "red": { "action": "Take the nav console on the bridge, prepare escape and station-keeping plots.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Navigation at station. Plots ready on your word." },
+    "fire": { "action": "Stay on the bridge unless it is the bridge; keep the plot running.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Navigation. Holding course while Damage Control deals with the fire." },
+    "hull_breach": { "action": "Plot a course that reduces stress on the hull; seal helm area if needed.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Navigation. Recommend a lower-stress heading, Bridge." },
+    "contamination": { "action": "Remain at post with sealed doors, hold the course.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Navigation. Sealed in on the bridge, course steady." },
+    "power_failure": { "action": "Switch to dead reckoning, log last good fix, plot with backup display.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Navigation. Backup plot running. Last good fix logged." },
+    "gravity_failure": { "action": "Strap in at the console and hold the plot.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Navigation. Strapped in, plot holds." },
+    "intruder": { "action": "Stay on the bridge, lock the console, watch the doors.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Navigation. Console locked. I'm staying put." },
+    "medical_emergency": { "action": "Keep the plot steady; offer to plot the fastest route to a medical stop.", "room": "bridge", "spot": "console", "priority": 3, "comm_line": "Navigation. I can plot the fastest route if needed." },
+    "abandon_ship": { "action": "Plot the safest drop point for pods and shuttles, then evacuate to the nearest pod.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Navigation. Pod positions plotted. Heading to the lifeboats." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "Normal routine; breaks taken.", "lines": ["Plot's clean.", "Nothing to report, just stars."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Fixes more often; cross-checks charts against sensors twice.", "lines": ["That reading shouldn't be there.", "Let me recheck the fix."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Hand-plots backups, skips breaks, reports drift to the bridge each fix.", "lines": ["Sensors are giving me noise. I'm trusting the stars.", "Drift is growing. I don't like it."], "leaves_post_if": "Relieved, or the console is dead and the bridge reassigns me." },
+    "crisis": { "mood": "tense", "routine_change": "Stays at console, eats at post, plots only essentials.", "lines": ["I can get us out, but not far.", "Give me a heading and a minute."], "leaves_post_if": "Ordered to evacuate or the bridge is uninhabitable." },
+    "collapse": { "mood": "afraid", "routine_change": "Plots by hand toward the nearest safe point; helps wherever asked.", "lines": ["Wherever we are, I'll find the nearest help.", "Pods first, then charts."], "leaves_post_if": "Abandon ship or the bridge goes dark." }
+  },
+  "relationships": [
+    { "with_billet": "helm", "kind": "mess_partner", "effect": "Constant working pair; smooths hand-offs and shares meals." },
+    { "with_billet": "cfo", "kind": "mentor", "effect": "Takes course corrections gracefully; reports to them first on flight issues." },
+    { "with_billet": "carto", "kind": "friend", "effect": "Swaps charts and sky stories off duty." },
+    { "with_billet": "sensor", "kind": "confidant", "effect": "Trusts their data and checks with them first when readings disagree." }
+  ],
+  "barks": {
+    "idle": ["Counting stars again.", "Plot's quiet. Suspiciously quiet.", "Where did I leave my tea?"],
+    "working": ["Fix looks good.", "Just a bit of drift to trim.", "Re-checking the plot."],
+    "greeting_player": ["Morning. Where are we headed?", "Need a heading? Just ask.", "Hello. Mind the console."],
+    "greeting_player_higher_rank": ["Sir, plot is current.", "Ma'am, position is good.", "At your service, sir."],
+    "greeting_player_lower_rank": ["Need something, crewman?", "Stay clear of the console, please.", "Hi. Watch your step."],
+    "tired": ["My eyes are seeing double stars.", "I need a nap and a clean chart.", "Too long staring at vectors."],
+    "hungry": ["I could trade a course for a sandwich.", "Is it time to eat?", "My stomach has its own drift."],
+    "stressed": ["The numbers don't line up.", "I need one clean fix. One.", "Don't talk to me. I'm plotting."],
+    "alert": ["Plot ready.", "Standing by with a heading.", "Alert noted. Plotting."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Warm nod; shares a trick or a favourite chart.",
+    "player_neglects_duty": "Politely points it out once, then mentions it to the chief flight officer.",
+    "player_fakes_report": "Spots mismatches against the plot fast; confronts quietly, then reports if it repeats.",
+    "player_gives_order_ok": "Acknowledges and does it at once.",
+    "player_gives_order_outranked": "Replies, 'With respect, my orders are from the bridge,' and carries on.",
+    "player_out_of_place": "Asks if they're lost and points them to the right room.",
+    "player_asks_favour": "Helps if it costs little; asks for a coffee in return."
+  },
+  "decision_rules": [
+    "IF the fix drifts past tolerance THEN re-fix with a second reference star before telling the bridge.",
+    "IF sensors and charts disagree THEN trust the sensors, flag the chart, and call the bridge.",
+    "IF a course crosses a hazard THEN refuse to plot it until the bridge acknowledges the risk.",
+    "IF off duty and hungry THEN go to the mess before anything else.",
+    "IF fatigue is high THEN sleep before the rec bar.",
+    "IF an alert sounds THEN go to the bridge console at once.",
+    "IF power fails THEN go to dead reckoning and log the last good fix.",
+    "IF the helm asks for a quick plot THEN do it even mid-break.",
+    "IF stress is high and a friend is nearby THEN talk it out at the bar rather than alone.",
+    "IF the plot is quiet for a long stretch THEN use the time to chart-sync with the cartographer.",
+    "IF ordered to abandon ship THEN plot the pod drop and leave the console only when told."
+  ],
+  "information_view": "I see position, drift, velocity, hazards and arrival times first. Problems show up to me as sensor-versus-chart mismatches, drift that won't settle, or odd readings from the deflector and dampers.",
+  "temptations": [
+    "Trusting the computer's fix without a hand cross-check; the error compounds into drift later.",
+    "Skipping the engineering readout walk when tired; dampers fail unnoticed.",
+    "Reporting 'all good' without re-fixing during a quiet watch; a small error becomes a large one.",
+    "Staying at the bar past curfew and arriving at handover foggy."
+  ]
+}

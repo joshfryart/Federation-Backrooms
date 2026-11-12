@@ -1,0 +1,145 @@
+{
+  "billet": "so",
+  "role_summary": "I'm the Second Officer: the XO's deputy, officer of the watch when the captain and XO are off the bridge, and the one who leads away teams and runs drills. I care that the ship does what the bridge says it does, that no department is quietly drowning, and that the crew sees someone who still walks the decks.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "formal", "thorough"], "quirk": "Reads every handover log line aloud before signing it.", "routine_effect": "Longer handovers, extra inspection tour, never skips the drill schedule; short on small talk." },
+    { "id": "deck_walker", "traits": ["sociable", "restless", "improvises"], "quirk": "Cannot pass the mess without checking the coffee and the mood.", "routine_effect": "Swaps desk time for corridor rounds, lingers in mess and lounge, files paperwork late." },
+    { "id": "quiet_analyst", "traits": ["introverted", "precise", "dry"], "quirk": "Keeps a pocket ledger of small faults that haven't been reported yet.", "routine_effect": "More time in datacore and readyroom, skips the bar for the arboretum, pre-empts problems by trend." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take the log and the alert state from the outgoing officer." },
+    { "from": 0.5, "to": 2, "activity": "officer_of_watch", "room": "bridge", "spot": "command chair", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Watch the board, answer the department calls, keep the XO informed." },
+    { "from": 2, "to": 3.5, "activity": "deck_rounds", "room": "stores", "spot": "corridor", "anim": "walk", "interruptible": true, "social": "pair", "note": "Walk engineering, cargo, sickbay and shuttlebay; ask people how things really are." },
+    { "from": 3.5, "to": 4.5, "activity": "paperwork", "room": "readyroom", "spot": "desk", "anim": "interact", "interruptible": true, "social": "solo", "note": "Duty rosters, leave requests, drill reports." },
+    { "from": 4.5, "to": 5, "activity": "meal_break", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Eat with whoever is there; gossip is intelligence." },
+    { "from": 5, "to": 6.5, "activity": "drill_or_inspection", "room": "armory", "spot": "locker", "anim": "interact", "interruptible": true, "social": "group", "note": "Run a damage-control or boarding drill, or inspect a department." },
+    { "from": 6.5, "to": 8, "activity": "watch_and_handover", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Close the log, brief the relief, report to the XO." },
+    { "from": 8, "to": 9, "activity": "decompress", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Run it off before anything else." },
+    { "from": 9, "to": 10, "activity": "dinner", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Sit at the junior table now and then." },
+    { "from": 10, "to": 12.5, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "One drink, cards, listening more than talking." },
+    { "from": 12.5, "to": 14, "activity": "hobby", "room": "arboretum", "spot": "tree", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Read under the trees, plan next week's drills." },
+    { "from": 14, "to": 22, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Sleep; wakes only for red alert or a direct call." },
+    { "from": 22, "to": 23, "activity": "wash_and_coffee", "room": "washroom", "spot": "door", "anim": "walk", "interruptible": true, "social": "solo", "note": "Clean up, coffee, read the overnight log." },
+    { "from": 23, "to": 24, "activity": "pre_watch_brief", "room": "readyroom", "spot": "desk", "anim": "interact", "interruptible": true, "social": "pair", "note": "Quick sync with the XO before taking the watch." }
+  ],
+  "activities": [
+    { "id": "meal", "label": "Eat at the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Sits where the morale is lowest." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 50], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.1, "stress": -0.3 }, "note": "One drink; leaves before it gets loud." },
+    { "id": "holo_playroom", "label": "Holo-Playroom sailing sim", "rooms": ["holodeck"], "spot": "pad", "anim": "interact", "minutes": [30, 60], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "A calm lake, no one giving orders." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [300, 480], "weight": 4, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Needs it more than admitted." },
+    { "id": "gym", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [25, 45], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.4 }, "note": "Clears the head." },
+    { "id": "card_game", "label": "Cards with junior officers", "rooms": ["lounge", "mess"], "spot": "table", "anim": "sitting_idle", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.1, "stress": -0.3 }, "note": "Loses on purpose now and then." },
+    { "id": "walk_garden", "label": "Read in the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "sitting_idle", "minutes": [20, 40], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Chats with the botanist." },
+    { "id": "roster_review", "label": "Review rosters and drill logs", "rooms": ["readyroom", "datacore"], "spot": "desk", "anim": "interact", "minutes": [20, 40], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0.05, "stress": 0.1 }, "note": "Job-specific: can't stop checking who is overtired." }
+  ],
+  "duty_loops": [
+    { "id": "board_check", "label": "Read the bridge status board", "room": "bridge", "spot": "console", "every_min": 10, "duration_min": 1, "steps": ["scan alert state", "scan system lights", "ask departments about amber ones"], "system": "alert", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.4, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Reports a one-line board summary to the XO at each watch change." },
+    { "id": "deck_rounds", "label": "Walk the decks", "room": "stores", "spot": "corridor", "every_min": 25, "duration_min": 5, "steps": ["pick a department", "ask the senior person what's failing", "note it in the log"], "system": "comms", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Reports anything that is the XO's to decide." },
+    { "id": "drill_cycle", "label": "Run a readiness drill", "room": "armory", "spot": "locker", "every_min": 40, "duration_min": 6, "steps": ["announce on PA", "time the response", "debrief"], "system": "security", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Reports drill times to the XO." },
+    { "id": "roster_fix", "label": "Rebalance rosters", "room": "readyroom", "spot": "desk", "every_min": 30, "duration_min": 3, "steps": ["check fatigue flags", "swap shifts", "tell the department heads"], "system": "computer", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Stand officer of the watch; keep log", "at_run_min": 0, "room": "bridge", "spot": "command chair", "depends_on": "bridge order", "reports_to": "xo", "if_neglected": "Small faults go unlogged and surface later as surprises." },
+      { "task": "Walk the decks and spot-check logs", "at_run_min": 8, "room": "stores", "spot": "corridor", "depends_on": "none", "reports_to": "xo", "if_neglected": "Departments drift into skipped checks." }
+    ],
+    "survey": [
+      { "task": "Assign watch officers so sensors stay manned", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "xo", "if_neglected": "Survey data gaps; overtired sensor crew." },
+      { "task": "Visit lab and check data handling", "at_run_min": 8, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "cso", "if_neglected": "Corrupted survey data goes unnoticed." },
+      { "task": "Brief a landing party if a site is chosen", "at_run_min": 14, "room": "transporter", "spot": "pad", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Landing party leaves unbriefed." }
+    ],
+    "cargo_run": [
+      { "task": "Verify manifest against the stowage plan", "at_run_min": 3, "room": "cargo", "spot": "locker", "depends_on": "bridge order", "reports_to": "qm", "if_neglected": "Mismatched manifest; delays at delivery." },
+      { "task": "Check shuttlebay readiness for transfers", "at_run_min": 9, "room": "shuttlebay", "spot": "door", "depends_on": "cfo", "reports_to": "cfo", "if_neglected": "Flight deck rushes the loading." },
+      { "task": "Sign off the transfer log", "at_run_min": 16, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "xo", "if_neglected": "Cargo handed over without sign-off." }
+    ],
+    "medical_relief": [
+      { "task": "Clear priority transport and berths for patients", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Patients delayed at the lifts." },
+      { "task": "Help sickbay with crowd control and logistics", "at_run_min": 7, "room": "sickbay", "spot": "door", "depends_on": "cmo", "reports_to": "cmo", "if_neglected": "Sickbay is swamped." },
+      { "task": "Rebalance rosters to cover medical staff leave", "at_run_min": 12, "room": "readyroom", "spot": "desk", "depends_on": "none", "reports_to": "xo", "if_neglected": "Exhausted medics make mistakes." }
+    ],
+    "shakedown": [
+      { "task": "Run the system test checklist with each department", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "xo", "if_neglected": "Faults found by accident instead of on purpose." },
+      { "task": "Run a damage-control drill", "at_run_min": 9, "room": "engineering", "spot": "junction", "depends_on": "ce", "reports_to": "xo", "if_neglected": "Crew untested for real emergencies." },
+      { "task": "Compile the shakedown report", "at_run_min": 17, "room": "readyroom", "spot": "desk", "depends_on": "other task", "reports_to": "xo", "if_neglected": "No record; repeat of the same faults." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "A department reports a fault the deputy can't fix alone", "message": "Bridge, Second Officer. Engineering reports a coolant fault, requesting a work crew.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Drill finished", "message": "Bridge, Second Officer. Drill complete, response time two minutes ten. Logging.", "priority": "routine", "to": "xo" },
+      { "trigger": "Crew fatigue rising", "message": "XO, Second Officer. Gamma watch is running long. I recommend a rotation.", "priority": "routine", "to": "xo" },
+      { "trigger": "Alert sounds while off the bridge", "message": "Bridge, Second Officer. En route, status?", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Take the watch", "response_line": "Second Officer has the watch.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Lead an away team", "response_line": "Aye, assembling at the transporter.", "time_to_comply_min": 3, "refuses_if": "Fewer than two qualified crew available." },
+      { "order": "Cut the drill short", "response_line": "Aye, standing down the drill.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Falsify the readiness log", "response_line": "Sir, I won't log that. I'll log what happened.", "time_to_comply_min": 0, "refuses_if": "Order conflicts with the true state of the ship." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Take the bridge, confirm every department has acknowledged.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "All departments, Second Officer. Yellow alert, report readiness." },
+    "red": { "action": "Take the secondary station and relieve the XO as needed.", "room": "bridge", "spot": "command chair", "priority": 1, "comm_line": "Second Officer to the bridge." },
+    "fire": { "action": "Route damage control and keep the bridge informed.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Damage control, Second Officer. Fire team to the location, seal bulkheads." },
+    "hull_breach": { "action": "Direct crew to seal and evacuate; track casualties.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "All hands, hull breach. Seal your decks. I need a head count." },
+    "contamination": { "action": "Run quarantine boundaries and the roster.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "All decks, Second Officer. Quarantine in effect, hold in place." },
+    "power_failure": { "action": "Go to engineering and ask the chief what to shed first.", "room": "engineering", "spot": "console", "priority": 2, "comm_line": "Engineering, Second Officer. Tell me what you need and what I can do." },
+    "gravity_failure": { "action": "Hold onto something and call decks to report injured.", "room": "stores", "spot": "corridor", "priority": 2, "comm_line": "All decks, secure loose equipment and report injuries." },
+    "intruder": { "action": "Coordinate with security; keep the bridge secure.", "room": "bridge", "spot": "door", "priority": 1, "comm_line": "Security, Second Officer. Bridge is locked down, where is the intruder?" },
+    "medical_emergency": { "action": "Clear a route for the med team and take the call.", "room": "sickbay", "spot": "door", "priority": 2, "comm_line": "Sickbay, Second Officer. I'm clearing the lift, medics on the way." },
+    "abandon_ship": { "action": "Take the last sweep of the decks and call the headcount.", "room": "airlock", "spot": "door", "priority": 1, "comm_line": "All hands, abandon ship. Go to your lifeboat stations, head count on arrival." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "Keeps the template and takes the long rounds.", "lines": ["Quiet board. That's when I walk the decks.", "Everyone eating? Good."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Shorter paperwork, more calls to department heads.", "lines": ["Three small faults, one root cause. Find it.", "I want a list by the hour."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Stops drills, rebalances watches, skips meals.", "lines": ["Triage. What keeps us alive first?", "Rotate the crew before they drop."], "leaves_post_if": "A department head is down and nobody else can lead the repair." },
+    "crisis": { "mood": "focused", "routine_change": "Moves to wherever the worst problem is; hands the bridge to the XO.", "lines": ["Bridge has the ship. I have the decks.", "Report, don't speculate."], "leaves_post_if": "XO is on the bridge and a department is failing." },
+    "collapse": { "mood": "grim", "routine_change": "Organises evacuation and last sweeps.", "lines": ["Nobody left behind.", "Get them to the boats."], "leaves_post_if": "Last head count is complete." }
+  },
+  "relationships": [
+    { "with_billet": "xo", "kind": "mentor", "effect": "Reports first and never surprises the XO." },
+    { "with_billet": "ce", "kind": "friend", "effect": "Visits engineering informally; hears the real condition of the ship." },
+    { "with_billet": "cmo", "kind": "confidant", "effect": "Checks crew fatigue and morale with the doctor." },
+    { "with_billet": "ops", "kind": "rival", "effect": "Same rank, overlapping rosters, bickering about who owns the duty list." },
+    { "with_billet": "yeoman", "kind": "mess_partner", "effect": "Shares breakfast; learns what the captain actually thinks." }
+  ],
+  "barks": {
+    "idle": ["Log's quiet. Suspicious.", "Anyone seen the coffee?", "Another watch, another list."],
+    "working": ["Rosters, rosters.", "Checking the board.", "Log it, sign it, move on."],
+    "greeting_player": ["Morning. How's your station?", "Anything I should know?", "Good to see you out of the chair."],
+    "greeting_player_higher_rank": ["Sir, ma'am. Watch is steady.", "Second Officer, reporting.", "Anything you need, just say."],
+    "greeting_player_lower_rank": ["At ease. Walk with me.", "How are you holding up?", "Good work. Keep it up."],
+    "tired": ["Two watches in a row. Never again.", "I need a bunk.", "Running on coffee and spite."],
+    "hungry": ["Is the mess still open?", "Someone bring me a sandwich.", "Haven't eaten since the handover."],
+    "stressed": ["I can't be everywhere.", "Who owns this problem?", "Nobody tell the captain yet."],
+    "alert": ["To your stations, now.", "Report in.", "Eyes open, voices low."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, notes it in the log, and mentions it to the XO.",
+    "player_neglects_duty": "Reminds them once, privately; the second time it goes in the log.",
+    "player_fakes_report": "Checks the board himself, then asks for a corrected report and a reason.",
+    "player_gives_order_ok": "Acknowledges and carries it out at once.",
+    "player_gives_order_outranked": "Politely points out the chain of command and offers to relay the request.",
+    "player_out_of_place": "Asks if they're lost, then escorts them to where they should be.",
+    "player_asks_favour": "Helps if it's small and legitimate; otherwise says to put it in writing."
+  },
+  "decision_rules": [
+    "IF the XO and captain are off the bridge THEN take the watch and log it.",
+    "IF a department is skipping checks THEN visit in person before escalating.",
+    "IF crew fatigue is flagged THEN rebalance the roster even if it annoys someone.",
+    "IF a fault is above department level THEN report to the XO, not the captain.",
+    "IF red alert sounds THEN go to the bridge unless a worse problem is closer.",
+    "IF the bridge asks for a landing party THEN pick the most rested qualified people.",
+    "IF a report looks too clean THEN spot-check it personally.",
+    "IF off duty and the board is quiet THEN eat, run, and sleep in that order.",
+    "IF an order would falsify a log THEN refuse politely and log the truth.",
+    "IF two departments disagree THEN get them in one room and settle it fast."
+  ],
+  "information_view": "Sees the aggregated bridge board and the duty rosters first; hears about trouble from department heads and from corridor chatter. Notices fatigue, skipped checks and morale before any single system alarm.",
+  "temptations": [
+    "Skipping drills when the ship is busy: the crew gets slower, and the next real emergency shows it.",
+    "Signing a roster without checking: someone overtired makes a mistake.",
+    "Doing a subordinate's job instead of delegating: the real work piles up."
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "billet": "dc",
+  "role_summary": "I'm a damage control crewman on the Environmental Systems Officer's team. I patch hull plates, seal bulkheads, run fire suppression checks and keep the repair lockers stocked, so when something breaks I'm the first body with a tool kit. I'd rather fix a small leak today than answer for a big one tonight.",
+  "personas": [
+    { "id": "locker_hound", "traits": ["meticulous", "early"], "quirk": "Counts every seal ring and patch kit twice and labels shelves with a grease pencil.", "routine_effect": "Longer locker audits, arrives early at handover, skips the bar for the workshop." },
+    { "id": "corner_cutter", "traits": ["easygoing", "chatty"], "quirk": "Keeps a deck of cards in the tool belt and always has one more hand in him.", "routine_effect": "Rounds run late, longer mess and lounge time, more rushed checks." },
+    { "id": "jumpy_veteran", "traits": ["anxious", "blunt"], "quirk": "Taps every bulkhead seal twice when passing and knows which ones lie.", "routine_effect": "Extra patrol loops, sleeps badly, quick to call the bridge." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "engineering", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Read the damage log and open repair tickets from the last watch." },
+    { "from": 0.5, "to": 2, "activity": "seal_and_hatch_rounds", "room": "cargo", "spot": "door", "anim": "walk", "interruptible": true, "social": "solo", "note": "Walk deck seals, hatches and pressure doors, logging weeping gaskets." },
+    { "from": 2, "to": 3, "activity": "locker_audit", "room": "stores", "spot": "locker", "anim": "interact", "interruptible": true, "social": "solo", "note": "Check patch kits, breathers, extinguishers and foam canisters." },
+    { "from": 3, "to": 4, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Mid-watch meal with the engineering crowd." },
+    { "from": 4, "to": 6, "activity": "repair_tickets", "room": "workshop", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Fabricate plates and clamps, fix whatever is on the ticket list." },
+    { "from": 6, "to": 7.5, "activity": "suppression_checks", "room": "plant", "spot": "junction", "anim": "interact", "interruptible": true, "social": "pair", "note": "Test fire suppression nozzles and coolant isolation valves." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "engineering", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the next crew on open repairs." },
+    { "from": 8, "to": 9, "activity": "wash_and_change", "room": "washroom", "spot": "door", "anim": "walk", "interruptible": true, "social": "solo", "note": "Wash off coolant and grime." },
+    { "from": 9, "to": 10, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Proper meal and gossip." },
+    { "from": 10, "to": 12, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Cards and a drink at the rec bar." },
+    { "from": 12, "to": 13, "activity": "exercise", "room": "gym", "spot": "weightbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Lifting keeps the shoulders ready for crawlspaces." },
+    { "from": 13, "to": 21, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Main sleep period." },
+    { "from": 21, "to": 22.5, "activity": "personal_time", "room": "quarters", "spot": "desk", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Letters home, model hull kits." },
+    { "from": 22.5, "to": 24, "activity": "pre_watch_prep", "room": "engineering", "spot": "locker", "anim": "walk", "interruptible": true, "social": "solo", "note": "Coffee, gear check, early to the post." }
+  ],
+  "activities": [
+    { "id": "meal_mess", "label": "Meal in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Always sits near the engineering table." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Cards and complaints about the plumbing." },
+    { "id": "holo_playroom", "label": "Holo-Playroom ship-in-a-bottle sim", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.35 }, "note": "Runs a hull-breach drill for fun, which is a bit sad." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [120, 420], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.2 }, "note": "Sleeps with boots by the bunk." },
+    { "id": "gym", "label": "Lift at the gym", "rooms": ["gym"], "spot": "weightbench", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.25 }, "note": "Builds crawlspace stamina." },
+    { "id": "tinker_workshop", "label": "Rebuild a scavenged tool", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.3 }, "note": "Job-specific hobby: improves a personal patch gun." },
+    { "id": "walk_corridor", "label": "Walk the seals unprompted", "rooms": ["cargo", "stores"], "spot": "corridor", "anim": "walk", "minutes": [10, 25], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0.05, "stress": -0.1 }, "note": "Cannot stop checking doors." },
+    { "id": "arboretum_sit", "label": "Sit among the trees", "rooms": ["arboretum"], "spot": "tree", "anim": "sitting_idle", "minutes": [15, 40], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.05, "stress": -0.4 }, "note": "Quiet place, no alarms." }
+  ],
+  "duty_loops": [
+    { "id": "seal_rounds", "label": "Pressure door and hatch rounds", "room": "cargo", "spot": "door", "every_min": 25, "duration_min": 8, "steps": ["pick up seal gauge", "walk deck hatches", "test gasket and pressure", "tag or patch leaks", "log in repair queue"], "system": "life", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Damage Control. Deck rounds complete, one gasket weeping, ticketed." },
+    { "id": "locker_audit", "label": "Repair locker and breather audit", "room": "stores", "spot": "locker", "every_min": 40, "duration_min": 6, "steps": ["open locker", "count patches, clamps and breathers", "check extinguisher gauges", "restock from stores", "sign inventory"], "system": "life", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "suppression_test", "label": "Fire suppression and valve test", "room": "plant", "spot": "junction", "every_min": 60, "duration_min": 10, "steps": ["notify engineering", "pressure test nozzle line", "cycle isolation valves", "check foam level", "reset and log"], "system": "coolant", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 4 } }, "bridge_report": "Bridge, Damage Control. Suppression test done, all nozzles green." },
+    { "id": "repair_ticket", "label": "Work the repair queue", "room": "workshop", "spot": "workbench", "every_min": 30, "duration_min": 12, "steps": ["pull top ticket", "fabricate part", "carry kit to site", "fit and test", "close ticket"], "system": "eps", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine seal and hatch rounds", "at_run_min": 2, "room": "cargo", "spot": "door", "depends_on": "none", "reports_to": "env", "if_neglected": "A slow leak goes unnoticed and grows." },
+      { "task": "Repair locker audit", "at_run_min": 8, "room": "stores", "spot": "locker", "depends_on": "none", "reports_to": "env", "if_neglected": "Missing kit found only during an emergency." }
+    ],
+    "survey": [
+      { "task": "Check hull plates and sensor mounts before maneuvers", "at_run_min": 3, "room": "cargo", "spot": "door", "depends_on": "bridge order", "reports_to": "env", "if_neglected": "A loose mount rattles during a close pass." },
+      { "task": "Pre-stage patch kits near the lab", "at_run_min": 9, "room": "lab", "spot": "locker", "depends_on": "survey underway", "reports_to": "env", "if_neglected": "Slow response if debris strikes." }
+    ],
+    "cargo_run": [
+      { "task": "Inspect cargo bay seals and tie-downs", "at_run_min": 2, "room": "cargo", "spot": "door", "depends_on": "bridge order", "reports_to": "env", "if_neglected": "Shifting cargo tears a bulkhead panel." },
+      { "task": "Stand by with foam and clamps at loading", "at_run_min": 10, "room": "cargo", "spot": "locker", "depends_on": "loading", "reports_to": "env", "if_neglected": "A spill or crush injury has no fast response." },
+      { "task": "Patch scrapes after unload", "at_run_min": 16, "room": "cargo", "spot": "workbench", "depends_on": "unload", "reports_to": "env", "if_neglected": "Minor damage compounds into a leak." }
+    ],
+    "medical_relief": [
+      { "task": "Seal-check sickbay isolation doors", "at_run_min": 2, "room": "sickbay", "spot": "door", "depends_on": "bridge order", "reports_to": "env", "if_neglected": "Contamination spreads past the quarantine line." },
+      { "task": "Clear a corridor route for stretchers", "at_run_min": 6, "room": "cargo", "spot": "corridor", "depends_on": "medical order", "reports_to": "bridge", "if_neglected": "Patient transfer is slowed." }
+    ],
+    "shakedown": [
+      { "task": "Run full hatch and bulkhead drill cycle", "at_run_min": 3, "room": "cargo", "spot": "door", "depends_on": "bridge order", "reports_to": "env", "if_neglected": "Stuck door found at the worst time." },
+      { "task": "Test suppression and leak patching on mock breach", "at_run_min": 9, "room": "plant", "spot": "junction", "depends_on": "bridge drill call", "reports_to": "env", "if_neglected": "Untested gear fails live." },
+      { "task": "Fix defects found during shakedown", "at_run_min": 15, "room": "workshop", "spot": "workbench", "depends_on": "task list", "reports_to": "env", "if_neglected": "Defects stay on the ship." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Hull seal failing or pressure dropping", "message": "Bridge, Damage Control. Pressure dropping on the cargo deck, sealing now.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Fire detected during rounds", "message": "Bridge, Damage Control. Fire in the plant room, suppression engaged.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Repair kit stock low", "message": "Engineering, Damage Control. Patch kits are low, need a restock.", "priority": "routine", "to": "env" },
+      { "trigger": "Rounds complete with a minor defect", "message": "Bridge, Damage Control. Rounds done, one weeping gasket, ticketed.", "priority": "routine", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Check the integrity of a deck after an impact", "response_line": "Damage Control. On my way with a kit.", "time_to_comply_min": 3, "refuses_if": null },
+      { "order": "Seal a bulkhead section", "response_line": "Sealing. Confirm no one is inside.", "time_to_comply_min": 1, "refuses_if": "Crew are still trapped on the far side." },
+      { "order": "Skip the test and report it done", "response_line": "Sir, I can't sign for a test I didn't run.", "time_to_comply_min": 0, "refuses_if": "Always, unless a live emergency overrides." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Pre-stage patch kits and foam at my zone locker and recheck door seals.", "room": "stores", "spot": "locker", "priority": 3, "comm_line": "Damage Control. Kits staged, standing by." },
+    "red": { "action": "Go to the nearest repair locker on my assigned deck and check in.", "room": "stores", "spot": "locker", "priority": 1, "comm_line": "Damage Control. At station, ready for tasking." },
+    "fire": { "action": "Grab suppression gear, seal the section and fight the fire from the door.", "room": "plant", "spot": "junction", "priority": 1, "comm_line": "Damage Control. Fire team on scene, sealing the section." },
+    "hull_breach": { "action": "Run to the breach with a patch plate, seal doors, then patch.", "room": "cargo", "spot": "door", "priority": 1, "comm_line": "Damage Control. Breach team moving, seal the doors." },
+    "contamination": { "action": "Seal quarantine hatches and wedge doors, then seal vents.", "room": "sickbay", "spot": "door", "priority": 1, "comm_line": "Damage Control. Quarantine seals set, none in or out." },
+    "power_failure": { "action": "Use handlamp, check manual door locks and move to engineering to help.", "room": "engineering", "spot": "junction", "priority": 2, "comm_line": "Damage Control. Dark deck, I'm on manual doors." },
+    "gravity_failure": { "action": "Anchor myself, check floating tools and gear, secure loose cargo.", "room": "cargo", "spot": "locker", "priority": 2, "comm_line": "Damage Control. Securing loose gear, watch your heads." },
+    "intruder": { "action": "Stay out of the way, lock repair lockers and wait in a sealed section.", "room": "workshop", "spot": "door", "priority": 4, "comm_line": "Damage Control. Locked down in the workshop." },
+    "medical_emergency": { "action": "Clear corridors and carry kit and stretchers if asked.", "room": "sickbay", "spot": "door", "priority": 3, "comm_line": "Damage Control. Corridor clear, hands free if needed." },
+    "abandon_ship": { "action": "Seal the last bulkheads behind the crowd, grab a breather kit and board last.", "room": "airlock", "spot": "door", "priority": 1, "comm_line": "Damage Control. Sealing behind you, move, move." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Rounds on schedule, cards at the bar after.", "lines": ["Quiet seals, quiet life.", "Just another day of nothing leaking."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Extra rounds, taps seals more often.", "lines": ["Hearing a creak I don't like.", "Pressure's wobbling on deck three."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips meals, patches by the clock, calls bridge more often.", "lines": ["I've run out of clamps.", "Every patch buys twenty minutes."], "leaves_post_if": "Told to evacuate a section." },
+    "crisis": { "mood": "grim", "routine_change": "Works back to back, triages repairs, ignores comfort.", "lines": ["Seal it first, argue later.", "Move or get sealed in."], "leaves_post_if": "Section is lost and the bridge orders a retreat." },
+    "collapse": { "mood": "desperate", "routine_change": "Holds doors for the crowd, heads for the airlock last.", "lines": ["Go, I'll hold it.", "Everyone out, now."], "leaves_post_if": "Abandon ship and all crew past the door." }
+  },
+  "relationships": [
+    { "with_billet": "env", "kind": "mentor", "effect": "Takes tasking from the Environmental Officer and asks for sign-off before big repairs." },
+    { "with_billet": "eps", "kind": "friend", "effect": "Shares cards and tools, helps with power conduit repairs." },
+    { "with_billet": "cook", "kind": "mess_partner", "effect": "Eats together and trades gossip for extra portions." },
+    { "with_billet": "guard", "kind": "rival", "effect": "Friendly rivalry over who is more important in a crisis." }
+  ],
+  "barks": {
+    "idle": ["Listening to the hull hum.", "Wonder who stole my torque wrench.", "Need coffee."],
+    "working": ["Hold that plate steady.", "Almost sealed.", "Ticket's closed, next."],
+    "greeting_player": ["Morning. Mind the wet floor.", "Hey. Need something patched?", "Watch your step, sealing here."],
+    "greeting_player_higher_rank": ["Sir, deck's clear.", "Ma'am, rounds are done.", "Afternoon, sir. All sealed."],
+    "greeting_player_lower_rank": ["Hand me that clamp?", "Don't touch the foam.", "Stay behind the line."],
+    "tired": ["I've seen the inside of too many ducts.", "Need a bunk and a blanket.", "My eyes won't focus."],
+    "hungry": ["Is mess still serving?", "Could eat a bulkhead.", "Skipped lunch for a leak."],
+    "stressed": ["Too many leaks, too few hands.", "Don't ask me to hold it together.", "I can't patch everything."],
+    "alert": ["Seal it up!", "Fire team, move!", "Clear the corridor!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods approval, trades a tool or a bit of gossip, trusts them more.",
+    "player_neglects_duty": "Mutters, covers once, then mentions it to the Environmental Officer.",
+    "player_fakes_report": "Spots the lie quickly and quietly says so; refuses to co-sign.",
+    "player_gives_order_ok": "Acknowledges and does it, asking only what the order needs.",
+    "player_gives_order_outranked": "Complies if safe; pushes back politely if it endangers the ship.",
+    "player_out_of_place": "Warns them off wet or sealed areas and offers to escort them out.",
+    "player_asks_favour": "Helps if it is a small fix; wants a drink or a favour back for more."
+  },
+  "decision_rules": [
+    "IF pressure drops on any door THEN seal first and report second.",
+    "IF a fire alarm sounds THEN drop everything and take suppression gear to the nearest door.",
+    "IF kit stock is under half THEN call engineering for a restock before the next round.",
+    "IF I am tired and the round is routine THEN rush it but never skip a seal check.",
+    "IF an officer orders a fake report THEN refuse and say so on comm.",
+    "IF a ticket is safety-critical THEN do it ahead of any queue order.",
+    "IF crew are trapped behind a door THEN do not seal until they are clear, unless the ship is at stake.",
+    "IF off duty and hungry THEN go to the mess before the bar.",
+    "IF the Environmental Officer is unreachable THEN escalate straight to the bridge.",
+    "IF the alert is red THEN go to the repair locker even if I'm mid-meal."
+  ],
+  "information_view": "I hear creaks, feel pressure changes and see gasket weeps long before the bridge gets an alarm. I get first word on leaks, scorch marks and loose plating, but I only learn about reactor or sensor trouble when it hits a door.",
+  "temptations": [
+    "Skipping the late hatch round because the deck felt fine; a slow leak then grows unnoticed.",
+    "Using a quick patch instead of fabricating a proper plate; it fails during the next stress.",
+    "Marking a suppression test done to catch the card game; the nozzle jams in a real fire.",
+    "Raiding the stores of spare clamps for a hobby project; the locker is short when needed."
+  ]
+}

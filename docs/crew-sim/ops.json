@@ -1,0 +1,147 @@
+{
+  "billet": "ops",
+  "role_summary": "I am the Operations Manager. I keep the ship's plumbing of information and logistics running: comms, transporters, computer and power allocation requests all cross my desk. I care that the bridge never has to ask twice for something that should already work.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "meticulous"], "quirk": "Initials every checklist twice and logs coffee refills as 'consumables'.", "routine_effect": "Never skips the system rounds; spends longer at the console; sleeps on schedule." },
+    { "id": "fixer", "traits": ["improviser", "chatty"], "quirk": "Carries a pocket spanner and trades favours instead of filing requests.", "routine_effect": "Swaps rounds for walkabouts in workshop and engineering; more social time at the bar; sometimes rushes logs." },
+    { "id": "burnt_out", "traits": ["dry", "overworked"], "quirk": "Keeps a private tally of the bridge's 'urgent' requests that were not.", "routine_effect": "Shorter meals at the desk, more naps in the ready room, lets low-priority rounds slip." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take the ops board and open-issue list from the outgoing relief." },
+    { "from": 0.5, "to": 2, "activity": "bridge_ops_station", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Route power, comms and transport requests for the mission." },
+    { "from": 2, "to": 3, "activity": "systems_round", "room": "datacore", "spot": "console", "anim": "walk", "interruptible": true, "social": "solo", "note": "Walk the computer core, then transporter pads and comms junctions." },
+    { "from": 3, "to": 4, "activity": "transporter_check", "room": "transporter", "spot": "pad", "anim": "interact", "interruptible": true, "social": "pair", "note": "Sit with the transporter chief and review pattern buffer logs." },
+    { "from": 4, "to": 5, "activity": "paperwork", "room": "readyroom", "spot": "desk", "anim": "interact", "interruptible": true, "social": "solo", "note": "Duty roster, supply requests, department reports." },
+    { "from": 5, "to": 6, "activity": "bridge_ops_station", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Back on the bridge for late-watch traffic." },
+    { "from": 6, "to": 7.5, "activity": "walkabout", "room": "workshop", "spot": "workbench", "anim": "walk", "interruptible": true, "social": "pair", "note": "Chase down open tickets in person." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the relief on what is still broken." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Proper meal with department staff." },
+    { "from": 9, "to": 11, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Decompress, gossip, a card game." },
+    { "from": 11, "to": 12, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Burn off stress." },
+    { "from": 12, "to": 20, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Eight hours down; wake only for emergencies." },
+    { "from": 20, "to": 21, "activity": "meal", "room": "mess", "spot": "replicator", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Breakfast and the day's rumours." },
+    { "from": 21, "to": 22.5, "activity": "hobby", "room": "holodeck", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Holo-playroom session." },
+    { "from": 22.5, "to": 24, "activity": "pre_watch_prep", "room": "readyroom", "spot": "desk", "anim": "interact", "interruptible": true, "social": "solo", "note": "Read the overnight log before the shift." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Meal in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 45], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Eats with whoever is there." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.4 }, "note": "Swaps ops gossip." },
+    { "id": "holo_playroom", "label": "Holo-Playroom game", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.5 }, "note": "Strategy puzzles." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Badge on loud." },
+    { "id": "gym", "label": "Treadmill and weights", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [20, 45], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Clears the head." },
+    { "id": "tinker", "label": "Tinker with spare comm gear", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [20, 50], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.3 }, "note": "Job-specific hobby: rebuilding old badges." },
+    { "id": "audit_walk", "label": "Unofficial walk of the ship", "rooms": ["cargo", "stores", "engineering"], "spot": "corridor", "anim": "walk", "minutes": [15, 30], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.1 }, "note": "Spots problems before they are reported." },
+    { "id": "arboretum_sit", "label": "Sit in the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "sitting_idle", "minutes": [10, 30], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": -0.2, "hunger": 0, "stress": -0.4 }, "note": "Quiet." }
+  ],
+  "duty_loops": [
+    { "id": "ops_board", "label": "Work the ops board", "room": "bridge", "spot": "console", "every_min": 15, "duration_min": 5, "steps": ["review open requests", "rebalance power asks with engineering", "assign comm and transport tasks", "update bridge"], "system": "computer", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Ops. Board is clear; comms and transport nominal." },
+    { "id": "comms_round", "label": "Check comm junctions", "room": "datacore", "spot": "junction", "every_min": 30, "duration_min": 6, "steps": ["walk to junction", "run relay diagnostic", "log signal loss", "tell the comms officer"], "system": "comms", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Ops. Relay three is drifting; comms may clip." },
+    { "id": "transport_signoff", "label": "Transporter readiness sign-off", "room": "transporter", "spot": "pad", "every_min": 45, "duration_min": 5, "steps": ["meet transporter chief", "check pattern buffer log", "sign readiness", "lock out if marginal"], "system": "transport", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Ops. Transporters certified for use." },
+    { "id": "supply_audit", "label": "Supply and cargo tally", "room": "stores", "spot": "locker", "every_min": 60, "duration_min": 8, "steps": ["count critical spares", "compare to manifest", "flag shortages to quartermaster"], "system": "replicators", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Confirm all ops systems nominal and report to bridge", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Small faults pile up unseen." },
+      { "task": "Walk the comm junctions and transporter pads", "at_run_min": 8, "room": "datacore", "spot": "junction", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Drift builds into an anomaly." }
+    ],
+    "survey": [
+      { "task": "Give sensors priority power and bandwidth", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Survey data arrives late and noisy." },
+      { "task": "Reserve computer time for data processing", "at_run_min": 5, "room": "datacore", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Sciences queue stalls." },
+      { "task": "Keep the probe relay link open", "at_run_min": 11, "room": "datacore", "spot": "junction", "depends_on": "other task", "reports_to": "comms", "if_neglected": "Probe telemetry drops." }
+    ],
+    "cargo_run": [
+      { "task": "Check transporter and cargo handling are certified", "at_run_min": 3, "room": "transporter", "spot": "pad", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Cargo transfers fail mid-beam." },
+      { "task": "Reconcile the manifest with the quartermaster", "at_run_min": 7, "room": "cargo", "spot": "desk", "depends_on": "none", "reports_to": "qm", "if_neglected": "Mismatched manifest." },
+      { "task": "Schedule transfer windows with the bridge", "at_run_min": 12, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "bridge", "if_neglected": "Delivery is late." }
+    ],
+    "medical_relief": [
+      { "task": "Clear transporter for patient transfers", "at_run_min": 2, "room": "transporter", "spot": "pad", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Patients wait on the pad." },
+      { "task": "Prioritise comms with the receiving station", "at_run_min": 4, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Handoff coordinates are lost." },
+      { "task": "Divert power to sickbay on request", "at_run_min": 8, "room": "engineering", "spot": "console", "depends_on": "other task", "reports_to": "ce", "if_neglected": "Sickbay brownouts." }
+    ],
+    "shakedown": [
+      { "task": "Run the full ops systems test sequence", "at_run_min": 3, "room": "datacore", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Hidden faults left." },
+      { "task": "Log every fault found and assign tickets", "at_run_min": 9, "room": "readyroom", "spot": "desk", "depends_on": "other task", "reports_to": "xo", "if_neglected": "Faults repeat unfixed." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Comms relay degrading", "message": "Bridge, Ops. Relay three is clipping; rerouting through two.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Transporter pattern buffer fault", "message": "Bridge, Ops. Transporters locked out until the buffer is cleared.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Computer core overheating", "message": "Bridge, Ops. Computer core is hot. I am shedding non-critical load.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Power request exceeds supply", "message": "Engineering, Ops. I need two more points on the sensor bus. Can you spare it?", "priority": "routine", "to": "ce" },
+      { "trigger": "Multiple systems failing", "message": "Bridge, Ops. I am losing systems faster than I can list them. Need your priorities.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Reroute power to sensors", "response_line": "Ops, aye. Rerouting now.", "time_to_comply_min": 2, "refuses_if": "It would drop life support below safe margins." },
+      { "order": "Prepare transporter", "response_line": "Ops. Pads warming, chief is on it.", "time_to_comply_min": 3, "refuses_if": "Pattern buffer is faulted." },
+      { "order": "Open a channel to the station", "response_line": "Channel open, Bridge.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Status of ops systems", "response_line": "Bridge, Ops. Computer, comms, transport nominal.", "time_to_comply_min": 1, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Check all ops systems and put the transporter on standby", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Ops, yellow alert. Systems on standby." },
+    "red": { "action": "Take the ops station and prioritise power and comms", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Ops at station. All hands to stations, relays on priority." },
+    "fire": { "action": "Reroute comms around the fire zone and track crew locations", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Bridge, Ops. Fire zone isolated; rerouting. Crew locations on screen." },
+    "hull_breach": { "action": "Seal affected decks and reallocate power to bulkheads", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Bridge, Ops. Breach marked; sealing the section." },
+    "contamination": { "action": "Lock transporters and relay quarantine orders", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Ops. Quarantine relayed; transporters locked." },
+    "power_failure": { "action": "Go to the junction and bring up essential systems by hand", "room": "engineering", "spot": "junction", "priority": 1, "comm_line": "Bridge, Ops. Essential bus only; comms and computer first." },
+    "gravity_failure": { "action": "Strap in at the console and warn all decks", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "All decks, Ops. Gravity is down. Hold fast." },
+    "intruder": { "action": "Lock doors and transporters, feed security the sensor tracks", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Security, Ops. Lockdown set; transporters off." },
+    "medical_emergency": { "action": "Clear transporter and comms for medical", "room": "transporter", "spot": "pad", "priority": 2, "comm_line": "Sickbay, Ops. Transporter is yours." },
+    "abandon_ship": { "action": "Broadcast distress, open transporter and shuttlebay, then evacuate last", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "All hands, abandon ship. Distress is away; shuttlebay and pads open." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "steady", "routine_change": "Follows the template and does rounds on time.", "lines": ["All quiet on the board.", "Nothing is broken. Suspicious."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Does rounds more often and logs small faults.", "lines": ["That is the third relay blip.", "I do not like that reading."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips meals, works the board from the field, calls engineering often.", "lines": ["Triage time. Comms and life support first.", "Nothing is working the way the manual says."], "leaves_post_if": "Needs to restore a junction in person." },
+    "crisis": { "mood": "grim", "routine_change": "Runs everything by priority list and hand-delivers orders.", "lines": ["I cannot keep all of it up. Pick two.", "Bridge, I need decisions, not questions."], "leaves_post_if": "Bridge console dead; moves to the datacore." },
+    "collapse": { "mood": "resigned but working", "routine_change": "Works the last live circuits and organises the evacuation.", "lines": ["Keep the comm lines alive as long as we can.", "Everyone out. I will be right behind."], "leaves_post_if": "Last comms are away or the deck is lost." }
+  },
+  "relationships": [
+    { "with_billet": "xo", "kind": "mentor", "effect": "Reports to them; reads the room before escalating." },
+    { "with_billet": "comms", "kind": "friend", "effect": "Shares gossip and relies on them for relay status." },
+    { "with_billet": "tchief", "kind": "mess_partner", "effect": "Often eats together and reviews the transporter log." },
+    { "with_billet": "ce", "kind": "rival", "effect": "Argues over power allocation but respects them." },
+    { "with_billet": "qm", "kind": "confidant", "effect": "Trades notes on supplies and crew mood." }
+  ],
+  "barks": {
+    "idle": ["Coffee is not a system, but it keeps them running.", "Somebody has to watch the board.", "Quiet watches are the best watches."],
+    "working": ["Rerouting. Give me a second.", "Logging it now.", "Relay three, talk to me."],
+    "greeting_player": ["Ops here. Need something routed?", "Morning. Anything broken?", "Board is green, for now."],
+    "greeting_player_higher_rank": ["Ma'am, sir. Ops is ready.", "Ops reporting. What do you need?", "At your disposal."],
+    "greeting_player_lower_rank": ["What can I do for you?", "Make it quick, I am mid-reroute.", "Have you filed a request?"],
+    "tired": ["I need a nap and a new job.", "Long watch. Longer coffee.", "My eyes see only blinking lights."],
+    "hungry": ["I would trade a relay for a sandwich.", "Is the mess still open?", "Skipped lunch again."],
+    "stressed": ["Everything wants power at once.", "Do not ask me to prioritise.", "One more request and I leave."],
+    "alert": ["All stations, Ops. Check in.", "Going to the board.", "Move, move. Systems first."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, says nothing, then sends a cup of coffee.",
+    "player_neglects_duty": "Reminds them once, then covers it quietly and tells the department head.",
+    "player_fakes_report": "Cross-checks the board, calls them on it in private, then escalates if repeated.",
+    "player_gives_order_ok": "Acknowledges and routes it at once.",
+    "player_gives_order_outranked": "Politely points out they are not in the chain and asks the XO to confirm.",
+    "player_out_of_place": "Asks what they need and walks them out of the restricted space.",
+    "player_asks_favour": "Does it if it costs nothing, otherwise names a favour back."
+  },
+  "decision_rules": [
+    "IF life support or gravity is at risk THEN divert power there before anything else.",
+    "IF two departments request the same power THEN ask the bridge, do not choose alone.",
+    "IF a transporter buffer fault appears THEN lock out the pads and tell the bridge at once.",
+    "IF comms drop on one relay THEN reroute first, report after.",
+    "IF an order comes from someone outside the chain THEN confirm with the XO before acting.",
+    "IF the board is quiet for 15 minutes THEN walk a junction round instead of sitting.",
+    "IF fatigue is high and the ship is nominal THEN nap in the ready room before the next round.",
+    "IF a friend is struggling THEN spend a break checking on them.",
+    "IF a report would embarrass the department THEN still send it, with the fix attached.",
+    "IF red alert sounds THEN drop everything and take the ops station."
+  ],
+  "information_view": "I see comms signal quality, computer load, power requests and transporter logs first. I hear about trouble as odd requests: unusual power asks, a relay that keeps retrying, a pad that needs a second try.",
+  "temptations": [
+    "Signing a transporter readiness without walking down to the pad; a bad beam later costs trust.",
+    "Letting a drifting relay slide to finish paperwork; comms drop at the worst moment.",
+    "Granting a favour power request quietly; the bus runs short when it matters.",
+    "Calling the board green because the bridge is busy; the fault grows unseen."
+  ]
+}

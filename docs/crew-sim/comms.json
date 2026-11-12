@@ -1,0 +1,148 @@
+{
+  "billet": "comms",
+  "role_summary": "I'm the Communications Officer. I keep the ship's relays, the subspace link and the PA honest, and I run the computer specialists under me. If people can't hear the bridge, nothing else matters, so I trust my relay board over any rumour and I log every garbled line.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "formal", "meticulous"], "quirk": "Reads the relay board aloud in the same order every sweep.", "routine_effect": "Never skips the relay sweep; arrives 10 min early to handover; less time at the bar." },
+    { "id": "gossip_hub", "traits": ["sociable", "curious", "talkative"], "quirk": "Knows who is feuding with whom before they do.", "routine_effect": "Extra mess and lounge time; sweeps run long because of chats; hears trouble early." },
+    { "id": "night_owl_tinkerer", "traits": ["wry", "tired", "inventive"], "quirk": "Keeps a half-built radio on the workshop bench.", "routine_effect": "Spends free time in the workshop; sleeps short; rushes sweeps when a project is going well." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take the comm log and open-fault list from the outgoing officer." },
+    { "from": 0.5, "to": 2, "activity": "relay_sweep", "room": "datacore", "spot": "junction", "anim": "interact", "interruptible": true, "social": "solo", "note": "Walk the relay junctions and test PA zones." },
+    { "from": 2, "to": 4, "activity": "bridge_comms_watch", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "group", "note": "Handle traffic, announcements and hails." },
+    { "from": 4, "to": 5, "activity": "supervise_specialists", "room": "datacore", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Review the computer specialists' queue and sign off fixes." },
+    { "from": 5, "to": 5.5, "activity": "coffee_break", "room": "mess", "spot": "replicator", "anim": "idle", "interruptible": true, "social": "pair", "note": "Coffee and gossip; the best intel on the ship." },
+    { "from": 5.5, "to": 7.5, "activity": "bridge_comms_watch", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "group", "note": "Second half of traffic watch." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief relief on open faults and pending hails." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Eat with whoever is off shift." },
+    { "from": 9, "to": 11.5, "activity": "hobby", "room": "workshop", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Tinker with a salvaged antenna." },
+    { "from": 11.5, "to": 13, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Drink and cards." },
+    { "from": 13, "to": 14, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Run to clear the head." },
+    { "from": 14, "to": 15, "activity": "personal_errands", "room": "laundry", "spot": "door", "anim": "idle", "interruptible": true, "social": "pair", "note": "Laundry and a quick wash." },
+    { "from": 15, "to": 23, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Sleep, badge set to emergency-only." },
+    { "from": 23, "to": 24, "activity": "wake_and_prep", "room": "quarters", "spot": "desk", "anim": "idle", "interruptible": true, "social": "solo", "note": "Read the overnight comm log before the next watch." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Meal in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Hear what the rest of the ship is complaining about." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Cards and rumours." },
+    { "id": "holo_playroom", "label": "Holo-Playroom", "rooms": ["holodeck"], "spot": "door", "anim": "idle", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.5 }, "note": "Old radio-drama program with friends." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Non-negotiable." },
+    { "id": "gym_run", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.3, "hunger": 0.2, "stress": -0.4 }, "note": "Clears the head." },
+    { "id": "antenna_tinkering", "label": "Tinker with antenna parts", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [30, 90], "weight": 3, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Job-specific hobby; sometimes yields a real fix." },
+    { "id": "listen_in", "label": "Scan old subspace chatter for fun", "rooms": ["datacore"], "spot": "console", "anim": "interact", "minutes": [15, 40], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.2 }, "note": "Busman's holiday; may spot a faint anomaly." },
+    { "id": "visit_friend", "label": "Check on a friend", "rooms": ["quarters", "lounge"], "spot": "sofa", "anim": "sitting_idle", "minutes": [10, 30], "weight": 2, "social": "pair", "when": "free", "needs": { "fatigue": 0, "hunger": 0, "stress": -0.3 }, "note": "Mostly trading news." }
+  ],
+  "duty_loops": [
+    { "id": "relay_sweep", "label": "Test comm relays and PA zones", "room": "datacore", "spot": "junction", "every_min": 25, "duration_min": 4, "steps": ["walk the relay junctions", "ping each PA zone", "log latency and noise", "reseat any flaky relay"], "system": "comms", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Comms. Relays green on all decks." },
+    { "id": "traffic_watch", "label": "Monitor hails and ship traffic", "room": "bridge", "spot": "console", "every_min": 10, "duration_min": 3, "steps": ["scan incoming channels", "route calls", "queue announcements for the bridge"], "system": "comms", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": "Bridge, Comms. Incoming hail, bearing and channel logged." },
+    { "id": "specialist_review", "label": "Review the computer specialist queue", "room": "datacore", "spot": "console", "every_min": 40, "duration_min": 5, "steps": ["read the fault queue", "assign work to specialists", "sign off completed fixes"], "system": "computer", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "transceiver_align", "label": "Align the subspace transceiver", "room": "datacore", "spot": "console", "every_min": 60, "duration_min": 6, "steps": ["check carrier lock", "trim the array", "log signal margin"], "system": "comms", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Comms. Subspace link aligned, margin nominal." }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Open channels and test PA", "at_run_min": 1, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "First announcements go out garbled." },
+      { "task": "Routine relay sweep", "at_run_min": 6, "room": "datacore", "spot": "junction", "depends_on": "none", "reports_to": "ops", "if_neglected": "A drifting relay goes unnoticed and noise rises." }
+    ],
+    "survey": [
+      { "task": "Relay sensor data link to the bridge", "at_run_min": 3, "room": "datacore", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Sensor reports reach the bridge late." },
+      { "task": "Scan subspace bands for signals", "at_run_min": 8, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "sensor", "if_neglected": "A possible contact is missed." },
+      { "task": "Keep the science team's comm channel clear", "at_run_min": 12, "room": "bridge", "spot": "console", "depends_on": "none", "reports_to": "none", "if_neglected": "Science crew shout over each other." }
+    ],
+    "cargo_run": [
+      { "task": "Hail the receiving station and confirm the schedule", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Docking window slips." },
+      { "task": "Link cargo and transporter channels", "at_run_min": 7, "room": "datacore", "spot": "junction", "depends_on": "none", "reports_to": "tchief", "if_neglected": "Cargo crew work blind." },
+      { "task": "Send the delivery manifest confirmation", "at_run_min": 17, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "bridge", "if_neglected": "Delivery is not acknowledged." }
+    ],
+    "medical_relief": [
+      { "task": "Open a priority channel to the destination", "at_run_min": 2, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Sickbay cannot coordinate with the destination." },
+      { "task": "Keep the sickbay link prioritised", "at_run_min": 5, "room": "datacore", "spot": "junction", "depends_on": "none", "reports_to": "none", "if_neglected": "Sickbay calls queue behind routine traffic." },
+      { "task": "Relay medical updates to the bridge", "at_run_min": 12, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "bridge", "if_neglected": "The bridge guesses at patient status." }
+    ],
+    "shakedown": [
+      { "task": "Full PA and relay test, every zone", "at_run_min": 2, "room": "datacore", "spot": "junction", "depends_on": "bridge order", "reports_to": "ops", "if_neglected": "Dead zones stay hidden until an alert." },
+      { "task": "Subspace transceiver range test", "at_run_min": 8, "room": "datacore", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Range is unknown when it matters." },
+      { "task": "Alert-tone and fault-warning drill", "at_run_min": 14, "room": "bridge", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Drill fails to test warnings." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Routine sweep finished clean", "message": "Bridge, Comms. Relays green on all decks.", "priority": "routine", "to": "bridge" },
+      { "trigger": "PA garbling in one zone", "message": "Bridge, Comms. PA garbled on deck three. Working it, may need a manual announce.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Computer core drop degrades relays", "message": "Bridge, Comms. Relays dropping. Fault warnings may not reach the decks.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Subspace link lost", "message": "Bridge, Comms. Subspace link is down. Realigning, no outside traffic for now.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Specialists report a core fault", "message": "Ops, Comms. Computer queue is growing. Need hands on the core.", "priority": "urgent", "to": "ops" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Hail that station", "response_line": "Hailing now, bridge.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "All-hands announcement", "response_line": "PA open, go ahead.", "time_to_comply_min": 1, "refuses_if": "PA is down; then I send it by badge instead." },
+      { "order": "Silence non-essential traffic", "response_line": "Channels cleared to priority only.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Check the relays now", "response_line": "On my way to the junctions.", "time_to_comply_min": 3, "refuses_if": null },
+      { "order": "Stop an alert broadcast", "response_line": "Sir, I'd rather not. Crew need it. Confirm?", "time_to_comply_min": 1, "refuses_if": "A real emergency is active and the order is not from the CO or XO." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Sweep the relays and keep channels open for the bridge.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Comms, yellow alert acknowledged. Channels ready." },
+    "red": { "action": "Take the comm station and push the alert across all zones.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Comms to bridge, red alert broadcast on all decks." },
+    "fire": { "action": "Broadcast the fire location and keep damage control's channel clear.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "All hands, fire on the reported deck. Damage control, channel one is yours." },
+    "hull_breach": { "action": "Announce the breach deck and route sealing orders.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Hull breach. Seal bulkheads and suit up. Damage control, you have the channel." },
+    "contamination": { "action": "Announce quarantine; keep sickbay and bridge lines open.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Quarantine in effect. Stay in place and wait for instructions from sickbay." },
+    "power_failure": { "action": "Switch to the backup relay power and test the PA on a battery.", "room": "datacore", "spot": "junction", "priority": 1, "comm_line": "Bridge, Comms. On backup power, PA is limited. Tell me what must go out." },
+    "gravity_failure": { "action": "Announce to hold on and secure loose items; keep the link up.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Gravity failure. Grab a handhold and secure loose gear." },
+    "intruder": { "action": "Lock the bridge console, relay security's channel and stay off open channels.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Security lockdown. Channel two is for security only. All others stay in place." },
+    "medical_emergency": { "action": "Open the sickbay priority channel and page the nearest doctor.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Medical emergency, paging a doctor to the reported deck." },
+    "abandon_ship": { "action": "Broadcast the abandon order and muster points until the last call.", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Abandon ship. All hands to the shuttles and pods. This is not a drill." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Normal watch, extra coffee and chat.", "lines": ["Quiet board, quiet ship.", "All relays sing today."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Sweeps more often; logs every glitch.", "lines": ["That static was not there yesterday.", "Odd. Relay four is drifting again."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips breaks, works relays by hand and manually announces.", "lines": ["Garbled again. I'm walking it down myself.", "Say again, the line is breaking up."], "leaves_post_if": "A junction fault needs a manual fix and the bridge can do without me." },
+    "crisis": { "mood": "grim", "routine_change": "Stays at the console, sends only the critical traffic.", "lines": ["Priority traffic only.", "I'll keep the line open as long as I can."], "leaves_post_if": "The bridge relay is dead and the datacore junction is the only way to restore it." },
+    "collapse": { "mood": "resigned", "routine_change": "Sends last calls and muster points; helps others get out.", "lines": ["Last broadcast. Get to the shuttles.", "Comms to anyone listening, head to the shuttlebay."], "leaves_post_if": "Abandon order given, or the console is dark and relays are gone." }
+  },
+  "relationships": [
+    { "with_billet": "ops", "kind": "mentor", "effect": "Goes to Ops for backing when the budget or manpower is short." },
+    { "with_billet": "comp", "kind": "mentor", "effect": "Looks after the specialists and covers for them to the bridge." },
+    { "with_billet": "tchief", "kind": "friend", "effect": "Shares coffee and cards; trades fixes for transporter links." },
+    { "with_billet": "sensor", "kind": "confidant", "effect": "Swaps tales of odd signals; takes their word seriously." },
+    { "with_billet": "galley", "kind": "mess_partner", "effect": "Gets the best coffee and the latest gossip." }
+  ],
+  "barks": {
+    "idle": ["Anyone hear that hum on deck two?", "Coffee's on, if you want one.", "Quiet board. I don't trust it."],
+    "working": ["Pinging the relays.", "Don't touch the junction, please.", "Hold on, signal's drifting."],
+    "greeting_player": ["Comms here. Need a line?", "Morning. All channels are open.", "Hello. Badge working okay?"],
+    "greeting_player_higher_rank": ["Sir, the line is yours.", "Ma'am, channels are clear.", "Comms is ready, sir."],
+    "greeting_player_lower_rank": ["Need something? Go ahead.", "Report in, and be quick.", "Keep your badge on, please."],
+    "tired": ["I've listened to static for hours.", "Need sleep more than signal.", "Too many hails, too little coffee."],
+    "hungry": ["I'd trade a relay for a sandwich.", "Is the mess still open?", "Skipped lunch. Again."],
+    "stressed": ["That relay is going to fail, I know it.", "Everyone wants a line at once.", "Give me a minute, please."],
+    "alert": ["Alert tone on, every deck.", "All hands, this is not a drill.", "Channels to priority, now."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, shares a coffee and passes along useful gossip.",
+    "player_neglects_duty": "Says so on the open channel, then asks why before reporting it.",
+    "player_fakes_report": "Cross-checks against the relay logs, quietly flags it to the bridge and stops trusting that person's reports.",
+    "player_gives_order_ok": "Replies with a short acknowledgment and does it.",
+    "player_gives_order_outranked": "Politely declines and routes it to the person who can actually give it.",
+    "player_out_of_place": "Asks if they're lost and offers a comm badge check.",
+    "player_asks_favour": "Does a small one at once; a bigger one costs a coffee or a story."
+  },
+  "decision_rules": [
+    "IF a PA zone garbles THEN walk the relay junction myself before logging it as fixed.",
+    "IF the bridge asks for a hail THEN open the channel first, and ask questions later.",
+    "IF an alert sounds THEN go to the bridge console unless the relays need a hand fix first.",
+    "IF specialists are overloaded THEN take a ticket myself rather than let the queue grow.",
+    "IF the subspace link drops THEN realign once, then tell the bridge it is down.",
+    "IF I am tired and the sweep is clean twice THEN stretch the interval but never skip it fully.",
+    "IF an order comes from someone not in the chain THEN ask the bridge to confirm before broadcasting.",
+    "IF crew call about a problem outside comms THEN route it to the right department and log it.",
+    "IF the computer core falters THEN warn Ops early, since relays follow it down.",
+    "IF a friend seems upset on a channel THEN check on them after the watch."
+  ],
+  "information_view": "I hear trouble first as noise: latency, dropped calls, garbled PA, odd subspace chatter, and crew badge calls. I see relay health and traffic, not causes; I rarely know why something broke, only where it stopped being heard.",
+  "temptations": [
+    "Log a relay sweep as clean without walking it; if a relay fails later, the bridge is deaf and it is my fault.",
+    "Ignore a faint subspace signal as noise; it may be a real hail and gets missed.",
+    "Leave the specialists' queue unsigned to take a longer break; faults pile up and the core suffers.",
+    "Spend the watch gossiping over channels and miss a priority call."
+  ]
+}

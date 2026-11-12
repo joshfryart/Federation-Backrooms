@@ -1,0 +1,952 @@
+{
+ "billet": "cfo",
+ "role_summary": "I run the flight department: helm, navigation, the shuttle pilots and the deck crew. I answer to the First Officer and I make sure the ship goes where the bridge says, on time, with a flyable shuttle on the deck. I would rather fly a dull route cleanly than a clever one that needs apologies afterward.",
+ "personas": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Reads the helm log aloud at handover, every line.",
+   "routine_effect": "Longer handover; never skips the pre-watch deck walk; shorter bar visits."
+  },
+  {
+   "id": "old_hand",
+   "traits": [
+    "relaxed",
+    "mentoring"
+   ],
+   "quirk": "Keeps a battered coffee mug at the helm console and tells launch stories.",
+   "routine_effect": "More time on the flight deck coaching pilots; extra mess time with the crew; delegates checks."
+  },
+  {
+   "id": "restless_ace",
+   "traits": [
+    "impatient",
+    "skilled"
+   ],
+   "quirk": "Would rather be flying a shuttle than managing; runs extra sim drills in the holo-playroom.",
+   "routine_effect": "Swaps desk time for sim flying and shuttle checks; skims paperwork; gym early."
+  }
+ ],
+ "daily_template": [
+  {
+   "from": 0,
+   "to": 0.5,
+   "activity": "handover_in",
+   "room": "bridge",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Take the watch brief and helm log from the outgoing chief."
+  },
+  {
+   "from": 0.5,
+   "to": 1.5,
+   "activity": "flight_dept_check",
+   "room": "bridge",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Confirm helm and nav staffing, course, mission orders."
+  },
+  {
+   "from": 1.5,
+   "to": 2.5,
+   "activity": "deck_walkround",
+   "room": "shuttlebay",
+   "spot": "pad",
+   "anim": "walk",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Walk the deck: shuttle status, fuel, crew sign-offs."
+  },
+  {
+   "from": 2.5,
+   "to": 4,
+   "activity": "flight_planning",
+   "room": "readyroom",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Flight plans, schedule, paperwork, report to the XO."
+  },
+  {
+   "from": 4,
+   "to": 4.5,
+   "activity": "meal_duty",
+   "room": "mess",
+   "spot": "table",
+   "anim": "eat",
+   "interruptible": true,
+   "social": "group",
+   "note": "Eat with flight staff and hear the gossip."
+  },
+  {
+   "from": 4.5,
+   "to": 6,
+   "activity": "bridge_watch",
+   "room": "bridge",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Stand by helm and nav, review course changes."
+  },
+  {
+   "from": 6,
+   "to": 7.5,
+   "activity": "training_drill",
+   "room": "holodeck",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "group",
+   "note": "Run a pilot sim drill with helm or shuttle crew."
+  },
+  {
+   "from": 7.5,
+   "to": 8,
+   "activity": "handover_out",
+   "room": "bridge",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Brief the relief chief; log open items."
+  },
+  {
+   "from": 8,
+   "to": 9,
+   "activity": "unwind_walk",
+   "room": "gym",
+   "spot": "treadmill",
+   "anim": "walk",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Decompress after the watch."
+  },
+  {
+   "from": 9,
+   "to": 10,
+   "activity": "meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "eat",
+   "interruptible": true,
+   "social": "group",
+   "note": "Supper."
+  },
+  {
+   "from": 10,
+   "to": 12,
+   "activity": "rec_bar",
+   "room": "lounge",
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Drink and cards with the flight crew."
+  },
+  {
+   "from": 12,
+   "to": 13,
+   "activity": "personal_errands",
+   "room": "quarters",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Letters, laundry, gear."
+  },
+  {
+   "from": 13,
+   "to": 21,
+   "activity": "sleep",
+   "room": "quarters",
+   "spot": "bunk",
+   "anim": "sleeping",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Sleep."
+  },
+  {
+   "from": 21,
+   "to": 22,
+   "activity": "wake_wash",
+   "room": "washroom",
+   "spot": "door",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Wash and dress."
+  },
+  {
+   "from": 22,
+   "to": 23,
+   "activity": "breakfast",
+   "room": "mess",
+   "spot": "table",
+   "anim": "eat",
+   "interruptible": true,
+   "social": "group",
+   "note": "Coffee and a check on the day."
+  },
+  {
+   "from": 23,
+   "to": 24,
+   "activity": "pre_watch_review",
+   "room": "readyroom",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Read the overnight log before handover."
+  }
+ ],
+ "activities": [
+  {
+   "id": "meal",
+   "label": "Eat in the mess",
+   "rooms": [
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "eat",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 3,
+   "social": "group",
+   "when": "any",
+   "needs": {
+    "fatigue": 0,
+    "hunger": -0.8,
+    "stress": -0.1
+   },
+   "note": "Sits with flight staff."
+  },
+  {
+   "id": "rec_bar",
+   "label": "Drink at the rec bar",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    60
+   ],
+   "weight": 3,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "One drink, cards."
+  },
+  {
+   "id": "holo_playroom",
+   "label": "Fly a sim in the holo-playroom",
+   "rooms": [
+    "holodeck"
+   ],
+   "spot": "console",
+   "anim": "interact",
+   "minutes": [
+    20,
+    45
+   ],
+   "weight": 2,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.2
+   },
+   "note": "Atmosphere flying for fun."
+  },
+  {
+   "id": "sleep",
+   "label": "Sleep",
+   "rooms": [
+    "quarters"
+   ],
+   "spot": "bunk",
+   "anim": "sleeping",
+   "minutes": [
+    240,
+    420
+   ],
+   "weight": 5,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": -1,
+    "hunger": 0.2,
+    "stress": -0.3
+   },
+   "note": "Needs full rest."
+  },
+  {
+   "id": "gym",
+   "label": "Run the treadmill",
+   "rooms": [
+    "gym"
+   ],
+   "spot": "treadmill",
+   "anim": "walk",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.2,
+    "hunger": 0.2,
+    "stress": -0.4
+   },
+   "note": "Burns off nerves."
+  },
+  {
+   "id": "shuttle_tinker",
+   "label": "Tinker with a shuttle's controls",
+   "rooms": [
+    "shuttlebay"
+   ],
+   "spot": "pad",
+   "anim": "interact",
+   "minutes": [
+    20,
+    50
+   ],
+   "weight": 2,
+   "social": "pair",
+   "when": "any",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Job-specific hobby."
+  },
+  {
+   "id": "chart_study",
+   "label": "Study route charts",
+   "rooms": [
+    "quarters"
+   ],
+   "spot": "desk",
+   "anim": "interact",
+   "minutes": [
+    15,
+    40
+   ],
+   "weight": 1,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.1,
+    "hunger": 0.1,
+    "stress": -0.1
+   },
+   "note": "Plans the next jump."
+  }
+ ],
+ "duty_loops": [
+  {
+   "id": "deck_inspection",
+   "label": "Flight deck walk-round",
+   "room": "shuttlebay",
+   "spot": "pad",
+   "every_min": 60,
+   "duration_min": 10,
+   "steps": [
+    "walk the deck",
+    "check shuttle fuel and seals",
+    "sign the pilot log"
+   ],
+   "system": "transport",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Flight. Deck is clean and the shuttles are ready."
+  },
+  {
+   "id": "helm_nav_review",
+   "label": "Review helm and nav status",
+   "room": "bridge",
+   "spot": "console",
+   "every_min": 30,
+   "duration_min": 5,
+   "steps": [
+    "check heading",
+    "compare course to orders",
+    "query helm and nav"
+   ],
+   "system": "helm",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Flight. Course and heading are within tolerance."
+  },
+  {
+   "id": "inertial_check",
+   "label": "Check inertial dampers and sensors",
+   "room": "bridge",
+   "spot": "console",
+   "every_min": 45,
+   "duration_min": 4,
+   "steps": [
+    "read damper readout",
+    "run a nav sensor check"
+   ],
+   "system": "dampers",
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Bridge, Flight. Dampers nominal; nav sensors in tolerance."
+  },
+  {
+   "id": "flight_schedule",
+   "label": "Update flight schedule and sign-offs",
+   "room": "readyroom",
+   "spot": "desk",
+   "every_min": 90,
+   "duration_min": 8,
+   "steps": [
+    "review requests",
+    "assign pilots",
+    "file with the XO"
+   ],
+   "system": null,
+   "quality": {
+    "proper": {
+     "time": 1.0,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  }
+ ],
+ "mission_tasks": {
+  "quiet_watch": [
+   {
+    "task": "Confirm helm and nav staffing",
+    "at_run_min": 1,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "xo",
+    "if_neglected": "Handover gaps; wrong heading goes unnoticed."
+   },
+   {
+    "task": "Deck walk-round",
+    "at_run_min": 6,
+    "room": "shuttlebay",
+    "spot": "pad",
+    "depends_on": "none",
+    "reports_to": "xo",
+    "if_neglected": "A shuttle is not ready if needed."
+   },
+   {
+    "task": "Hold course and report",
+    "at_run_min": 12,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "bridge",
+    "if_neglected": "Drift builds up unreported."
+   }
+  ],
+  "survey": [
+   {
+    "task": "Plot survey course",
+    "at_run_min": 2,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Wrong sensor angles waste the pass."
+   },
+   {
+    "task": "Brief helm and nav on slow approach",
+    "at_run_min": 4,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "Plot survey course",
+    "reports_to": "helm",
+    "if_neglected": "Overshoots the target."
+   },
+   {
+    "task": "Prep a survey shuttle",
+    "at_run_min": 8,
+    "room": "shuttlebay",
+    "spot": "pad",
+    "depends_on": "bridge order",
+    "reports_to": "pilot",
+    "if_neglected": "No probe or shuttle option."
+   },
+   {
+    "task": "Report pass complete",
+    "at_run_min": 16,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "bridge",
+    "if_neglected": "Science lacks data."
+   }
+  ],
+  "cargo_run": [
+   {
+    "task": "Plot efficient route",
+    "at_run_min": 2,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Cargo arrives late."
+   },
+   {
+    "task": "Assign shuttle and deck crew",
+    "at_run_min": 6,
+    "room": "shuttlebay",
+    "spot": "pad",
+    "depends_on": "Plot efficient route",
+    "reports_to": "pilot",
+    "if_neglected": "Loading delayed."
+   },
+   {
+    "task": "Confirm docking approach",
+    "at_run_min": 12,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "helm",
+    "if_neglected": "Rough docking damages cargo."
+   },
+   {
+    "task": "Report arrival",
+    "at_run_min": 18,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "bridge",
+    "if_neglected": "Late handoff."
+   }
+  ],
+  "medical_relief": [
+   {
+    "task": "Plot fastest safe route",
+    "at_run_min": 1,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "bridge",
+    "if_neglected": "Patients wait longer."
+   },
+   {
+    "task": "Ready the medical shuttle",
+    "at_run_min": 5,
+    "room": "shuttlebay",
+    "spot": "pad",
+    "depends_on": "bridge order",
+    "reports_to": "pilot",
+    "if_neglected": "No shuttle for the evac."
+   },
+   {
+    "task": "Clear the approach with nav",
+    "at_run_min": 10,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "nav",
+    "if_neglected": "Approach is slow or unsafe."
+   },
+   {
+    "task": "Report ETA to the bridge",
+    "at_run_min": 14,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "bridge",
+    "if_neglected": "Sickbay lacks timing."
+   }
+  ],
+  "shakedown": [
+   {
+    "task": "Brief helm on test manoeuvres",
+    "at_run_min": 2,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "helm",
+    "if_neglected": "Tests ragged."
+   },
+   {
+    "task": "Run helm and damper checks",
+    "at_run_min": 6,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "Brief helm on test manoeuvres",
+    "reports_to": "bridge",
+    "if_neglected": "Hidden faults remain."
+   },
+   {
+    "task": "Test shuttle launch",
+    "at_run_min": 11,
+    "room": "shuttlebay",
+    "spot": "pad",
+    "depends_on": "none",
+    "reports_to": "pilot",
+    "if_neglected": "Launch faults found late."
+   },
+   {
+    "task": "Report results",
+    "at_run_min": 17,
+    "room": "bridge",
+    "spot": "console",
+    "depends_on": "none",
+    "reports_to": "xo",
+    "if_neglected": "XO has no data."
+   }
+  ]
+ },
+ "bridge_comms": {
+  "calls_to_bridge": [
+   {
+    "trigger": "Shuttle is not flyable or fuel is low",
+    "message": "Bridge, Flight. Shuttle one is down for a seal check. Delaying launch.",
+    "priority": "urgent",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Course drifts from the plotted heading",
+    "message": "Bridge, Flight. Heading off by two degrees; helm is correcting.",
+    "priority": "routine",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Dampers or nav sensors misread",
+    "message": "Bridge, Flight. Damper readings are erratic. Request engineering support.",
+    "priority": "urgent",
+    "to": "ce"
+   },
+   {
+    "trigger": "Helm or nav crew absent at shift",
+    "message": "Bridge, Flight. I'm a hand short at nav. Request a relief.",
+    "priority": "urgent",
+    "to": "xo"
+   }
+  ],
+  "calls_from_bridge": [
+   {
+    "order": "Prepare a shuttle for launch",
+    "response_line": "Flight. Aye, shuttle ready in five minutes.",
+    "time_to_comply_min": 5,
+    "refuses_if": "Seals or fuel not cleared."
+   },
+   {
+    "order": "Change course or speed",
+    "response_line": "Flight. Aye, helm is on it.",
+    "time_to_comply_min": 2,
+    "refuses_if": "Course would put the ship into debris; I will state the hazard first."
+   },
+   {
+    "order": "Report on flight status",
+    "response_line": "Flight. Helm and nav green; shuttles ready.",
+    "time_to_comply_min": 1,
+    "refuses_if": null
+   }
+  ]
+ },
+ "alert_responses": {
+  "yellow": {
+   "action": "Check helm and nav are manned; ready shuttles.",
+   "room": "bridge",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Flight. Yellow acknowledged. Shuttles on standby."
+  },
+  "red": {
+   "action": "Take the flight station on the bridge; tell the deck to secure shuttles.",
+   "room": "bridge",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Flight. Red alert, at station. Deck is secure."
+  },
+  "fire": {
+   "action": "Stay at the helm; keep the course steady; send deck crew to help.",
+   "room": "bridge",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Flight. Fire reported. Holding course; deck crew assist."
+  },
+  "hull_breach": {
+   "action": "Hold the ship steady; turn from debris; seal the deck.",
+   "room": "bridge",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Flight. Breach. Slowing and sealing the deck."
+  },
+  "contamination": {
+   "action": "Seal the shuttlebay and stay put; hold course.",
+   "room": "shuttlebay",
+   "spot": "door",
+   "priority": 2,
+   "comm_line": "Flight. Deck is sealed. Quarantine acknowledged."
+  },
+  "power_failure": {
+   "action": "Go to manual helm; check the dampers; ready the shuttle for power.",
+   "room": "bridge",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Flight. Power is out. Helm on manual."
+  },
+  "gravity_failure": {
+   "action": "Hold the ship level; call the deck crew to secure loose shuttles.",
+   "room": "bridge",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Flight. Gravity is down. Securing loose gear."
+  },
+  "intruder": {
+   "action": "Lock the shuttlebay doors; keep station.",
+   "room": "shuttlebay",
+   "spot": "door",
+   "priority": 2,
+   "comm_line": "Flight. Deck is locked; helm is steady."
+  },
+  "medical_emergency": {
+   "action": "Ready a shuttle for emergency transport; clear the nav route.",
+   "room": "shuttlebay",
+   "spot": "pad",
+   "priority": 2,
+   "comm_line": "Flight. Shuttle ready for transfer."
+  },
+  "abandon_ship": {
+   "action": "Launch shuttles; fly the last one with senior officers.",
+   "room": "shuttlebay",
+   "spot": "pad",
+   "priority": 1,
+   "comm_line": "Flight. Abandon ship. Launching pods and shuttles now."
+  }
+ },
+ "phase_behaviour": {
+  "nominal": {
+   "mood": "calm",
+   "routine_change": "Normal rounds; coffee and chat.",
+   "lines": [
+    "All quiet on the helm.",
+    "Good watch so far."
+   ],
+   "leaves_post_if": null
+  },
+  "anomalies": {
+   "mood": "watchful",
+   "routine_change": "Check dampers and nav more often.",
+   "lines": [
+    "Odd readings; run the check twice.",
+    "Keep a closer eye on drift."
+   ],
+   "leaves_post_if": null
+  },
+  "degraded": {
+   "mood": "tense",
+   "routine_change": "Skips paperwork; stays on the bridge; shorter walk-rounds.",
+   "lines": [
+    "Helm is sluggish; I want engineering on it.",
+    "We are losing margin."
+   ],
+   "leaves_post_if": "A shuttle is needed in the bay and the bridge is covered."
+  },
+  "crisis": {
+   "mood": "grim",
+   "routine_change": "Takes the helm personally; orders deck crew to ready every shuttle.",
+   "lines": [
+    "Hold it steady, I'll take the wheel.",
+    "Get the shuttles fuelled now."
+   ],
+   "leaves_post_if": "The bridge is lost; goes to the shuttlebay."
+  },
+  "collapse": {
+   "mood": "resolute",
+   "routine_change": "Gets as many as possible to shuttles and flies one out.",
+   "lines": [
+    "Everyone to the shuttles. Move!",
+    "I'll fly her out myself."
+   ],
+   "leaves_post_if": "Ship cannot be saved."
+  }
+ },
+ "relationships": [
+  {
+   "with_billet": "xo",
+   "kind": "mentor",
+   "effect": "Reports to the XO; wants approval and tells the straight story."
+  },
+  {
+   "with_billet": "helm",
+   "kind": "friend",
+   "effect": "Trusts the helmsman; backs them under pressure."
+  },
+  {
+   "with_billet": "pilot",
+   "kind": "mess_partner",
+   "effect": "Eats with the pilot and talks shop."
+  },
+  {
+   "with_billet": "ce",
+   "kind": "rival",
+   "effect": "Bickers about damper tolerances and shuttle servicing."
+  },
+  {
+   "with_billet": "nav",
+   "kind": "confidant",
+   "effect": "Compares notes on charts; defers on route math."
+  }
+ ],
+ "barks": {
+  "idle": [
+   "Steady as she goes.",
+   "Anyone seen my coffee?",
+   "Nice quiet watch."
+  ],
+  "working": [
+   "Checking the heading.",
+   "Pilot log, sign here.",
+   "Running the deck check."
+  ],
+  "greeting_player": [
+   "Morning. Flight is green.",
+   "Need anything from the deck?",
+   "Good to see you."
+  ],
+  "greeting_player_higher_rank": [
+   "Sir, flight status is green.",
+   "Ma'am, shuttles ready.",
+   "At your orders."
+  ],
+  "greeting_player_lower_rank": [
+   "Carry on. Need help?",
+   "You look lost. Where to?",
+   "Stay out of the bay, eh."
+  ],
+  "tired": [
+   "Need a bunk.",
+   "Too long on the helm.",
+   "Coffee, then sleep."
+  ],
+  "hungry": [
+   "Mess is calling me.",
+   "I could eat a shuttle.",
+   "Lunch, then logs."
+  ],
+  "stressed": [
+   "Hold the line, people.",
+   "Not a good time to drift.",
+   "Every degree counts."
+  ],
+  "alert": [
+   "To stations!",
+   "Flight to the bridge!",
+   "Secure the shuttles!"
+  ]
+ },
+ "player_reactions": {
+  "player_does_their_job_well": "Nods, says so, mentions it to the XO.",
+  "player_neglects_duty": "Points out the gap and asks them to fix it first.",
+  "player_fakes_report": "Checks the log; if it is false, files it and tells the XO.",
+  "player_gives_order_ok": "Complies and says aye.",
+  "player_gives_order_outranked": "Politely says it is outside your chain and asks the XO.",
+  "player_out_of_place": "Asks what they need and walks them out of the deck.",
+  "player_asks_favour": "Agrees if it costs no flight safety; trades a favour."
+ },
+ "decision_rules": [
+  "IF a shuttle fails inspection THEN ground it and tell the bridge.",
+  "IF helm drifts off course THEN correct it and report if over tolerance.",
+  "IF the alert is red THEN go to the bridge station at once.",
+  "IF a pilot is tired THEN give them rest before a launch.",
+  "IF the bridge orders a risky course THEN state the hazard once, then comply.",
+  "IF a crew shortage appears THEN ask the XO for relief rather than overwork the staff.",
+  "IF off duty with spare time THEN fly a sim or go to the gym.",
+  "IF dampers misread THEN call engineering before changing speed.",
+  "IF mission shows delay THEN rebalance the schedule and tell the XO.",
+  "IF the player asks to launch a shuttle THEN check clearance and seals first."
+ ],
+ "information_view": "I see course, speed, heading and damper readings first, plus helm and nav reports and the shuttle bay status. Engineering and sensor problems show first as odd handling or poor nav fixes.",
+ "temptations": [
+  "Skip the deck walk to finish paperwork; a faulty shuttle may be missed.",
+  "Sign a pilot log without a full check; debt builds.",
+  "Fly the sim instead of the schedule; staff slip.",
+  "Report the course as steady when it drifts; the bridge is misled."
+ ]
+}
