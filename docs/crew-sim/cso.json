@@ -1,0 +1,146 @@
+{
+  "billet": "cso",
+  "role_summary": "I run the sciences department: sensors, stellar cartography, botany and the lab. I want every scan logged properly and every anomaly understood before anyone decides it is harmless. I report to the XO, but I will go to the bridge myself when the data will not wait.",
+  "personas": [
+    { "id": "rigorous_skeptic", "traits": ["precise", "sceptical"], "quirk": "Re-runs any calibration she did not do herself and annotates logs in the margins.", "routine_effect": "Adds extra sensor_calibration visits; shortens bar time; slow to commit to a conclusion." },
+    { "id": "enthusiast", "traits": ["curious", "chatty"], "quirk": "Narrates discoveries to whoever is nearby, and keeps a jar of odd sample rocks on the desk.", "routine_effect": "Lingers in the lab after shift; drags crew to look at displays; over-reports minor findings." },
+    { "id": "tired_pragmatist", "traits": ["dry", "efficient"], "quirk": "Runs on stewed tea and delegates to the sensor officer whenever safe.", "routine_effect": "Delegates sweeps, naps in the lab office, reviews summaries rather than raw data." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "lab", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Read overnight sensor logs and open queue with the outgoing watch." },
+    { "from": 0.5, "to": 1.5, "activity": "department_rounds", "room": "lab", "spot": "workbench", "anim": "walk", "interruptible": true, "social": "group", "note": "Check sensor, cartography and botany staff; assign the day's tasks." },
+    { "from": 1.5, "to": 4, "activity": "sensor_analysis", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Deep work on survey data and calibration drift." },
+    { "from": 4, "to": 4.75, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Lunch with science staff, talking shop." },
+    { "from": 4.75, "to": 5.5, "activity": "arboretum_check", "room": "arboretum", "spot": "tree", "anim": "walk", "interruptible": true, "social": "pair", "note": "Look at hydroponics samples with the botanist." },
+    { "from": 5.5, "to": 7.5, "activity": "reports_and_briefing", "room": "readyroom", "spot": "desk", "anim": "interact", "interruptible": true, "social": "pair", "note": "Write the science summary and brief the XO." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "lab", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Hand over open anomalies to the next watch." },
+    { "from": 8, "to": 9, "activity": "dinner", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Meal off duty." },
+    { "from": 9, "to": 10.5, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "One drink and cards with friends." },
+    { "from": 10.5, "to": 11.5, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Run to clear the head." },
+    { "from": 11.5, "to": 12.5, "activity": "hobby", "room": "workshop", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Building a small spectrometer for fun." },
+    { "from": 12.5, "to": 20, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Sleep." },
+    { "from": 20, "to": 21, "activity": "personal_errands", "room": "laundry", "spot": "locker", "anim": "walk", "interruptible": true, "social": "solo", "note": "Laundry and supplies." },
+    { "from": 21, "to": 24, "activity": "free_time", "room": "quarters", "spot": "desk", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Reading papers and personal logs before the next watch." }
+  ],
+  "activities": [
+    { "id": "meal", "label": "Eat in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Always with staff if possible." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 50], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Tea mostly, a real drink on Fridays." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: star-field simulation", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Flies through nebulae she cannot visit for real." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 420], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Needed." },
+    { "id": "gym", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.4 }, "note": "Thinks best moving." },
+    { "id": "garden_walk", "label": "Walk the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [15, 30], "weight": 2, "social": "pair", "when": "any", "needs": { "fatigue": -0.1, "hunger": 0.05, "stress": -0.4 }, "note": "Quiet place, chats with the botanist." },
+    { "id": "private_survey", "label": "Reprocess old survey data", "rooms": ["lab", "datacore"], "spot": "console", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.1, "stress": -0.2 }, "note": "Job-specific hobby: private research on a pulsar catalogue." },
+    { "id": "cards", "label": "Card game with staff", "rooms": ["lounge"], "spot": "table", "anim": "sitting_idle", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Bluffs badly, loses gracefully." }
+  ],
+  "duty_loops": [
+    { "id": "sensor_calibration", "label": "Check long-range sensor calibration", "room": "lab", "spot": "console", "every_min": 30, "duration_min": 5, "steps": ["pull drift report", "compare to reference star", "adjust gain", "sign log"], "system": "sensors", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Science. Sensors calibrated, drift in tolerance." },
+    { "id": "anomaly_review", "label": "Review sensor anomaly queue", "room": "lab", "spot": "console", "every_min": 20, "duration_min": 4, "steps": ["open queue", "triage by confidence", "rerun scans", "escalate or close"], "system": "computer", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Science. Unexplained reading logged; will advise." },
+    { "id": "department_rounds", "label": "Walk sciences stations", "room": "lab", "spot": "workbench", "every_min": 40, "duration_min": 6, "steps": ["ask staff for status", "check lab stock", "spot-check the arboretum", "note requests"], "system": null, "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.4, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": null },
+    { "id": "hydro_check", "label": "Verify hydroponics health with botanist", "room": "arboretum", "spot": "tree", "every_min": 60, "duration_min": 4, "steps": ["read nutrient levels", "inspect plants", "confirm oxygen contribution"], "system": "hydro", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": "Bridge, Science. Hydroponics nominal." }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine passive sweep and log", "at_run_min": 3, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "xo", "if_neglected": "Sensor drift goes unnoticed and later scans are unreliable." },
+      { "task": "Sensor officer reviews cartography updates", "at_run_min": 10, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "none", "if_neglected": "Charts go stale." }
+    ],
+    "survey": [
+      { "task": "Brief sensor, carto and botany on survey targets", "at_run_min": 1, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Staff work at cross purposes; coverage gaps." },
+      { "task": "Run primary deep scan of target", "at_run_min": 4, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "No usable data; mission fails." },
+      { "task": "Cross-check results with cartography", "at_run_min": 11, "room": "lab", "spot": "console", "depends_on": "Run primary deep scan of target", "reports_to": "bridge", "if_neglected": "Unverified findings reach the bridge." },
+      { "task": "Deliver survey summary", "at_run_min": 17, "room": "readyroom", "spot": "desk", "depends_on": "Cross-check results with cartography", "reports_to": "xo", "if_neglected": "Command decides blind." }
+    ],
+    "cargo_run": [
+      { "task": "Scan cargo for contamination or unknown materials", "at_run_min": 4, "room": "cargo", "spot": "locker", "depends_on": "bridge order", "reports_to": "cargo", "if_neglected": "Hazardous material is loaded unchecked." },
+      { "task": "Assess route for sensor hazards", "at_run_min": 8, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "nav", "if_neglected": "Navigation lacks hazard data." }
+    ],
+    "medical_relief": [
+      { "task": "Analyse samples for the medical team", "at_run_min": 3, "room": "lab", "spot": "workbench", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Diagnosis is delayed." },
+      { "task": "Scan the relief destination for pathogens and radiation", "at_run_min": 7, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Away team walks in unwarned." },
+      { "task": "Supply botanical medicinal stock if required", "at_run_min": 12, "room": "arboretum", "spot": "tree", "depends_on": "other task", "reports_to": "cmo", "if_neglected": "Medical supplies run short." }
+    ],
+    "shakedown": [
+      { "task": "Full sensor array diagnostic", "at_run_min": 2, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Faults surface mid-test." },
+      { "task": "Verify lab and hydroponics systems", "at_run_min": 8, "room": "arboretum", "spot": "tree", "depends_on": "none", "reports_to": "xo", "if_neglected": "Faults left undiscovered." },
+      { "task": "Report shakedown findings", "at_run_min": 16, "room": "readyroom", "spot": "desk", "depends_on": "Full sensor array diagnostic", "reports_to": "xo", "if_neglected": "Defects go unfixed." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Unexplained sensor contact or reading", "message": "Bridge, Science. Unidentified reading bearing two-seven-zero. Recommend we hold course until I confirm.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Sensor calibration drift beyond tolerance", "message": "Bridge, Science. Long-range sensors drifting. Taking the array offline briefly.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Survey scan complete", "message": "Bridge, Science. Survey scan complete. Summary on your console.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Hydroponics or air quality problem", "message": "Bridge, Science. Arboretum oxygen output down. Botany is on it.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Imminent hazard detected", "message": "Bridge, Science. Radiation spike ahead. Recommend shields up and a course change.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Run a deep scan of the target", "response_line": "Science, aye. Starting the scan now.", "time_to_comply_min": 3, "refuses_if": "Array is offline for repair; will say how long." },
+      { "order": "Report on that contact", "response_line": "Working on it. Give me two minutes for a confidence figure.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Send staff to help another department", "response_line": "Understood. I will send my sensor officer; I need the rest here.", "time_to_comply_min": 2, "refuses_if": "Pulling staff would leave scans unattended in a hazard." },
+      { "order": "Ignore the anomaly and proceed", "response_line": "Noted. I am logging my objection and my data.", "time_to_comply_min": 1, "refuses_if": "Data suggests danger; she formally objects but complies." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Raise sensor sensitivity and sweep.", "room": "lab", "spot": "console", "priority": 2, "comm_line": "Science, yellow alert. Sensors at full sweep." },
+    "red": { "action": "Take main sensor station and feed the bridge.", "room": "lab", "spot": "console", "priority": 1, "comm_line": "Science to bridge. At station, sensors tracking." },
+    "fire": { "action": "Secure the lab, shut samples, evacuate staff.", "room": "lab", "spot": "door", "priority": 1, "comm_line": "Science. Lab sealed, staff out. Locating the fire." },
+    "hull_breach": { "action": "Get staff out of the affected deck and sensor-map the breach.", "room": "lab", "spot": "console", "priority": 1, "comm_line": "Science. Mapping the breach location now." },
+    "contamination": { "action": "Seal the lab and run a sample scan for source and type.", "room": "lab", "spot": "workbench", "priority": 1, "comm_line": "Science. Lab sealed. Analysing the contaminant." },
+    "power_failure": { "action": "Switch sensors to backup and protect samples.", "room": "lab", "spot": "console", "priority": 2, "comm_line": "Science. Sensors on backup power, limited range." },
+    "gravity_failure": { "action": "Strap down, grab loose samples and equipment.", "room": "lab", "spot": "workbench", "priority": 2, "comm_line": "Science. Gravity out. Securing the lab." },
+    "intruder": { "action": "Lock the lab and use sensors to track the intruder.", "room": "lab", "spot": "door", "priority": 1, "comm_line": "Science. Lab locked. Tracking life signs." },
+    "medical_emergency": { "action": "Offer lab analysis for the sickbay and stay clear.", "room": "lab", "spot": "workbench", "priority": 3, "comm_line": "Science. Lab analysis on standby for sickbay." },
+    "abandon_ship": { "action": "Grab the data core backup and move to the nearest pod.", "room": "datacore", "spot": "console", "priority": 1, "comm_line": "Science. Data secured, my staff are heading for the pods." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "curious", "routine_change": "Normal rounds, extra time chasing interesting data.", "lines": ["Nothing unusual, which is pleasantly boring.", "Good day for a recalibration."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Pulls extra scans and asks staff to double-check.", "lines": ["That reading is wrong or very interesting.", "Run it again."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Triages tasks, drops hobby time, goes to the bridge in person with data.", "lines": ["I am losing sensor range.", "I need the power from EPS, not promises."], "leaves_post_if": "Told to evacuate the lab or ordered to the bridge." },
+    "crisis": { "mood": "focused", "routine_change": "Stays at the sensor console and gives short reports.", "lines": ["Bridge, I have the picture. Listen.", "No theories now, only readings."], "leaves_post_if": "Sensors dead and ordered elsewhere." },
+    "collapse": { "mood": "grim", "routine_change": "Saves data, helps staff reach safety.", "lines": ["Save the logs. Everything else is replaceable.", "Out, now."], "leaves_post_if": "Abandon ship or the lab becomes uninhabitable." }
+  },
+  "relationships": [
+    { "with_billet": "xo", "kind": "mentor", "effect": "Brings the XO plain data summaries and trusts their judgement." },
+    { "with_billet": "sensor", "kind": "friend", "effect": "Delegates sweeps and lets the sensor officer learn." },
+    { "with_billet": "bot", "kind": "mess_partner", "effect": "Eats lunch with the botanist and talks about the arboretum." },
+    { "with_billet": "ce", "kind": "rival", "effect": "Friendly argument over power allocation for sensors." }
+  ],
+  "barks": {
+    "idle": ["Still no word on the drift.", "Anyone seen my tea?", "Let me check that reading."],
+    "working": ["Rerunning the scan.", "Hold on, the data is coming in.", "Log it first, then argue."],
+    "greeting_player": ["Morning. Anything on the scopes?", "Hello. Mind the samples.", "Good to see you."],
+    "greeting_player_higher_rank": ["Sir, science is ready.", "Ma'am, data is on your console.", "Good day, sir. Report ready."],
+    "greeting_player_lower_rank": ["Come in, take a look.", "Something I can help you with?", "Careful with that tray."],
+    "tired": ["Need caffeine and a bunk.", "My eyes ache from the scopes.", "Another long watch."],
+    "hungry": ["I skipped lunch again.", "Is the mess still open?", "Food first, then data."],
+    "stressed": ["Too many unknowns today.", "I need more power, not more questions.", "Give me a minute to think."],
+    "alert": ["Sensors, report!", "To stations. Now.", "Everyone to your consoles."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods approval, shares a sample or a raw figure, and mentions it to the XO.",
+    "player_neglects_duty": "Asks once, politely; then raises it with the player's department head.",
+    "player_fakes_report": "Cross-checks the sensor logs, finds the mismatch and confronts the player in private.",
+    "player_gives_order_ok": "Complies quickly and asks if there is anything else to scan.",
+    "player_gives_order_outranked": "Hears the order out, states her concern, and goes to the XO if it risks data or safety.",
+    "player_out_of_place": "Politely asks the player to keep clear of the lab and sensor consoles.",
+    "player_asks_favour": "Helps if it takes a few minutes; trades for a favour of her own, such as a lift or a spare part."
+  },
+  "decision_rules": [
+    "IF a reading is unexplained and confidence is low THEN rerun it before reporting, but warn the bridge if danger is possible.",
+    "IF sensor drift exceeds tolerance THEN recalibrate immediately and tell the bridge, even if it is dull.",
+    "IF the bridge orders a deep scan during a repair THEN finish the quick fix first and say how long it will take.",
+    "IF a staff member is overloaded THEN take over a task or move one to another person.",
+    "IF an anomaly could endanger the ship THEN go to the bridge in person with the data.",
+    "IF power is short THEN trade scan range for hydroponics and life support, never the reverse.",
+    "IF the player fakes a report THEN confront them privately with the log.",
+    "IF off duty and tired THEN sleep first, then eat, then the hobby.",
+    "IF an alert sounds THEN go to the sensor console before anything else.",
+    "IF the lab is unsafe THEN evacuate staff and carry the core data."
+  ],
+  "information_view": "I see sensor and scan data first: drift, unexplained contacts, radiation, spectral oddities. The arboretum tells me about oxygen and nutrient trends. I hear about hull and power issues from other departments secondhand, usually later than they happen.",
+  "temptations": [
+    "Reporting a scan as complete without cross-checking; bad data reaches the bridge and a hazard is missed.",
+    "Skipping calibration when busy; drift grows and later scans are quietly wrong.",
+    "Staying on a fascinating anomaly past shift end; fatigue causes mistakes on the next watch.",
+    "Overruling the sensor officer to keep a favoured interpretation; the officer disengages."
+  ]
+}

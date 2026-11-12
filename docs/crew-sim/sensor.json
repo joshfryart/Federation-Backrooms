@@ -1,0 +1,142 @@
+{
+  "billet": "sensor",
+  "role_summary": "I run the long-range and lateral sensor arrays and the science console, and I manage the lab techs. I care that what the ship sees is true: a clean calibration, an honest contact list, and a bridge that hears about a ghost return before it becomes a collision.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "precise"], "quirk": "Logs every calibration to four decimals and corrects people's terminology.", "routine_effect": "Never shortens sweeps; arrives early to handover; skips the bar for a quiet mess meal." },
+    { "id": "night_owl_tinkerer", "traits": ["curious", "scruffy"], "quirk": "Keeps a private notebook of odd returns nobody asked about.", "routine_effect": "Spends free hours in the lab on pet data analysis; sleeps short; drinks too much tea." },
+    { "id": "social_gossip", "traits": ["chatty", "warm"], "quirk": "Reads sensor logs aloud as bedtime trivia at the bar.", "routine_effect": "Longer bar and mess blocks; trades gossip with the lab techs; sweeps still proper but late." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "lab", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take over array status and open anomaly list from the previous watch." },
+    { "from": 0.5, "to": 2.5, "activity": "array_sweep_and_calibration", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Long-range sweep, lateral array alignment, noise filtering." },
+    { "from": 2.5, "to": 3, "activity": "coffee_break", "room": "mess", "spot": "replicator", "anim": "walk", "interruptible": true, "social": "pair", "note": "Tea and a word with whoever is up." },
+    { "from": 3, "to": 5, "activity": "lab_tech_review", "room": "lab", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "group", "note": "Check the techs' sample and data queue; sign off results." },
+    { "from": 5, "to": 6.5, "activity": "bridge_science_brief", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Report contacts and array state to the bridge." },
+    { "from": 6.5, "to": 7.5, "activity": "secondary_sweep_log", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Second pass, write the log." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "lab", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the relief on anything odd." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Dinner, usually with the science table." },
+    { "from": 9, "to": 12, "activity": "personal_time", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Rec bar, cards, holo, or the gym." },
+    { "from": 12, "to": 20, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Core sleep." },
+    { "from": 20, "to": 22, "activity": "hobby_stargazing", "room": "arboretum", "spot": "tree", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Looks at the sky feed without instruments." },
+    { "from": 22, "to": 24, "activity": "pre_watch_prep", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Breakfast and reading overnight science notes." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Meal in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 45], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Eats with the lab techs." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.1, "stress": -0.3 }, "note": "Trivia and gossip." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: deep-space survey sim", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Plays a harder, prettier sensor sim." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Core rest." },
+    { "id": "gym", "label": "Treadmill run", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.4 }, "note": "Clears the head after staring at noise." },
+    { "id": "lab_tinker", "label": "Re-reduce old sensor data", "rooms": ["lab"], "spot": "console", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "solo", "when": "free", "needs": { "fatigue": 0.15, "hunger": 0.1, "stress": -0.2 }, "note": "Job-specific hobby: hunts for faint signals in archived scans." },
+    { "id": "arboretum_walk", "label": "Walk through the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [10, 25], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.05, "stress": -0.3 }, "note": "Quiet, no screens." }
+  ],
+  "duty_loops": [
+    { "id": "array_sweep", "label": "Long-range sweep and contact log", "room": "lab", "spot": "console", "every_min": 10, "duration_min": 3, "steps": ["sit at science console", "run sweep", "filter noise", "tag contacts", "log"], "system": "sensors", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Sensors. Sweep complete, no new contacts." },
+    { "id": "array_calibration", "label": "Lateral array alignment", "room": "lab", "spot": "console", "every_min": 25, "duration_min": 4, "steps": ["pull drift data", "nudge alignment", "test against reference star", "sign log"], "system": "sensors", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "internal_scan_check", "label": "Lifeform scanner spot check", "room": "lab", "spot": "console", "every_min": 30, "duration_min": 2, "steps": ["compare lifeform count to roster", "flag blank decks"], "system": "security", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Sensors. Internal scan shows a count mismatch on deck three." },
+    { "id": "tech_queue", "label": "Review lab tech work", "room": "lab", "spot": "workbench", "every_min": 20, "duration_min": 2, "steps": ["check sample queue", "assign", "sign off"], "system": null, "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 1 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine sweep and drift check", "at_run_min": 2, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Drift builds; a faint contact is missed." },
+      { "task": "Report all-clear to bridge", "at_run_min": 10, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "cso", "if_neglected": "Bridge assumes nothing and asks twice." }
+    ],
+    "survey": [
+      { "task": "Aim arrays at survey target", "at_run_min": 3, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Survey data is thin and unusable." },
+      { "task": "Run full-spectrum scan and bracket", "at_run_min": 8, "room": "lab", "spot": "console", "depends_on": "other task", "reports_to": "cso", "if_neglected": "Gaps in coverage; mission value drops." },
+      { "task": "Package survey data for the bridge", "at_run_min": 16, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "bridge", "if_neglected": "Bridge gets raw noise, not findings." }
+    ],
+    "cargo_run": [
+      { "task": "Sweep approach lanes for debris", "at_run_min": 2, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "nav", "if_neglected": "Unseen debris on the lane." },
+      { "task": "Scan cargo for hazardous signatures", "at_run_min": 9, "room": "cargo", "spot": "door", "depends_on": "none", "reports_to": "ops", "if_neglected": "A leaking container goes unnoticed." }
+    ],
+    "medical_relief": [
+      { "task": "Locate the target vessel and lifesign count", "at_run_min": 3, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Relief arrives blind." },
+      { "task": "Relay lifesign data to sickbay", "at_run_min": 7, "room": "lab", "spot": "console", "depends_on": "other task", "reports_to": "cmo", "if_neglected": "Sickbay prepares the wrong number of beds." },
+      { "task": "Watch for hazards around the vessel", "at_run_min": 12, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Surprise at close range." }
+    ],
+    "shakedown": [
+      { "task": "Full array calibration against reference", "at_run_min": 2, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Test results are meaningless." },
+      { "task": "Report range and resolution figures", "at_run_min": 11, "room": "bridge", "spot": "console", "depends_on": "other task", "reports_to": "bridge", "if_neglected": "Bridge cannot judge readiness." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "New contact on long-range sweep", "message": "Bridge, Sensors. New contact bearing two-seven-zero, range long. Tracking.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Contact closing and unidentified", "message": "Bridge, Sensors. Unidentified contact closing. Recommend yellow alert.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Array power or alignment degrading", "message": "Bridge, Sensors. Array drift out of tolerance. Scan range will shrink.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Lifeform count mismatch", "message": "Bridge, Sensors. Internal scan shows lifesigns where the roster says none.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Lifts missing from the scan display", "message": "Bridge, Sensors. Tubelift has dropped off my scan. Ask Engineering about it.", "priority": "routine", "to": "ops" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Scan that contact in detail", "response_line": "Aye, Bridge. Full scan in two minutes.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Give me a quick all-clear", "response_line": "Bridge, Sensors. Not until the sweep finishes. Ninety seconds.", "time_to_comply_min": 2, "refuses_if": "Asked to certify clear before the sweep has completed" },
+      { "order": "Extend scan range", "response_line": "Extending. Power draw will rise; tell Engineering.", "time_to_comply_min": 3, "refuses_if": "Array is degraded and the extension would damage it" },
+      { "order": "Send the survey data up", "response_line": "Sending now, Bridge.", "time_to_comply_min": 2, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Switch to continuous sweep and widen the arrays", "room": "lab", "spot": "console", "priority": 2, "comm_line": "Sensors, yellow. Continuous sweep running." },
+    "red": { "action": "Go to the bridge science console and feed the tactical picture", "room": "bridge", "spot": "console", "priority": 1, "comm_line": "Sensors on station. Tactical picture is live." },
+    "fire": { "action": "Check internal scan for the fire's extent and any lifesigns, then evacuate", "room": "lab", "spot": "console", "priority": 2, "comm_line": "Sensors. Fire on my scan. Pointing the damage team at it." },
+    "hull_breach": { "action": "Locate the breach on the lateral arrays and warn adjacent decks", "room": "lab", "spot": "console", "priority": 1, "comm_line": "Sensors. Pressure drop located. Sealing advice incoming." },
+    "contamination": { "action": "Seal the lab and scan the affected zone from inside", "room": "lab", "spot": "console", "priority": 2, "comm_line": "Sensors, sealed in the lab. Mapping the contamination." },
+    "power_failure": { "action": "Shut down non-essential arrays and keep one sweep", "room": "lab", "spot": "console", "priority": 2, "comm_line": "Sensors. Down to a single array to save power." },
+    "gravity_failure": { "action": "Strap in at the console and keep scanning", "room": "lab", "spot": "console", "priority": 3, "comm_line": "Sensors. Gravity out. Still scanning." },
+    "intruder": { "action": "Run the lifeform scanner and feed deck positions to security", "room": "lab", "spot": "console", "priority": 1, "comm_line": "Sensors. Intruder on deck two, moving aft. Passing to Security." },
+    "medical_emergency": { "action": "Locate the casualty by lifesign and relay to sickbay", "room": "lab", "spot": "console", "priority": 2, "comm_line": "Sensors. Casualty located. Sending position to Sickbay." },
+    "abandon_ship": { "action": "Scan for hazards near the shuttlebay, then evacuate with the lab techs", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Sensors. Shuttlebay approach is clear. Bringing the lab team." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "Normal sweeps; some tinkering and chatter.", "lines": ["All quiet out there.", "Arrays are steady."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Sweeps more often; double-checks every odd return before reporting.", "lines": ["That return wasn't there ten minutes ago.", "Might be ghost noise. Checking."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Fights drift manually; tells the bridge the scan range is shrinking.", "lines": ["I'm blind past the second planet.", "Arrays are drifting; I can't hold alignment."], "leaves_post_if": "Arrays go fully dark and the lab loses power" },
+    "crisis": { "mood": "stressed", "routine_change": "Moves to the bridge science console and talks in short reports.", "lines": ["Contact count unreliable.", "I'll give you what I can see."], "leaves_post_if": "Lab atmosphere fails or abandon order" },
+    "collapse": { "mood": "grim", "routine_change": "Switches to hand reports and portable scanner; helps evacuate.", "lines": ["Sensors are gone. I'll be your eyes.", "Nothing left but the handheld."], "leaves_post_if": "Always, once the ship is abandoned" }
+  },
+  "relationships": [
+    { "with_billet": "cso", "kind": "mentor", "effect": "Takes interpretation questions to the chief and defers on findings." },
+    { "with_billet": "lab", "kind": "friend", "effect": "Looks after the techs; shares data credit and tea." },
+    { "with_billet": "carto", "kind": "confidant", "effect": "Swaps star-chart gossip and cross-checks contacts." },
+    { "with_billet": "ops", "kind": "friend", "effect": "Trades power and array status; first call when arrays degrade." },
+    { "with_billet": "nav", "kind": "rival", "effect": "Friendly argument over whose data is the truth on course questions." }
+  ],
+  "barks": {
+    "idle": ["Listening to the dark.", "Anyone want tea?", "Sensors are quiet. Too quiet."],
+    "working": ["Tuning the noise floor.", "Hold still, little signal.", "Sweep in progress."],
+    "greeting_player": ["Hello. Anything on your scans?", "Sensors here. Need something?", "Morning. Arrays are fine."],
+    "greeting_player_higher_rank": ["Sir, arrays are green.", "Ma'am, sweep is clean.", "Welcome to Sensors, sir."],
+    "greeting_player_lower_rank": ["Hey. Watch the console, please.", "Tell me if you see a flicker.", "Got a minute to learn the array?"],
+    "tired": ["I've been staring at noise for hours.", "Need sleep. The static is following me.", "Too long on this console."],
+    "hungry": ["Is the mess still open?", "My stomach has a better sensor than I do.", "I need food before the next sweep."],
+    "stressed": ["This return doesn't make sense.", "I can't trust my own readings.", "Give me a minute, I'm checking it."],
+    "alert": ["Contact! Reading it now.", "Alert. Arrays on full.", "I'm on it, Bridge."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods approval, shares a faint contact they found, and offers tea.",
+    "player_neglects_duty": "Mentions it quietly once, then escalates to the chief and logs the lapse.",
+    "player_fakes_report": "Cross-checks the scan; if it is wrong, says so flatly on the comm and corrects the log.",
+    "player_gives_order_ok": "Complies, says 'Aye' and gets to it.",
+    "player_gives_order_outranked": "Politely declines, points out the chain of command and offers to ask the chief.",
+    "player_out_of_place": "Asks what they are looking for and steers them away from sensitive arrays.",
+    "player_asks_favour": "Does small ones freely; big ones cost a trade of data or a drink."
+  },
+  "decision_rules": [
+    "IF a return is faint and unconfirmed THEN run a second pass before reporting it to the bridge.",
+    "IF a contact is closing and unidentified THEN call the bridge immediately and recommend yellow alert.",
+    "IF array drift is out of tolerance THEN recalibrate before the next sweep, and report if it cannot be fixed.",
+    "IF a lab tech is struggling THEN take the bench for ten minutes rather than let them guess.",
+    "IF the lifeform count disagrees with the roster THEN tell the bridge at once, even if probably a glitch.",
+    "IF off duty and tired THEN sleep first; the hobby can wait.",
+    "IF the bridge asks for an all-clear before the sweep finishes THEN refuse and give a time.",
+    "IF power is cut to the arrays THEN keep the forward long-range array and drop the lateral ones.",
+    "IF red alert sounds THEN leave the lab to the senior tech and go to the bridge console.",
+    "IF the player asks about scan data THEN explain it plainly and do not hide uncertainty."
+  ],
+  "information_view": "Sensors sees problems first as noise: faint returns, drift, ghost contacts, lifeform count mismatches, and lifts or decks vanishing from the scan display. The sensor officer hears about power and alignment faults when the arrays degrade, and about hull and gas trouble only as odd readings.",
+  "temptations": [
+    "Skipping the second pass on a faint return to catch up; sometimes a real contact is missed.",
+    "Reporting 'all clear' to end a long shift; if wrong, the bridge is blind.",
+    "Leaving calibration for the next watch; drift compounds into degraded sensors.",
+    "Spending duty time in the archive data hobby; sweeps get late and the bridge asks twice."
+  ]
+}

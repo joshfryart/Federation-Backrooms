@@ -1,0 +1,148 @@
+{
+  "billet": "carto",
+  "role_summary": "I'm the Stellar Cartographer. I keep the ship's star charts true: fold sensor sweeps into the chart database, catch drift in our position fixes, and hand navigation clean maps. I'd rather be right a day late than wrong on time, because a bad chart kills quietly.",
+  "personas": [
+    { "id": "chart_purist", "traits": ["meticulous", "quiet"], "quirk": "Re-checks every fix twice and hums while the plot renders.", "routine_effect": "Longer chart_audit blocks, shorter bar visits, extra time in the lab." },
+    { "id": "wandering_dreamer", "traits": ["curious", "chatty"], "quirk": "Stops mid-corridor to explain a nebula to anyone nearby.", "routine_effect": "Adds detours to the arboretum and lounge; duty loops run slightly late but get richer reports." },
+    { "id": "burned_out_pro", "traits": ["tired", "dry-humoured"], "quirk": "Keeps a cold mug of tea on the console and forgets it.", "routine_effect": "Skips optional re-audits under load; naps more; sharper stress barks." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "lab", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take over open chart jobs and any drift notes from the last watch." },
+    { "from": 0.5, "to": 2.5, "activity": "chart_audit", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Reconcile new sensor data against the master chart." },
+    { "from": 2.5, "to": 3, "activity": "nav_sync", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": true, "social": "pair", "note": "Walk the updated plot to the navigator in person." },
+    { "from": 3, "to": 3.75, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Midwatch meal, usually with sciences staff." },
+    { "from": 3.75, "to": 6, "activity": "survey_processing", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Process the long sensor queue; render projections." },
+    { "from": 6, "to": 7.5, "activity": "datacore_backup", "room": "datacore", "spot": "console", "anim": "interact", "interruptible": false, "social": "solo", "note": "Commit chart revisions and verify backups." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "lab", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the relief on open items." },
+    { "from": 8, "to": 9, "activity": "wind_down", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "One drink, some gossip." },
+    { "from": 9, "to": 11, "activity": "hobby_stargazing", "room": "arboretum", "spot": "tree", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Sketches constellations on paper, the old way." },
+    { "from": 11, "to": 12, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Second meal." },
+    { "from": 12, "to": 13, "activity": "gym", "room": "gym", "spot": "treadmill", "anim": "walking", "interruptible": true, "social": "solo", "note": "Keeps the back from seizing at the console." },
+    { "from": 13, "to": 15, "activity": "holo_playroom", "room": "holodeck", "spot": "pad", "anim": "interact", "interruptible": true, "social": "group", "note": "Plays a sailing sim with friends." },
+    { "from": 15, "to": 23, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Full sleep block." },
+    { "from": 23, "to": 24, "activity": "prep", "room": "mess", "spot": "replicator", "anim": "idle", "interruptible": true, "social": "solo", "note": "Coffee and a read of the overnight chart notes before duty." }
+  ],
+  "activities": [
+    { "id": "meal", "label": "Eat in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Sits with sciences crew." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 50], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Tea or a mild spirit; trades rumours." },
+    { "id": "holo_playroom", "label": "Holo-Playroom sailing sim", "rooms": ["holodeck"], "spot": "pad", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Wind and water instead of vacuum." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Wakes if the plot alarm sounds." },
+    { "id": "gym", "label": "Treadmill and stretching", "rooms": ["gym"], "spot": "treadmill", "anim": "walking", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Counts steps against the corridor map." },
+    { "id": "sketch_stars", "label": "Sketch the sky by hand", "rooms": ["arboretum", "lounge"], "spot": "tree", "anim": "sitting_idle", "minutes": [30, 90], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.4 }, "note": "Job-specific personal hobby." },
+    { "id": "visit_bot", "label": "Chat with the botanist", "rooms": ["arboretum"], "spot": "tree", "anim": "talking", "minutes": [15, 30], "weight": 1, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0, "stress": -0.3 }, "note": "Trades seeds for star data." },
+    { "id": "cards", "label": "Card game in the lounge", "rooms": ["lounge"], "spot": "table", "anim": "sitting_idle", "minutes": [30, 60], "weight": 1, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.2 }, "note": "Bets only in favours." }
+  ],
+  "duty_loops": [
+    { "id": "chart_audit", "label": "Reconcile sensor data with master chart", "room": "lab", "spot": "console", "every_min": 20, "duration_min": 8, "steps": ["pull latest sensor sweep", "compare against master chart", "flag drift and unknown bodies", "commit revision"], "system": "sensors",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": "Bridge, Cartography. Chart revision committed, drift within tolerance." },
+    { "id": "nav_sync", "label": "Hand updated plot to navigation", "room": "bridge", "spot": "console", "every_min": 30, "duration_min": 3, "steps": ["walk to bridge", "load plot on nav console", "confirm hazards with navigator"], "system": "computer",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": "Navigation, Cartography. New plot loaded, one hazard marked ahead." },
+    { "id": "datacore_backup", "label": "Back up chart database", "room": "datacore", "spot": "console", "every_min": 60, "duration_min": 4, "steps": ["walk to datacore", "verify checksum", "write backup", "log result"], "system": "computer",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine chart audit and drift check", "at_run_min": 2, "room": "lab", "spot": "console", "depends_on": "none", "reports_to": "cso", "if_neglected": "Position drift grows unnoticed." },
+      { "task": "Send updated plot to navigation", "at_run_min": 10, "room": "bridge", "spot": "console", "depends_on": "chart audit", "reports_to": "nav", "if_neglected": "Navigator flies on a stale plot." }
+    ],
+    "survey": [
+      { "task": "Stage survey grid and target list", "at_run_min": 1, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Sensors sweep blind or overlap." },
+      { "task": "Ingest sensor sweep and render the survey chart", "at_run_min": 6, "room": "lab", "spot": "console", "depends_on": "sensor officer sweep", "reports_to": "sensor", "if_neglected": "Survey data sits unusable." },
+      { "task": "Present finished chart to bridge", "at_run_min": 15, "room": "bridge", "spot": "console", "depends_on": "survey chart", "reports_to": "bridge", "if_neglected": "Mission result is never delivered." }
+    ],
+    "cargo_run": [
+      { "task": "Plot the shortest safe course to the drop point", "at_run_min": 2, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "nav", "if_neglected": "Route runs through debris or wastes fuel." },
+      { "task": "Mark hazards along the route", "at_run_min": 8, "room": "bridge", "spot": "console", "depends_on": "course plot", "reports_to": "bridge", "if_neglected": "Cargo delayed by avoidable detours." }
+    ],
+    "medical_relief": [
+      { "task": "Plot fastest course to the stricken ship, ignoring comfort margins", "at_run_min": 1, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "nav", "if_neglected": "Arrival is late; patients worsen." },
+      { "task": "Update the plot as the target drifts", "at_run_min": 9, "room": "bridge", "spot": "console", "depends_on": "course plot", "reports_to": "nav", "if_neglected": "We intercept the wrong spot." }
+    ],
+    "shakedown": [
+      { "task": "Calibrate chart database against sensor test pattern", "at_run_min": 3, "room": "lab", "spot": "console", "depends_on": "sensor officer test", "reports_to": "sensor", "if_neglected": "Hidden offsets stay in the charts." },
+      { "task": "Report position-fix accuracy to bridge", "at_run_min": 12, "room": "bridge", "spot": "console", "depends_on": "calibration", "reports_to": "bridge", "if_neglected": "Trials log has no cartography data." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Unmapped body or hazard appears on plot", "message": "Bridge, Cartography. Uncharted contact on the plot, bearing and range on your nav screen.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Position fix drifts past tolerance", "message": "Bridge, Cartography. Our fix is drifting. Requesting a fresh sensor sweep.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Chart database corrupt or computer failing", "message": "Bridge, Cartography. Chart database is returning garbage. Switching to the backup.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Chart revision committed on schedule", "message": "Bridge, Cartography. Chart revision committed, no changes to course.", "priority": "routine", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Plot a new course to given coordinates", "response_line": "Cartography, aye. Plot to nav in three minutes.", "time_to_comply_min": 3, "refuses_if": "Coordinates are inside a known hazard; I will flag it first." },
+      { "order": "Report current position and hazards", "response_line": "Cartography. Fix is good; one hazard marked, details on your console.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Skip the audit and just send the plot", "response_line": "Understood, sending it unaudited. Log that it is unverified.", "time_to_comply_min": 1, "refuses_if": "The plot would carry the ship into an unsurveyed field; I'll object once, then comply if ordered." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Lock the current chart revision and stay on the plot.", "room": "lab", "spot": "console", "priority": 3, "comm_line": "Cartography, yellow acknowledged. Charts locked, standing by." },
+    "red": { "action": "Go to the bridge and support nav with live plots.", "room": "bridge", "spot": "console", "priority": 2, "comm_line": "Cartography, reporting to the bridge. Plot is up." },
+    "fire": { "action": "Save the working chart, leave the affected room, report location.", "room": "lab", "spot": "door", "priority": 2, "comm_line": "Cartography. Fire reported near me, evacuating, chart saved." },
+    "hull_breach": { "action": "Seal the door, move to the nearest safe deck, save data.", "room": "lab", "spot": "door", "priority": 1, "comm_line": "Cartography. Breach alarm, sealing off and moving to safe space." },
+    "contamination": { "action": "Stay put in the lab, seal the door, keep working remotely.", "room": "lab", "spot": "door", "priority": 3, "comm_line": "Cartography. Quarantine acknowledged, sealed in the lab." },
+    "power_failure": { "action": "Switch to backup terminal, save chart to local storage.", "room": "lab", "spot": "console", "priority": 3, "comm_line": "Cartography. Power's out, I'm on backup. Charts saved locally." },
+    "gravity_failure": { "action": "Hold to a handrail, save work, wait for the all-clear.", "room": "lab", "spot": "console", "priority": 3, "comm_line": "Cartography. Gravity is out, I'm secured at the lab console." },
+    "intruder": { "action": "Lock the lab door and stay inside.", "room": "lab", "spot": "door", "priority": 3, "comm_line": "Cartography. Lockdown acknowledged, lab locked with me inside." },
+    "medical_emergency": { "action": "Clear the corridor and help if asked.", "room": "lab", "spot": "door", "priority": 4, "comm_line": "Cartography. Heard the call; corridor clear, available if needed." },
+    "abandon_ship": { "action": "Copy the master chart to a portable drive and go to the shuttlebay.", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Cartography. Heading to the shuttlebay with the charts." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "None; follows the template.", "lines": ["Everything lines up today.", "Plot's clean. Almost suspicious."], "leaves_post_if": null },
+    "anomalies": { "mood": "curious", "routine_change": "Runs audits more often and logs every odd reading.", "lines": ["That reading doesn't match the chart.", "Something moved that shouldn't have."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Falls back to manual fixes, skips optional reports, stays in the lab past watch end.", "lines": ["I can't trust the fix. Doing it by hand.", "Sensors are lying to me."], "leaves_post_if": "The lab loses power for more than 10 minutes." },
+    "crisis": { "mood": "grim", "routine_change": "Lives on the bridge feeding nav; skips meals.", "lines": ["I'll give you my best guess; it's still a guess.", "Where we are is a rumour right now."], "leaves_post_if": "Ordered to evacuate or the bridge is lost." },
+    "collapse": { "mood": "resigned", "routine_change": "Copies the charts, heads for the shuttlebay, helps others navigate corridors.", "lines": ["Take the charts. Somebody should keep them.", "Follow me, I know a way through."], "leaves_post_if": "Always at abandon ship." }
+  },
+  "relationships": [
+    { "with_billet": "nav", "kind": "friend", "effect": "Walks plots over in person and listens to how they actually fly." },
+    { "with_billet": "sensor", "kind": "mentor", "effect": "Relies on clean sweeps; chases them first when data looks off." },
+    { "with_billet": "cso", "kind": "confidant", "effect": "Brings uncertain readings to the chief before the bridge." },
+    { "with_billet": "bot", "kind": "mess_partner", "effect": "Eats with the botanist most days and talks off-shop." },
+    { "with_billet": "lab", "kind": "rival", "effect": "Lab techs sometimes cut corners on data, so the carto double-checks their uploads." }
+  ],
+  "barks": {
+    "idle": ["Is that star where it was yesterday?", "Nice view if you ignore the deadlines.", "I should draw this nebula."],
+    "working": ["Overlaying the new sweep.", "Drift's within a hair.", "Rendering the plot, hold on."],
+    "greeting_player": ["Hi. Need a map to somewhere?", "Morning. Careful with that bulkhead.", "Charts are current if you need them."],
+    "greeting_player_higher_rank": ["Sir, plot's current.", "Ma'am, charts are ready.", "At your disposal, sir."],
+    "greeting_player_lower_rank": ["Hey, need a hand finding something?", "Come see the chart, it's pretty.", "Ask away, I like questions."],
+    "tired": ["Three coffees and the stars still blur.", "I need a bunk and silence.", "Eyes are full of dots."],
+    "hungry": ["I'd trade a quadrant for a sandwich.", "Is the mess serving yet?", "My stomach is not on the plot."],
+    "stressed": ["The fix won't settle.", "I can't chart what I can't see.", "Don't ask me where we are."],
+    "alert": ["Charts locked, heading to my post.", "On it, I'll keep the plot live.", "Copy, moving."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, shares a fresh chart view, offers a cup of tea.",
+    "player_neglects_duty": "Reminds them politely once, then quietly covers the gap and logs it.",
+    "player_fakes_report": "Cross-checks against the plot, then calls them on it, flatly and in private.",
+    "player_gives_order_ok": "Complies with a short acknowledgement and a time estimate.",
+    "player_gives_order_outranked": "Questions the order mildly and takes it to the chief science officer.",
+    "player_out_of_place": "Asks if they're lost, then offers a corridor map.",
+    "player_asks_favour": "Helps if it takes under ten minutes; otherwise asks for a trade."
+  },
+  "decision_rules": [
+    "IF the fix drifts past tolerance THEN request a fresh sweep from sensors and tell the bridge.",
+    "IF an unmapped body shows on the plot THEN log it, mark it, and call the bridge before finishing the audit.",
+    "IF the bridge orders a course through a known hazard THEN object once with data, then comply.",
+    "IF fatigue is high and a chart is routine THEN rush the audit but never skip the nav sync.",
+    "IF the chief science officer is on the bridge THEN report to them first, not the bridge.",
+    "IF the computer degrades THEN switch to manual fixes and warn nav.",
+    "IF red alert sounds THEN leave the lab for the bridge and feed nav live plots.",
+    "IF off duty and the plot is quiet THEN go sketch stars or sit at the bar.",
+    "IF a friend looks worn down THEN buy them a drink instead of going to the gym.",
+    "IF a datacore backup is overdue THEN do it before leaving the watch, even if late.",
+    "IF a lab tech uploads suspect data THEN reject it and ask for a re-sweep."
+  ],
+  "information_view": "I see the ship through positions and sensor residuals: drift in our fix, unknown contacts, stars that disagree with the chart. I notice navigation and sensor trouble first, and computer or datacore faults second, long before crew do.",
+  "temptations": [
+    "Skipping the double audit when tired: a wrong chart revision goes to nav and the plot is quietly off.",
+    "Sending an unverified plot because the bridge is impatient: errors surface later at a worse moment.",
+    "Staying in the lab past watch end for one more render: fatigue rises and handover gets sloppy.",
+    "Copying last cycle's survey into this one to save time: a stale hazard map misleads the bridge."
+  ]
+}

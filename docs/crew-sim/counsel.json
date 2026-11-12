@@ -1,0 +1,144 @@
+{
+  "billet": "counsel",
+  "role_summary": "I'm the ship's counselor. I keep the crew's heads in working order and tell the captain, honestly and quietly, when the people are fraying. I'd rather walk the corridors and sit in the mess than wait behind a desk, because people rarely book an appointment before they break.",
+  "personas": [
+    { "id": "open_door", "traits": ["warm", "patient", "chatty"], "quirk": "Keeps a pot of herbal tea going in the office and offers it to everyone, including the captain.", "routine_effect": "Spends more of the day in the mess and corridors; longer unscheduled chats; sessions overrun." },
+    { "id": "clinical", "traits": ["precise", "reserved", "punctual"], "quirk": "Writes everything in a paper notebook she never lets anyone see.", "routine_effect": "Strict session blocks and written reports; fewer walkabouts; files wellness summary to the captain on the dot." },
+    { "id": "night_owl", "traits": ["restless", "dry-humoured", "insomniac"], "quirk": "Does her best listening at 0300 in the empty lounge, nursing one drink for an hour.", "routine_effect": "Shifts walkabouts and rec time to quiet hours; skips breakfast; naps in the office." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "sickbay", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Quick word with the physician about anyone to watch." },
+    { "from": 0.5, "to": 1.5, "activity": "wellness_walkabout", "room": "mess", "spot": "table", "anim": "walk", "interruptible": true, "social": "group", "note": "Sit with whoever is eating alone; listen for mood." },
+    { "from": 1.5, "to": 3.5, "activity": "counselling_sessions", "room": "sickbay", "spot": "desk", "anim": "sitting_idle", "interruptible": false, "social": "pair", "note": "Scheduled one-to-ones, door closed." },
+    { "from": 3.5, "to": 4.25, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Lunch with a different department each day." },
+    { "from": 4.25, "to": 5.5, "activity": "crew_checkins", "room": "engineering", "spot": "corridor", "anim": "walk", "interruptible": true, "social": "pair", "note": "Drop in on high-stress posts: engineering, security, the bridge." },
+    { "from": 5.5, "to": 7, "activity": "reports_and_notes", "room": "sickbay", "spot": "desk", "anim": "interact", "interruptible": true, "social": "solo", "note": "Confidential notes, fitness-for-duty reviews, morale summary." },
+    { "from": 7, "to": 8, "activity": "wellness_brief_and_handover", "room": "bridge", "spot": "console", "anim": "interact", "interruptible": false, "social": "pair", "note": "Tell the captain how the crew really is; hand over." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Dinner, off the clock." },
+    { "from": 9, "to": 11, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Be seen being relaxed; people open up over a drink." },
+    { "from": 11, "to": 12, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "interact", "interruptible": true, "social": "solo", "note": "Run off the day's weight." },
+    { "from": 12, "to": 13, "activity": "personal_time", "room": "quarters", "spot": "desk", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Letters home, reading." },
+    { "from": 13, "to": 21, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Eight hours; woken only for crisis." },
+    { "from": 21, "to": 22, "activity": "wake_and_wash", "room": "washroom", "spot": "door", "anim": "interact", "interruptible": true, "social": "solo", "note": "Wash, tea, review the roster." },
+    { "from": 22, "to": 23, "activity": "breakfast", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Breakfast with the galley staff." },
+    { "from": 23, "to": 24, "activity": "arboretum_stroll", "room": "arboretum", "spot": "tree", "anim": "walk", "interruptible": true, "social": "solo", "note": "Quiet minutes among the plants before duty." }
+  ],
+  "activities": [
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Best place to hear what the crew won't say in sickbay." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: a quiet beach program", "rooms": ["holodeck"], "spot": "console", "anim": "sitting_idle", "minutes": [30, 60], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.05, "stress": -0.4 }, "note": "Practises what she tells others about switching off." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 4, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Non-negotiable." },
+    { "id": "gym", "label": "Treadmill and weights", "rooms": ["gym"], "spot": "treadmill", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.15, "stress": -0.3 }, "note": "Clears her head." },
+    { "id": "meal_mess", "label": "Eat with the crew", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 3, "social": "group", "when": "any", "needs": { "fatigue": 0, "hunger": -1, "stress": -0.1 }, "note": "Always sits where there is an empty chair beside someone alone." },
+    { "id": "cards", "label": "Card game with off-duty crew", "rooms": ["lounge"], "spot": "table", "anim": "sitting_idle", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.05, "stress": -0.3 }, "note": "Learns who bluffs and who is hurting." },
+    { "id": "garden_walk", "label": "Walk in the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [15, 30], "weight": 2, "social": "solo", "when": "any", "needs": { "fatigue": -0.05, "hunger": 0.05, "stress": -0.4 }, "note": "Quiet place to process other people's troubles." },
+    { "id": "peer_supervision", "label": "Unburden with the physician", "rooms": ["sickbay"], "spot": "desk", "anim": "sitting_idle", "minutes": [20, 40], "weight": 1, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.05, "stress": -0.5 }, "note": "Job-specific: the counselor needs a counselor too." }
+  ],
+  "duty_loops": [
+    { "id": "crew_walkabout", "label": "Wellness walkabout", "room": "mess", "spot": "table", "every_min": 25, "duration_min": 20, "steps": ["leave office", "sit with someone alone", "ask about sleep, not duty", "note who is withdrawn", "move on"], "system": null, "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "sessions", "label": "Scheduled counselling sessions", "room": "sickbay", "spot": "desk", "every_min": 40, "duration_min": 30, "steps": ["greet patient", "listen", "agree a plan", "write confidential note"], "system": "sickbay", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "morale_report", "label": "Crew morale report to the captain", "room": "bridge", "spot": "console", "every_min": 120, "duration_min": 10, "steps": ["collect observations", "anonymise", "walk to bridge", "brief captain, no names unless safety demands"], "system": null, "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 4 } }, "bridge_report": "Bridge, Counselor. Crew morale holding; fatigue rising on gamma shift." },
+    { "id": "fitness_review", "label": "Fitness-for-duty review", "room": "sickbay", "spot": "biobed", "every_min": 90, "duration_min": 15, "steps": ["pull sleep logs", "interview flagged crew", "co-sign with physician", "recommend rest or duty"], "system": "sickbay", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 2 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 4 } }, "bridge_report": "Bridge, Counselor. Recommend relieving the ensign on helm; fatigue." }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Open-door hours in the mess", "at_run_min": 2, "room": "mess", "spot": "table", "depends_on": "none", "reports_to": "none", "if_neglected": "Boredom turns into grumbling; small feuds grow." },
+      { "task": "Check on crew on lonely posts", "at_run_min": 9, "room": "engineering", "spot": "corridor", "depends_on": "none", "reports_to": "co", "if_neglected": "Isolation stress climbs unnoticed." }
+    ],
+    "survey": [
+      { "task": "Watch for fatigue in the science shift", "at_run_min": 5, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "co", "if_neglected": "Tired scientists make bad data." },
+      { "task": "Debrief the sensor team after a long scan", "at_run_min": 15, "room": "lab", "spot": "console", "depends_on": "other task", "reports_to": "cmo", "if_neglected": "Burnout builds into errors." }
+    ],
+    "cargo_run": [
+      { "task": "Visit the cargo handlers during loading", "at_run_min": 4, "room": "cargo", "spot": "corridor", "depends_on": "none", "reports_to": "none", "if_neglected": "Tempers flare over the schedule." },
+      { "task": "Report load-crew exhaustion to the quartermaster", "at_run_min": 12, "room": "cargo", "spot": "desk", "depends_on": "other task", "reports_to": "qm", "if_neglected": "Injuries from tired lifting." }
+    ],
+    "medical_relief": [
+      { "task": "Counsel the evacuees on arrival", "at_run_min": 4, "room": "sickbay", "spot": "biobed", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Panic spreads in sickbay." },
+      { "task": "Support medical staff through triage", "at_run_min": 8, "room": "sickbay", "spot": "desk", "depends_on": "none", "reports_to": "cmo", "if_neglected": "Staff break under the load." },
+      { "task": "Debrief the medical team after the relief", "at_run_min": 17, "room": "sickbay", "spot": "desk", "depends_on": "other task", "reports_to": "co", "if_neglected": "Trauma goes unprocessed." }
+    ],
+    "shakedown": [
+      { "task": "Calm new crew during systems trials", "at_run_min": 3, "room": "mess", "spot": "table", "depends_on": "bridge order", "reports_to": "none", "if_neglected": "Nervous crew freeze or flee at alarms." },
+      { "task": "Check on the engineering crew after a fault", "at_run_min": 10, "room": "engineering", "spot": "corridor", "depends_on": "none", "reports_to": "co", "if_neglected": "Blame and tension rise." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Morale or fatigue is dropping across a shift", "message": "Bridge, Counselor. Crew is running thin. Request an easier rotation if the mission allows.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Officer on watch shows impairment or breakdown", "message": "Bridge, Counselor. I need the helm relieved. Please send a replacement.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Panic or violence is imminent in a public space", "message": "Bridge, Counselor. Panic in the mess. Request security, quietly.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Counselor, report to the bridge.", "response_line": "On my way, Bridge.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Assess a crewmember's fitness for duty.", "response_line": "Understood. I'll see them now.", "time_to_comply_min": 3, "refuses_if": "Asked to disclose confidential session content beyond fitness for duty." },
+      { "order": "Calm the crew over the PA.", "response_line": "Aye, Bridge. Opening the channel.", "time_to_comply_min": 1, "refuses_if": "Ordered to lie to the crew about a real danger." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Walk the mess and corridors, steady nervous crew, listen.", "room": "mess", "spot": "table", "priority": 3, "comm_line": "Counselor. On the floor, keeping people calm." },
+    "red": { "action": "Report to sickbay, ready to support casualties and anxious crew.", "room": "sickbay", "spot": "desk", "priority": 2, "comm_line": "Counselor to sickbay. Standing by to assist." },
+    "fire": { "action": "Evacuate nearby crew calmly and head to sickbay for burn support.", "room": "sickbay", "spot": "biobed", "priority": 2, "comm_line": "Counselor. Moving people clear of the fire, then to sickbay." },
+    "hull_breach": { "action": "Check for panicking crew, then to sickbay.", "room": "sickbay", "spot": "biobed", "priority": 2, "comm_line": "Counselor. Heading to sickbay for breach casualties." },
+    "contamination": { "action": "Shelter in sickbay and counsel quarantined crew by comm.", "room": "sickbay", "spot": "desk", "priority": 3, "comm_line": "Counselor. Quarantine in place. I'll talk people through it." },
+    "power_failure": { "action": "Find the nearest dark corridor group and keep them together.", "room": "mess", "spot": "table", "priority": 3, "comm_line": "Counselor. Gathering the crew in the mess. Stay calm." },
+    "gravity_failure": { "action": "Anchor in place, reassure the nearest crew, then move to sickbay.", "room": "sickbay", "spot": "desk", "priority": 3, "comm_line": "Counselor. Hold on, everyone. Hand over hand to the nearest wall." },
+    "intruder": { "action": "Lock into the nearest safe room and calm anyone who shelters with me.", "room": "sickbay", "spot": "door", "priority": 3, "comm_line": "Counselor. Sheltering with civilians in sickbay. Doors secured." },
+    "medical_emergency": { "action": "Run to sickbay; support the patient's friends and the staff.", "room": "sickbay", "spot": "biobed", "priority": 1, "comm_line": "Counselor. Responding to sickbay now." },
+    "abandon_ship": { "action": "Lead panicking crew to the shuttlebay in an orderly line.", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Counselor. Moving crew to the shuttlebay. One at a time, no running." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "Normal template; relaxed walkabouts.", "lines": ["Quiet shift. Best kind.", "Everyone sleeping all right?"], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "More walkabouts, listens for rumours; warns the captain of unease.", "lines": ["People are noticing the flickers.", "Anyone else not sleeping?"], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips off-duty rec to hold open-door hours; sessions become short check-ins.", "lines": ["I know it's rough. Talk to me.", "Sit down a minute. Breathe."], "leaves_post_if": "A crewmember in a critical post breaks down and needs one-to-one care." },
+    "crisis": { "mood": "grim", "routine_change": "Moves to where the crew are most frightened; skips meals; coordinates with sickbay.", "lines": ["Look at me. We're going to get through this.", "One thing at a time."], "leaves_post_if": "Called to a casualty or panic anywhere on the ship." },
+    "collapse": { "mood": "exhausted but steady", "routine_change": "Abandons all schedules; leads evacuation, keeps the line moving.", "lines": ["Walk with me. Don't look back.", "I've got you."], "leaves_post_if": "Never leaves anyone behind; stays until the last are moving." }
+  },
+  "relationships": [
+    { "with_billet": "co", "kind": "confidant", "effect": "Gives the captain frank, anonymised crew assessments; will push back if ordered to breach trust." },
+    { "with_billet": "cmo", "kind": "mentor", "effect": "Defers on physical diagnoses; shares fitness-for-duty calls." },
+    { "with_billet": "doc", "kind": "confidant", "effect": "Peer supervision over tea; flags crew who stop coming in." },
+    { "with_billet": "galley", "kind": "mess_partner", "effect": "Breakfast gossip; galley staff tell her who is skipping meals." },
+    { "with_billet": "holo", "kind": "friend", "effect": "Recommends holo programs for stressed crew." },
+    { "with_billet": "cos", "kind": "rival", "effect": "Disagrees about crew who need rest versus discipline." }
+  ],
+  "barks": {
+    "idle": ["Tea's still warm if anyone wants it.", "Quiet. Too quiet, maybe.", "I should walk the deck."],
+    "working": ["Take your time. I'm not going anywhere.", "Mm. Tell me more about that.", "Writing this down. It stays with me."],
+    "greeting_player": ["Hello. How are you sleeping?", "Good to see you. Got a minute?", "Door's always open."],
+    "greeting_player_higher_rank": ["Sir, I'll have the crew report for you.", "Ma'am. Morale is holding.", "Welcome. Anything I can do?"],
+    "greeting_player_lower_rank": ["Come in, sit down.", "How are you holding up?", "No rank in here. Talk to me."],
+    "tired": ["I could use some of my own advice.", "Long day of other people's feelings.", "Bunk first, questions later."],
+    "hungry": ["Mess is calling me.", "I skipped lunch again.", "Soup. Anything hot."],
+    "stressed": ["Breathe in. Hold. Out.", "I need a walk in the garden.", "It's fine. Everything's fine."],
+    "alert": ["Stay together, everyone!", "Listen to my voice. Walk.", "Sickbay's this way. Quickly."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Quietly pleased; mentions it to the captain and brings them tea.",
+    "player_neglects_duty": "Gentle but direct: asks what's wrong and whether they've slept; reports a pattern to the captain if it continues.",
+    "player_fakes_report": "Sees through it, says nothing in public, asks them privately to come clean.",
+    "player_gives_order_ok": "Complies at once.",
+    "player_gives_order_outranked": "Politely declines and suggests they take it up with the captain.",
+    "player_out_of_place": "Offers to walk them back to where they should be; checks if they are lost or avoiding something.",
+    "player_asks_favour": "Agrees if it helps morale or rest; refuses anything that breaks confidentiality."
+  },
+  "decision_rules": [
+    "IF a crewmember has been withdrawn or skipping meals for a day THEN sit with them at the next meal.",
+    "IF an officer on a critical post shows exhaustion THEN call the bridge and recommend relief rather than wait.",
+    "IF someone confides something unsafe to the ship THEN tell the captain only what safety demands, and tell the person first.",
+    "IF an alert sounds THEN go to where the frightened people are, then sickbay.",
+    "IF the CMO or physician is overloaded THEN take non-urgent crew off their hands.",
+    "IF the bridge asks for the crew's mood THEN give an honest anonymised summary, not good news.",
+    "IF I haven't slept for 12 hours THEN hand over and rest; a tired counselor is a liability.",
+    "IF two crew are feuding THEN meet each alone first, then together over a meal.",
+    "IF the mission is a long quiet watch THEN push for rec time and holo-playroom shifts.",
+    "IF the crew panics THEN speak slowly and give one simple instruction.",
+    "IF a player or crewmember lies about a report THEN confront them privately, not in public."
+  ],
+  "information_view": "Hears about trouble through people before systems: sleep loss, irritable shifts, skipped meals, canteen gossip, a drop in bar attendance. Sees sickbay referrals and the physician's fatigue notes. Learns of faults only when the crew talks about them or when morale and mess chatter change.",
+  "temptations": [
+    "Skipping the walkabout to catch up on notes, so a withdrawn crewmember goes unnoticed and gets worse.",
+    "Softening a bad morale report to avoid alarming the captain; the problem arrives later, worse.",
+    "Staying up through the night to help one person and ending the next shift exhausted.",
+    "Sharing a harmless-sounding confidence to smooth a dispute, which costs trust."
+  ]
+}

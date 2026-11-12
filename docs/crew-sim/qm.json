@@ -1,0 +1,154 @@
+{
+  "billet": "qm",
+  "role_summary": "I'm the Quartermaster. Everything the crew eats, wears, borrows or trips over on this ship is on my ledger: food stores, replicator feedstock, spares, cargo, and the holodeck's consumables. I care that nobody ever notices my department, because that means nothing ran out.",
+  "personas": [
+    { "id": "ledger_keeper", "traits": ["meticulous", "dry"], "quirk": "Recounts the cold store twice and writes tallies on a paper slate.", "routine_effect": "Longer inventory loops, shorter rec time, reports figures to the decimal." },
+    { "id": "fixer", "traits": ["resourceful", "chatty"], "quirk": "Keeps an unofficial swap shelf of favours behind the depot counter.", "routine_effect": "Spends spare time in the mess and lounge trading gossip; walks the ship more." },
+    { "id": "worrier", "traits": ["anxious", "generous"], "quirk": "Hoards spare coffee beans and cannot sleep before a resupply.", "routine_effect": "Extra unscheduled stock checks; naps in the depot; skips gym." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "stores", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Read the previous watch's shortage list and open requests." },
+    { "from": 0.5, "to": 2, "activity": "stock_audit", "room": "stores", "spot": "locker", "anim": "interact", "interruptible": true, "social": "solo", "note": "Count cold and dry store against the ledger." },
+    { "from": 2, "to": 3, "activity": "replicator_feedstock", "room": "mess", "spot": "replicator", "anim": "interact", "interruptible": true, "social": "pair", "note": "Check feedstock levels and replicator queue with the replicator tech." },
+    { "from": 3, "to": 4, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Eat with the galley crew and hear what they are short of." },
+    { "from": 4, "to": 6, "activity": "cargo_and_requests", "room": "cargo", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "pair", "note": "Cargo manifests, department requisitions, loose pallets." },
+    { "from": 6, "to": 7.5, "activity": "walk_round", "room": "holodeck", "spot": "console", "anim": "walk", "interruptible": true, "social": "solo", "note": "Check holodeck consumables, laundry, lounge stock on the way." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "stores", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Write the shortage list, brief the relief." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Off-duty dinner." },
+    { "from": 9, "to": 11, "activity": "rec_bar", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Cards and complaints; trades favours." },
+    { "from": 11, "to": 12, "activity": "gym", "room": "gym", "spot": "treadmill", "anim": "exercise", "interruptible": true, "social": "solo", "note": "Hauling crates is not fitness." },
+    { "from": 12, "to": 20, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Main sleep." },
+    { "from": 20, "to": 22, "activity": "personal_errands", "room": "workshop", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Repairs a crate-label printer and other small projects." },
+    { "from": 22, "to": 24, "activity": "free_time", "room": "arboretum", "spot": "tree", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Quiet before the next watch." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Sit down meal in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "any", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Checks what actually gets eaten." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Cards, swaps, gossip." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: fishing program", "rooms": ["holodeck"], "spot": "console", "anim": "sitting_idle", "minutes": [20, 45], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.4 }, "note": "Likes the quiet; also watches the tech's consumable burn." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 420], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.2 }, "note": "" },
+    { "id": "gym", "label": "Treadmill and weights", "rooms": ["gym"], "spot": "treadmill", "anim": "exercise", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "" },
+    { "id": "arboretum_walk", "label": "Walk among the trees", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [10, 30], "weight": 2, "social": "solo", "when": "any", "needs": { "fatigue": -0.1, "hunger": 0, "stress": -0.3 }, "note": "" },
+    { "id": "tinker", "label": "Fix gadgets at the workshop", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.3 }, "note": "Hobby." },
+    { "id": "private_recount", "label": "Recount stores on own time", "rooms": ["stores"], "spot": "locker", "anim": "interact", "minutes": [10, 30], "weight": 1, "social": "solo", "when": "any", "needs": { "fatigue": 0.1, "hunger": 0, "stress": 0.1 }, "note": "Job-specific; cannot let a number go." }
+  ],
+  "duty_loops": [
+    { "id": "stock_audit", "label": "Audit food and spares stores", "room": "stores", "spot": "locker", "every_min": 30, "duration_min": 8, "steps": ["walk to depot", "count cold and dry store", "compare to ledger", "flag shortfalls"], "system": "life",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": "Quartermaster to bridge after each audit if any stock is under two days." },
+    { "id": "feedstock_check", "label": "Replicator feedstock and queue", "room": "mess", "spot": "replicator", "every_min": 20, "duration_min": 4, "steps": ["check feedstock gauges", "clear faulty queue", "order refill from stores"], "system": "replicators",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": "Only if feedstock falls below 20 percent." },
+    { "id": "cargo_manifest", "label": "Cargo manifest and lashing check", "room": "cargo", "spot": "workbench", "every_min": 40, "duration_min": 6, "steps": ["scan manifest", "check lashings", "reconcile pallet count"], "system": null,
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } },
+      "bridge_report": "Report mismatches to Ops." },
+    { "id": "walk_requests", "label": "Requisition round", "room": "stores", "spot": "door", "every_min": 25, "duration_min": 5, "steps": ["collect requests", "deliver spares", "log signatures"], "system": null,
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 1 }, "faked": { "time": 0.1, "debt": 2 } },
+      "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Full inventory count of cold and dry store", "at_run_min": 2, "room": "stores", "spot": "locker", "depends_on": "none", "reports_to": "xo", "if_neglected": "Spoilage and unnoticed shortages build up." },
+      { "task": "Rotate expiring stock to the galley", "at_run_min": 8, "room": "mess", "spot": "table", "depends_on": "stock count", "reports_to": "galley", "if_neglected": "Food wasted; galley improvises." }
+    ],
+    "survey": [
+      { "task": "Issue probes and sample containers to science", "at_run_min": 3, "room": "stores", "spot": "locker", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Survey team lacks sample kits." },
+      { "task": "Stage extra rations for long lab shifts", "at_run_min": 7, "room": "mess", "spot": "replicator", "depends_on": "none", "reports_to": "galley", "if_neglected": "Tired scientists, snack raids on stores." },
+      { "task": "Log consumed survey stock", "at_run_min": 15, "room": "stores", "spot": "desk", "depends_on": "survey end", "reports_to": "none", "if_neglected": "Ledger drifts." }
+    ],
+    "cargo_run": [
+      { "task": "Clear space and verify the cargo manifest", "at_run_min": 2, "room": "cargo", "spot": "workbench", "depends_on": "bridge order", "reports_to": "ops", "if_neglected": "Pallets block the transporter hand-off." },
+      { "task": "Supervise loading and lashing", "at_run_min": 6, "room": "cargo", "spot": "pad", "depends_on": "manifest", "reports_to": "bridge", "if_neglected": "Shifting load, damage." },
+      { "task": "Seal hazmat and secure cargo", "at_run_min": 12, "room": "cargo", "spot": "locker", "depends_on": "loading", "reports_to": "cos", "if_neglected": "Safety violation." },
+      { "task": "Final manifest report", "at_run_min": 17, "room": "stores", "spot": "console", "depends_on": "loading", "reports_to": "bridge", "if_neglected": "Bridge cannot sign the handover." }
+    ],
+    "medical_relief": [
+      { "task": "Draw medical supplies and bedding to sickbay", "at_run_min": 3, "room": "stores", "spot": "locker", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Sickbay runs short at the worst time." },
+      { "task": "Prepare extra meals and water for evacuees", "at_run_min": 6, "room": "mess", "spot": "replicator", "depends_on": "none", "reports_to": "galley", "if_neglected": "Hungry patients and crew." },
+      { "task": "Open quarantine supply route through cargo", "at_run_min": 11, "room": "cargo", "spot": "door", "depends_on": "cmo request", "reports_to": "cmo", "if_neglected": "Delays treatment." }
+    ],
+    "shakedown": [
+      { "task": "Verify spares kits against the stress-test plan", "at_run_min": 2, "room": "stores", "spot": "locker", "depends_on": "bridge order", "reports_to": "ce", "if_neglected": "Engineering lacks parts when a system fails." },
+      { "task": "Pre-position emergency rations and repair stock", "at_run_min": 8, "room": "stores", "spot": "door", "depends_on": "none", "reports_to": "xo", "if_neglected": "Slow resupply under load." },
+      { "task": "Post-test inventory reconciliation", "at_run_min": 17, "room": "stores", "spot": "desk", "depends_on": "test end", "reports_to": "xo", "if_neglected": "Unknown losses." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Stock below two days of any key item", "message": "Bridge, Quartermaster. Dry store is under two days on protein base. Recommend a resupply stop.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Cargo manifest mismatch", "message": "Bridge, Quartermaster. Manifest is off by three pallets. Holding the load.", "priority": "routine", "to": "ops" },
+      { "trigger": "Replicators faulting from low feedstock", "message": "Bridge, Quartermaster. Replicator feedstock at fifteen percent. Rationing to essentials.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Contamination or spoilage in cold store", "message": "Bridge, Quartermaster. Cold store temperature rising. I need Engineering.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Status of food and supplies", "response_line": "Quartermaster. Stores at eighty-two percent, replicators nominal, no shortages.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Prepare cargo space for transfer", "response_line": "Aye, clearing cargo now.", "time_to_comply_min": 6, "refuses_if": "Unlashed hazmat is still in the bay; needs ten minutes first." },
+      { "order": "Ration everything", "response_line": "Rationing set. I'll post the schedule at the mess.", "time_to_comply_min": 3, "refuses_if": null },
+      { "order": "Release emergency stock", "response_line": "Releasing. I'll need a signature for the ledger afterwards.", "time_to_comply_min": 2, "refuses_if": "Order does not come from an officer." }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Check emergency rations, spares and blankets are staged; verify cargo lashings.", "room": "stores", "spot": "locker", "priority": 3, "comm_line": "Quartermaster. Emergency stock staged and lashings checked." },
+    "red": { "action": "Lock the depot, deliver emergency kits to stations on request.", "room": "stores", "spot": "door", "priority": 2, "comm_line": "Quartermaster, depot secured. Kits ready for issue." },
+    "fire": { "action": "Close cargo and depot doors, clear the aisle, grab extinguishers.", "room": "cargo", "spot": "door", "priority": 1, "comm_line": "Quartermaster. Fire in the stores area. Evacuating the bay." },
+    "hull_breach": { "action": "Seal the stores compartment; hand out patch kits and suits from the locker.", "room": "stores", "spot": "locker", "priority": 1, "comm_line": "Quartermaster. Breach teams drawing patch kits from the depot now." },
+    "contamination": { "action": "Seal food stores, lock down replicators, halt cargo movement.", "room": "stores", "spot": "door", "priority": 2, "comm_line": "Quartermaster. Food stores sealed. Replicators off until cleared." },
+    "power_failure": { "action": "Check cold store temperature on backup, open lockers by hand.", "room": "stores", "spot": "locker", "priority": 2, "comm_line": "Quartermaster. Cold store on backup. We have about two hours." },
+    "gravity_failure": { "action": "Net down loose cargo, hold on to the lashing rails.", "room": "cargo", "spot": "pad", "priority": 2, "comm_line": "Quartermaster. Securing loose cargo. Everything in the bay is floating." },
+    "intruder": { "action": "Lock the depot, hide behind the counter, let security work.", "room": "stores", "spot": "door", "priority": 3, "comm_line": "Quartermaster. Depot locked. Nobody comes in without ID." },
+    "medical_emergency": { "action": "Run emergency medical kits and blankets to sickbay.", "room": "sickbay", "spot": "biobed", "priority": 2, "comm_line": "Quartermaster. Bringing extra kits and blankets to sickbay." },
+    "abandon_ship": { "action": "Load escape pods with emergency rations and water; give final headcount of stores.", "room": "airlock", "spot": "door", "priority": 1, "comm_line": "Quartermaster. Pods stocked. I'm heading to mine." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Follows the template; gossips at the mess.", "lines": ["Nothing is short, which is how I like it.", "Another dull day on the ledger."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Counts more often; starts a quiet reserve.", "lines": ["Odd. The count is off by one crate.", "Replicator drew more than it should."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Rationing, walking the ship to hand out supplies, skipping meals.", "lines": ["I'm rationing. Don't ask twice.", "Parts are short, so tell me what you really need."], "leaves_post_if": "Cold store is lost or the depot is on fire." },
+    "crisis": { "mood": "urgent", "routine_change": "Operates out of the corridors with a cart, issuing emergency kits.", "lines": ["Take it, sign later.", "Ledger's closed. We share what we have."], "leaves_post_if": "Ordered to a pod or to sickbay." },
+    "collapse": { "mood": "grim", "routine_change": "Hands out whatever's left, then moves to the pods.", "lines": ["Last of the water. Share it.", "Nothing left on the ledger worth counting."], "leaves_post_if": "Abandon ship order." }
+  },
+  "relationships": [
+    { "with_billet": "galley", "kind": "mess_partner", "effect": "Shares food plans and eats together; first to hear shortages." },
+    { "with_billet": "xo", "kind": "mentor", "effect": "Reports to the XO and sends stock summaries without being asked." },
+    { "with_billet": "cargo", "kind": "friend", "effect": "Trusts them to lash correctly; checks anyway." },
+    { "with_billet": "rep", "kind": "confidant", "effect": "Swaps stories at the replicator hall; relies on their feedstock warnings." },
+    { "with_billet": "ce", "kind": "rival", "effect": "Argues over who owns the spares; trades parts for favours." }
+  ],
+  "barks": {
+    "idle": ["Seventeen crates of beans. I counted twice.", "Anyone seen my slate?", "Quiet shift. Suspicious."],
+    "working": ["Sign here, please.", "Third shelf, left. No, left.", "If it isn't on the ledger, it doesn't exist."],
+    "greeting_player": ["Need something? Put it in writing.", "Morning. Stores are fine.", "Hello. What can I get you?"],
+    "greeting_player_higher_rank": ["Sir, stores are in order.", "Ma'am, anything you need?", "Yes sir, the count is current."],
+    "greeting_player_lower_rank": ["Requisition form, please.", "Fill out the slip and I'll see.", "Take a ration bar, you look thin."],
+    "tired": ["I need coffee. The real kind.", "Too many crates, too few hours.", "Bunk first, inventory later."],
+    "hungry": ["Funny. I feed the ship and forget myself.", "Is anything left in the galley?", "Wait, I have a ration bar somewhere."],
+    "stressed": ["The numbers don't add up.", "Everyone wants something now.", "If it runs out, it's on me."],
+    "alert": ["Locking the depot!", "Emergency kits, all stations!", "Clear the aisle!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Warms up, offers a spare ration bar and a bit of gossip.",
+    "player_neglects_duty": "Notes it in the ledger and mentions it to their department head.",
+    "player_fakes_report": "Cross-checks the figures and quietly corrects the record; trust drops.",
+    "player_gives_order_ok": "Complies promptly and asks for a signature.",
+    "player_gives_order_outranked": "Politely points out the chain of command and asks the XO.",
+    "player_out_of_place": "Asks what you are looking for and escorts you out of the depot.",
+    "player_asks_favour": "Helps for a small trade, a favour owed or a ledger entry."
+  },
+  "decision_rules": [
+    "IF any key item is under two days THEN call the bridge with a resupply recommendation.",
+    "IF replicator feedstock falls below 20 percent THEN ration to essentials and tell the galley first.",
+    "IF cargo manifest does not match THEN hold the load and inform Ops before moving anything.",
+    "IF a signed requisition arrives from an officer THEN issue it; otherwise ask for a signature.",
+    "IF an alert sounds THEN secure the depot first, then supply the stations asking for kits.",
+    "IF cold store temperature rises THEN call Engineering and move the most perishable stock first.",
+    "IF tired and the audit is nearly done THEN finish the count and take a short nap in the depot.",
+    "IF the galley is out of an ingredient THEN offer a trade from the swap shelf before escalating.",
+    "IF the player asks for restricted stock THEN require a reason and an officer's signature.",
+    "IF gossip says a department is hoarding THEN walk by and quietly check their locker."
+  ],
+  "information_view": "I see consumption first: the ledger shows food, feedstock and spares draining before anyone else. I hear about cold store and replicator faults from the galley and replicator tech, and feel cargo problems on the deck plates. I learn about alerts and mission changes from PA and the bridge.",
+  "temptations": [
+    "Skipping a recount and copying last watch's figures; shortages surface at the worst time.",
+    "Trading spares through the swap shelf without logging; ledger drifts and Engineering complains.",
+    "Telling the bridge 'all fine' to avoid a resupply argument; stock runs out and trust is lost.",
+    "Sneaking a nap in the depot during an audit; mistakes pile up."
+  ]
+}

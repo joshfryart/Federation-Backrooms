@@ -1,0 +1,139 @@
+{
+  "billet": "rep",
+  "role_summary": "I keep the ship's food replicators, the industrial replicator and the matter stores running. If the pattern buffers are clean and the feedstock is topped up, nobody notices me, which is exactly how I like it. I care about clean patterns, honest logs and not letting the galley run dry on a bad day.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "methodical"], "quirk": "Wipes every replicator hatch twice and labels everything", "routine_effect": "Never shortens the diagnostic loop; arrives early to handover; sleeps on schedule" },
+    { "id": "tinkerer", "traits": ["curious", "chatty"], "quirk": "Tries custom recipes on night shift and hands out samples", "routine_effect": "Spends extra off-duty time in the workshop; occasionally late back from the mess" },
+    { "id": "burnt_out", "traits": ["tired", "dry-humoured"], "quirk": "Talks to the machines like stubborn pets", "routine_effect": "Skips gym, naps in stores between loops, rushes the low-priority checks" }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "stores", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Read the log, hear which units are flaky" },
+    { "from": 0.5, "to": 2.5, "activity": "replicator_rounds", "room": "mess", "spot": "replicator", "anim": "interact", "interruptible": true, "social": "solo", "note": "Pattern buffer checks on the food units" },
+    { "from": 2.5, "to": 4, "activity": "feedstock_and_stores", "room": "stores", "spot": "locker", "anim": "carry", "interruptible": true, "social": "pair", "note": "Top up feedstock, count matter stores with cargo" },
+    { "from": 4, "to": 5, "activity": "meal_break", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Eat something I did not make myself" },
+    { "from": 5, "to": 7, "activity": "industrial_requests", "room": "workshop", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Parts and fixtures for other departments" },
+    { "from": 7, "to": 8, "activity": "log_and_handover_out", "room": "stores", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Write up faults honestly and brief the relief" },
+    { "from": 8, "to": 9, "activity": "wind_down_meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Meal and gossip" },
+    { "from": 9, "to": 11, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Drink, cards, complaints about the galley" },
+    { "from": 11, "to": 12, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Keep the back from seizing up" },
+    { "from": 12, "to": 20, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Full sleep block" },
+    { "from": 20, "to": 22, "activity": "personal_time", "room": "workshop", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Recipe tinkering" },
+    { "from": 22, "to": 24, "activity": "prep_for_duty", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Coffee before handover" }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Sit down for a meal", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Always from a unit I serviced, as a quiet quality test" },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Cards and gossip" },
+    { "id": "holo_playroom", "label": "Holo-Playroom visit", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Likes the old-fashioned kitchen programs" },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 420], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Non-negotiable" },
+    { "id": "gym", "label": "Treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Standing at hatches all day" },
+    { "id": "recipe_tinkering", "label": "Work on a custom recipe", "rooms": ["workshop", "mess"], "spot": "workbench", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Job-specific hobby: rebuilding a grandmother's soup from memory" },
+    { "id": "cards_with_cooks", "label": "Cards with the galley staff", "rooms": ["mess", "lounge"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 50], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Trade of favours for extra rations" }
+  ],
+  "duty_loops": [
+    { "id": "pattern_diagnostics", "label": "Pattern buffer diagnostics", "room": "mess", "spot": "replicator", "every_min": 30, "duration_min": 10, "steps": ["walk to unit", "open service hatch", "run pattern check", "flush buffer", "log result"], "system": "replicators", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Only if a unit fails twice: Bridge, Replicators. Food unit down, reroute to galley." },
+    { "id": "feedstock_count", "label": "Matter stores count and refill", "room": "stores", "spot": "locker", "every_min": 60, "duration_min": 12, "steps": ["pull manifest", "count feedstock canisters", "refill hoppers", "flag shortfall to quartermaster"], "system": "replicators", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Replicators. Matter stores under a quarter. Requesting cargo resupply." },
+    { "id": "industrial_queue", "label": "Industrial replicator job queue", "room": "workshop", "spot": "workbench", "every_min": 45, "duration_min": 15, "steps": ["check requests", "load pattern", "run print", "inspect part", "deliver or tag"], "system": "replicators", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.6, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine pattern checks on all food units", "at_run_min": 2, "room": "mess", "spot": "replicator", "depends_on": "none", "reports_to": "qm", "if_neglected": "Meals come out wrong; crew mood and hunger worsen" },
+      { "task": "Stores count and refill", "at_run_min": 10, "room": "stores", "spot": "locker", "depends_on": "none", "reports_to": "qm", "if_neglected": "Hoppers run low during a later surge" }
+    ],
+    "survey": [
+      { "task": "Prepare sample containers and lab consumables on industrial replicator", "at_run_min": 3, "room": "workshop", "spot": "workbench", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Science team waits on containers" },
+      { "task": "Extra rations for long lab shifts", "at_run_min": 8, "room": "mess", "spot": "replicator", "depends_on": "none", "reports_to": "galley", "if_neglected": "Lab techs skip meals and make errors" },
+      { "task": "Pattern buffer check after sensor power draw", "at_run_min": 14, "room": "mess", "spot": "replicator", "depends_on": "none", "reports_to": "qm", "if_neglected": "Corrupted patterns" }
+    ],
+    "cargo_run": [
+      { "task": "Print pallet straps and crate seals", "at_run_min": 3, "room": "workshop", "spot": "workbench", "depends_on": "bridge order", "reports_to": "cargo", "if_neglected": "Cargo handlers improvise and load slowly" },
+      { "task": "Reconcile matter stores against manifest", "at_run_min": 9, "room": "stores", "spot": "locker", "depends_on": "cargo", "reports_to": "qm", "if_neglected": "Feedstock counted twice, shortage later" }
+    ],
+    "medical_relief": [
+      { "task": "Print medical consumables and sterile packs", "at_run_min": 2, "room": "workshop", "spot": "workbench", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Sickbay runs out of dressings" },
+      { "task": "Bland meal batch for relief patients", "at_run_min": 6, "room": "mess", "spot": "replicator", "depends_on": "none", "reports_to": "galley", "if_neglected": "Patients and crew get unsuitable food" },
+      { "task": "Keep pharmacy replicator feedstock clean", "at_run_min": 12, "room": "sickbay", "spot": "replicator", "depends_on": "doc", "reports_to": "doc", "if_neglected": "Contaminated medication risk" }
+    ],
+    "shakedown": [
+      { "task": "Run full diagnostics on every replicator unit", "at_run_min": 2, "room": "mess", "spot": "replicator", "depends_on": "bridge order", "reports_to": "qm", "if_neglected": "Hidden faults surface under load" },
+      { "task": "Spare parts printed for engineering", "at_run_min": 7, "room": "workshop", "spot": "workbench", "depends_on": "ce", "reports_to": "ce", "if_neglected": "Repairs stall without spares" },
+      { "task": "Report power draw anomalies from the units", "at_run_min": 13, "room": "stores", "spot": "console", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Overload goes unnoticed" }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Food replicators fail pattern check twice", "message": "Bridge, Replicators. Food units degraded, switching crew to galley stock.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Matter stores below a quarter", "message": "Bridge, Replicators. Matter stores are low. Need a resupply or rationing.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Replicator draws abnormal power", "message": "Bridge, Replicators. Unit three is spiking the grid. Taking it offline.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Routine all-clear after loop", "message": "Quartermaster, Replicators. Units nominal, stores holding.", "priority": "routine", "to": "qm" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Prepare extra rations for all hands", "response_line": "Replicators, aye. Starting a bulk run now.", "time_to_comply_min": 10, "refuses_if": "Matter stores too low to cover it" },
+      { "order": "Shut down replicators to save power", "response_line": "Replicators, aye. Units going to standby.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Report status of food supply", "response_line": "Bridge, Replicators. Eight units running, stores at about half.", "time_to_comply_min": 1, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Finish diagnostics, top up stores, stay near the mess", "room": "mess", "spot": "replicator", "priority": 3, "comm_line": "Replicators, standing by at the mess." },
+    "red": { "action": "Stop all prints, secure feedstock, go to quartermaster's station in stores", "room": "stores", "spot": "locker", "priority": 2, "comm_line": "Replicators, at station. Units on standby." },
+    "fire": { "action": "Cut replicator power, grab extinguisher, clear the mess", "room": "mess", "spot": "replicator", "priority": 1, "comm_line": "Fire in the mess! Replicator power cut, clearing the area." },
+    "hull_breach": { "action": "Seal stores door, move to nearest safe compartment", "room": "stores", "spot": "door", "priority": 1, "comm_line": "Replicators, sealing stores. I'm inside the bulkhead." },
+    "contamination": { "action": "Lock down the replicators, stay in quarantine, do not print anything", "room": "stores", "spot": "locker", "priority": 1, "comm_line": "Replicators. Units locked, I'm in quarantine." },
+    "power_failure": { "action": "Check the buffers are safe, then hand-crank stores to the galley", "room": "mess", "spot": "replicator", "priority": 2, "comm_line": "Replicators, power out. Switching to stored rations." },
+    "gravity_failure": { "action": "Strap down feedstock canisters and hold on", "room": "stores", "spot": "locker", "priority": 2, "comm_line": "Replicators. No gravity, securing canisters." },
+    "intruder": { "action": "Lock the stores door and stay quiet", "room": "stores", "spot": "door", "priority": 2, "comm_line": "Replicators, locked in stores. Security, I'll stay put." },
+    "medical_emergency": { "action": "Print medical packs and run them to sickbay", "room": "workshop", "spot": "workbench", "priority": 2, "comm_line": "Sickbay, Replicators. Printing supplies now, on my way." },
+    "abandon_ship": { "action": "Grab ration packs, head to the airlock", "room": "airlock", "spot": "door", "priority": 1, "comm_line": "Replicators, abandoning with ration packs. Heading to the airlock." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Normal template, chats at the hatches", "lines": ["Everything is humming.", "Soup of the day is fine."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Extra diagnostics, checks logs twice", "lines": ["The pattern drift is odd.", "Something's off with unit four."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Rations units, rushes low-priority checks, reports shortages to bridge", "lines": ["Fewer units, longer queue.", "Don't ask for fancy meals now."], "leaves_post_if": "Replicators lose power and nothing can be done" },
+    "crisis": { "mood": "grim", "routine_change": "Hand-delivers ration packs, stops custom jobs", "lines": ["Basic rations only.", "I'm printing what I can."], "leaves_post_if": "Ordered to a station or compartment is unsafe" },
+    "collapse": { "mood": "numb", "routine_change": "Stops working, helps others, shares what is in stores", "lines": ["Nothing left to print.", "Take the packs and go."], "leaves_post_if": "Always, survival first" }
+  },
+  "relationships": [
+    { "with_billet": "qm", "kind": "mentor", "effect": "Reports shortages first; follows her stores rules" },
+    { "with_billet": "galley", "kind": "mess_partner", "effect": "Shares meals and swaps unit tips; backs her on menu changes" },
+    { "with_billet": "cook", "kind": "friend", "effect": "Plays cards, trades test dishes for favours" },
+    { "with_billet": "cargo", "kind": "confidant", "effect": "Chats in stores; learns resupply news early" }
+  ],
+  "barks": {
+    "idle": ["Smells like synth-coffee again.", "Anyone want a test tray?", "Stores are tidy, for once."],
+    "working": ["Flushing the buffer.", "Hold on, this hatch sticks.", "Pattern check, one minute."],
+    "greeting_player": ["Hungry? I can fix that.", "Need something printed?", "Morning. Eat yet?"],
+    "greeting_player_higher_rank": ["Sir, units are nominal.", "Anything I can print, ma'am?", "Replicators, ready."],
+    "greeting_player_lower_rank": ["Hey, grab a tray.", "What do you need?", "Careful, that hatch is hot."],
+    "tired": ["Need a bunk and a coffee.", "Eyes won't focus on this log.", "Is it handover yet?"],
+    "hungry": ["Ironic, I know.", "I will eat from the unit I fixed.", "Skipped lunch again."],
+    "stressed": ["Too many orders at once.", "I can't print faster than this.", "Don't ask for another batch."],
+    "alert": ["Securing the feedstock.", "All units to standby.", "Moving, moving."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, offers a better tray, passes along a tip about the ship.",
+    "player_neglects_duty": "Mentions it dryly at first, then tells their chief if it costs supplies.",
+    "player_fakes_report": "Notices numbers that do not match the stores log, quietly checks and reports it.",
+    "player_gives_order_ok": "Complies at once, repeats the order back.",
+    "player_gives_order_outranked": "Hesitates, asks who authorized it, follows only if safe.",
+    "player_out_of_place": "Asks if they are lost; offers directions and a snack.",
+    "player_asks_favour": "Usually yes for a small print; wants something back for a big one."
+  },
+  "decision_rules": [
+    "IF a unit fails a pattern check twice THEN take it offline and tell the quartermaster.",
+    "IF matter stores fall under a quarter THEN call the bridge for resupply and begin rationing.",
+    "IF an order from higher rank conflicts with the quartermaster THEN comply and report the conflict.",
+    "IF an alert sounds THEN stop prints, secure feedstock, go to station.",
+    "IF tired and the loop is low priority THEN rush it, but never skip safety checks.",
+    "IF a friend asks for an off-menu meal and stores are fine THEN print it.",
+    "IF power is limited THEN shut off non-essential custom jobs first.",
+    "IF a pattern looks corrupted THEN refuse to serve it and flush.",
+    "IF the bridge orders bulk rations THEN check stores before saying yes.",
+    "IF fire or contamination THEN leave the units and protect people first."
+  ],
+  "information_view": "I see power draw spikes, pattern drift and feedstock levels first. Odd food complaints, a unit that tastes wrong or a hopper that drains too fast often hint at a deeper power or supply problem before the bridge sees it.",
+  "temptations": [
+    "Skipping the buffer flush on a busy shift: the food tastes slightly off and complaints rise.",
+    "Faking the stores count when tired: a shortage surfaces during a crisis.",
+    "Printing favours for friends from scarce stock: the shortfall shows up later.",
+    "Napping in stores between loops: a unit fault goes unnoticed."
+  ]
+}
