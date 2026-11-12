@@ -16,7 +16,7 @@ export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5;   // real seco
 export class CrewSim {
   constructor({ roster, clock, plan, data, seed = 1, decks = 8 }) {
     Object.assign(this, { roster, clock, plan: plan || {}, data, seed, decks });
-    this.st = new Map(); this.handlers = {}; this.player = null; this.acc = 0; this.log = [];
+    this.t = 0; this.over = new Map(); this.st = new Map(); this.handlers = {}; this.player = null; this.acc = 0; this.log = [];
     for (const p of roster.people) this._init(p);
   }
   on(ev, fn) { (this.handlers[ev] ||= []).push(fn); return this; }
@@ -25,6 +25,7 @@ export class CrewSim {
 
   // The scheduled block for a person right now: { room, spot, activity } or null
   block(p) {
+    const ov = this.over.get(p.id); if (ov && (ov.until === undefined || ov.until > this.t)) return { room: ov.room, spot: ov.spot || 'door', activity: ov.activity || 'evacuating' };
     const day = this.data?.billets?.[p.billet]?.day; if (!day?.length) return null;
     const h = this.clock.localHour(p), b = day.find(x => h >= x[0] && h < x[1]) || day[day.length - 1];
     return { room: b[2], spot: b[3], activity: b[4] };
@@ -54,7 +55,12 @@ export class CrewSim {
   // the person is removed from the abstract sim (died, or became the player)
   drop(p) { this.st.delete(p.id); }
 
+  // send a person somewhere else for a while (evacuation, orders...): room type + optional seconds; clear with sim.release(p)
+  redirect(p, room, spot = 'door', seconds = undefined, activity = 'evacuating') { this.over.set(p.id, { room, spot, activity, until: seconds === undefined ? undefined : this.t + seconds }); }
+  release(p) { this.over.delete(p.id); }
+  overridden(p) { const o = this.over.get(p.id); return !!o && (o.until === undefined || o.until > this.t); }
   tick(dt) {
+    this.t += dt;
     // finish trips
     for (const s of this.st.values()) {
       if (!s.transit) continue; s.transit.eta -= dt;

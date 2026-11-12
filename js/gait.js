@@ -47,7 +47,8 @@ export function gaitNow(g, ctx = {}) {
   if (ctx.tired) v *= 1 - 0.14 * ctx.tired;
   if (ctx.late) v *= 1.15;
   if ((ctx.alert || 0) >= 2) { v *= 1.18; turn *= 1.2; accel *= 1.3; }
-  if ((ctx.alert || 0) >= 3) { clip = 'jog'; stride = 2.3; v = Math.max(v * 1.6, 2.6); turn *= 1.3; accel *= 1.5; }
+  if (ctx.run) { clip = 'sprint'; stride = 5.2; v = Math.max(4.0, v * 2.6); turn *= 1.5; accel *= 2.2; }
+  else if ((ctx.alert || 0) >= 3) { clip = 'jog'; stride = 3.0; v = Math.max(v * 1.6, 2.6); turn *= 1.3; accel *= 1.5; }
   return { v, clip, stride, timeScale: Math.max(0.5, Math.min(2.0, v / stride)), turn, accel, sway: car.sway * (ctx.alert >= 2 ? 1.4 : 1), glance: car.glance, pause: g.habit === 'stops-to-think' ? Math.max(car.pause, 0.3) : car.pause, space: car.space, look: g.habit === 'looks-around', cut: g.habit === 'cuts-corners' };
 }
 export const describeGait = (g) => `${g.pace} ${g.style} ${g.carriage}${g.habit !== 'none' ? ', ' + g.habit : ''} (${g.v.toFixed(2)} m/s)`;

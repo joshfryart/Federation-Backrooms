@@ -300,7 +300,7 @@ function placeGore(data, rnd, n) {
 // ---- NPC walking on the player's deck: descend the path field toward a tile at walking pace, then take the pose of the spot
 const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'interact', desk: 'interact', workbench: 'interact', labbench: 'interact', junction: 'interact', warpcore: 'interact', replicator: 'interact', bar: 'sitting_idle', table: 'sitting_idle', sofa: 'sitting_idle', bunk: 'sitting_idle', biobed: 'idle_talking', treadmill: 'jog', weightbench: 'idle_torch' };
 function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
-function pathField(tx, ty) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty; let f = c.get(k); if (!f) { f = world.field(tx, ty, true); c.set(k, f); if (c.size > 40) c.delete(c.keys().next().value); } return f; }
+function pathField(tx, ty, tubes = false) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty + (tubes ? 't' : ''); let f = c.get(k); if (!f) { f = tubes ? world.field(tx, ty, false, true) : world.field(tx, ty, true); c.set(k, f); if (c.size > 60) c.delete(c.keys().next().value); } return f; }
 
 
 // ---- fidgets and gestures (js/movement.js): an additive bone layer + face morphs on top of whatever clip is playing
@@ -314,21 +314,41 @@ function fidgetStep(e, dt, d) {
   if (o.cue && d < 9) voiceCue(e.person, CUE_OF[o.cue] || o.cue);
 }
 
+
+// ---- dodging: step aside when the player sprints at someone standing still, then drift back to the spot
+const DODGE_LINES = ['Whoa!', 'Watch it!', 'Hey, careful!', 'Coming through, huh?'];
+function dodgeCheck(e, dt, d) {
+  if (e.retT > 0) { e.retT -= dt; if (e.retT <= 0 && !e.walk && e.returnTo) { startWalk(e, e.returnTo[0], e.returnTo[1], false); e.returnTo = null; } }
+  e.dodgeCool = (e.dodgeCool || 0) - dt; if (e.walk || e.dodgeCool > 0 || d > 2.8 || G.phase !== 'play') return;
+  const sp = Math.hypot(P.vx || 0, P.vz || 0); if (sp < 3.0) return;
+  const vx = P.vx / sp, vz = P.vz / sp, rx = e.x - P.x, rz = e.z - P.z, ahead = rx * vx + rz * vz, lat = rx * -vz + rz * vx; if (ahead < 0.1 || ahead > 2.9 || Math.abs(lat) > 0.85) return;
+  const [ex, ey] = world.tile(e.x, e.z), s = lat >= 0 ? 1 : -1, cand = [[-vz * s, vx * s], [vz * s, -vx * s]].flatMap(([dx, dz]) => [[Math.round(dx), Math.round(dz)], [Math.sign(dx), Math.sign(dz)]]);
+  for (const [dx, dy] of [...cand, ...WALK_DIRS]) { const x = ex + dx, y = ey + dy; if ((dx || dy) && world.grid[y]?.[x] === 0 && !world.isTube(x, y) && (Math.abs(dx) + Math.abs(dy)) === 1) { const [cx, cz] = world.center(x, y); if (Math.hypot(cx - P.x, cz - P.z) < 1.0) continue; e.dodgeCool = 5; startWalk(e, x, y, false, { run: true, dodge: true, returnTo: e.returnTo || [ex, ey] }); if (e.person && Math.random() < 0.5) { const t = DODGE_LINES[Math.floor(Math.random() * DODGE_LINES.length)]; G.say(`${e.person.short}: ${t}`, 'npc'); try { speak(e.person, t); } catch (er) { } } return; }
+  }
+}
+// collapse: the crew make for the shuttlebay (running, crawling through tubes when it is quicker) and the sim keeps them there
+function evacuationStep(dt) {
+  if (!G.phases || G.phases.index < 4 || !G.sim) return; G.evacT = (G.evacT || 0) - dt; if (G.evacT > 0) return; G.evacT = 1.2;
+  const room = G.plan?.shuttlebay ? 'shuttlebay' : 'transporter';
+  for (const p of G.roster.people) if (!p.isPlayer && !['dead', 'crazed', 'evacuated'].includes(p.status) && !G.sim.overridden(p) && ['mess', 'quarters', 'lounge', 'gym', 'holodeck', 'cargo', 'stores', 'laundry', 'arboretum'].includes(G.sim.where(p)?.room)) { if (hash01('evac', G.runSeed, p.id) < 0.6) G.sim.redirect(p, room, 'door', undefined, 'evacuating'); }
+}
+
 function gaitFor(e) {   // this walker's gait right now: their own mix of parts, modulated by alert level, fatigue and time of day
   if (!e.gaitBase) e.gaitBase = makeGait(e.person, G.runSeed);
-  if (!e.gaitCtx || G.time - e.gaitT > 1) { const h = G.comms ? G.comms.clock.localHour(e.person) : 2; e.gaitT = G.time; e.gaitCtx = gaitNow(e.gaitBase, { alert: G.comms?.alerts?.top()?.def.severity ?? 0, tired: Math.max(0, Math.min(1, (h - 5) / 3)), relaxed: h > 8 && h < 20 }); }
+  if (!e.gaitCtx || G.time - e.gaitT > 1 || e.gaitRun !== !!e.run) { e.gaitRun = !!e.run; const h = G.comms ? G.comms.clock.localHour(e.person) : 2; e.gaitT = G.time; e.gaitCtx = gaitNow(e.gaitBase, { run: !!e.run, alert: G.comms?.alerts?.top()?.def.severity ?? 0, tired: Math.max(0, Math.min(1, (h - 5) / 3)), relaxed: h > 8 && h < 20 }); }
   return e.gaitCtx;
 }
-function startWalk(e, tx, ty, vanish) { e.walk = { tx, ty, vanish, stuck: 0 }; }
+function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, opts }; e.run = !!opts.run; }
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, yielding to others.
-  const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty), W = world.W, [tx, ty] = world.tile(e.x, e.z), cur = f[tx + ty * W];
-  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
+  const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, [tx, ty] = world.tile(e.x, e.z), cur = f[tx + ty * W];
+  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
   if (cur < 0) return finish();
   const [fx, fz] = world.center(w.tx, w.ty), toEnd = Math.hypot(fx - e.x, fz - e.z);
-  const gt = gaitFor(e);
+  const gt = gaitFor(e), [mx, my] = world.tile(e.x, e.z);
+  e.crawl = world.isTube(mx, my); e.climbing = world.tubeKind(mx, my) === 'lad'; const vault = world.grid[my]?.[mx] === 2;
   // look-ahead: follow the field downhill up to 4 tiles and aim at the furthest one that is in clear sight
   let gx, gz, ax = tx, ay = ty, av = cur; const chain = [];
-  for (let k = 0; k < (gt.cut ? 6 : 4) && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
+  for (let k = 0; k < (e.crawl || e.climbing || w.opts.tubes ? 1 : gt.cut ? 6 : 4) && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
   if (!chain.length) { gx = fx; gz = fz; } else { let pick = chain[0]; for (const c of chain) { const [cx, cz] = world.center(c[0], c[1]); if (world.los(e.x, e.z, cx, cz) && (c === chain[0] || world.los(e.x + 0.28, e.z, cx + 0.28, cz) && world.los(e.x - 0.28, e.z, cx - 0.28, cz) && world.los(e.x, e.z + 0.28, cx, cz + 0.28) && world.los(e.x, e.z - 0.28, cx, cz - 0.28))) pick = c; else break; } [gx, gz] = world.center(pick[0], pick[1]); }
   if (av === 0 && chain.length && chain[chain.length - 1][0] === w.tx && chain[chain.length - 1][1] === w.ty && world.los(e.x, e.z, fx, fz)) { gx = fx; gz = fz; }
   if (cur === 0) { gx = fx; gz = fz; }
@@ -341,19 +361,21 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const want = Math.atan2(gx - e.x, gz - e.z); let err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading));
   const maxTurn = (e.v > 0.3 ? gt.turn : gt.turn * 1.3) * dt; e.heading += Math.max(-maxTurn, Math.min(maxTurn, err)); e.mesh.rotation.y = e.heading;
   e.pauseCool = (e.pauseCool || 0) - dt; if ((e.pauseT || 0) > 0) { e.pauseT -= dt; slow = Math.min(slow, 0.05); } else if (Math.abs(err) > 0.8 && e.v > 0.7 && e.pauseCool <= 0 && gt.pause > 0 && Math.random() < gt.pause * dt * 8) { e.pauseT = 0.5 + Math.random() * 0.8; e.pauseCool = 5; }
-  const turnK = Math.abs(err) > 1.2 ? 0 : Math.max(0.25, Math.cos(Math.abs(err))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = gt.v * slow * turnK * (w.vanish ? 1 : arrive);
+  const turnK = Math.abs(err) > 1.2 ? 0 : Math.max(0.25, Math.cos(Math.abs(err))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = gt.v * slow * turnK * (w.vanish ? 1 : arrive) * (e.climbing ? 0.4 : e.crawl ? 0.5 : vault ? 0.55 : 1);
   e.v = (e.v || 0); e.v += Math.max(-1.5 * gt.accel * dt, Math.min(gt.accel * dt, target - e.v));
   if (toEnd < 0.05 && !w.vanish) return finish();
   if (w.vanish && cur === 0 && toEnd < 0.2) return finish();
   if (e.v < 0.02 && slow < 0.2) { if ((w.stuck += dt) > 7) return finish(); } else w.stuck = 0;
   const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; e.mesh.position.x = e.x; e.mesh.position.z = e.z;
+  { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading) * 0.6, e.z + Math.cos(e.heading) * 0.6), gy = e.v > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0; e.y = y0 + Math.max(-7 * dt, Math.min(3.2 * dt, gy - y0)); e.mesh.position.y = e.y; }
   if (H) {
-    if (!e.walking || e.clip !== gt.clip) { try { H.play(gt.clip, { fade: 0.25 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = gt.clip; }
+    const clip = e.climbing ? 'push' : e.crawl || vault ? 'crouch_fwd' : gt.clip;
+    if (!e.walking || e.clip !== clip) { try { H.play(clip, { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = clip; }
     if (d > 22) return true;
-    fidgetStep(e, dt, d);
+    if (!e.run && !e.crawl && !e.climbing && !vault) fidgetStep(e, dt, d); else { H.add = null; }
     const ph = e.gaitBase.phase; e.gt = (e.gt || 0) + dt; let look = Math.sin(e.gt * 0.7 + ph) * gt.sway * (gt.look ? 3 : 1);
     if (pd < 3.8 && Math.abs(Math.atan2(P.x - e.x, P.z - e.z) - e.heading) < 1.2 && hash01('glance', e.person.id, Math.floor(e.gt / 3)) < gt.glance) look = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(Math.atan2(P.x - e.x, P.z - e.z) - e.heading), Math.cos(Math.atan2(P.x - e.x, P.z - e.z) - e.heading))));
-    H.lookYaw += (look - H.lookYaw) * Math.min(1, dt * 3.5); H.update(dt * Math.max(0.3, Math.min(1.8, e.v / gt.stride)));
+    H.lookYaw += (look - H.lookYaw) * Math.min(1, dt * 3.5); H.update(dt * (e.climbing ? 1.4 : e.crawl || vault ? Math.max(0.8, e.v / 0.6) : Math.max(0.3, Math.min(2.2, e.v / gt.stride))));
   }
   return true;
 }
@@ -374,8 +396,8 @@ function simBodies(dt, force = false) {
     if (e.walk) continue;   // still on its way somewhere
     if (!o || o.room !== e.room) {
       if (force || unseen(e.x, e.z)) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
-      else if (!o && world.car) startWalk(e, world.car.tx, world.car.ty, true);                       // left the deck: walk to the lift and go
-      else if (o) { const t = simTileFor(e.person, o); if (t) { e.room = o.room; e.spot = o.spot; e.faceAt = t.face || null; startWalk(e, t[0], t[1], false); } }   // new room on this deck: walk there
+      else if (!o && world.car) startWalk(e, world.car.tx, world.car.ty, true, G.sim.overridden(e.person) ? { run: true, tubes: true } : {});                       // left the deck: walk to the lift and go
+      else if (o) { const t = simTileFor(e.person, o); if (t) { e.room = o.room; e.spot = o.spot; e.faceAt = t.face || null; startWalk(e, t[0], t[1], false, G.sim.overridden(e.person) ? { run: true } : {}); } }   // new room on this deck: walk there
     }
   }
   for (const o of here.values()) {   // arrive
@@ -412,7 +434,7 @@ function setupDuty() {
 }
 function nomTick(dt) {
   if (!NOM() || !G.sim) return;
-  G.sim.tick(dt); simBodies(dt);
+  G.sim.tick(dt); evacuationStep(dt); simBodies(dt);
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt);
@@ -876,6 +898,7 @@ function step(dt, t) {
     } else if (e.kind === 'crew' || e.kind === 'emh') {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       const H = e.mesh.userData.human;
+      if (e.simmed && !e.walk) dodgeCheck(e, dt, d);
       if (e.walk && walkStep(e, dt, d)) continue;
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
       if (e.repairing) repairerStep(e, dt, d);
@@ -1396,6 +1419,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();
