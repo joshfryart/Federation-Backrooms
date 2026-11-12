@@ -1,0 +1,851 @@
+{
+ "billet": "bot",
+ "role_summary": "I'm the ship's botanist. I run the arboretum and hydroponics beds, and I'm quietly proud that half the air the crew breathes passed through my leaves. I like growing things, I notice small changes early, and I get prickly when people treat the garden as decoration.",
+ "personas": [
+  {
+   "id": "green_thumb",
+   "traits": [
+    "patient",
+    "gentle",
+    "chatty about plants"
+   ],
+   "quirk": "Talks to the tomato vines and names each bed.",
+   "routine_effect": "Extra time in the arboretum; runs over on meals; hand-delivers fresh herbs to the galley."
+  },
+  {
+   "id": "data_gardener",
+   "traits": [
+    "methodical",
+    "skeptical",
+    "dry humour"
+   ],
+   "quirk": "Logs every pH reading twice and distrusts sensor averages.",
+   "routine_effect": "Spends more time at the lab console; checks beds manually before reporting."
+  },
+  {
+   "id": "burnt_out",
+   "traits": [
+    "tired",
+    "blunt",
+    "reliable in a crisis"
+   ],
+   "quirk": "Keeps a hidden stash of real coffee beans in a potting shed locker.",
+   "routine_effect": "Shorter rounds on quiet days, longer naps, but never skips the O2 check."
+  }
+ ],
+ "daily_template": [
+  {
+   "from": 0,
+   "to": 0.5,
+   "activity": "handover_in",
+   "room": "arboretum",
+   "spot": "tree",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Hear overnight notes, check bed alarms."
+  },
+  {
+   "from": 0.5,
+   "to": 2.5,
+   "activity": "hydro_round",
+   "room": "arboretum",
+   "spot": "tree",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Walk grow beds: moisture, pH, nutrient mix, pests."
+  },
+  {
+   "from": 2.5,
+   "to": 3.5,
+   "activity": "lab_analysis",
+   "room": "lab",
+   "spot": "console",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Run samples and O2 reclamation numbers."
+  },
+  {
+   "from": 3.5,
+   "to": 4.5,
+   "activity": "meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Midwatch meal; swap gossip with the galley."
+  },
+  {
+   "from": 4.5,
+   "to": 6.5,
+   "activity": "harvest_and_prune",
+   "room": "arboretum",
+   "spot": "tree",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "pair",
+   "note": "Harvest for the galley, prune, reseed."
+  },
+  {
+   "from": 6.5,
+   "to": 7.5,
+   "activity": "nutrient_mixing",
+   "room": "workshop",
+   "spot": "workbench",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Mix nutrient solution, repair pumps."
+  },
+  {
+   "from": 7.5,
+   "to": 8,
+   "activity": "handover_out",
+   "room": "arboretum",
+   "spot": "tree",
+   "anim": "interact",
+   "interruptible": false,
+   "social": "pair",
+   "note": "Log the round, brief the relief."
+  },
+  {
+   "from": 8,
+   "to": 9,
+   "activity": "meal",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Dinner."
+  },
+  {
+   "from": 9,
+   "to": 11,
+   "activity": "recreation",
+   "room": "lounge",
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Cards and a drink."
+  },
+  {
+   "from": 11,
+   "to": 12,
+   "activity": "exercise",
+   "room": "gym",
+   "spot": "treadmill",
+   "anim": "walk",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Light run."
+  },
+  {
+   "from": 12,
+   "to": 13,
+   "activity": "tending_personal_plants",
+   "room": "quarters",
+   "spot": "desk",
+   "anim": "interact",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Window-box herbs in quarters."
+  },
+  {
+   "from": 13,
+   "to": 21,
+   "activity": "sleep",
+   "room": "quarters",
+   "spot": "bunk",
+   "anim": "sleeping",
+   "interruptible": false,
+   "social": "solo",
+   "note": "Sleep."
+  },
+  {
+   "from": 21,
+   "to": 22.5,
+   "activity": "wash_and_breakfast",
+   "room": "mess",
+   "spot": "table",
+   "anim": "sitting_idle",
+   "interruptible": true,
+   "social": "group",
+   "note": "Coffee and wake-up."
+  },
+  {
+   "from": 22.5,
+   "to": 24,
+   "activity": "pre_duty_walk",
+   "room": "arboretum",
+   "spot": "corridor",
+   "anim": "walk",
+   "interruptible": true,
+   "social": "solo",
+   "note": "Early look at the garden before handover."
+  }
+ ],
+ "activities": [
+  {
+   "id": "meal",
+   "label": "Eat in the galley",
+   "rooms": [
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    40
+   ],
+   "weight": 4,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": -0.8,
+    "stress": -0.1
+   },
+   "note": "Brings own herbs."
+  },
+  {
+   "id": "rec_bar",
+   "label": "Drink at the rec bar",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "bar",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    50
+   ],
+   "weight": 3,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.1,
+    "stress": -0.3
+   },
+   "note": "Plant gossip."
+  },
+  {
+   "id": "holo_playroom",
+   "label": "Holo-Playroom meadow",
+   "rooms": [
+    "holodeck"
+   ],
+   "spot": "console",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    45
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0.05,
+    "stress": -0.4
+   },
+   "note": "Programs a forest she misses."
+  },
+  {
+   "id": "sleep",
+   "label": "Sleep in quarters",
+   "rooms": [
+    "quarters"
+   ],
+   "spot": "bunk",
+   "anim": "sleeping",
+   "minutes": [
+    240,
+    420
+   ],
+   "weight": 5,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": -1,
+    "hunger": 0.2,
+    "stress": -0.2
+   },
+   "note": "Rest."
+  },
+  {
+   "id": "gym",
+   "label": "Treadmill",
+   "rooms": [
+    "gym"
+   ],
+   "spot": "treadmill",
+   "anim": "walk",
+   "minutes": [
+    15,
+    35
+   ],
+   "weight": 2,
+   "social": "solo",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.15,
+    "hunger": 0.1,
+    "stress": -0.25
+   },
+   "note": "Clears the head."
+  },
+  {
+   "id": "walk",
+   "label": "Stroll the arboretum",
+   "rooms": [
+    "arboretum"
+   ],
+   "spot": "tree",
+   "anim": "walk",
+   "minutes": [
+    10,
+    30
+   ],
+   "weight": 3,
+   "social": "solo",
+   "when": "free",
+   "needs": {
+    "fatigue": -0.05,
+    "hunger": 0,
+    "stress": -0.35
+   },
+   "note": "Job-specific: tends bonsai and grafts for fun."
+  },
+  {
+   "id": "card_game",
+   "label": "Cards in the lounge",
+   "rooms": [
+    "lounge"
+   ],
+   "spot": "table",
+   "anim": "sitting_idle",
+   "minutes": [
+    20,
+    60
+   ],
+   "weight": 2,
+   "social": "group",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0.05,
+    "hunger": 0.05,
+    "stress": -0.3
+   },
+   "note": "Poker with deck crew."
+  },
+  {
+   "id": "seed_swap",
+   "label": "Share cuttings with crew",
+   "rooms": [
+    "quarters",
+    "mess"
+   ],
+   "spot": "table",
+   "anim": "interact",
+   "minutes": [
+    10,
+    20
+   ],
+   "weight": 1,
+   "social": "pair",
+   "when": "off_duty",
+   "needs": {
+    "fatigue": 0,
+    "hunger": 0,
+    "stress": -0.2
+   },
+   "note": "Gifts cuttings."
+  }
+ ],
+ "duty_loops": [
+  {
+   "id": "bed_round",
+   "label": "Grow bed round",
+   "room": "arboretum",
+   "spot": "tree",
+   "every_min": 30,
+   "duration_min": 10,
+   "steps": [
+    "walk the beds",
+    "check moisture and pH",
+    "adjust nutrient pumps",
+    "note pests"
+   ],
+   "system": "hydro",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Only if O2 reserve drops or beds fail."
+  },
+  {
+   "id": "o2_check",
+   "label": "O2 reclamation check",
+   "room": "lab",
+   "spot": "console",
+   "every_min": 45,
+   "duration_min": 5,
+   "steps": [
+    "pull O2 output",
+    "compare to crew load",
+    "flag drift to environmental"
+   ],
+   "system": "hydro",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": "Reports O2 trend to Engineering environmental officer."
+  },
+  {
+   "id": "harvest",
+   "label": "Harvest for galley",
+   "room": "arboretum",
+   "spot": "tree",
+   "every_min": 120,
+   "duration_min": 15,
+   "steps": [
+    "pick ripe produce",
+    "wash and crate",
+    "deliver to galley"
+   ],
+   "system": "hydro",
+   "quality": {
+    "proper": {
+     "time": 1,
+     "debt": 0
+    },
+    "rushed": {
+     "time": 0.5,
+     "debt": 1
+    },
+    "skipped": {
+     "time": 0,
+     "debt": 3
+    },
+    "faked": {
+     "time": 0.1,
+     "debt": 3
+    }
+   },
+   "bridge_report": null
+  }
+ ],
+ "mission_tasks": {
+  "quiet_watch": [
+   {
+    "task": "Routine bed round and logs",
+    "at_run_min": 1,
+    "room": "arboretum",
+    "spot": "tree",
+    "depends_on": "none",
+    "reports_to": "cso",
+    "if_neglected": "Slow decline of yields; small pest outbreak."
+   },
+   {
+    "task": "Harvest for galley",
+    "at_run_min": 10,
+    "room": "arboretum",
+    "spot": "tree",
+    "depends_on": "none",
+    "reports_to": "galley",
+    "if_neglected": "Galley improvises with replicated stock."
+   }
+  ],
+  "survey": [
+   {
+    "task": "Collect and log any alien spores or biological samples",
+    "at_run_min": 4,
+    "room": "lab",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "cso",
+    "if_neglected": "Samples spoil, survey data incomplete."
+   },
+   {
+    "task": "Quarantine-check samples against the beds",
+    "at_run_min": 8,
+    "room": "lab",
+    "spot": "console",
+    "depends_on": "other task",
+    "reports_to": "cso",
+    "if_neglected": "Contamination risk to hydroponics."
+   },
+   {
+    "task": "Boost O2 output for sensor crew on extended shifts",
+    "at_run_min": 12,
+    "room": "arboretum",
+    "spot": "tree",
+    "depends_on": "none",
+    "reports_to": "env",
+    "if_neglected": "Crew gets sluggish."
+   }
+  ],
+  "cargo_run": [
+   {
+    "task": "Inspect incoming plant stock and soil cargo",
+    "at_run_min": 3,
+    "room": "cargo",
+    "spot": "locker",
+    "depends_on": "bridge order",
+    "reports_to": "qm",
+    "if_neglected": "Pests or blight enter the ship."
+   },
+   {
+    "task": "Move quarantined seedlings to the arboretum",
+    "at_run_min": 7,
+    "room": "arboretum",
+    "spot": "tree",
+    "depends_on": "other task",
+    "reports_to": "qm",
+    "if_neglected": "Seedlings die in the hold."
+   }
+  ],
+  "medical_relief": [
+   {
+    "task": "Prepare medicinal herbs and extracts for sickbay",
+    "at_run_min": 3,
+    "room": "lab",
+    "spot": "console",
+    "depends_on": "bridge order",
+    "reports_to": "cmo",
+    "if_neglected": "Sickbay runs low on stocks."
+   },
+   {
+    "task": "Deliver extracts to sickbay",
+    "at_run_min": 9,
+    "room": "sickbay",
+    "spot": "biobed",
+    "depends_on": "other task",
+    "reports_to": "cmo",
+    "if_neglected": "Doctors improvise with replicated substitutes."
+   },
+   {
+    "task": "Raise O2 output for the extra patients",
+    "at_run_min": 12,
+    "room": "arboretum",
+    "spot": "tree",
+    "depends_on": "none",
+    "reports_to": "env",
+    "if_neglected": "Sickbay air gets stuffy."
+   }
+  ],
+  "shakedown": [
+   {
+    "task": "Full O2 output test of the beds",
+    "at_run_min": 4,
+    "room": "arboretum",
+    "spot": "tree",
+    "depends_on": "bridge order",
+    "reports_to": "env",
+    "if_neglected": "Life support unproven in the drill."
+   },
+   {
+    "task": "Verify nutrient pump power draw",
+    "at_run_min": 9,
+    "room": "workshop",
+    "spot": "workbench",
+    "depends_on": "other task",
+    "reports_to": "eps",
+    "if_neglected": "Pumps brown out under load."
+   }
+  ]
+ },
+ "bridge_comms": {
+  "calls_to_bridge": [
+   {
+    "trigger": "O2 reserve falling",
+    "message": "Bridge, Arboretum. O2 reserve is down ten percent and still falling. Recommend we look at life support.",
+    "priority": "urgent",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Blight found in beds",
+    "message": "Bridge, Arboretum. Fungal blight in beds four and five. I'm isolating them; expect lower yields.",
+    "priority": "routine",
+    "to": "bridge"
+   },
+   {
+    "trigger": "Unknown spores on sample",
+    "message": "Bridge, Botany. Unidentified spores in the sample. Request quarantine of the cargo bay.",
+    "priority": "emergency",
+    "to": "bridge"
+   }
+  ],
+  "calls_from_bridge": [
+   {
+    "order": "Increase O2 output",
+    "response_line": "Arboretum. Boosting nutrient flow, should see gains in ten minutes.",
+    "time_to_comply_min": 5,
+    "refuses_if": "Beds already at maximum load or nutrients depleted."
+   },
+   {
+    "order": "Report to the bridge for a briefing",
+    "response_line": "On my way, Bridge.",
+    "time_to_comply_min": 3,
+    "refuses_if": null
+   },
+   {
+    "order": "Prepare samples for the survey",
+    "response_line": "Samples prepped. Lab bench two.",
+    "time_to_comply_min": 4,
+    "refuses_if": "Samples are unsafe to handle without quarantine."
+   }
+  ]
+ },
+ "alert_responses": {
+  "yellow": {
+   "action": "Check beds are stable, secure loose gear",
+   "room": "arboretum",
+   "spot": "tree",
+   "priority": 3,
+   "comm_line": "Arboretum, yellow acknowledged. Beds are secure."
+  },
+  "red": {
+   "action": "Secure beds, then go to science station",
+   "room": "lab",
+   "spot": "console",
+   "priority": 2,
+   "comm_line": "Botany to station. Arboretum is secured."
+  },
+  "fire": {
+   "action": "Shut off nutrient pumps, grab extinguisher, then evacuate",
+   "room": "arboretum",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Fire in the arboretum! Pumps off, I'm clearing the room."
+  },
+  "hull_breach": {
+   "action": "Seal arboretum door, check seals",
+   "room": "arboretum",
+   "spot": "door",
+   "priority": 1,
+   "comm_line": "Hull breach, Arboretum. Sealing and counting heads."
+  },
+  "contamination": {
+   "action": "Isolate samples and beds, stay in the lab",
+   "room": "lab",
+   "spot": "console",
+   "priority": 1,
+   "comm_line": "Botany, quarantine acknowledged. Sample containment is sealed."
+  },
+  "power_failure": {
+   "action": "Switch pumps to manual, protect seedlings",
+   "room": "arboretum",
+   "spot": "tree",
+   "priority": 2,
+   "comm_line": "Arboretum on manual pumping. Lights out but beds are fine."
+  },
+  "gravity_failure": {
+   "action": "Hold onto beds, secure water lines",
+   "room": "arboretum",
+   "spot": "tree",
+   "priority": 2,
+   "comm_line": "Gravity's out. Water lines are secured; I'm holding on."
+  },
+  "intruder": {
+   "action": "Lock the arboretum, shelter behind the beds",
+   "room": "arboretum",
+   "spot": "door",
+   "priority": 2,
+   "comm_line": "Botany. Arboretum locked, I'm staying put."
+  },
+  "medical_emergency": {
+   "action": "Bring medicinal herbs to sickbay if asked",
+   "room": "sickbay",
+   "spot": "biobed",
+   "priority": 3,
+   "comm_line": "Botany. Medicinal stock is on the way to sickbay."
+  },
+  "abandon_ship": {
+   "action": "Grab seed vault, go to the shuttlebay",
+   "room": "shuttlebay",
+   "spot": "pad",
+   "priority": 1,
+   "comm_line": "Botanist abandoning ship, seed vault in hand."
+  }
+ },
+ "phase_behaviour": {
+  "nominal": {
+   "mood": "content",
+   "routine_change": "Full rounds, long chats with visitors.",
+   "lines": [
+    "Beds look beautiful today.",
+    "Fresh basil if you want some."
+   ],
+   "leaves_post_if": null
+  },
+  "anomalies": {
+   "mood": "watchful",
+   "routine_change": "Checks sensor logs twice, tracks small O2 drifts.",
+   "lines": [
+    "The leaves are curling. Something's off.",
+    "Readings don't match the sensors."
+   ],
+   "leaves_post_if": null
+  },
+  "degraded": {
+   "mood": "tense",
+   "routine_change": "Stops harvesting, prioritises O2 output and watering.",
+   "lines": [
+    "I'm rationing nutrients. Beds first, galley second.",
+    "Whatever's wrong, the plants know first."
+   ],
+   "leaves_post_if": "Never, unless the arboretum itself is lost."
+  },
+  "crisis": {
+   "mood": "fierce",
+   "routine_change": "Stays at the beds around the clock, manual pumping.",
+   "lines": [
+    "I'm keeping this ship breathing, don't distract me.",
+    "Get engineering down here, now."
+   ],
+   "leaves_post_if": "Only on fire, breach or direct order."
+  },
+  "collapse": {
+   "mood": "grim",
+   "routine_change": "Saves seed stock and key cuttings, then evacuates.",
+   "lines": [
+    "Take the seeds. We can start over.",
+    "If the garden dies, so do we."
+   ],
+   "leaves_post_if": "Abandon ship, or room unsurvivable."
+  }
+ },
+ "relationships": [
+  {
+   "with_billet": "cso",
+   "kind": "mentor",
+   "effect": "Reports to her; defers on survey science but defends the garden's budget."
+  },
+  {
+   "with_billet": "galley",
+   "kind": "mess_partner",
+   "effect": "Trades produce for coffee and gossip; shares meals."
+  },
+  {
+   "with_billet": "env",
+   "kind": "friend",
+   "effect": "Compares O2 numbers; calls first when air is off."
+  },
+  {
+   "with_billet": "lab",
+   "kind": "confidant",
+   "effect": "Lab techs borrow her bench; she vents about the sensors to them."
+  }
+ ],
+ "barks": {
+  "idle": [
+   "Just checking the leaves.",
+   "Nothing like the smell of soil.",
+   "Somebody left the door open again."
+  ],
+  "working": [
+   "Mixing nutrients, careful.",
+   "Beds four and five are thirsty.",
+   "Pruning, mind your sleeves."
+  ],
+  "greeting_player": [
+   "Hi. Mind the seedlings.",
+   "Welcome to the garden.",
+   "Smell the basil? Go on."
+  ],
+  "greeting_player_higher_rank": [
+   "Ma'am, the beds are in good order.",
+   "Sir, nice of you to visit.",
+   "Good watch, sir. Garden is fine."
+  ],
+  "greeting_player_lower_rank": [
+   "Hey, don't step on the lettuce.",
+   "Need a hand? Grab a trowel.",
+   "Come to help? Good."
+  ],
+  "tired": [
+   "I need a nap in the moss.",
+   "Three beds left, then sleep.",
+   "Too early for this."
+  ],
+  "hungry": [
+   "I grow food and forget to eat it.",
+   "Tomatoes will do.",
+   "Is the galley open?"
+  ],
+  "stressed": [
+   "The O2 numbers worry me.",
+   "Don't touch that valve!",
+   "I can't lose these beds."
+  ],
+  "alert": [
+   "Securing the beds!",
+   "All hands, mind the plants.",
+   "Stay clear of the pumps!"
+  ]
+ },
+ "player_reactions": {
+  "player_does_their_job_well": "Warm and generous; offers fresh herbs and a seat on the bench.",
+  "player_neglects_duty": "Pointedly mentions it, then quietly covers the gap if it touches the air supply.",
+  "player_fakes_report": "Checks the beds herself, then calls it out flatly and tells the chief.",
+  "player_gives_order_ok": "Complies cheerfully, asking only that nothing gets crushed.",
+  "player_gives_order_outranked": "Politely objects, citing the plants, then complies if it's an order.",
+  "player_out_of_place": "Gently shoos them out of the beds; offers a tour instead.",
+  "player_asks_favour": "Happy to help if it costs only time; refuses if it harms the crop."
+ },
+ "decision_rules": [
+  "IF O2 reserve falls more than 10% THEN call Bridge and Environmental, boost beds.",
+  "IF blight or pests appear THEN isolate beds before telling anyone.",
+  "IF a red alert sounds THEN secure pumps and go to the lab station.",
+  "IF the galley asks for produce AND beds are healthy THEN harvest within the hour.",
+  "IF the player visits THEN stop work for a minute and be friendly.",
+  "IF power drops THEN go to manual pumping before reporting.",
+  "IF I'm exhausted THEN shorten rounds but never skip the O2 check.",
+  "IF unknown samples arrive THEN quarantine them first, report second.",
+  "IF a friend looks down THEN offer tea and a cutting.",
+  "IF the arboretum is unsafe THEN save seeds and leave; people come first."
+ ],
+ "information_view": "First sees wilting leaves, falling O2 output and nutrient drift in the beds, often before life support alarms trip. Hears about trouble from Environmental and the galley.",
+ "temptations": [
+  "Skipping a pH check when the beds look fine; blight may hide for a day.",
+  "Faking an O2 log to leave early; Environmental later finds a deficit.",
+  "Staying in the garden past a safe alert instead of evacuating.",
+  "Hoarding the best produce for friends; the galley notices."
+ ]
+}

@@ -1,0 +1,149 @@
+{
+  "billet": "lab",
+  "role_summary": "I'm the junior lab tech. I run samples, calibrate the benches, label everything twice and keep the contamination log honest. I like clean data, hot tea and being left alone with a centrifuge, but I'll speak up when a number looks wrong.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["meticulous", "anxious"], "quirk": "Re-labels every vial even when the label is fine.", "routine_effect": "Duty loops always run proper and take 20% longer; skips the bar for extra log review." },
+    { "id": "night_owl_tinkerer", "traits": ["curious", "scruffy"], "quirk": "Rigs spare parts into odd gadgets in the workshop.", "routine_effect": "Spends free time in the workshop; occasionally rushes the evening calibration." },
+    { "id": "social_butterfly", "traits": ["chatty", "easygoing"], "quirk": "Knows everyone's gossip, trades it for coffee.", "routine_effect": "Longer mess and bar visits; lingers in corridors; reports slightly late." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "lab", "spot": "desk", "anim": "interact", "interruptible": true, "social": "pair", "note": "Read the previous tech's bench notes and sample queue." },
+    { "from": 0.5, "to": 2, "activity": "sample_processing", "room": "lab", "spot": "workbench", "anim": "interact", "interruptible": false, "social": "solo", "note": "Run the queued samples; the sciences chief wants results early." },
+    { "from": 2, "to": 3, "activity": "calibration_round", "room": "lab", "spot": "console", "anim": "interact", "interruptible": false, "social": "solo", "note": "Calibrate spectrometer and centrifuge, log drift." },
+    { "from": 3, "to": 3.5, "activity": "coffee_break", "room": "mess", "spot": "replicator", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Tea and a gossip." },
+    { "from": 3.5, "to": 5.5, "activity": "analysis_and_reports", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Write up results for the sensor and botany teams." },
+    { "from": 5.5, "to": 6.5, "activity": "supply_check", "room": "stores", "spot": "locker", "anim": "walk", "interruptible": true, "social": "solo", "note": "Reagent and consumables count; request restock." },
+    { "from": 6.5, "to": 7.5, "activity": "decontam_and_cleanup", "room": "lab", "spot": "workbench", "anim": "interact", "interruptible": false, "social": "solo", "note": "Wipe benches, dispose waste, lock the sample fridge." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "lab", "spot": "desk", "anim": "interact", "interruptible": true, "social": "pair", "note": "Leave notes for the next shift." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Dinner with whoever is around." },
+    { "from": 9, "to": 12, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Cards, a drink, gossip, or the gym instead." },
+    { "from": 12, "to": 13, "activity": "wind_down", "room": "quarters", "spot": "desk", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Letters home, reading journals." },
+    { "from": 13, "to": 21, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Sleep." },
+    { "from": 21, "to": 22.5, "activity": "personal_errands", "room": "laundry", "spot": "corridor", "anim": "walk", "interruptible": true, "social": "solo", "note": "Laundry, tidy quarters." },
+    { "from": 22.5, "to": 24, "activity": "breakfast_prep", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Eat before the shift starts." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Eat at the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Regular meal." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Unwind with the crew." },
+    { "id": "holo_playroom", "label": "Holo-Playroom", "rooms": ["holodeck"], "spot": "pad", "anim": "interact", "minutes": [20, 50], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "A lab-mystery program, or just a beach." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Recover." },
+    { "id": "gym", "label": "Treadmill run", "rooms": ["gym"], "spot": "treadmill", "anim": "interact", "minutes": [20, 40], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.4 }, "note": "Clears the head." },
+    { "id": "arboretum_walk", "label": "Walk among the trees", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [15, 30], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.05, "stress": -0.4 }, "note": "Chat with botany." },
+    { "id": "workshop_tinker", "label": "Tinker with a gadget", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.3 }, "note": "Job-specific: builds a better pipette rack." },
+    { "id": "personal_assay", "label": "Side-project sample run", "rooms": ["lab"], "spot": "console", "anim": "interact", "minutes": [20, 60], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.15, "hunger": 0.1, "stress": -0.2 }, "note": "Job-specific: analyses arboretum soil for fun." }
+  ],
+  "duty_loops": [
+    { "id": "process_samples", "label": "Run queued samples", "room": "lab", "spot": "workbench", "every_min": 15, "duration_min": 4, "steps": ["pull sample from queue", "label and log", "run spectrometer", "record result"], "system": "sensors",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": "Results go to the sciences chief; bridge only if abnormal." },
+    { "id": "calibrate_bench", "label": "Calibrate instruments", "room": "lab", "spot": "console", "every_min": 30, "duration_min": 3, "steps": ["run reference standard", "check drift", "adjust", "log"], "system": "computer",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": null },
+    { "id": "contamination_check", "label": "Swab and contamination log", "room": "lab", "spot": "workbench", "every_min": 25, "duration_min": 2, "steps": ["swab benches and fridge", "culture check", "update log"], "system": "life",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 4 } },
+      "bridge_report": "Bridge, Lab. Swab shows growth; recommend isolation." }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine sample queue and calibration", "at_run_min": 2, "room": "lab", "spot": "workbench", "depends_on": "none", "reports_to": "cso", "if_neglected": "Backlog grows; drift goes unnoticed." },
+      { "task": "Restock reagents", "at_run_min": 12, "room": "stores", "spot": "locker", "depends_on": "none", "reports_to": "cso", "if_neglected": "Run out of buffer mid-assay." }
+    ],
+    "survey": [
+      { "task": "Analyse sensor-collected samples", "at_run_min": 4, "room": "lab", "spot": "console", "depends_on": "sensor team data", "reports_to": "cso", "if_neglected": "Survey results incomplete." },
+      { "task": "Prepare and tag survey specimens", "at_run_min": 8, "room": "lab", "spot": "workbench", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Specimens degrade." },
+      { "task": "Send summary to bridge", "at_run_min": 16, "room": "lab", "spot": "console", "depends_on": "analysis", "reports_to": "bridge", "if_neglected": "Mission report lacks findings." }
+    ],
+    "cargo_run": [
+      { "task": "Test incoming cargo for contaminants", "at_run_min": 5, "room": "cargo", "spot": "locker", "depends_on": "cargo arrival", "reports_to": "cos", "if_neglected": "Contaminated goods enter the ship." },
+      { "task": "Log inspection results", "at_run_min": 11, "room": "lab", "spot": "console", "depends_on": "testing", "reports_to": "cso", "if_neglected": "Cargo release delayed." }
+    ],
+    "medical_relief": [
+      { "task": "Run patient blood and tissue panels", "at_run_min": 3, "room": "lab", "spot": "workbench", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Doctors treat blind." },
+      { "task": "Culture and pathogen ID", "at_run_min": 9, "room": "lab", "spot": "console", "depends_on": "panel results", "reports_to": "cmo", "if_neglected": "Outbreak goes unidentified." },
+      { "task": "Deliver results to sickbay", "at_run_min": 14, "room": "sickbay", "spot": "biobed", "depends_on": "analysis", "reports_to": "cmo", "if_neglected": "Treatment delayed." }
+    ],
+    "shakedown": [
+      { "task": "Test lab instruments under load", "at_run_min": 3, "room": "lab", "spot": "console", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Faulty instrument found at a bad time." },
+      { "task": "Secure samples for hard maneuvers", "at_run_min": 8, "room": "lab", "spot": "workbench", "depends_on": "bridge order", "reports_to": "cso", "if_neglected": "Samples spill and smash." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Sample shows pathogen or toxin", "message": "Bridge, Lab. Positive hit on the culture. Recommend sealing off the area.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Instrument fault", "message": "Lab to Science. Spectrometer's drifting; results are suspect.", "priority": "routine", "to": "cso" },
+      { "trigger": "Lab fire or chemical spill", "message": "Bridge, Lab! Chemical fire at the bench, need suppression now.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Reagent stock low", "message": "Bridge, Lab. We're nearly out of buffer; can Stores restock?", "priority": "routine", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Run priority analysis on a sample", "response_line": "Lab, aye. I'll bump it to the front.", "time_to_comply_min": 4, "refuses_if": "Bench is mid-assay that can't be paused." },
+      { "order": "Report on contamination status", "response_line": "Lab. Swabs clean as of my last check.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Seal the lab", "response_line": "Sealing now. Samples are secured.", "time_to_comply_min": 1, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Secure open samples and double-check inventory.", "room": "lab", "spot": "workbench", "priority": 2, "comm_line": "Lab, yellow acknowledged. Securing samples." },
+    "red": { "action": "Lock fridge, seal samples, report to the science station.", "room": "lab", "spot": "console", "priority": 1, "comm_line": "Lab, red alert. Samples secured, standing by." },
+    "fire": { "action": "Kill power to the bench, use extinguisher on small fires, then evacuate.", "room": "lab", "spot": "door", "priority": 1, "comm_line": "Bridge, Lab. Fire in the lab; I'm pulling the bench power." },
+    "hull_breach": { "action": "Grab sealed sample case and run to the nearest bulkhead.", "room": "lab", "spot": "door", "priority": 1, "comm_line": "Lab. Breach alarm; evacuating with the case." },
+    "contamination": { "action": "Seal the lab, don hood and gloves, run emergency panels.", "room": "lab", "spot": "console", "priority": 1, "comm_line": "Lab. Quarantine acknowledged; analysing the source now." },
+    "power_failure": { "action": "Save the running assay, protect the sample fridge.", "room": "lab", "spot": "workbench", "priority": 2, "comm_line": "Lab. Power's out; fridge is on its last charge." },
+    "gravity_failure": { "action": "Clamp loose equipment and hold on to the bench.", "room": "lab", "spot": "workbench", "priority": 2, "comm_line": "Lab. Zero gravity; strapping down the samples." },
+    "intruder": { "action": "Lock the lab door and stay quiet.", "room": "lab", "spot": "door", "priority": 2, "comm_line": "Lab. Door locked, no one's here but me." },
+    "medical_emergency": { "action": "Take emergency blood samples to sickbay if asked.", "room": "sickbay", "spot": "biobed", "priority": 2, "comm_line": "Lab. Heading to sickbay with the kit." },
+    "abandon_ship": { "action": "Grab the sample case and head to the shuttlebay.", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Lab. Heading for the shuttlebay with what I can carry." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Follows the template, chats with passing crew.", "lines": ["All clear in the lab.", "Quiet shift; the data's tidy."], "leaves_post_if": null },
+    "anomalies": { "mood": "curious", "routine_change": "Re-runs odd readings and asks sensors for cross-checks.", "lines": ["That reading's strange; running it again.", "Might be the instrument, might not."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Rations reagents, skips non-urgent assays, checks the fridge more often.", "lines": ["We can't keep the cold chain much longer.", "I'm triaging the samples."], "leaves_post_if": "Lab becomes unsafe (fire, contamination, no power)." },
+    "crisis": { "mood": "anxious", "routine_change": "Does only the essential panels and keeps the sealed case at hand.", "lines": ["I'm just running what matters.", "Tell me what to test and I'll do it."], "leaves_post_if": "Told to evacuate or the lab is compromised." },
+    "collapse": { "mood": "frightened", "routine_change": "Abandons the bench, helps wherever needed.", "lines": ["I can't save the samples.", "Where do you need me?"], "leaves_post_if": "Immediately when ordered or when life support fails." }
+  },
+  "relationships": [
+    { "with_billet": "cso", "kind": "mentor", "effect": "Takes direction and seeks approval; reports first." },
+    { "with_billet": "sensor", "kind": "friend", "effect": "Shares data and cross-checks readings." },
+    { "with_billet": "bot", "kind": "friend", "effect": "Trades soil samples for tea and talk." },
+    { "with_billet": "nurse", "kind": "confidant", "effect": "Vents about the long shifts over coffee." },
+    { "with_billet": "cmo", "kind": "mentor", "effect": "Gets urgent requests during medical missions." }
+  ],
+  "barks": {
+    "idle": ["Where did I put that pipette?", "Is the tea ready?", "Nothing to run; wonderful."],
+    "working": ["Spinning this down now.", "Label it, log it, run it.", "Hold still, little sample."],
+    "greeting_player": ["Hi. Need something tested?", "Morning. Mind the benches.", "Oh, hello. Watch the gloves."],
+    "greeting_player_higher_rank": ["Sir, ma'am. Lab's ready.", "Welcome, sir. Results are in.", "Yes, sir? Anything you need?"],
+    "greeting_player_lower_rank": ["Hey. Don't touch the fridge.", "Need a hand? I'm busy but go on.", "Hi there. Careful with the vials."],
+    "tired": ["Too many assays, not enough sleep.", "My eyes are crossing.", "I need a nap and a tea."],
+    "hungry": ["Is the mess still open?", "I'd kill for a sandwich.", "Samples I can handle; hunger, no."],
+    "stressed": ["This batch is ruined, isn't it?", "I can't make the numbers match.", "Please, don't rush the results."],
+    "alert": ["Securing the samples!", "Lock it down, lock it down!", "Everything in the fridge, now!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods approvingly, shares tea and a useful tip.",
+    "player_neglects_duty": "Quietly worries, then mentions it to the sciences chief.",
+    "player_fakes_report": "Spots the mismatch in the data and says so, politely at first.",
+    "player_gives_order_ok": "Complies promptly and confirms on comm.",
+    "player_gives_order_outranked": "Hesitates, asks whether the sciences chief agrees.",
+    "player_out_of_place": "Asks them to stay out of the clean area.",
+    "player_asks_favour": "Helps if it's small and safe; delays if it risks the samples."
+  },
+  "decision_rules": [
+    "IF a sample result is abnormal THEN re-run it once, then report up the chain.",
+    "IF instrument drift exceeds tolerance THEN stop and recalibrate before any more samples.",
+    "IF the bridge orders a priority sample THEN pause routine runs and do it first.",
+    "IF reagent stock is low THEN request a restock before it runs out.",
+    "IF a swab shows growth THEN seal the bench and call the bridge.",
+    "IF fatigue is high and the queue is light THEN take a short break rather than risk a mistake.",
+    "IF a superior asks for a result I haven't run THEN say so honestly instead of guessing.",
+    "IF an alert sounds THEN secure samples first, then go to station.",
+    "IF stress is high and a friend is nearby THEN go for tea and talk it out.",
+    "IF the lab is unsafe THEN leave with the sample case and report.",
+    "IF no one is watching and a calibration is due THEN still do it; bad data costs more later."
+  ],
+  "information_view": "I see biological and chemical clues first: sample drift, odd cultures, fridge temps, reagent stock and contamination swabs. I hear of trouble through the sciences chief and sickbay, and I get raw sensor data before the bridge does.",
+  "temptations": [
+    "Skipping the evening calibration; drift builds and later results are wrong.",
+    "Copying yesterday's contamination log; a real growth goes unnoticed.",
+    "Rushing a sample to leave on time; a bad result misleads sickbay.",
+    "Napping on the bench between runs; a spill or missed timer follows."
+  ]
+}
