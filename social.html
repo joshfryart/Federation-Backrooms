@@ -1,0 +1,73 @@
+<!doctype html><meta charset="utf-8"><title>Social ties — Starfarers: The Backdecks</title>
+<style>body{margin:0;background:#05070c;background-image:linear-gradient(rgba(120,170,220,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,170,220,.05) 1px,transparent 1px);background-size:32px 32px;color:#e8eef6;font-family:"Helvetica Neue",Arial,sans-serif;padding:22px;--f-d:"Avenir Next Condensed","Roboto Condensed","Arial Narrow",Arial,sans-serif;--f-m:ui-monospace,Menlo,Consolas,monospace;--am:#f2a03d;--tl:#58c9b9;--line:rgba(150,180,210,.26)}
+.top{display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.top svg{width:46px;height:46px;color:var(--am);flex:none}
+.eyebrow{font-family:var(--f-m);font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#8fa0b6}
+h1{font-family:var(--f-d);font-weight:300;letter-spacing:.24em;font-size:22px;text-transform:uppercase;margin:2px 0 0}h1 b{color:var(--am);font-weight:800}
+p{opacity:.72;font-size:13px;max-width:980px;line-height:1.55}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}nav a{color:#bcd0e6;text-decoration:none;font-size:12px;font-family:var(--f-d);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line);padding:3px 10px}nav a:hover{border-color:var(--am)}nav a.on{background:var(--am);color:#0a0d12;font-weight:800;border-color:var(--am)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--f-m);font-size:11px;color:#9fb0c6;margin:8px 0 14px;text-transform:uppercase;letter-spacing:.08em}.legend i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+body{font-size:13px}h2{font-family:var(--f-d);font-weight:400;letter-spacing:.22em;text-transform:uppercase;font-size:14px;color:#ffd9a0;margin:24px 0 8px;border-left:3px solid var(--tl);padding-left:9px}
+canvas{width:100%;max-width:960px;display:block;background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--am);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.fx{font-family:var(--f-m);font-size:11px;background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--tl);padding:10px;white-space:pre-wrap;max-width:960px}</style>
+<style>.ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:10px 0}.ctl label{font-family:var(--f-m);font-size:11px;color:#9fb0c6;text-transform:uppercase;letter-spacing:.08em}
+button,select,input{font:inherit;font-size:12px;background:#0c1220;color:#e8eef6;border:1px solid var(--line);padding:4px 10px}button{cursor:pointer;border-color:var(--am);color:var(--am)}button:hover{background:var(--am);color:#05070c}
+.grid{display:grid;grid-template-columns:minmax(320px,560px) 1fr;gap:18px;align-items:start}@media (max-width:900px){.grid{grid-template-columns:1fr}}
+#mx{width:100%;max-width:560px;aspect-ratio:1;cursor:crosshair;image-rendering:pixelated}
+.card{background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--tl);padding:8px 10px;margin:0 0 8px}.card h4{margin:0 0 4px;font-family:var(--f-d);letter-spacing:.12em;text-transform:uppercase;font-weight:400;font-size:12px;color:#ffd9a0}.card small{font-family:var(--f-m);color:#9fb0c6;font-size:10px}
+.pc{display:inline-block;margin:1px 3px 1px 0;padding:1px 6px;font-family:var(--f-m);font-size:10px;border:1px solid var(--line);border-left:3px solid var(--u,#888);cursor:pointer;white-space:nowrap}.pc:hover{border-color:var(--am)}.pc.sel{background:var(--am);color:#05070c}
+#who div{padding:2px 0;border-bottom:1px solid rgba(150,180,210,.1)}#who .say{color:#8fd8ff;font-style:italic;margin-top:6px}
+table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}th{font-family:var(--f-d);letter-spacing:.12em;text-transform:uppercase;font-weight:400;color:#ffd9a0;font-size:11px}
+.pos{color:#5fd38d}.neg{color:#ff7a6a}.groups{columns:2 360px;column-gap:10px}.groups .card{break-inside:avoid}</style>
+<div class="top"><svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="50" cy="50" r="44"/><circle cx="50" cy="50" r="36" stroke-dasharray="2.2 20.42" stroke-width="7" opacity=".85"/><path d="M50 16l7 27 27 7-27 7-7 27-7-27-27-7 27-7z" fill="currentColor" fill-opacity=".16"/><path d="M30 62h40M34 69h32M39 76h22" stroke-width="2" opacity=".8"/></g><circle cx="50" cy="50" r="4.5" fill="currentColor"/></svg><div><div class="eyebrow">United Starfarers' Fleet · Social tracker</div><h1 id="t"></h1></div></div><nav id="nav"></nav>
+<p>Every run's crew gets its own social life (js/social.js, docs/social.md): mess tables, department cells, route crews, hobby groups, cliques, couples, mentors, rivals, feuds, gossip, a favour book, the one everyone likes and the one nobody trusts. Ties come from who works, eats and sleeps near whom (department, watch, duty rooms, deck, rank) plus seeded chemistry. Matrix: rows/columns sorted by department then watch; green = positive tie (brighter = stronger), red = negative, gold = partner. Click a cell or a name.</p>
+<div class="ctl"><label>Seed <input id="seed" type="number" style="width:90px"></label><button id="go">Deal</button><label>Groups <select id="kind"><option value="">all but tables</option><option value="*">all</option></select></label><button id="dump">Download JSON</button><span id="stats" style="font-family:var(--f-m);font-size:11px;color:#9fb0c6"></span></div>
+<div class="grid"><div><canvas id="mx" width="560" height="560"></canvas><h2>Strongest ties</h2><table><thead><tr><th>Pair</th><th>Tie</th><th>Why</th></tr></thead><tbody id="ties"></tbody></table></div>
+<div><h2>Person</h2><div class="card" id="who">Click someone.</div><h2>Groups</h2><div class="groups" id="groups"></div></div></div>
+<script type="module">
+import { SHIPS } from './js/ships.js';
+import { makeComplement, DEPARTMENTS, DIVISION, DEPT } from './js/crew.js';
+import { loadPersonas } from './js/voice.js';
+import { ShipClock } from './js/clock.js';
+import { shipPlan } from './js/gen.js';
+import { generateSocial, REL_TYPES, hhmm } from './js/social.js';
+await loadPersonas();
+const data = await (await fetch('./assets/data/comms.json')).json();
+const q = new URLSearchParams(location.search), i = Math.max(0, Math.min(SHIPS.length - 1, +(q.get('ship') || 0))), seed = +(q.get('seed') || 1), ship = SHIPS[i], $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])), hex = (c) => '#' + c.toString(16).padStart(6, '0');
+$('t').textContent = `${ship.name} — social ties`; $('seed').value = seed;
+$('nav').innerHTML = `<a href="crew.html?ship=${i}&seed=${seed}">Ship's company</a><a href="voices.html?ship=${i}&seed=${seed}">Crew voices</a>` + SHIPS.map((s, k) => `<a class="${k === i ? 'on' : ''}" href="?ship=${k}&seed=${seed}">${s.province}</a>`).join('');
+$('go').onclick = () => { location.search = `?ship=${i}&seed=${+$('seed').value || 1}`; };
+const roster = makeComplement(ship, seed), clock = new ShipClock({ seed }); clock.assign(roster);
+const t0 = performance.now(), g = generateSocial(roster, { seed, plan: shipPlan(ship, seed), data, clock, ship }), ms = performance.now() - t0, P = roster.people;
+const st = g.stats(); $('stats').textContent = `${st.people} crew · ${st.groups} groups · ${Object.entries(st.types).map(([k, v]) => `${v} ${k}`).join(' · ')} · ${st.loners} loners · ${ms.toFixed(0)} ms`;
+for (const k of Object.keys(st.kinds)) $('kind').insertAdjacentHTML('beforeend', `<option>${k}</option>`);
+const col = (p) => hex(roster.uniformOf(p)), chip = (id) => `<span class="pc" data-p="${id}" style="--u:${col(P[id])}">${esc(P[id].short)}</span>`;
+// matrix
+const order = P.slice().sort((a, b) => DEPARTMENTS.findIndex(d => d.id === a.dept) - DEPARTMENTS.findIndex(d => d.id === b.dept) || clock.watchOf(a).localeCompare(clock.watchOf(b)) || b.rank - a.rank || a.id - b.id).map(p => p.id);
+const cv = $('mx'), cx = cv.getContext('2d'), n = order.length, c = cv.width / n;
+cx.fillStyle = '#070b14'; cx.fillRect(0, 0, cv.width, cv.height);
+order.forEach((a, ia) => order.forEach((b, ib) => { const r = g.relation(a, b); if (!r) return; const s = r.strength;
+  cx.fillStyle = r.type === 'spouse' || r.type === 'romance' ? `rgba(242,180,61,${0.4 + s * 0.6})` : r.valence < 0 ? `rgba(255,90,74,${0.3 + s * 0.7})` : `rgba(95,211,141,${(REL_TYPES[r.type].strong ? 0.35 : 0.08) + s * (REL_TYPES[r.type].strong ? 0.65 : 0.25)})`;
+  cx.fillRect(ia * c, ib * c, Math.ceil(c), Math.ceil(c)); }));
+let last = null; order.forEach((id, k) => { const d = P[id].dept; if (d !== last) { cx.fillStyle = hex(DIVISION[DEPT[d].division].color); cx.fillRect(k * c, 0, 1, cv.height); cx.fillRect(0, k * c, cv.width, 1); last = d; } });
+cv.onclick = (e) => { const r = cv.getBoundingClientRect(), x = Math.floor((e.clientX - r.left) / r.width * n), y = Math.floor((e.clientY - r.top) / r.height * n); if (order[x] != null) show(order[x], order[y]); };
+// strongest ties
+const all = []; for (const l of g.out) for (const r of l.values()) if (r.a < r.b && (REL_TYPES[r.type].strong || r.type === 'feud' || r.type === 'rival')) all.push(r);
+all.sort((a, b) => Math.abs(b.valence) * b.strength - Math.abs(a.valence) * a.strength || a.a - b.a);
+$('ties').innerHTML = all.slice(0, 40).map(r => `<tr><td>${chip(r.a)} ${chip(r.b)}</td><td class="${r.valence < 0 ? 'neg' : 'pos'}">${REL_TYPES[r.type].label}${r.visible ? '' : ' (secret)'} · ${r.strength.toFixed(2)}</td><td>${esc(r.reason)}</td></tr>`).join('');
+// groups
+const drawGroups = () => { const k = $('kind').value, tables = ['department-cell', 'watch-mess', 'officers-table'];
+  $('groups').innerHTML = g.groups.filter(x => k === '*' || (k ? x.kind === k : !tables.includes(x.kind))).map(x => `<div class="card"><h4>${esc(x.name)}</h4><small>${x.kind} · cohesion ${x.cohesion.toFixed(2)}${x.room ? ` · ${x.room}` : ''}${x.site ? ` deck ${x.site.deckNo}` : ''}${x.meet ? ` · ${hhmm(x.meet.from)}–${hhmm(x.meet.to)} (${x.meet.watch} +${x.meet.local[0]}h)` : ''}</small><div>${x.members.map(chip).join('')}</div></div>`).join(''); };
+$('kind').onchange = drawGroups; drawGroups();
+// person drilldown
+function show(a, b = null) {
+  const p = P[a], pr = g.profile(a), rel = b != null && b !== a ? g.relation(a, b) : null;
+  $('who').innerHTML = `<h4>${esc(p.full)} — ${esc(p.title)}</h4>` + g.describe(a).map(l => `<div>${esc(l)}</div>`).join('') +
+    (rel ? `<div><b>${esc(p.short)} → ${esc(P[b].short)}:</b> ${REL_TYPES[rel.type].label}${rel.attitude ? ' + ' + rel.attitude : ''} · strength ${rel.strength} · valence ${rel.valence} · ${esc(rel.reason)}${rel.shared.length ? ' · shares ' + rel.shared.join(', ') : ''}</div>` : b != null && b !== a ? `<div>No tie to ${esc(P[b].short)} (affinity ${g.affinity(a, b).toFixed(2)})</div>` : '') +
+    `<div>All groups (incl. tables): ${g.groupsOf(a).map(x => esc(x.name)).join(' · ')}</div><div>Would seek out now: ${g.seekTargets(a).slice(0, 5).map(t => chip(t.id)).join('')}</div><div class="say">"${esc(g.talkLine(a))}"</div>`;
+  document.querySelectorAll('.pc').forEach(e => e.classList.toggle('sel', +e.dataset.p === a));
+}
+document.addEventListener('click', (e) => { const t = e.target.closest('.pc'); if (t) show(+t.dataset.p); });
+$('dump').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(g)], { type: 'application/json' })); a.download = `social-${ship.province}-${seed}.json`; a.click(); };
+show(P[0].id); window.__social = g; window.__ready = true;
+</script>
