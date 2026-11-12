@@ -299,18 +299,36 @@ const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'inte
 function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
 function pathField(tx, ty) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty; let f = c.get(k); if (!f) { f = world.field(tx, ty, true); c.set(k, f); if (c.size > 40) c.delete(c.keys().next().value); } return f; }
 function startWalk(e, tx, ty, vanish) { e.walk = { tx, ty, vanish, stuck: 0 }; }
-function walkStep(e, dt, d) {   // true while still walking
+function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, yielding to others.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty), W = world.W, [tx, ty] = world.tile(e.x, e.z), cur = f[tx + ty * W];
-  const finish = () => { e.walk = null; if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
+  const finish = () => { e.walk = null; e.v = 0; if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
   if (cur < 0) return finish();
-  let gx, gz;
-  if (cur === 0) { [gx, gz] = world.center(tx, ty); if (Math.hypot(gx - e.x, gz - e.z) < 0.18) return finish(); }
-  else { let best = cur, bx = tx, by = ty; for (const [dx, dy] of WALK_DIRS) { const nx = tx + dx, ny = ty + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } [gx, gz] = world.center(bx, by); }
-  const dx = gx - e.x, dz = gz - e.z, dist = Math.hypot(dx, dz) || 1, pd = Math.hypot(P.x - e.x, P.z - e.z), blocked = pd < 0.9 && ((P.x - e.x) * dx + (P.z - e.z) * dz) > 0;
-  if (H && !e.walking) { try { H.play('walk', { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; }
-  if (!blocked) { const sp = Math.min(dist, 1.45 * dt); e.x += dx / dist * sp; e.z += dz / dist * sp; e.mesh.position.x = e.x; e.mesh.position.z = e.z; w.stuck = 0; } else if ((w.stuck += dt) > 6) return finish();
-  let da = Math.atan2(dx, dz) - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); e.mesh.rotation.y += da * Math.min(1, dt * 7);
-  if (H) { if (d > 22) return true; H.lookYaw += (0 - H.lookYaw) * Math.min(1, dt * 4); H.update(dt); } return true;
+  const [fx, fz] = world.center(w.tx, w.ty), toEnd = Math.hypot(fx - e.x, fz - e.z);
+  // look-ahead: follow the field downhill up to 4 tiles and aim at the furthest one that is in clear sight
+  let gx, gz, ax = tx, ay = ty, av = cur; const chain = [];
+  for (let k = 0; k < 4 && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
+  if (!chain.length) { gx = fx; gz = fz; } else { let pick = chain[0]; for (const c of chain) { const [cx, cz] = world.center(c[0], c[1]); if (world.los(e.x, e.z, cx, cz) && (c === chain[0] || world.los(e.x + 0.28, e.z, cx + 0.28, cz) && world.los(e.x - 0.28, e.z, cx - 0.28, cz) && world.los(e.x, e.z + 0.28, cx, cz + 0.28) && world.los(e.x, e.z - 0.28, cx, cz - 0.28))) pick = c; else break; } [gx, gz] = world.center(pick[0], pick[1]); }
+  if (av === 0 && chain.length && chain[chain.length - 1][0] === w.tx && chain[chain.length - 1][1] === w.ty && world.los(e.x, e.z, fx, fz)) { gx = fx; gz = fz; }
+  if (cur === 0) { gx = fx; gz = fz; }
+  // yield to / sidestep other walkers and the player
+  let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg;
+  for (const o of ents) { if (o === e || (o.kind !== 'crew' && o !== null) || !o.mesh) continue; const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 1.3 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.35) continue; const side = (ox * -uz + oz * ux) > 0 ? -1 : 1; gx += -uz * side * 0.5; gz += ux * side * 0.5; if (od < 0.75 && (o.walk ? o.person.id < e.person.id : true)) slow = Math.min(slow, 0.15 + od * 0.4); }
+  const pd = Math.hypot(P.x - e.x, P.z - e.z); if (pd < 1.5 && ((P.x - e.x) * ux + (P.z - e.z) * uz) / (pd || 1) > 0.4) slow = Math.min(slow, pd < 0.9 ? 0 : 0.3);
+  // heading steers toward the goal at a capped rate; speed eases with turn error, nearness to the end and obstacles
+  if (e.heading === undefined) e.heading = e.mesh.rotation.y;
+  const want = Math.atan2(gx - e.x, gz - e.z); let err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading));
+  const maxTurn = (e.v > 0.3 ? 4.2 : 5.5) * dt; e.heading += Math.max(-maxTurn, Math.min(maxTurn, err)); e.mesh.rotation.y = e.heading;
+  const turnK = Math.max(0.25, Math.cos(Math.min(1.3, Math.abs(err)))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = 1.45 * slow * turnK * (w.vanish ? 1 : arrive) * (e.person ? 0.9 + ((e.person.id * 37) % 21) / 100 : 1);
+  e.v = (e.v || 0); e.v += Math.max(-4.5 * dt, Math.min(3 * dt, target - e.v));
+  if (toEnd < 0.05 && !w.vanish) return finish();
+  if (w.vanish && cur === 0 && toEnd < 0.2) return finish();
+  if (e.v < 0.02 && slow < 0.2) { if ((w.stuck += dt) > 7) return finish(); } else w.stuck = 0;
+  const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; e.mesh.position.x = e.x; e.mesh.position.z = e.z;
+  if (H) {
+    if (!e.walking) { try { H.play('walk', { fade: 0.25 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; }
+    if (d > 22) return true; H.lookYaw += (0 - H.lookYaw) * Math.min(1, dt * 4); H.update(dt * Math.max(0.35, Math.min(1.2, e.v / 1.3)));
+  }
+  return true;
 }
 
 // ---- NPC sim bodies: people the sim puts on this deck get a body; others are abstract. Bodies appear/vanish out of sight.
