@@ -180,7 +180,7 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck)); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
+  G.fieldCache = null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored) world.explored.set(SD.st.explored); G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
@@ -293,9 +293,29 @@ function placeGore(data, rnd, n) {
 }
 
 
+
+// ---- NPC walking on the player's deck: descend the path field toward a tile at walking pace, then take the pose of the spot
+const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'interact', desk: 'interact', workbench: 'interact', labbench: 'interact', junction: 'interact', warpcore: 'interact', replicator: 'interact', bar: 'sitting_idle', table: 'sitting_idle', sofa: 'sitting_idle', bunk: 'sitting_idle', biobed: 'idle_talking', treadmill: 'jog', weightbench: 'idle_torch' };
+function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
+function pathField(tx, ty) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty; let f = c.get(k); if (!f) { f = world.field(tx, ty, true); c.set(k, f); if (c.size > 40) c.delete(c.keys().next().value); } return f; }
+function startWalk(e, tx, ty, vanish) { e.walk = { tx, ty, vanish, stuck: 0 }; }
+function walkStep(e, dt, d) {   // true while still walking
+  const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty), W = world.W, [tx, ty] = world.tile(e.x, e.z), cur = f[tx + ty * W];
+  const finish = () => { e.walk = null; if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
+  if (cur < 0) return finish();
+  let gx, gz;
+  if (cur === 0) { [gx, gz] = world.center(tx, ty); if (Math.hypot(gx - e.x, gz - e.z) < 0.18) return finish(); }
+  else { let best = cur, bx = tx, by = ty; for (const [dx, dy] of WALK_DIRS) { const nx = tx + dx, ny = ty + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } [gx, gz] = world.center(bx, by); }
+  const dx = gx - e.x, dz = gz - e.z, dist = Math.hypot(dx, dz) || 1, pd = Math.hypot(P.x - e.x, P.z - e.z), blocked = pd < 0.9 && ((P.x - e.x) * dx + (P.z - e.z) * dz) > 0;
+  if (H && !e.walking) { try { H.play('walk', { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; }
+  if (!blocked) { const sp = Math.min(dist, 1.45 * dt); e.x += dx / dist * sp; e.z += dz / dist * sp; e.mesh.position.x = e.x; e.mesh.position.z = e.z; w.stuck = 0; } else if ((w.stuck += dt) > 6) return finish();
+  let da = Math.atan2(dx, dz) - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); e.mesh.rotation.y += da * Math.min(1, dt * 7);
+  if (H) { if (d > 22) return true; H.lookYaw += (0 - H.lookYaw) * Math.min(1, dt * 4); H.update(dt); } return true;
+}
+
 // ---- NPC sim bodies: people the sim puts on this deck get a body; others are abstract. Bodies appear/vanish out of sight.
 function simTileFor(person, e) {   // a free-ish tile inside the person's room, spread by id
-  const d = world.d, tiles = []; for (let y = 0; y < d.room.length; y++) for (let x = 0; x < d.room[y].length; x++) if (d.room[y][x] === e.room && d.grid[y][x] !== 1) tiles.push([x, y]);
+  const d = world.d, tiles = []; for (let y = 0; y < d.room.length; y++) for (let x = 0; x < d.room[y].length; x++) if (d.room[y][x] === e.room && d.grid[y][x] === 0 && !world.isTube(x, y)) tiles.push([x, y]);
   if (!tiles.length) return null; let h = (person.id * 2654435761 + 7) >>> 0; return tiles[h % tiles.length];
 }
 function simBodies(dt, force = false) {
@@ -303,15 +323,20 @@ function simBodies(dt, force = false) {
   const here = new Map(G.sim.onDeck(G.shipDeck + 1).map(o => [o.person.id, o])), unseen = (x, z) => Math.hypot(x - P.x, z - P.z) > 14 || (force ? false : !world.los(P.x, P.z, x, z));
   for (const e of ents.slice()) {   // leave
     if (e.kind !== 'crew' || !e.simmed) continue; const o = here.get(e.person.id);
-    if (!o || o.room !== e.room) { if (force || unseen(e.x, e.z)) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); } }
+    if (e.walk) continue;   // still on its way somewhere
+    if (!o || o.room !== e.room) {
+      if (force || unseen(e.x, e.z)) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
+      else if (!o && world.car) startWalk(e, world.car.tx, world.car.ty, true);                       // left the deck: walk to the lift and go
+      else if (o) { const t = simTileFor(e.person, o); if (t) { e.room = o.room; e.spot = o.spot; startWalk(e, t[0], t[1], false); } }   // new room on this deck: walk there
+    }
   }
   for (const o of here.values()) {   // arrive
     if (ents.some(e => e.person === o.person)) continue; if (o.person.status === 'dead' || o.person.status === 'crazed') continue;
-    const t = simTileFor(o.person, o); if (!t) continue; const [cx, cz] = world.center(t[0], t[1]);
-    if (!force && !unseen(cx, cz)) continue;
+    const t = simTileFor(o.person, o); if (!t) continue; let [cx, cz] = world.center(t[0], t[1]), walkTo = null;
+    if (!force && !unseen(cx, cz)) { if (!world.car) continue; const [lx, lz] = world.center(world.car.tx, world.car.ty); if (!unseen(lx, lz)) continue; cx = lx; cz = lz; walkTo = t; }   // seen from here: come out of the lift instead
     o.person.status = o.person.status === 'seen' ? 'seen' : 'seen';
     const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); m.position.set(cx, 0, cz); m.rotation.y = (o.person.id * 0.9) % 6.28; m.userData.rank = o.person.short; scene.add(m);
-    ents.push({ kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, room: o.room });
+    const ne = { kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, room: o.room, spot: o.spot }; ents.push(ne); if (walkTo) startWalk(ne, walkTo[0], walkTo[1], false); else poseFor(ne);
   }
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
@@ -803,6 +828,7 @@ function step(dt, t) {
     } else if (e.kind === 'crew' || e.kind === 'emh') {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       const H = e.mesh.userData.human;
+      if (e.walk && walkStep(e, dt, d)) continue;
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
       if (e.repairing) repairerStep(e, dt, d);
       if (H && e.kind === 'crew' && !e.fake) { const mad = gorns.find(g => g.mad && !g.dead && g.state !== S.DORMANT && Math.hypot(g.x - e.x, g.z - e.z) < 10 && world.los(g.x, g.z, e.x, e.z)); if (mad && !e.cower) { if (e.repairing) { e.repairing = null; G.say(`${e.person.short} drops their tools and hides.`, 'warn'); } e.cower = true; H.standing = false; H.play('crouch_idle', { fade: 0.2 }); H.face({ JawDrop: 0.7, LeftInnerBrowUp: 1, RightInnerBrowUp: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 }); if (d < 30) { sound.shriek(Math.max(0.05, 0.25 - d * 0.007)); if (d < 18) G.say(`${e.person ? e.person.short : 'A crewman'} screams: "${pick(['It\'s ' + (mad.person ? mad.person.given : 'him') + '! Something\'s wrong with ' + (mad.person ? mad.person.given : 'him') + '!', 'Stay back! STAY BACK!', 'No no no no—'])}"`, 'warn'); } } }
@@ -1321,6 +1347,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();
