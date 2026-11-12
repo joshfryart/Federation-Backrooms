@@ -2,7 +2,7 @@
 <style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
 #l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.75;line-height:1.6}#l a{color:#9cf;margin-right:10px;text-decoration:none}
 .tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000}</style>
-<canvas id="c"></canvas><div id="l"><a href="?set=crew">crew</a><a href="?set=enemies">enemies</a><a href="?set=misc">items &amp; creatures</a><a href="?set=props">props</a><a href="?set=decor">wall fixtures</a><br>drag to orbit · wheel to zoom · ?clip=walk|jog|sprint|dance|death01|sitting_idle… · ?only=name</div>
+<canvas id="c"></canvas><div id="l"><a href="?set=crew">crew</a><a href="?set=enemies">enemies</a><a href="?set=misc">items &amp; creatures</a><a href="?set=props">props</a><a href="?set=decor">wall fixtures</a><a href="?set=carry">carts &amp; held items</a><br>drag to orbit · wheel to zoom · ?clip=walk|jog|sprint|dance|death01|sitting_idle… · ?only=name</div>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -12,6 +12,9 @@ import { makeHuman, makeCorpse, markImpostor, holoMaterial, DIVISIONS, liveFace 
 import { MODELS } from './js/enemies.js';
 import { buildProp, PROP_KINDS, buildDecor, DECOR_KINDS } from './js/world.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { makeItemMesh, makeCart, holdItem, dropItem, tickHeld, rollCart } from './js/carry.js';
+import { ITEM_IDS, Operator } from './js/equipment.js';
+import { toBones, ambient } from './js/movement.js';
 const q = new URLSearchParams(location.search); const set = q.get('set') || 'crew', only = q.get('only'), clip = q.get('clip');
 const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
 r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.1;
@@ -41,7 +44,17 @@ if (set === 'crew') {
   add('Furble', makeTribble(), null, 0.8); const f2 = makeTribble(); f2.scale.setScalar(2.5); add('Furble (close)', f2, null, 1.3);
   const vm = makeViewmodel(); if (vm) { vm.group.position.y = 1.2; vm.group.scale.setScalar(3); add('Zapper (viewmodel ×3)', vm.group, null, 2); }
 } else if (set === 'props') { for (const k of PROP_KINDS) add(k, buildProp(k), null, 2.6); }
-else if (set === 'decor') { for (const k of DECOR_KINDS) add(k, buildDecor(k), null, 2.3); }   // wall fixtures (instanced set dressing)
+else if (set === 'decor') { for (const k of DECOR_KINDS) add(k, buildDecor(k), null, 2.3); }
+else if (set === 'carry') {   // carts (wheels roll), held items in a hand, and NPCs running equipment use scripts (js/carry.js, js/equipment.js)
+  for (const [k, ld] of [['cargo', true], ['cargo', false], ['med', true], ['tool', true]]) { const c = makeCart(k, ld); add(`${k} cart${ld ? '' : ' (empty)'}`, c, (dt) => rollCart(c, dt * 0.8), 1.6); }
+  { const g = new THREE.Group(); ITEM_IDS.forEach((id, i) => { const m = makeItemMesh(id); m.position.set((i % 6) * 0.3 - 0.75, 0.9 + Math.floor(i / 6) * 0.35, 0); g.add(m); }); add('items', g, null, 2.2); }
+  for (const [kind, label] of [['console', 'at a console'], ['replicator', 'replicator'], ['workbench', 'workbench'], ['bar', 'bar (sitting)'], ['weightbench', 'weights'], ['biobed', 'biobed scan'], ['shelving', 'shelving']]) {
+    const m = makeHuman({ kind: ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy'][label.length % 4], uniform: DIVISIONS[label.length % 3] }); if (!m) continue; const H = m.userData.human, op = new Operator(kind, { id: label.length }, 3); let held = {}, t0 = 0;
+    add(label, m, (dt, t) => { const o = op.update(dt); if (H.current !== o.clip) H.play(H.has(o.clip) ? o.clip : 'idle', { fade: 0.3 }); const ch = ambient(t, 1); for (const k in o.ch) ch[k] = (ch[k] || 0) + o.ch[k]; H.add = toBones(ch);
+      for (const [hand, want] of [['hand_r', o.hold], ['hand_l', o.holdL]]) if (held[hand] !== want) { dropItem(H, hand); held[hand] = want; if (want) holdItem(H, want, hand); }
+      H.update(dt); tickHeld(H); liveFace(H, t, m.id); }, 1.3);
+  }
+}   // wall fixtures (instanced set dressing)
 let x = 0; const total = list.reduce((a, l) => a + l.w, 0);
 for (const l of list) { l.mesh.position.x = x + l.w / 2 - total / 2; x += l.w; l.mesh.traverse(o => { if (o.isMesh && o.material?.type !== 'ShaderMaterial' && !o.material?.transparent) { o.castShadow = true; o.receiveShadow = true; } }); s.add(l.mesh);
   l.el = document.createElement('div'); l.el.className = 'tag'; l.el.textContent = l.name; document.body.appendChild(l.el); }
