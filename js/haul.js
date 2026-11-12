@@ -8,9 +8,12 @@ import { Operator, equipFor, equipKey, standPoint, ITEMS, CARTS, HAULERS, carryS
 import { HOLDS, toBones, ambient } from './movement.js';
 import { makeItemMesh, holdItem, dropItem, heldIn, tickHeld, makeCart, rollCart, cartLoad, cartUnload } from './carry.js';
 import { hash01 } from './clock.js';
+import { toolFor, toolScript, HANDHELDS } from './handhelds.js';
+import { wearKit, syncWorn } from './kit.js';
 
 let C = null;
 export function initHaul(ctx) { C = ctx; }
+export const ctx = () => C;
 const ang = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const CUE = { beep: 'hum', keys: 'hum', groan: 'sigh', sip: 'hum', clank: 'crack', scan: 'hum', replicate: 'hum' };   // equipment cues -> the voice cue set (js/speech.js)
 
@@ -19,18 +22,23 @@ const CUE = { beep: 'hum', keys: 'hum', groan: 'sigh', sip: 'hum', clank: 'crack
 export function opStart(e) {
   const H = e.mesh?.userData.human; if (!C || !H || !e.simmed || !e.person || e.fake || C.G.mode === 'madness') return false;
   if (e.haul) { H.play('idle', { fade: 0.25 }); H.standing = false; e.walking = false; return true; }
+  if (e.returnTo) { H.play('idle', { fade: 0.25 }); H.standing = true; e.walking = false; return true; }   // stepped aside (dodge): wait, the walk back to the spot starts the use script
   const def = equipFor(e.spot), W = C.world; let goal = { x: e.x, z: e.z, yaw: e.mesh.rotation.y, y: def.y || 0 };
-  if (e.faceAt) { const [tx, ty] = W.tile(e.faceAt[0], e.faceAt[1]), p = W.d.props.find(q => q.tx === tx && q.ty === ty); if (p) { const [cx, cz] = W.center(tx, ty); goal = standPoint(def, { cx, cz, rot: p.rot || 0 }, { x: e.x, z: e.z }, C.ents.filter(o => o !== e && o.opGoal).map(o => [o.opGoal.x, o.opGoal.z])); } }
+  const fa = e.faceAt || (e.opProp && Math.hypot(e.opProp[0] - e.x, e.opProp[1] - e.z) < 2.6 ? e.opProp : null); e.opProp = fa; e.faceAt = null;   // the mesh is turned here (opHook), not by the generic face-the-spot code
+  if (fa) { const [tx, ty] = W.tile(fa[0], fa[1]), p = W.d.props.find(q => q.tx === tx && q.ty === ty); if (p) { const [cx, cz] = W.center(tx, ty); goal = standPoint(def, { cx, cz, rot: p.rot || 0 }, { x: e.x, z: e.z }, C.ents.filter(o => o !== e && o.opGoal).map(o => [o.opGoal.x, o.opGoal.z])); } }
   let kind = e.spot; if (def.stance === 'sit' && def.spots && !goal.spot) { kind = 'post'; goal = { x: e.x, z: e.z, yaw: goal.yaw, y: 0 }; }   // every seat taken: stand by instead of sitting on air
-  e.op = new Operator(kind, e.person, C.G.runSeed); e.opGoal = goal; e.opHeld = { hand_r: null, hand_l: null }; e.seatDY = null; e.seatT = 0;
-  e.faceAt = [goal.x + Math.sin(goal.yaw), goal.z + Math.cos(goal.yaw)];
-  if (Math.hypot(C.P.x - e.x, C.P.z - e.z) > 10) { e.x = goal.x; e.z = goal.z; e.mesh.position.x = e.x; e.mesh.position.z = e.z; e.mesh.rotation.y = goal.yaw; }
+  wearKit(e); const tool = toolFor(e.person, equipKey(kind), C.G.runSeed);   // the billet's handheld comes out now and then (js/handhelds.js)
+  e.op = new Operator(kind, e.person, C.G.runSeed, { toolSteps: tool ? toolScript(tool) : null }); e.opGoal = goal; e.opHeld = { hand_r: null, hand_l: null }; e.seatDY = null; e.seatT = 0;
+  // logical position (e.x/e.z: paths, dodging, line of sight) stays on the walkable tile, as close to the use point as it allows; only the mesh goes onto the use point
+  { let [tx, ty] = W.tile(e.x, e.z); if (W.solid(tx, ty)) { const n = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [tx + a, ty + b]).find(([x, y]) => !W.solid(x, y)); if (n) [tx, ty] = n; }
+    const [cx, cz] = W.center(tx, ty), k = 0.95; e.opAnchor = [cx + Math.max(-k, Math.min(k, goal.x - cx)), cz + Math.max(-k, Math.min(k, goal.z - cz))]; e.x = e.opAnchor[0]; e.z = e.opAnchor[1]; }
+  if (Math.hypot(C.P.x - e.x, C.P.z - e.z) > 10) { e.mesh.position.x = goal.x; e.mesh.position.z = goal.z; e.mesh.rotation.y = goal.yaw; }
   const o = e.op.update(0); H.play(H.has(o.clip) ? o.clip : 'idle', { fade: 0.3 }); H.standing = false; e.walking = false; e.opClip = o.clip;
   return true;
 }
 export function opEnd(e) {
   const H = e.mesh?.userData.human; if (H) { for (const h of ['hand_r', 'hand_l']) if (e.opHeld?.[h]) dropItem(H, h); H.add = null; }
-  e.op = null; e.opGoal = null; e.opHeld = null; e.seatDY = null; if (e.mesh) e.mesh.position.y = e.y || 0;
+  e.op = null; e.opGoal = null; e.opHeld = null; e.seatDY = null; if (e.mesh) { e.mesh.position.y = e.y || 0; e.mesh.position.x = e.x; e.mesh.position.z = e.z; }
 }
 // the additive layer while operating / pushing / carrying. true = handled (fidgetStep returns)
 export function opHook(e, dt, d) {
@@ -45,8 +53,10 @@ export function opHook(e, dt, d) {
   if (e.cower || e.repairing) { opEnd(e); return false; }
   const o = e.op.update(dt), g = e.opGoal;
   // shuffle onto the use point, then hold it
-  const dx = g.x - e.x, dz = g.z - e.z, dist = Math.hypot(dx, dz);
-  if (dist > 0.02) { const s = Math.min(dist, dt * 1.1); e.x += dx / dist * s; e.z += dz / dist * s; e.mesh.position.x = e.x; e.mesh.position.z = e.z; }
+  const mp = e.mesh.position, dx = g.x - mp.x, dz = g.z - mp.z, dist = Math.hypot(dx, dz);
+  if (dist > 0.02) { const s = Math.min(dist, dt * 1.1); mp.x += dx / dist * s; mp.z += dz / dist * s; }
+  if (e.opAnchor) { e.x = e.opAnchor[0]; e.z = e.opAnchor[1]; }
+  e.mesh.rotation.y += ang((dist > 0.12 ? Math.atan2(dx, dz) : g.yaw) - e.mesh.rotation.y) * Math.min(1, dt * 4);
   const moving = dist > 0.12, clip = moving ? 'walk' : H.has(o.clip) ? o.clip : 'idle';
   H.play(clip, { fade: 0.3, speed: moving ? 0.8 : o.speed }); e.opClip = clip;
   // seat height: after the sitting clip has settled, drop/raise the body so the pelvis sits on the seat
@@ -57,7 +67,7 @@ export function opHook(e, dt, d) {
   const f = {}; for (const k of e.fidFace || []) f[k] = 0; Object.assign(f, o.face); H.face(f); e.fidFace = Object.keys(o.face);
   // held items follow the script (two-handed items fill both hands)
   for (const [hand, want] of [['hand_r', o.hold], ['hand_l', o.holdL]]) { if (e.opHeld[hand] === want) continue; if (e.opHeld[hand]) dropItem(H, hand); e.opHeld[hand] = null; if (want) { holdItem(H, want, ITEMS[want]?.two ? 'hand_r' : hand); e.opHeld[hand] = want; if (ITEMS[want]?.two) e.opHeld[hand === 'hand_r' ? 'hand_l' : 'hand_r'] = null; } }
-  tickHeld(H);
+  tickHeld(H); syncWorn(e, o.hold);
   if (o.cue && d < 9) try { C.cue?.(e.person, CUE[o.cue] || o.cue); } catch (er) { }
   e.opFx = o.fx || e.opFx; e.opStep = o.step;
   return true;
@@ -109,7 +119,8 @@ export class Haul {
       for (const r of d.rooms) { if (r.type !== to || (ex >= r.x && ex < r.x + r.w && ey >= r.y && ey < r.y + r.h)) continue; for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (d.grid[y][x] === 0 && !W.isTube(x, y)) opts.push([x, y, to]); }
     }
     if (!opts.length && here) { for (const r of d.rooms) if (ex >= r.x && ex < r.x + r.w && ey >= r.y && ey < r.y + r.h) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (d.grid[y][x] === 0 && Math.abs(x - ex) + Math.abs(y - ey) >= 2) opts.push([x, y, here]); }
-    for (let k = 0; k < 6 && opts.length; k++) { const o = opts[Math.floor(hash01('dst', this.seed, this.n, k) * opts.length)], f = C.pathField(o[0], o[1]); if (f[ex + ey * W.W] > 0) return o; }
+    let far = null; for (let k = 0; k < 8 && opts.length; k++) { const o = opts[Math.floor(hash01('dst', this.seed, this.n, k) * opts.length)], f = C.pathField(o[0], o[1]), v = f[ex + ey * W.W]; if (v > 0 && v <= 16) return o; if (v > 0 && !far) far = o; }   // prefer a short haul (<= 16 tiles)
+    if (far) return far;
     return null;
   }
   startJob(e, force = false) {
@@ -122,7 +133,7 @@ export class Haul {
         for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = e.x + a * 1.5, z = e.z + b * 1.5; if (this.W.los(e.x, e.z, x + a * 0.7, z + b * 0.7) && !this.W.solidAt(x, z)) { c = this.addCart(spec.cart, x, z, Math.atan2(a, b), hash01('ld', this.seed, this.n) < 0.7); break; } }
         if (!c) { e.haul = null; return null; }
       }
-      job.cart = c; c.pusher = e; const [hx, hz] = handleOf(c); C.startWalk(e, 0, 0, false, { point: [hx - Math.sin(c.yaw) * 0.45, hz - Math.cos(c.yaw) * 0.45] });
+      job.cart = c; c.pusher = e; const [hx, hz] = handleOf(c); C.startWalk(e, 0, 0, false, { point: [hx - Math.sin(c.yaw) * 0.45, hz - Math.cos(c.yaw) * 0.45] }); job.walk = e.walk;
     } else { job.phase = 'take'; job.t = 1.0; const H = e.mesh.userData.human; H?.play('interact', { fade: 0.2 }); }
     this.jobs.push(job); return job;
   }
@@ -135,10 +146,10 @@ export class Haul {
     }
     for (const job of [...this.jobs]) {
       const e = job.e, H = e.mesh?.userData.human; job.age += dt;
-      if (!ents.includes(e) || job.age > 120 || e.cower) { if (e.walk?.opts.push) e.walk = null; this.endJob(job); continue; }
+      if (!ents.includes(e) || job.age > 150 || e.cower || (e.walk && e.walk !== job.walk)) { if (e.walk?.opts.push) e.walk = null; this.endJob(job); continue; }   // someone else (sim, dodge, test) gave them a new walk: drop the job
       if (job.phase === 'go' && !e.walk) { job.phase = 'grab'; job.t = 0.8; e.mesh.rotation.y = job.cart.yaw; H?.play('interact', { fade: 0.2 }); }
-      else if (job.phase === 'grab' && (job.t -= dt) <= 0) { job.phase = 'push'; e.pushing = job.cart; e.heading = job.cart.yaw; e.mesh.rotation.y = job.cart.yaw; C.startWalk(e, job.dest[0], job.dest[1], false, { push: job.cart }); }
-      else if (job.phase === 'take' && (job.t -= dt) <= 0) { job.phase = 'carry'; e.carrying = job.item; if (H) holdItem(H, job.item); C.startWalk(e, job.dest[0], job.dest[1], false); }
+      else if (job.phase === 'grab' && (job.t -= dt) <= 0) { job.phase = 'push'; e.pushing = job.cart; e.heading = job.cart.yaw; e.mesh.rotation.y = job.cart.yaw; C.startWalk(e, job.dest[0], job.dest[1], false, { push: job.cart }); job.walk = e.walk; }
+      else if (job.phase === 'take' && (job.t -= dt) <= 0) { job.phase = 'carry'; e.carrying = job.item; if (H) holdItem(H, job.item); C.startWalk(e, job.dest[0], job.dest[1], false); job.walk = e.walk; }
       else if ((job.phase === 'push' || job.phase === 'carry') && !e.walk) { job.phase = 'release'; job.t = 0.9; e.pushing = null; if (job.cart) job.cart.pusher = null; H?.play('interact', { fade: 0.2 }); if (e.carrying && H) dropItem(H, 'hand_r'); e.carrying = null; }
       else if (job.phase === 'release' && (job.t -= dt) <= 0) { this.endJob(job); const t = C.simTileFor(e.person, e); if (t) { e.faceAt = t.face || null; C.startWalk(e, t[0], t[1], false); } }
     }
@@ -149,7 +160,9 @@ export class Haul {
     for (const c of this.carts) {
       const u = c.mesh.userData, r = u.half[0] + 0.1, off = Math.max(0, u.half[1] - u.half[0]), pts = [[c.x + Math.sin(c.yaw) * off, c.z + Math.cos(c.yaw) * off], [c.x - Math.sin(c.yaw) * off, c.z - Math.cos(c.yaw) * off]];
       const shove = (o, rad, isP) => { for (const [px, pz] of pts) { const dx = o.x - px, dz = o.z - pz, dd = Math.hypot(dx, dz), need = r + rad; if (dd < need && dd > 1e-4) { o.x = px + dx / dd * need; o.z = pz + dz / dd * need; if (!isP && o.mesh) { o.mesh.position.x = o.x; o.mesh.position.z = o.z; } } } };
-      for (const e of C.ents) if (e.kind === 'crew' && e.mesh && e !== c.pusher && Math.hypot(e.x - c.x, e.z - c.z) < 2) shove(e, 0.25, false);
+      // a pushed cart makes people step aside; a parked cart is bumped out of a walker's way (never a deadlock on a path)
+      for (const e of C.ents) { if (e.kind !== 'crew' || !e.mesh || e === c.pusher || Math.hypot(e.x - c.x, e.z - c.z) > 2 || C.world.isTube(...C.world.tile(e.x, e.z))) continue;
+        if (c.pusher) { shove(e, 0.25, false); continue; } const before = { x: e.x, z: e.z }; shove(e, 0.25, true); if (e.x !== before.x || e.z !== before.z) { const q = { x: c.x - (e.x - before.x), z: c.z - (e.z - before.z), y: 0 }; e.x = before.x; e.z = before.z; C.world.resolve(q, Math.min(0.45, u.half[0] + 0.05)); c.x = q.x; c.z = q.z; c.mesh.position.set(c.x, 0, c.z); } }
       if (c.pusher !== 'player' && Math.hypot(P.x - c.x, P.z - c.z) < 2 && (P.y || 0) < 0.8) { shove(P, 0.3, true); }
     }
   }
@@ -161,7 +174,7 @@ export class Haul {
   interact() {   // E: let go / grab a cart handle / pick a dropped item back up. true = handled
     const P = C.P, G = C.G;
     if (P.cart) { this.release(); return true; }
-    const it = !G.carry && this.droppedInFront(); if (it) { C.scene.remove(it.mesh); this.dropped.splice(this.dropped.indexOf(it), 1); G.carry = it.carry; C.sound?.pickup?.(); G.say(`You pick up: ${it.carry.name}.`, 'good'); return true; }
+    const it = this.droppedInFront(); if (it && (it.inst || !G.carry)) { if (it.inst && !G.kit?.add(it.inst)) { G.say('Your belt is full.', 'warn'); return true; } C.scene.remove(it.mesh); this.dropped.splice(this.dropped.indexOf(it), 1); if (!it.inst) G.carry = it.carry; C.sound?.pickup?.(); G.say(`You pick up: ${it.inst ? it.name : it.carry.name}.`, 'good'); return true; }
     const c = this.cartInFront(); if (c) { if (G.carry && ITEMS[G.carry.item]?.two) { G.say('Your hands are full — [G] put it on the cart first.', 'warn'); return true; } c.pusher = 'player'; P.cart = c; P.pushing = true; G.say(`You take the handle of the ${c.mesh.userData.name}. [E] let go`, 'good'); return true; }
     return false;
   }
@@ -182,9 +195,9 @@ export class Haul {
   prompt() {
     const P = C.P, G = C.G, cr = G.carry;
     if (P.cart) return `Pushing the ${P.cart.mesh.userData.name} — [E] let go${cr ? ` · [G] load ${cr.name}` : P.cart.mesh.userData.load.length ? ' · [R] take a load' : ''}`;
-    const it = !cr && this.droppedInFront(); if (it) return `[E] Pick up ${it.carry.name}`;
+    const it = this.droppedInFront(); if (it && (it.inst || !cr)) return `[E] Pick up ${it.inst ? it.name : it.carry.name}`;
     const c = this.cartInFront(); if (c) { const u = c.mesh.userData; return `[E] Push the ${u.name}${cr ? ` · [G] put ${cr.name} on it` : u.load.length ? ` · [R] take ${ITEMS[u.load[u.load.length - 1]]?.name || 'a load'}` : ''}`; }
-    return '';
+    return G.kit?.prompt() || '';
   }
   playerStep(dt) {
     const P = C.P, G = C.G, c = P.cart;

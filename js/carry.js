@@ -45,6 +45,22 @@ export function makeItemMesh(id) {
     case 'smallbox': g.add(box(0.36, 0.24, 0.3, m.card)); g.add(box(0.365, 0.03, 0.06, m.hazard, 0, 0.11, 0)); rest = 0.12; break;
     case 'crate': g.add(box(0.52, 0.4, 0.44, m.olive)); g.add(box(0.53, 0.05, 0.45, m.dark, 0, 0.02, 0)); g.add(box(0.2, 0.08, 0.005, m.hazard, 0, 0.1, 0.223)); for (const sx of [-1, 1]) g.add(box(0.02, 0.05, 0.14, m.dark, sx * 0.27, 0.12, 0)); rest = 0.2; break;
     case 'hose': for (let i = 0; i < 3; i++) { const t = new THREE.Mesh(new THREE.TorusGeometry(0.15 - i * 0.012, 0.022, 6, 20), m.hose); t.rotation.x = Math.PI / 2; t.position.y = -0.15 + i * 0.02; t.castShadow = true; g.add(t); } g.add(cyl(0.025, 0.025, 0.06, m.metal, 0.15, -0.1, 0)); rest = 0.17; break;
+    // ---- handhelds (js/handhelds.js): grip at the origin, working end along +y
+    case 'tricorder': case 'tricorder_med': case 'tricorder_sec': { const c = id === 'tricorder_med' ? m.blue : id === 'tricorder_sec' ? m.red : m.dark; g.add(box(0.075, 0.12, 0.03, c, 0, 0.02, 0)); const lid = box(0.075, 0.06, 0.012, m.metal, 0, 0.1, -0.025); lid.rotation.x = -0.5; g.add(lid); { const sc = box(0.06, 0.045, 0.002, m.screen, 0, 0.05, 0.016); sc.castShadow = false; g.add(sc); } g.add(box(0.05, 0.012, 0.004, m.glowG, 0, -0.01, 0.016)); rest = 0.015; g.userData.lie = true; break; }
+    case 'badge': g.add(box(0.035, 0.045, 0.008, m.hazard)); rest = 0.004; break;
+    case 'phaser1': g.add(box(0.035, 0.03, 0.11, m.dark, 0, 0.0, 0.03)); g.add(box(0.012, 0.012, 0.02, m.glowR, 0, 0, 0.09)); rest = 0.015; g.userData.lie = true; break;
+    case 'phaser2': g.add(box(0.03, 0.1, 0.035, m.dark, 0, -0.03, 0)); g.add(box(0.035, 0.04, 0.17, m.metal, 0, 0.03, 0.06)); g.add(box(0.014, 0.014, 0.02, m.glowR, 0, 0.03, 0.15)); rest = 0.02; g.userData.lie = true; break;
+    case 'rifle': g.add(box(0.04, 0.06, 0.55, m.dark, 0, 0.02, 0.12)); g.add(box(0.03, 0.1, 0.04, m.dark, 0, -0.04, 0)); g.add(box(0.035, 0.08, 0.14, m.metal, 0, 0.0, -0.19)); g.add(box(0.016, 0.016, 0.03, m.glowR, 0, 0.03, 0.41)); rest = 0.03; g.userData.lie = true; break;
+    case 'hypospray': g.add(cyl(0.016, 0.016, 0.1, m.metal, 0, 0, 0)); g.add(cyl(0.02, 0.02, 0.03, m.blue, 0, -0.05, 0)); g.add(cyl(0.006, 0.01, 0.025, m.white, 0, 0.06, 0, 8)); rest = 0.016; g.userData.lie = true; break;
+    case 'dermal': g.add(cyl(0.018, 0.014, 0.13, m.white, 0, 0, 0)); g.add(cyl(0.012, 0.012, 0.01, m.glowG, 0, 0.07, 0, 8)); rest = 0.018; g.userData.lie = true; break;
+    case 'scalpel': g.add(box(0.012, 0.11, 0.008, m.metal, 0, 0, 0)); g.add(box(0.004, 0.025, 0.003, m.glowR, 0, 0.065, 0)); rest = 0.004; g.userData.lie = true; break;
+    case 'wrench': g.add(box(0.025, 0.24, 0.008, m.metal, 0, 0.04, 0)); for (const sy of [-1, 1]) g.add(box(0.05, 0.03, 0.009, m.metal, 0, 0.04 + sy * 0.12, 0)); rest = 0.005; g.userData.lie = true; break;
+    case 'torch': g.add(cyl(0.022, 0.022, 0.18, m.dark, 0, 0, 0)); g.add(cyl(0.012, 0.018, 0.12, m.metal, 0, 0.14, 0, 8)); g.add(cyl(0.006, 0.006, 0.02, m.glowR, 0, 0.21, 0, 6)); g.add(new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 6, 14), m.hose)); rest = 0.022; g.userData.lie = true; break;
+    case 'flashlight': g.add(cyl(0.017, 0.017, 0.15, m.dark, 0, 0, 0)); g.add(cyl(0.026, 0.018, 0.04, m.metal, 0, 0.09, 0)); g.add(cyl(0.022, 0.022, 0.004, m.screen, 0, 0.112, 0)); rest = 0.02; g.userData.lie = true; break;
+    case 'extinguisher': g.add(cyl(0.07, 0.07, 0.38, m.red, 0, -0.24, 0)); g.add(cyl(0.02, 0.02, 0.05, m.dark, 0, -0.03, 0)); g.add(box(0.12, 0.015, 0.025, m.dark, 0.03, 0.0, 0)); { const h = cyl(0.008, 0.008, 0.25, m.rubber, 0.08, -0.12, 0, 6); h.rotation.z = 0.2; g.add(h); } rest = 0.43; break;
+    case 'mop': g.add(cyl(0.012, 0.012, 1.3, m.metal, 0, 0.1, 0, 8)); g.add(box(0.28, 0.03, 0.08, m.blue, 0, -0.55, 0)); g.add(box(0.26, 0.05, 0.07, m.cloth, 0, -0.59, 0)); rest = 0.62; break;
+    case 'hook': g.add(cyl(0.018, 0.018, 0.1, m.brown, 0, 0, 0)); { const t = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.006, 6, 12, Math.PI * 1.3), m.metal); t.position.set(0.0, 0.1, 0); t.rotation.y = Math.PI / 2; g.add(t); } rest = 0.02; g.userData.lie = true; break;
+    case 'crowbar': g.add(cyl(0.012, 0.012, 0.7, m.red, 0, 0.15, 0, 8)); g.add(box(0.02, 0.05, 0.012, m.metal, 0.012, 0.51, 0)); g.add(box(0.03, 0.015, 0.012, m.metal, 0.02, -0.2, 0)); rest = 0.012; g.userData.lie = true; break;
     default: g.add(box(0.12, 0.08, 0.1, m.metal)); rest = 0.04;
   }
   g.userData.rest = rest; return g;
@@ -57,8 +73,18 @@ const GRIP = {
   hang: { p: [0, 0.095, 0.0], r: [Math.PI, 0, Math.PI / 2] },        // handle across the fingers, the body hangs below the fist (toolbox, medkit, hose)
   rod: { p: [0, 0.085, 0.015], r: [0, 0, 0] },                       // tool shaft along the fingers' wrap axis
   flat: { p: [0.02, 0.07, 0.03], r: [0, 0, Math.PI / 2] },           // PADD / scanner face up in the palm
+  gun: { p: [0, 0.07, 0.02], r: [-Math.PI / 2, 0, 0] },              // pistol grip in the fist, muzzle along the fingers' pointing line
 };
-const GRIP_OF = { cup: 'default', glass: 'default', vial: 'default', toolbox: 'hang', medkit: 'hang', hose: 'hang', tool: 'rod', zapper: 'rod', dumbbell: 'rod', padd: 'flat', scanner: 'flat', chip: 'flat', ration: 'flat' };
+// worn on the body (js/handhelds.js holster): pelvis frame (+x the character's left, +y up, +z forward), metres
+const HOLSTER = { hip_r: { p: [-0.2, -0.06, 0.02], r: [0, 0, 0] }, hip_l: { p: [0.2, -0.06, 0.02], r: [0, 0, 0] }, back: { p: [0.05, 0.28, -0.2], r: [0, 0, 2.4] }, belt_back: { p: [0, -0.02, -0.17], r: [0, 0, Math.PI / 2] } };
+export function holsterItem(H, id, slot = 'hip_r') {
+  const bone = H?.bones?.pelvis; if (!bone) return null; H.worn = H.worn || {}; if (H.worn[slot]) { H.worn[slot].parent?.remove(H.worn[slot]); }
+  const holder = new THREE.Group(); holder.name = 'worn:' + slot; bone.add(holder); bone.updateWorldMatrix(true, false); bone.matrixWorld.decompose(_v, _q, _s); holder.scale.set(1 / _s.x, 1 / _s.y, 1 / _s.z);
+  const mesh = makeItemMesh(id), h = HOLSTER[slot] || HOLSTER.hip_r; mesh.position.set(...h.p); mesh.rotation.set(...h.r); if (mesh.userData.lie && slot.startsWith('hip')) mesh.rotation.x = Math.PI;   // muzzle / tip down
+  holder.add(mesh); holder.userData = { id, slot }; H.worn[slot] = holder; return holder;
+}
+const GRIP_OF = { cup: 'default', glass: 'default', vial: 'default', toolbox: 'hang', medkit: 'hang', hose: 'hang', extinguisher: 'hang', tool: 'rod', zapper: 'rod', dumbbell: 'rod', padd: 'flat', scanner: 'flat', chip: 'flat', ration: 'flat',
+  tricorder: 'flat', tricorder_med: 'flat', tricorder_sec: 'flat', badge: 'flat', phaser1: 'gun', phaser2: 'gun', rifle: 'gun', hypospray: 'rod', dermal: 'rod', scalpel: 'rod', wrench: 'rod', torch: 'rod', flashlight: 'rod', mop: 'rod', hook: 'rod', crowbar: 'rod' };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
 
 // parent an item (id or mesh) to a hand bone. Returns the holder. The holder cancels the bone's scale so offsets are in metres.

@@ -28,6 +28,7 @@ import { makeGait, gaitNow, describeGait } from './gait.js';
 import { Fidgeter } from './movement.js';
 import { Haul, initHaul, opStart, opHook, opEnd, pushHook, toolBonus } from './haul.js';   // equipment motions, carrying, carts (js/equipment.js, js/carry.js)
 import { propsFor, classifyItem } from './equipment.js';
+import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
 import { MISSIONS, party as commParty } from './bridge.js';
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -216,6 +217,7 @@ function loadDeck(n) {
   // survivors + bodies
   if (NM && G.sim) simBodies(0, true);
   G.haul?.dispose(); G.haul = NM ? new Haul() : null;   // parked carts, NPC hauling, player carry/push (js/haul.js)
+  if (!G.kit || G.kit.who !== G.player || G.kit.run !== G.runSeed) { G.kit?.dispose(); G.kit = new Kit(NM ? G.player : null, G.runSeed, NM ? null : ['crowbar', 'tricorder_sec', 'flashlight']); G.kit.who = G.player; G.kit.run = G.runSeed; } else G.kit.dispose();   // belt kit (V/X/T, click)
   for (let i = 0; i < (NM ? 0 : 3 + (n > 2 ? 1 : 0)); i++) {
     const t = data.pickTile(() => true); if (!t) continue;
     const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen';
@@ -376,9 +378,11 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   // pass others on the right-hand side (so two people meeting both step the same way), slow for anyone you cannot get round
   let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg, rx = uz, rz = -ux;   // (rx, rz) = right of travel
   const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh), { x: P.x, z: P.z, player: true }];
-  for (const o of others) {
+  if (cur < (e.bestF ?? 1e9) - 0.5) { e.bestF = cur; e.bestT = G.time; } if (G.time - (e.bestT ?? G.time) > 5 && toEnd > 0.5) { e.forceT = 2; e.bestT = G.time; e.bestF = cur; }   // no progress for 5 s: ignore everyone and head straight down the field for a moment
+  if (e.forceT > 0) e.forceT -= dt;
+  for (const o of (tubeish || e.forceT > 0) ? [] : others) {
     const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 3.0 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.3) continue; const lat = ox * rx + oz * rz; if (Math.abs(lat) > 1.3) continue;
-    const need = gt.space * 1.05 - (o.player ? 0.1 : 0) - lat * 0.0, k = Math.max(0.25, 1 - od / 3.0) * 1.2; gx += rx * need * k; gz += rz * need * k;   // always bear right of them
+    const need = gt.space * 1.05 - (o.player ? 0.1 : 0) - lat * 0.0, k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0); gx += rx * off; gz += rz * off;   // always bear right of them
     if (od < 0.8 + gt.space * 0.3 && (!(e.ghost > 0) || o.player)) slow = Math.min(slow, Math.max(0.05, (od - 0.35) / 0.8));
   }
   // heading steers toward the goal at a capped rate; speed eases with turn error, nearness to the end, braking distance and obstacles
@@ -442,7 +446,7 @@ function simBodies(dt, force = false) {
   }
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
-initHaul({ get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
+initHaul({ get gorns() { return gorns; }, killMad, nearestRepair, get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
 
 
 // ---- the player's billet: duty loops, orders, delegation, reports, mission task board (js/duty.js, js/hud-duty.js)
@@ -675,6 +679,9 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
     if (e.code === 'KeyG' && NOM() && G.carry && !G.haul?.putDown()) { G.say(`You put ${G.carry.name} down.`); G.carry = null; }   // onto a cart / surface in js/haul.js
     if (e.code === 'KeyR' && NOM()) G.haul?.takeFromCart();
+    if (e.code === 'KeyV' && G.kit) { if (e.shiftKey && G.kit.inst) { const st = G.kit.cycleSetting(); if (st) G.say(`Setting: ${st}`); } else G.kit.cycle(); }   // handhelds: V switch (Shift+V phaser setting), X use, T throw
+    if (e.code === 'KeyX' && G.kit) G.kit.useJob();
+    if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
     if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat) fireGrapple();
@@ -704,6 +711,7 @@ $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offer
 // ---------------- actions ----------------
 const _v = new THREE.Vector3(), _f = new THREE.Vector3();
 function fire() {
+  if (G.phase === 'play' && G.kit?.inst && G.kit.attack()) return;   // a handheld in hand: phaser shot or improvised swing (js/kit.js)
   if (G.phase !== 'play' || shot > 0 || NOM()) return;   // no zapper in Systems Nominal
   if (G.phaser <= 0) { sound.empty(); G.say('Zapper depleted — find a power cell', 'warn'); shot = 0.3; return; }
   gunKick = 1; G.phaser--; shot = 0.45; sound.phaser(); noiseNow = Math.max(noiseNow, 16); updateHUD();
@@ -909,7 +917,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  G.comms?.tick(dt); nomTick(dt); updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
+  G.comms?.tick(dt); nomTick(dt); G.kit?.tick(dt); updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -1104,7 +1112,7 @@ let repairPts = [], statusOpen = false, statusT = 0;
 const SHIP = () => G.shipState;
 const BEAM = new THREE.Color(0x8fd8ff);
 const garble = (t) => G.fx.comms ? t.replace(/[a-z]/gi, c => Math.random() < 0.35 ? '▒' : c) : t;
-const repairTime = (r) => SYS[r.sys].repair * (r.main ? 1 : 1.5) * (1 + perk('boots') * 0) / toolBonus(G.carry);   // a carried toolbox repairs 25% faster
+const repairTime = (r) => SYS[r.sys].repair * (r.main ? 1 : 1.5) * (1 + perk('boots') * 0) / (G.kit ? G.kit.repairMul() : toolBonus(G.carry));   // tool in hand / a carried toolbox repairs 25% faster
 function nearestRepair(any = false) {
   let best = null, bd = 1e9;
   for (const r of repairPts) { const d = Math.hypot(r.x - P.x, r.z - P.z); if (d < r.reach && d < bd && (any || SHIP().status(r.sys) !== 'nominal')) { bd = d; best = r; } }
@@ -1460,6 +1468,6 @@ function frame() {
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
-Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
+Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

@@ -32,6 +32,8 @@ import { movementTests } from './test-movement.mjs';
 await movementTests(fail);
 import { equipmentTests } from './test-equipment.mjs';   // equipment motions / carry items (tools/test-equipment.mjs)
 await equipmentTests(fail);
+import { handheldTests } from './test-handhelds.mjs';   // handheld job equipment / improvised weapons (tools/test-handhelds.mjs)
+await handheldTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -283,29 +285,41 @@ const nom = await page2.evaluate(async () => {
       out.move2 = r;
     }
     { // equipment motions, held items, carts, player carry (js/equipment.js, js/carry.js, js/haul.js)
-      G.phase = 'play'; g.simBodies(0, true); const w = g.world, HL = g.haul, q = { haul: !!HL }, hum = (x) => x?.mesh?.userData.human;
+      G.phase = 'play'; g.simBodies(0, true); if (g.ents.filter(x => x.simmed).length < 4) { const dn = G.shipDecks.findIndex((d, i) => g.sim.onDeck(i + 1).length >= 5); if (dn >= 0) { g.loadDeck(dn + 1); tick(5); G.phase = 'play'; g.simBodies(0, true); } }   // a deck with people on it
+      G.simT = 1e9; if (g.haul) g.haul.t = 1e9;   // hold the schedule still while we watch one body (restored below)
+      const w = g.world, HL = g.haul, q = { haul: !!HL }, hum = (x) => x?.mesh?.userData.human;
       const nb = (p) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [p.tx + a, p.ty + b]).find(([x, y]) => w.d.grid[y]?.[x] === 0 && !w.isTube(x, y));
       let e = g.ents.find(x => x.simmed && hum(x) && !x.walk); const cp = w.d.props.find(p => p.kind === 'console' && nb(p));
       if (e) { e.walk = null; e.haul = null; if (cp) { const [x, z] = w.center(...nb(cp)); e.x = x; e.z = z; e.mesh.position.set(x, 0, z); e.faceAt = w.center(cp.tx, cp.ty); } e.spot = 'console'; g.opEnd(e); g.opStart(e); }
-      if (e?.op) { const st = new Set(), ge = new Set(), cl = new Set(); for (let i = 0; i < 30 * 30; i++) { P.x = e.x + 2.2; P.z = e.z; P.vx = P.vz = 0; tick(1); if (!e.op) break; st.add(e.opStep); cl.add(hum(e).current); if (Object.keys(hum(e).add || {}).length > 3) ge.add(e.opStep); }
-        q.op = { key: e.op?.key, steps: st.size, gest: ge.size, clips: [...cl], faced: !!e.faceAt, still: !e.walk };
-        e.spot = 'bar'; g.opEnd(e); g.opStart(e); tick(2); const H = hum(e), h = H.held?.hand_r, bp = new (h?.position.constructor || Object)(); q.held = { id: h?.userData.id || null, bone: h?.parent?.name || null };
+      if (e?.op) { const st = new Set(), ge = new Set(), cl = new Set(), faced = !!e.opGoal && Math.abs(Math.atan2(Math.sin(e.opGoal.yaw - e.mesh.rotation.y), Math.cos(e.opGoal.yaw - e.mesh.rotation.y))) < 2; for (let i = 0; i < 30 * 30; i++) { P.x = e.x + 2.2; P.z = e.z; P.vx = P.vz = 0; tick(1); if (!e.op) break; st.add(e.opStep); cl.add(hum(e).current); if (Object.keys(hum(e).add || {}).length > 3) ge.add(e.opStep); }
+        q.op = { key: e.op?.key, steps: st.size, gest: ge.size, clips: [...cl], faced, still: !e.walk };
+        e.spot = 'workbench'; e.opProp = null; g.opEnd(e); g.opStart(e); for (let i = 0; i < 150 && !hum(e).held?.hand_r; i++) tick(1); const H = hum(e), h = H.held?.hand_r, bp = new (h?.position.constructor || Object)(); q.held = { id: h?.userData.id || null, bone: h?.parent?.name || null };
         if (h) { const a = h.children[0].getWorldPosition(bp.clone()), b = H.bones.hand_r.getWorldPosition(bp.clone()); q.held.dist = +a.distanceTo(b).toFixed(3); for (let i = 0; i < 20; i++) tick(1); q.held.follows = h.children[0].getWorldPosition(bp.clone()).distanceTo(H.bones.hand_r.getWorldPosition(bp.clone())) < 0.3; }
         g.opEnd(e); q.held.dropped = !H.held?.hand_r; }
       // NPC haul: walk to a cart, grab it, push it along a path, release it
       if (HL) { HL.t = 1e9; let job = null; for (const c of g.ents.filter(x => x.simmed && hum(x) && !x.walk)) { if (c.op) g.opEnd(c); job = HL.startJob(c, true); if (job) { if (job.kind !== 'cart') { HL.endJob(job); job = null; continue; } break; } }
         if (job) { const c = job.cart, e2 = job.e, c0 = [c.x, c.z], w0 = c.mesh.userData.wheels[0].rotation.x, ph = new Set(); let gap = 0, n = 0; P.x = e2.x + 30; P.z = e2.z;
-          for (; n < 30 * 120 && HL.jobs.includes(job); n++) { tick(1); ph.add(job.phase); if (job.phase === 'push') gap = Math.max(gap, Math.hypot(c.x - e2.x, c.z - e2.z)); }
+          for (; n < 30 * 160 && HL.jobs.includes(job); n++) { tick(1); ph.add(job.phase); if (job.phase === 'push') gap = Math.max(gap, Math.hypot(c.x - e2.x, c.z - e2.z)); }
           q.cart = { phases: [...ph], moved: +Math.hypot(c.x - c0[0], c.z - c0[1]).toFixed(2), gap: +gap.toFixed(2), wheels: +Math.abs(c.mesh.userData.wheels[0].rotation.x - w0).toFixed(1), released: c.pusher === null && !e2.haul && !e2.pushing, secs: +(n / 30).toFixed(1) }; } }
       // player: grab a cart, push it, load/unload, carry weight, drop and pick up, let go
-      if (HL) { const t = w.d.openTiles.find(([x, y]) => [1, 2, 3].every(k => w.d.grid[y]?.[x + k] === 0 && !w.isTube(x + k, y)) && w.d.grid[y][x] === 0); if (t) { const [x0, z0] = w.center(t[0], t[1]); for (const e3 of g.ents) if (e3.simmed && Math.hypot(e3.x - x0 - 3, e3.z - z0) < 5) { e3.x += 40; e3.mesh.position.x = e3.x; }
+      if (HL) { const t = w.d.openTiles.find(([x, y]) => [0, 1, 2, 3].every(k => w.d.grid[y]?.[x + k] === 0 && !w.isTube(x + k, y) && !(w.car && w.car.tx === x + k && w.car.ty === y)) && [-1, 1].every(k => !w.isTube(x - 1, y + k))); if (t) { const [x0, z0] = w.center(t[0], t[1]); for (const e3 of g.ents) if (e3.simmed && Math.hypot(e3.x - x0 - 3, e3.z - z0) < 5) { e3.x += 40; e3.mesh.position.x = e3.x; }
         const c = HL.addCart('cargo', x0 + 1.6, z0, Math.PI / 2, false); P.x = x0 + 0.1; P.z = z0; P.y = 0; P.vx = P.vz = 0; P.yaw = -Math.PI / 2; P.mode = 'walk'; G.carry = null; const pr0 = HL.prompt();
         const grab = HL.interact(), d0 = c.x; dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })); dispatchEvent(new KeyboardEvent('keydown', { code: 'ShiftLeft' })); let vmax = 0; for (let i = 0; i < 45; i++) { tick(1); vmax = Math.max(vmax, Math.hypot(P.vx, P.vz)); } dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })); dispatchEvent(new KeyboardEvent('keyup', { code: 'ShiftLeft' })); tick(3);
         q.push = { prompt: /Push/.test(pr0), grab, pushing: !!P.pushing, moved: +(c.x - d0).toFixed(2), ahead: +(c.x - P.x).toFixed(2), vmax: +vmax.toFixed(2), mul: P.carryMul };
         G.carry = { name: 'Field toolbox', real: '', item: 'toolbox' }; tick(1); q.carry = { vm: !!HL.vm, bonus: g.haul && G.carry.item === 'toolbox' }; const n0 = c.mesh.userData.load.length; HL.putDown(); q.carry.loaded = c.mesh.userData.load.length === n0 + 1 && !G.carry; HL.takeFromCart(); q.carry.unloaded = G.carry?.item === 'toolbox';
         HL.interact(); q.push.released = !P.cart && !P.pushing && c.pusher === null; tick(1); q.push.mulAfter = P.carryMul;
         G.carry = { name: 'Supply crate', real: '', item: 'crate' }; tick(1); q.carry.slow = P.carryMul; P.yaw = Math.PI / 2; HL.putDown(); q.carry.dropped = HL.dropped.length === 1 && !G.carry; HL.interact(); q.carry.picked = G.carry?.item === 'crate' && !HL.dropped.length; G.carry = null; tick(1); } }
-      out.equip = q;
+      out.equip = q; G.simT = 0;
+    }
+    { // handhelds: NPC kit on the body / in the hand, tricorder speeds a repair, improvised weapon stuns and breaks a foldable (js/handhelds.js, js/kit.js)
+      G.phase = 'play'; g.simBodies(0, true); G.simT = 1e9; const HHm = await import('./js/handhelds.js'), K = g.kit, q = { kit: !!K }, hum = (x) => x?.mesh?.userData.human;
+      const belt = (x) => HHm.loadoutFor(x.person).some(i => ['belt', 'back'].includes(HHm.HANDHELDS[i].holster)), e = g.ents.find(x => x.simmed && hum(x) && !x.walk && !x.cower && belt(x)) || g.ents.find(x => x.simmed && hum(x) && !x.walk && !x.cower); if (e) { g.opEnd(e); e.kitWorn = null; g.opStart(e); const worn = Object.values(e.kitWorn || {}); q.worn = { n: worn.length, bone: worn[0]?.holder.parent?.name || null };
+        const ok = (await import('./js/equipment.js')), op = new ok.Operator('post', e.person, 3, { toolSteps: HHm.toolScript('tricorder_sec'), toolP: 1 }); e.op = op; e.opHeld = { hand_r: null, hand_l: null }; e.opGoal = e.opGoal || { x: e.mesh.position.x, z: e.mesh.position.z, yaw: e.mesh.rotation.y, y: 0 }; let held = null; for (let i = 0; i < 30 * 40 && !held; i++) { P.x = e.x + 2.5; P.z = e.z; tick(1); if (!e.op) break; held = hum(e).held?.hand_r?.userData.id === 'tricorder_sec' ? hum(e).held.hand_r.parent?.name : null; } q.inHand = held; g.opEnd(e); }
+      if (K) { const rp = g.repairPts.find(r => r.sys) || g.repairPts[0]; K.hand = -1; G.carry = null; const t0 = rp ? g.repairTime(rp) : 0; if (!K.equip('tricorder_eng')) { K.add(HHm.newInstance('tricorder_eng', 5)); } const t1 = rp ? g.repairTime(rp) : 0; q.repair = { t0: +t0.toFixed(2), t1: +t1.toFixed(2), faster: t1 < t0 * 0.8 }; const r = K.useJob(); q.repair.scan = !!r?.ok;
+        const v = g.ents.find(x => x.simmed && hum(x) && !x.cower && x !== e); if (v) { if (v.op) g.opEnd(v); v.walk = null; K.add(HHm.newInstance('tricorder_sci', 9)); const inst = K.inst; P.x = v.x + 1.0; P.z = v.z; P.yaw = Math.atan2(1, 0); let hits = 0; const stuns = [];
+          while (!HHm.isBroken(inst) && hits < 12) { K.cd = 0; K.attack(); hits++; stuns.push(v.stunT || 0); tick(1); } q.weapon = { hits, stunned: stuns.some(s => s > 0), cower: !!v.cower, broken: HHm.isBroken(inst), jobAfter: !!K.useJob()?.ok, last: K.last?.target || null };
+          for (let i = 0; i < 30 * 25; i++) tick(1); q.weapon.recovered = !v.cower; } K.hand = -1; }
+      out.hh = q; G.simT = 0;
     }
     { // sliding doors, clutter pick-up, terminal and talk menus
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
@@ -328,11 +342,15 @@ console.log('nominal:', JSON.stringify(nom));
     && n.locked.fx && n.locked.panel === 'play' && n.unlocked === 'select';
   if (!ok) fail('nominal ship / turbolift'); }
 { const q = nom.equip || {}; console.log('equipment:', JSON.stringify(q));   // equipment motions / carts / carry (js/haul.js)
-  if (!q.haul || !q.op || q.op.steps < 3 || q.op.gest < 1 || !q.op.still || !q.held || !q.held.id || q.held.bone !== 'hand_r' || !(q.held.dist < 0.3) || !q.held.follows || !q.held.dropped) fail('equipment operator / held item ' + JSON.stringify(q.op) + JSON.stringify(q.held));
+  if (!q.haul || !q.op || q.op.steps < 3 || q.op.gest < 1 || !q.op.faced || !q.op.still || !q.held || !q.held.id || q.held.bone !== 'hand_r' || !(q.held.dist < 0.3) || !q.held.follows || !q.held.dropped) fail('equipment operator / held item ' + JSON.stringify(q.op) + JSON.stringify(q.held));
   if (q.cart && !(q.cart.phases.includes('push') && q.cart.moved > 2 && q.cart.gap < 2.2 && q.cart.wheels > 3 && q.cart.released)) fail('equipment: NPC cart haul ' + JSON.stringify(q.cart));
   if (!q.cart) fail('equipment: no NPC cart haul could start');
   if (!q.push || !(q.push.prompt && q.push.grab && q.push.pushing && q.push.moved > 0.5 && q.push.ahead > 0.6 && q.push.vmax < 2.4 && q.push.mul === 0.6 && q.push.released && q.push.mulAfter > 0.9)) fail('equipment: player cart ' + JSON.stringify(q.push));
   if (!q.carry || !(q.carry.vm && q.carry.loaded && q.carry.unloaded && q.carry.slow < 0.9 && q.carry.dropped && q.carry.picked)) fail('equipment: player carry ' + JSON.stringify(q.carry)); }
+{ const q = nom.hh || {}; console.log('handhelds:', JSON.stringify(q));   // handheld job equipment / improvised weapons (js/kit.js)
+  if (!q.kit || !q.worn || q.worn.bone !== 'pelvis' || q.inHand !== 'hand_r') fail('handhelds: NPC kit on the body / in hand ' + JSON.stringify(q.worn) + q.inHand);
+  if (!q.repair || !q.repair.faster || !q.repair.scan) fail('handhelds: tricorder repair ' + JSON.stringify(q.repair));
+  if (!q.weapon || !(q.weapon.stunned && q.weapon.cower && q.weapon.broken && !q.weapon.jobAfter && q.weapon.hits <= 6 && q.weapon.recovered)) fail('handhelds: improvised weapon ' + JSON.stringify(q.weapon)); }
 // ---- crew voices, tags, lift speech, NPC riders ----
 const vox = await page2.evaluate(async () => {
   const V = await import('./js/voice.js'), SP = await import('./js/speech.js'), { SHIPS } = await import('./js/ships.js'), { makeComplement } = await import('./js/crew.js');

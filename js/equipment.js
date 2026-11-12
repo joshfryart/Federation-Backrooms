@@ -120,10 +120,11 @@ export function standPoint(def, prop, from, taken = []) {   // taken: [[x, z], .
 
 // ---- use scripts: one cycle of steps with natural variation (optional steps, durations, an occasional idle gesture), deterministic ----
 const pickRange = (r, u) => r[0] + (r[1] - r[0]) * u;
-export function useScript(kind, person = { id: 0 }, seed = 1, cycle = 0) {
+export function useScript(kind, person = { id: 0 }, seed = 1, cycle = 0, opts = {}) {
   const key = equipKey(kind), def = EQUIPMENT[key], pid = person?.id ?? 0, H = (...a) => hash01('op', seed, pid, key, cycle, ...a);
   const steps = [];   // a skipped optional step still puts away what it would have put away
   def.steps.forEach((s, i) => { if (s.p !== undefined && H('p', i) >= s.p) { if (s.hold === null || s.holdL === null) steps.push({ g: null, dur: 0.01, ...(s.hold === null ? { hold: null } : {}), ...(s.holdL === null ? { holdL: null } : {}), skip: true }); return; } steps.push({ ...s, i, dur: pickRange(s.dur, H('d', i)) }); });
+  if (opts.toolSteps?.length && H('tool') < (opts.toolP ?? 0.5)) { const at = Math.floor(H('tat') * (steps.length + 1)); steps.splice(at, 0, ...opts.toolSteps.map((t, i) => ({ ...t, dur: pickRange(t.dur, H('td', i)) }))); }   // take out the billet's handheld (js/handhelds.js) this cycle
   if (def.idle?.length && H('idle') < 0.45) { const g = def.idle[Math.floor(H('ig') * def.idle.length)]; const gd = GESTURES[g]; steps.splice(Math.floor(H('at') * (steps.length + 1)), 0, { g, dur: pickRange(gd.dur, H('igd')), idle: true }); }
   return { key, kind, def, stance: def.stance, clip: def.clip || STANCE_CLIP[def.stance], speed: def.speed || 1, steps, rest: pickRange(def.rest || [2, 4], H('rest')), restClip: def.restClip || null, cycle };
 }
@@ -135,7 +136,7 @@ export class Operator {
   constructor(kind, person = { id: 0 }, seed = 1, opts = {}) {
     this.kind = kind; this.key = equipKey(kind); this.person = person; this.seed = seed; this.loops = opts.loops ?? Infinity;
     this.cycle = 0; this.i = -1; this.t = 0; this.dur = 0; this.resting = false; this.done = false;
-    this.hold = EQUIPMENT[this.key].hold || null; this.holdL = null; this.poseW = {}; this.script = useScript(kind, person, seed, 0);
+    this.hold = EQUIPMENT[this.key].hold || null; this.holdL = null; this.poseW = {}; this.opts = opts; this.script = useScript(kind, person, seed, 0, opts);
     this.t = -hash01('op0', seed, person?.id ?? 0, this.key) * 1.5;   // a short settle before the first step, staggered per person
     this.cur = null;
   }
@@ -155,7 +156,7 @@ export class Operator {
       if (n >= sc.steps.length) { this.resting = true; this.t = 0; this.dur = sc.rest; this.cur = null; }
     } else if (this.resting && this.t >= this.dur) {
       this.resting = false; this.cycle++; if (this.cycle >= this.loops) { this.done = true; this.hold = null; this.holdL = null; out.done = true; out.hold = out.holdL = null; out.step = 'done'; return out; }
-      this.script = useScript(this.kind, this.person, this.seed, this.cycle); this.i = -1; this.t = 0; return this.update(0);
+      this.script = useScript(this.kind, this.person, this.seed, this.cycle, this.opts); this.i = -1; this.t = 0; return this.update(0);
     }
     const s = this.resting ? null : this.cur;
     if (this.resting && sc.restClip) out.clip = sc.restClip;
@@ -194,6 +195,13 @@ export const ITEMS = {
   smallbox: { name: 'parts box', w: 4, two: true, pose: 'carry_front', load: true },
   crate: { name: 'supply crate', w: 14, two: true, pose: 'carry_front', load: true },
   hose: { name: 'hose coil', w: 6, pose: 'hold_r', hand: 'r', load: true },
+  // handheld job equipment models (js/handhelds.js says what each does and how it hits)
+  tricorder: { name: 'tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_med: { name: 'medical tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_sec: { name: 'security tricorder', w: 0.5, pose: 'hold_r', hand: 'r' },
+  badge: { name: 'comm badge', w: 0.02, pose: null, hand: 'r' }, phaser1: { name: 'type-1 phaser', w: 0.3, pose: 'hold_r', hand: 'r' }, phaser2: { name: 'type-2 phaser', w: 0.7, pose: 'hold_r', hand: 'r' },
+  rifle: { name: 'phaser rifle', w: 3.2, pose: 'hold_r', hand: 'r' }, hypospray: { name: 'hypospray', w: 0.2, pose: 'hold_r', hand: 'r' }, dermal: { name: 'dermal regenerator', w: 0.3, pose: 'hold_r', hand: 'r' },
+  scalpel: { name: 'laser scalpel', w: 0.05, pose: 'hold_r', hand: 'r' }, wrench: { name: 'spanner', w: 0.6, pose: 'hold_r', hand: 'r' }, torch: { name: 'plasma torch', w: 1.8, pose: 'hold_r', hand: 'r' },
+  flashlight: { name: 'hand lamp', w: 0.4, pose: 'hold_r', hand: 'r' }, extinguisher: { name: 'fire extinguisher', w: 6, pose: 'hold_r', hand: 'r' }, mop: { name: 'mop', w: 1.5, pose: 'hold_r', hand: 'r' },
+  hook: { name: 'cargo hook', w: 0.5, pose: 'hold_r', hand: 'r' }, crowbar: { name: 'pry bar', w: 2.5, pose: 'hold_r', hand: 'r' },
 };
 export const ITEM_IDS = Object.keys(ITEMS);
 // player speed multiplier for carrying an item (crates slow you, small things do not)
