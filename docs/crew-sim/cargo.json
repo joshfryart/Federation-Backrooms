@@ -1,0 +1,149 @@
+{
+  "billet": "cargo",
+  "role_summary": "I'm a Cargo Handler, bottom rung of Services. I move, strap, count and shelve whatever the ship carries, and I like a bay where every crate is where the manifest says it is. Nobody notices cargo until a pallet comes loose, so I mostly want to be left alone to do it right and get to my coffee.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "meticulous"], "quirk": "Reads every strap tension twice and initials the manifest in green pen", "routine_effect": "Always proper-quality loops; extra manifest audit at h 5; short break; rarely at the bar" },
+    { "id": "easy_rider", "traits": ["laid-back", "chatty"], "quirk": "Hums while hauling and stacks the lighter crates on top as a rule of thumb", "routine_effect": "Longer mess and lounge time; rushes the 2nd strap check when busy; gossips with every passerby" },
+    { "id": "night_owl_tinkerer", "traits": ["curious", "tired"], "quirk": "Keeps a pocket of salvaged parts and rebuilds cargo sleds in spare time", "routine_effect": "Swaps recreation for workshop time; yawns early on duty; skips the gym" }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "cargo", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take the manifest and any flagged pallets from the outgoing handler" },
+    { "from": 0.5, "to": 2, "activity": "inventory_walk", "room": "cargo", "spot": "locker", "anim": "interact", "interruptible": true, "social": "solo", "note": "Count crates against the manifest, check straps and seals" },
+    { "from": 2, "to": 3.5, "activity": "haul_and_stow", "room": "stores", "spot": "locker", "anim": "carry", "interruptible": true, "social": "pair", "note": "Move supplies to stores for galley, replicator techs and engineering" },
+    { "from": 3.5, "to": 4.25, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Mid-watch meal with the other handlers" },
+    { "from": 4.25, "to": 6, "activity": "transporter_loading", "room": "transporter", "spot": "pad", "anim": "interact", "interruptible": true, "social": "pair", "note": "Stage and move cargo to or from the pads, or the shuttlebay" },
+    { "from": 6, "to": 7.5, "activity": "tie_down_audit", "room": "cargo", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Final manifest update, re-tension straps, log anything missing" },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "cargo", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief relief, report to quartermaster" },
+    { "from": 8, "to": 9, "activity": "wash_and_change", "room": "washroom", "spot": "door", "anim": "walking", "interruptible": true, "social": "solo", "note": "Shower off the dust" },
+    { "from": 9, "to": 10, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Big meal after the shift" },
+    { "from": 10, "to": 12, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Cards, a drink, gossip" },
+    { "from": 12, "to": 13, "activity": "gym_or_walk", "room": "gym", "spot": "weightbench", "anim": "interact", "interruptible": true, "social": "solo", "note": "Keeps the back working" },
+    { "from": 13, "to": 21, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Main sleep; interrupted only by red alert" },
+    { "from": 21, "to": 24, "activity": "free_time", "room": "quarters", "spot": "desk", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Letters home, laundry, tinkering before the next watch" }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Eat at the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 45], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Hauling burns calories" },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.4 }, "note": "Swap stories with other shifts" },
+    { "id": "holo_playroom", "label": "Holo-Playroom", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.5 }, "note": "Loves the mountain trail program" },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Lifting makes me tired" },
+    { "id": "gym", "label": "Lift weights", "rooms": ["gym"], "spot": "weightbench", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Keeps the back from complaining" },
+    { "id": "cards_in_bay", "label": "Cards on a crate", "rooms": ["cargo"], "spot": "table", "anim": "sitting_idle", "minutes": [15, 40], "weight": 2, "social": "group", "when": "any", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Crate-top poker with other handlers, in the quiet hour" },
+    { "id": "sled_tinker", "label": "Fix up a cargo sled", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Job-specific: rebuilds wobbly hover sleds and trade parts" },
+    { "id": "laundry_chat", "label": "Do laundry", "rooms": ["laundry"], "spot": "table", "anim": "interact", "minutes": [15, 30], "weight": 1, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0, "stress": -0.1 }, "note": "Dust gets in everything" },
+    { "id": "arboretum_walk", "label": "Walk the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "walking", "minutes": [15, 30], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0, "stress": -0.4 }, "note": "Only place on the ship that smells like outside" }
+  ],
+  "duty_loops": [
+    { "id": "manifest_count", "label": "Count and verify cargo against manifest", "room": "cargo", "spot": "console", "every_min": 25, "duration_min": 4, "steps": ["walk bay row by row", "scan each crate tag", "log shortages", "report discrepancies to quartermaster"], "system": "computer", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "secure_load", "label": "Check straps, seals and nets", "room": "cargo", "spot": "locker", "every_min": 30, "duration_min": 3, "steps": ["check strap tension", "re-seat loose pallets", "stack heavy low", "mark hazardous containers"], "system": "gravity", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Cargo. Bay one secured for maneuvers." },
+    { "id": "stage_transfer", "label": "Stage cargo for the pads or shuttlebay", "room": "transporter", "spot": "pad", "every_min": 40, "duration_min": 5, "steps": ["pull crates from bay", "sled to pad", "confirm weight and mass with transporter tech", "clear the pad"], "system": "transport", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "restock_stores", "label": "Restock galley and replicator stores", "room": "stores", "spot": "locker", "every_min": 45, "duration_min": 4, "steps": ["read shortage list", "pull stock from bay", "stack in stores", "tick manifest"], "system": null, "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine inventory and stores top-up", "at_run_min": 3, "room": "cargo", "spot": "console", "depends_on": "none", "reports_to": "qm", "if_neglected": "Manifest drifts; the galley runs short" },
+      { "task": "Re-secure loose pallets", "at_run_min": 10, "room": "cargo", "spot": "locker", "depends_on": "none", "reports_to": "none", "if_neglected": "Crate slides during a lurch" }
+    ],
+    "survey": [
+      { "task": "Stage sensor drones and sample cases at the shuttlebay", "at_run_min": 3, "room": "shuttlebay", "spot": "door", "depends_on": "bridge order", "reports_to": "lab", "if_neglected": "Science team waits on equipment" },
+      { "task": "Clear a sample storage rack in the bay", "at_run_min": 8, "room": "cargo", "spot": "locker", "depends_on": "other task", "reports_to": "qm", "if_neglected": "Samples are left in the corridor" },
+      { "task": "Move returned specimen cases to the lab", "at_run_min": 15, "room": "lab", "spot": "console", "depends_on": "survey drones back", "reports_to": "lab", "if_neglected": "Cases sit warm and spoil" }
+    ],
+    "cargo_run": [
+      { "task": "Verify manifest and tie-down for outbound load", "at_run_min": 2, "room": "cargo", "spot": "console", "depends_on": "bridge order", "reports_to": "qm", "if_neglected": "Wrong crates beam out" },
+      { "task": "Stage crates on the transporter pads", "at_run_min": 6, "room": "transporter", "spot": "pad", "depends_on": "manifest verified", "reports_to": "ttech", "if_neglected": "Transfer window missed" },
+      { "task": "Receive inbound load and shelve in bay", "at_run_min": 12, "room": "cargo", "spot": "locker", "depends_on": "transporter transfer", "reports_to": "qm", "if_neglected": "Pads jammed, incoming load stuck in the buffer" },
+      { "task": "Close out manifest and report totals", "at_run_min": 18, "room": "cargo", "spot": "desk", "depends_on": "load shelved", "reports_to": "bridge", "if_neglected": "Bridge can't confirm delivery" }
+    ],
+    "medical_relief": [
+      { "task": "Pull medical supply crates from the bay", "at_run_min": 2, "room": "cargo", "spot": "locker", "depends_on": "bridge order", "reports_to": "nurse", "if_neglected": "Sickbay runs short of stock" },
+      { "task": "Haul crates to sickbay and shelve them", "at_run_min": 6, "room": "sickbay", "spot": "door", "depends_on": "crates pulled", "reports_to": "nurse", "if_neglected": "Aid stays stuck in the bay" },
+      { "task": "Clear a quarantine corner in the bay", "at_run_min": 12, "room": "cargo", "spot": "locker", "depends_on": "bridge order", "reports_to": "qm", "if_neglected": "No place to isolate contaminated gear" }
+    ],
+    "shakedown": [
+      { "task": "Strap down everything in the bay before maneuvers", "at_run_min": 2, "room": "cargo", "spot": "locker", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Loose cargo goes airborne in a hard turn" },
+      { "task": "Test the cargo lift and sled", "at_run_min": 8, "room": "cargo", "spot": "lift", "depends_on": "none", "reports_to": "qm", "if_neglected": "A sled fails mid-emergency" },
+      { "task": "Post-maneuver inspection for damaged crates", "at_run_min": 15, "room": "cargo", "spot": "console", "depends_on": "shakedown maneuvers", "reports_to": "qm", "if_neglected": "Breakage goes unlogged" }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Bay secured before maneuvers", "message": "Bridge, Cargo. Bay is strapped and sealed. Ready for maneuvers.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Unmanifested or leaking container found", "message": "Bridge, Cargo. Unmarked container in the bay, leaking something. Request a tech.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Pallet shifted or broke loose", "message": "Bridge, Cargo. Pallet broke loose in bay one. I'm clear, but hold the hard turns.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Fire or breach in the bay", "message": "Bridge, Cargo! Fire in the cargo bay! I'm evacuating, seal it!", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Transfer complete", "message": "Bridge, Cargo. Load delivered, manifest closed. Totals match.", "priority": "routine", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Prepare cargo for transfer", "response_line": "Cargo, aye. Pulling the load now.", "time_to_comply_min": 4, "refuses_if": "Load not on manifest or unsafe to move" },
+      { "order": "Secure the bay for maneuvers", "response_line": "Cargo, aye. Strapping down.", "time_to_comply_min": 3, "refuses_if": null },
+      { "order": "Report cargo status", "response_line": "Bay is tight. Counts match the manifest.", "time_to_comply_min": 1, "refuses_if": null },
+      { "order": "Clear the bay and seal the doors", "response_line": "Cargo, clearing. Seal it behind me.", "time_to_comply_min": 1, "refuses_if": "Crew trapped inside" },
+      { "order": "Jettison cargo", "response_line": "Cargo, aye, if you're sure. Confirm. That's the manifest, sir.", "time_to_comply_min": 2, "refuses_if": "The order isn't confirmed by an officer" }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Re-check straps, clear aisles, stack loose gear down low", "room": "cargo", "spot": "locker", "priority": 3, "comm_line": "Cargo, yellow. Securing the bay." },
+    "red": { "action": "Strap down, then go to the assigned station in the bay and wait for orders", "room": "cargo", "spot": "console", "priority": 1, "comm_line": "Cargo at station. Bay secured, standing by." },
+    "fire": { "action": "Grab extinguisher, fight a small fire, otherwise evacuate and seal the bay", "room": "cargo", "spot": "door", "priority": 1, "comm_line": "Cargo. Fire in the bay! Pulling the extinguisher, or evacuating." },
+    "hull_breach": { "action": "Run for the nearest seal, grab a patch kit if close, shut the bay door behind me", "room": "cargo", "spot": "door", "priority": 1, "comm_line": "Cargo. Breach in the bay! Sealing the door!" },
+    "contamination": { "action": "Lock down the bay, seal the stored goods, wait in quarantine", "room": "cargo", "spot": "door", "priority": 2, "comm_line": "Cargo. Bay sealed, quarantine in effect." },
+    "power_failure": { "action": "Use handlight, lock the cargo lift, keep crates from sliding", "room": "cargo", "spot": "lift", "priority": 2, "comm_line": "Cargo. Bay is dark. Using handlights." },
+    "gravity_failure": { "action": "Grab a strap line, anchor the loose crates, stay clear of floating pallets", "room": "cargo", "spot": "locker", "priority": 1, "comm_line": "Cargo. Gravity's out. Crates are floating, I'm anchoring them." },
+    "intruder": { "action": "Lock the bay, hide behind the heavy crates, stay off comms unless asked", "room": "cargo", "spot": "locker", "priority": 2, "comm_line": "Cargo. Bay locked. Keeping my head down." },
+    "medical_emergency": { "action": "Bring a sled or stretcher cart to the call, clear the corridor", "room": "sickbay", "spot": "door", "priority": 3, "comm_line": "Cargo. Bringing a sled. Who is it?" },
+    "abandon_ship": { "action": "Drop everything, head for the shuttlebay, help load supply crates on the way", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Cargo. Heading to the shuttlebay, bringing rations." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Normal hauling, long lunches, gossip in the bay", "lines": ["Nothing to see, just crates.", "Quiet watch, I like quiet."], "leaves_post_if": null },
+    "anomalies": { "mood": "wary", "routine_change": "Re-checks straps twice, asks the quartermaster about odd noises or flickering lights", "lines": ["Lights keep flickering in the bay.", "Heard a thump in the stack. Probably nothing."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips the third inventory pass, starts moving valuables to safe spots, shortens meals", "lines": ["Half the lifts are down. I'm carrying it by hand.", "Seals aren't holding right."], "leaves_post_if": "Bay becomes unsafe: fire, leak or no gravity" },
+    "crisis": { "mood": "scared", "routine_change": "Only moves critical supplies (medical, rations, patches); ignores the manifest", "lines": ["Forget the manifest, what do you need?", "Tell me where to haul it."], "leaves_post_if": "Ordered out or the bay can't be sealed" },
+    "collapse": { "mood": "numb", "routine_change": "Stops counting; hauls survivors' gear to the shuttlebay or sits by the bay door", "lines": ["It doesn't matter what's in the crates now.", "I'm taking the rations. Come on."], "leaves_post_if": "Always, once abandon ship is called" }
+  },
+  "relationships": [
+    { "with_billet": "qm", "kind": "mentor", "effect": "Takes orders and reports to the quartermaster; wants the QM's approval and fears blame for losses" },
+    { "with_billet": "cook", "kind": "mess_partner", "effect": "Eats with the cooks, gets first pick of fresh stock, delivers extras to the galley" },
+    { "with_billet": "rep", "kind": "friend", "effect": "Trades parts and gossip with the replicator techs, restocks their feedstock first" },
+    { "with_billet": "ttech", "kind": "confidant", "effect": "Coordinates pad loads; lets the tech skip checks only if both agree" },
+    { "with_billet": "guard", "kind": "rival", "effect": "Security checks seals and inspects crates; the handler resents delays and the extra paperwork" }
+  ],
+  "barks": {
+    "idle": ["Whose pallet is that?", "Another crate, another day.", "I should really sit down."],
+    "working": ["Lift with the legs.", "Heavy on the bottom.", "Tag, scan, stack, repeat."],
+    "greeting_player": ["Mind the sled.", "Need something moved?", "Watch your step in the bay."],
+    "greeting_player_higher_rank": ["Sir, the bay is secure.", "Manifest's on the desk.", "Need a hand, ma'am?"],
+    "greeting_player_lower_rank": ["Grab a strap, rookie.", "Don't lean on that stack.", "New? I'll show you the straps."],
+    "tired": ["My back's done for the day.", "I need a bunk.", "One more crate and I'm gone."],
+    "hungry": ["Is the mess still serving?", "I could eat a whole pallet.", "Lunch can't come soon enough."],
+    "stressed": ["Everything's shifting around.", "Don't make me count again.", "I can't lose another crate."],
+    "alert": ["Strapping it down!", "Clear the aisle!", "All hands, move!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Respects them, offers coffee and shows the good shortcuts in the bay.",
+    "player_neglects_duty": "Mutters, tidies their share quietly, then mentions it to the quartermaster if it repeats.",
+    "player_fakes_report": "Spots mismatched counts at once and says so; will cover a first slip but not a second.",
+    "player_gives_order_ok": "Complies at once with 'aye', then double-checks the details.",
+    "player_gives_order_outranked": "Hesitates, says the quartermaster told them differently, and asks for it confirmed.",
+    "player_out_of_place": "Warns them off the moving loads and asks what they're doing in the bay.",
+    "player_asks_favour": "Helps if it is a quick haul or a spare strap; refuses to touch the manifest without the QM."
+  },
+  "decision_rules": [
+    "IF the bridge orders a load moved THEN verify it against the manifest, then move it and report done.",
+    "IF a crate is leaking or unmarked THEN back away, seal the area, and call the bridge or a tech.",
+    "IF a pallet has shifted and the bridge is about to maneuver THEN warn the bridge before touching it.",
+    "IF I'm exhausted and the count is nearly done THEN rush the last row, but never skip the straps.",
+    "IF the quartermaster and a higher officer give conflicting orders THEN do the safer one and tell the QM.",
+    "IF a friend asks me to slip something off the manifest THEN refuse unless it's medical or an emergency.",
+    "IF gravity fails THEN anchor the heaviest crates first, then everything else.",
+    "IF the bay is on fire and the extinguisher doesn't work in 30 seconds THEN leave and seal it.",
+    "IF no one is watching and the count is a few units off THEN recount once, then log it honestly.",
+    "IF abandon ship is called THEN grab rations and a medkit crate and head for the shuttlebay."
+  ],
+  "information_view": "The bay is the first to feel gravity wobble, loose pallets, odd drafts, leaks and strange smells, and cargo is the first to run out. I see shortages, tag mismatches, stuck lifts and pad glitches before the bridge does, but I don't see why engineering systems fail.",
+  "temptations": [
+    "Skipping the second strap check when tired: the pallet slips during a turn and may injure someone.",
+    "Faking the manifest count to leave early: the shortage turns up during a mission and the quartermaster blames me.",
+    "Taking a snack or spare part from stock: small, but it leaves a hole the galley notices.",
+    "Napping behind the crates during a slow watch: nobody notices until a call comes in and I'm late."
+  ]
+}
