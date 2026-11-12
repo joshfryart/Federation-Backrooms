@@ -296,6 +296,59 @@ export function buildProp(kind) {
         g.add(box(1.53, 0.1, 1.53, m.dark, 0, h * 0.5, 0)); g.add(box(0.5, 0.2, 0.02, m.hazard, 0, h * 0.7, 0.756));
       }
       break; }
+    // ---- props for the rooms added from the ship inventory ----
+    case 'desk': { g.userData.top = 0.76;   // ready room desk: wood top, drawer pedestals, a flat screen, a lamp and a stack of binders
+      g.add(rbox(1.8, 0.05, 0.85, m.wood, 0, 0.7, 0, 0.02)); for (const sx of [-1, 1]) g.add(rbox(0.5, 0.7, 0.78, m.dark, sx * 0.62, 0, 0, 0.03));
+      g.add(rbox(0.5, 0.34, 0.03, m.dark, -0.1, 0.78, -0.2, 0.01)); g.add(box(0.44, 0.28, 0.01, m.screenB, -0.1, 0.81, -0.18)); g.add(cyl(0.02, 0.02, 0.3, m.metal, 0.5, 0.75, 0.15, 8)); g.add(cyl(0.1, 0.12, 0.02, m.metal, 0.5, 0.75, 0.15, 12));
+      g.add(rbox(0.3, 0.07, 0.22, m.crate2, -0.65, 0.75, 0.2, 0.01)); g.add(rbox(0.28, 0.06, 0.2, m.fabric, -0.65, 0.82, 0.2, 0.01)); break; }
+    case 'cell': {   // brig cell: bunk, steel toilet and a bar front
+      g.add(rbox(1.9, 0.3, 0.8, m.dark, 0, 0, -0.5, 0.04)); g.add(rbox(1.84, 0.1, 0.74, m.sheet, 0, 0.3, -0.5, 0.04)); g.add(cyl(0.16, 0.12, 0.38, m.metal, 0.75, 0, 0.1, 12)); g.add(box(1.9, 0.06, 0.06, m.metal, 0, 1.95, 0.55)); g.add(box(1.9, 0.06, 0.06, m.metal, 0, 0.0, 0.55));
+      for (let i = 0; i < 13; i++) g.add(cyl(0.017, 0.017, 1.95, m.metal, -0.9 + i * 0.15, 0, 0.55, 6)); g.add(box(0.1, 0.1, 0.1, m.blinkR, 0.9, 1.1, 0.55)); break; }
+    case 'weaponrack': {   // armory cabinet with a lit status strip and racked zappers
+      g.add(box(1.7, 1.95, 0.04, m.dark, 0, 0, -0.26)); for (const sx of [-1, 1]) g.add(box(0.05, 1.95, 0.55, m.dark, sx * 0.825, 0, 0)); g.add(box(1.7, 0.05, 0.55, m.dark, 0, 0, 0)); g.add(box(1.5, 1.7, 0.02, m.glass, 0, 0.12, 0.28));
+      for (let r = 0; r < 4; r++) for (let i = 0; i < 5; i++) g.add(rbox(0.24, 0.14, 0.08, m.metal, -0.62 + i * 0.31, 0.25 + r * 0.42, 0.18, 0.02));
+      g.add(box(1.5, 0.05, 0.02, m.glowO, 0, 1.82, 0.29)); g.add(rbox(1.78, 0.05, 0.6, m.metal, 0, 1.95, 0, 0.02)); break; }
+    case 'treadmill': { g.userData.top = 0.24;
+      g.add(rbox(0.8, 0.14, 1.75, m.dark, 0, 0.05, 0, 0.04)); g.add(rbox(0.7, 0.04, 1.5, m.rubber, 0, 0.19, 0.02, 0.01)); for (const sx of [-1, 1]) g.add(cyl(0.025, 0.025, 1.15, m.metal, sx * 0.4, 0.1, -0.7, 8));
+      g.add(rbox(0.7, 0.2, 0.12, m.dark, 0, 1.15, -0.7, 0.03)); g.add(box(0.5, 0.12, 0.01, m.screenO, 0, 1.19, -0.63)); break; }
+    case 'weightbench': { g.userData.top = 0.5;
+      g.add(rbox(0.46, 0.1, 1.25, m.fabric, 0, 0.4, 0, 0.04)); for (const z of [-0.5, 0.5]) g.add(rbox(0.5, 0.4, 0.06, m.dark, 0, 0, z, 0.01));
+      for (const sx of [-1, 1]) g.add(rbox(0.06, 0.55, 0.06, m.metal, sx * 0.55, 0.45, -0.45, 0.01)); const bar = cyl(0.015, 0.015, 1.7, m.metal, 0, 0.98, -0.45, 8); bar.rotation.z = Math.PI / 2; g.add(bar);
+      for (const sx of [-1, 1]) for (const k of [0, 1]) { const pl = cyl(0.22 - k * 0.04, 0.22 - k * 0.04, 0.05, m.dark, sx * (0.68 - k * 0.07), 0.98 - 0.22 + k * 0.04, -0.45, 16); pl.rotation.z = Math.PI / 2; pl.position.y = 0.98; g.add(pl); } break; }
+    case 'labbench': { g.userData.top = 0.92;
+      g.add(rbox(1.7, 0.06, 0.8, m.white, 0, 0.86, 0, 0.02)); g.add(rbox(1.6, 0.86, 0.7, m.dark, 0, 0, 0, 0.03)); g.add(box(1.4, 0.02, 0.02, m.glowB, 0, 0.6, 0.355));
+      const mic = cyl(0.04, 0.05, 0.3, m.dark, -0.5, 0.92, 0, 10); mic.rotation.z = 0.35; g.add(mic); g.add(cyl(0.1, 0.12, 0.03, m.metal, -0.5, 0.92, 0, 12));
+      for (const [x, z, h] of [[0.1, 0.1, 0.16], [0.28, -0.1, 0.2], [0.45, 0.12, 0.12]]) { g.add(cyl(0.05, 0.05, h, m.glass, x, 0.92, z, 10)); g.add(cyl(0.04, 0.04, h * 0.5, m.glowB, x, 0.92, z, 8)); }
+      g.add(rbox(0.3, 0.2, 0.25, m.panel, 0.6, 0.92, -0.2, 0.02)); g.add(box(0.1, 0.06, 0.01, m.blinkG, 0.6, 1.0, -0.07)); break; }
+    case 'washer': { g.userData.top = 0.96;
+      for (const sx of [-1, 1]) { g.add(rbox(0.8, 0.95, 0.8, m.white, sx * 0.45, 0, 0, 0.05)); const door = cyl(0.27, 0.27, 0.05, m.dark, sx * 0.45, 0.35, 0.4, 20); door.rotation.x = Math.PI / 2; g.add(door); const gl = cyl(0.21, 0.21, 0.02, m.glass, sx * 0.45, 0.4, 0.43, 20); gl.rotation.x = Math.PI / 2; g.add(gl); g.add(box(0.5, 0.1, 0.01, m.screenG, sx * 0.45, 0.8, 0.405)); } break; }
+    case 'sofa': { g.userData.top = 0.46;
+      g.add(rbox(1.9, 0.38, 0.9, m.fabric, 0, 0, 0, 0.1)); g.add(rbox(1.9, 0.55, 0.2, m.fabric, 0, 0.3, -0.36, 0.09)); for (const sx of [-1, 1]) g.add(rbox(0.16, 0.3, 0.9, m.fabric, sx * 0.87, 0.3, 0, 0.07));
+      g.add(rbox(0.5, 0.14, 0.3, m.white, -0.4, 0.38, -0.1, 0.06)); break; }
+    case 'lathe': { g.userData.top = 1.0;
+      g.add(rbox(1.5, 0.72, 0.55, m.dark, 0, 0, 0, 0.03)); g.add(rbox(1.75, 0.16, 0.5, m.metal, 0, 0.72, 0, 0.02)); g.add(rbox(0.4, 0.45, 0.46, m.panel, -0.65, 0.88, 0, 0.03));
+      const chuck = cyl(0.13, 0.13, 0.12, m.pipe, -0.4, 1.05, 0, 14); chuck.rotation.z = Math.PI / 2; g.add(chuck); const rod = cyl(0.03, 0.03, 0.9, m.metal, 0.1, 1.05, 0, 8); rod.rotation.z = Math.PI / 2; g.add(rod);
+      g.add(rbox(0.3, 0.3, 0.4, m.panel, 0.65, 0.88, 0, 0.03)); g.add(box(0.08, 0.2, 0.12, m.hazard, 0.1, 0.88, 0.25)); g.add(box(1.0, 0.03, 0.01, m.hazard, 0, 0.3, 0.28)); break; }
+    case 'workbench': { g.userData.top = 0.95;
+      g.add(rbox(1.7, 0.08, 0.8, m.wood, 0, 0.86, 0, 0.02)); for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.07, 0.86, 0.07, m.metal, sx * 0.78, 0, sz * 0.33)); g.add(rbox(1.5, 0.12, 0.6, m.dark, 0, 0.2, 0, 0.02));
+      g.add(rbox(0.16, 0.14, 0.16, m.dark, -0.7, 0.94, 0.25, 0.02)); g.add(box(0.05, 0.1, 0.18, m.metal, -0.7, 1.08, 0.25)); g.add(box(0.5, 0.12, 0.06, m.hazard, 0.2, 0.94, -0.25)); g.add(rbox(0.3, 0.06, 0.18, m.metal, 0.5, 0.94, 0.1, 0.01)); break; }
+    case 'tank': {   // plant room pressure vessel with a gauge, valve wheel and piping
+      g.add(cyl(0.55, 0.55, 1.7, m.metal, 0, 0.12, 0, 22)); const dome = new THREE.Mesh(new THREE.SphereGeometry(0.55, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), m.metal); dome.position.y = 1.82; g.add(dome); g.add(cyl(0.6, 0.6, 0.12, m.dark, 0, 0, 0, 22));
+      for (const y of [0.5, 1.2]) { const band = cyl(0.57, 0.57, 0.06, m.hazard, 0, y, 0, 22); g.add(band); } g.add(cyl(0.05, 0.05, 0.9, m.pipe, 0.6, 0.2, 0.3, 10)); g.add(cyl(0.04, 0.04, 0.5, m.pipe, 0.35, 2.0, 0, 8));
+      const gauge = cyl(0.1, 0.1, 0.04, m.glowB, 0.0, 1.0, 0.56, 14); gauge.rotation.x = Math.PI / 2; g.add(gauge); break; }
+    case 'drawers': { g.userData.top = 1.12;
+      g.add(rbox(1.6, 1.1, 0.9, m.metal, 0, 0, 0, 0.03)); for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) { g.add(rbox(0.46, 0.46, 0.02, m.panel, -0.52 + c * 0.52, 0.06 + r * 0.52, 0.46, 0.01)); g.add(box(0.2, 0.03, 0.04, m.dark, -0.52 + c * 0.52, 0.3 + r * 0.52, 0.49)); } g.add(box(0.2, 0.05, 0.01, m.blinkG, 0.7, 1.0, 0.46)); break; }
+    case 'servers': {   // computer core stacks
+      for (let i = 0; i < 3; i++) { const x = (i - 1) * 0.66; g.add(rbox(0.6, 2.0, 0.85, m.dark, x, 0, 0, 0.03)); g.add(box(0.5, 1.7, 0.01, m.glass, x, 0.12, 0.43));
+        for (let k = 0; k < 9; k++) g.add(box(0.09, 0.02, 0.01, (k + i) % 4 === 0 ? m.blinkR : m.blinkG, x - 0.15 + (k % 3) * 0.15, 0.3 + Math.floor(k / 3) * 0.45, 0.435)); g.add(box(0.5, 0.04, 0.01, m.glowB, x, 1.9, 0.43)); } break; }
+    case 'shelving': {   // stores: steel shelving with boxed stock
+      for (const sx of [-1, 1]) g.add(box(0.05, 2.0, 0.6, m.metal, sx * 0.82, 0, 0)); for (let r = 0; r < 4; r++) { g.add(box(1.62, 0.04, 0.6, m.pipe, 0, 0.1 + r * 0.55, 0)); for (let b = 0; b < 3; b++) if (R() < 0.85) g.add(rbox(0.4 + R() * 0.12, 0.3 + R() * 0.12, 0.4, R() < 0.5 ? m.crate : m.crate2, -0.5 + b * 0.5, 0.14 + r * 0.55, 0, 0.02)); } break; }
+    case 'suitrack': {   // airlock locker bay with pressure suits hanging inside
+      g.add(box(1.5, 2.0, 0.04, m.panel, 0, 0, -0.28)); for (const sx of [-1, 1]) g.add(box(0.04, 2.0, 0.6, m.panel, sx * 0.73, 0, 0)); g.add(box(1.5, 0.04, 0.6, m.panel, 0, 1.96, 0)); g.add(box(0.04, 2.0, 0.6, m.panel, 0, 0, 0)); for (const sx of [-1, 1]) { g.add(cyl(0.2, 0.22, 0.9, m.white, sx * 0.36, 0.7, 0.05, 14)); const hel = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 10), m.white); hel.position.set(sx * 0.36, 1.78, 0.05); g.add(hel); const vis = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI), m.glass); vis.position.set(sx * 0.36, 1.78, 0.17); g.add(vis); g.add(box(0.1, 0.14, 0.02, m.glowO, sx * 0.36, 1.2, 0.27)); }
+      g.add(box(1.5, 0.04, 0.62, m.hazard, 0, 0.0, 0)); break; }
+    case 'sinkunit': { g.userData.top = 0.9;
+      g.add(rbox(1.5, 0.8, 0.55, m.white, 0, 0, 0, 0.04)); g.add(rbox(1.56, 0.05, 0.6, m.metal, 0, 0.8, 0, 0.02)); for (const sx of [-1, 1]) { g.add(cyl(0.16, 0.12, 0.06, m.glass, sx * 0.4, 0.8, 0.02, 14)); g.add(cyl(0.015, 0.015, 0.2, m.metal, sx * 0.4, 0.85, -0.2, 8)); }
+      g.add(rbox(1.4, 0.8, 0.03, m.glass, 0, 1.1, -0.25, 0.01)); break; }
     case 'tree': {
       g.add(rbox(1.2, 0.4, 1.2, m.dark, 0, 0, 0, 0.06)); g.add(box(1.05, 0.02, 1.05, m.trunk, 0, 0.4, 0));
       const t = model('ph_plant', 2.6, 0, 0, R() * 6, 0.1);
@@ -1197,4 +1250,4 @@ export class World {
   }
 }
 function yy(y, H) { return y < 0 || y >= H; }
-export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttle', 'holocube', 'pad', 'bunk', 'table', 'biobed', 'crate', 'tree', 'lonechair', 'plant', 'cart', 'replicator'];
+export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttle', 'holocube', 'pad', 'bunk', 'table', 'biobed', 'crate', 'tree', 'lonechair', 'plant', 'cart', 'replicator', 'desk', 'cell', 'weaponrack', 'treadmill', 'weightbench', 'labbench', 'washer', 'sofa', 'lathe', 'workbench', 'tank', 'drawers', 'servers', 'shelving', 'suitrack', 'sinkunit'];
