@@ -57,6 +57,7 @@ const run = await page.evaluate(async () => {
     if (g.shipState.status('lifts') === 'offline') g.shipState.repair('lifts');
     for (let k = 0; k < 4 && g.G.phase === 'play'; k++) { g.P.clung = 0; g.P.kbx = g.P.kbz = 0; g.P.x = g.world.liftPos.x; g.P.z = g.world.liftPos.z; tick(2); key('KeyE'); tick(1); }
     await new Promise(r => setTimeout(r, 2600)); tick(4);
+    for (let w = 0; w < 36 && g.G.deck === deck && g.G.phase !== 'win' && g.G.phase !== 'perk'; w++) { await new Promise(r => setTimeout(r, 500)); tick(4); }   // slow machine: keep waiting for the lift transition (up to ~20 s)
     if (g.G.phase === 'perk') { key('Digit1'); await new Promise(r => setTimeout(r, 300)); }
     if (g.G.phase === 'paused') { document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; }   // no pointer lock in headless
     log.push(`${deck}→${g.G.deck}:${g.G.phase}`);
