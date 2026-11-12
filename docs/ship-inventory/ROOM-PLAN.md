@@ -6,6 +6,12 @@ which department owns it, how it maps onto today's game rooms, and the group tha
 Zones follow the deck bands in `js/ships.js`: Command (top), Habitat, Services, Engineering (keel).
 Size: S ≈ 3×3 tiles, M ≈ 3×5, L ≈ 5×5, XL ≈ 7×9 (a tile is 2.5 m).
 
+## Focus ship: USF Ontario (Cairn class)
+For now the inventory targets **USF Ontario (USF-1867-ON)**, a Cairn-class deep-range explorer: a stack of discs of different sizes, nine decks, 310 m (see `js/ships.js`).
+Item lists are written ship-neutral, so they apply to Ontario and to the other Cairn ship, USF Québec. Ontario's identity colours (hull 0xb9b2a0 sand, accent 0xd9733a orange)
+and its role (deep-range exploration: long missions, big science and stores capacity) decide what to emphasise in later passes. Other classes come after Ontario is done.
+Fit to the hull: round decks with a central core (lift, tubes, services) and rooms arranged around the rim, so Ontario's rooms read as arcs and rings, not rectangles.
+
 ## Group A — Bridge & command (Command zone)
 | # | Space | Dept | Size | Game |
 |---|---|---|---|---|
