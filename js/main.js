@@ -20,6 +20,7 @@ import { speak, cue as voiceCue, attach as attachSpeech, getMode as voiceMode, s
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 import { createShipComms, loadCommsData, commsData } from './shipcomms.js';
 import { CrewSim } from './sim.js';
+import { generateSocial } from './social.js';
 import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALITIES } from './duty.js';
 import { DutyHUD } from './hud-duty.js';
 import { Phases, PHASES, FAILURE_MODES } from './phases.js';
@@ -348,7 +349,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const [mx0, my0] = world.tile(e.x, e.z);
   // short sidestep / settle to a point (dodging): straight toward it, no path field
   if (w.opts.point) {
-    const [px, pz] = w.opts.point, dist = Math.hypot(px - e.x, pz - e.z); if (dist < 0.07) return finish();
+    e.v = e.v || 0; const [px, pz] = w.opts.point, dist = Math.hypot(px - e.x, pz - e.z); if (dist < 0.07) return finish();
     const err = turnTo(px, pz, 1.4), sp0 = (w.opts.run ? 3.0 : 1.5) * Math.max(0.2, Math.cos(Math.min(1.3, Math.abs(err)))) * Math.min(1, 0.25 + dist / 0.6);
     e.v = (e.v || 0) + Math.max(-12 * dt, Math.min(9 * dt, sp0 - e.v)); const sp = Math.min(e.v * dt, dist); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.27); e.x = q.x; e.z = q.z; e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
     animate(w.opts.run ? gt.clip : 'walk'); if (H && d <= 22) { H.add = null; H.lookYaw += (0 - H.lookYaw) * Math.min(1, dt * 4); H.update(dt * Math.max(0.5, Math.min(2.2, e.v / (w.opts.run ? 3.0 : 0.95)))); } return true;
@@ -516,6 +517,7 @@ function talkMenu(e) {
     { label: 'Ask what they are doing', run: () => say(`${act.charAt(0).toUpperCase() + act.slice(1)}${w?.room ? ` — ${w.room}` : ''}. ${mood === 'cold' ? 'Anything else, sir?' : mood === 'warm' ? 'Good to see you.' : ''}`.trim()) },
     { label: 'Ask about their duty', run: () => { const l = DUTIES.billets?.[pr.billet]?.loops?.[0]; say(l ? `Mostly ${l.label.toLowerCase()}, every so often. ${DUTIES.billets[pr.billet].rules?.[0] ? '' : ''}` : 'Keeping the ship running.'); } },
     { label: 'Ask how they feel about you', run: () => say(mood === 'warm' ? 'You pull your weight. That counts for a lot here.' : mood === 'cold' ? 'I hear things. Make sure they are not true.' : 'Fine, I suppose. Ask me again later.') },
+    { label: 'Ask who they hang out with', run: () => say(G.social ? G.social.talkLine(pr, me) : 'Whoever is on my watch, I suppose.') },   // js/social.js
   ];
   if (D.subs().includes(pr)) opts.push({ label: 'Order them to do their duty', run: () => { const r = D.order(pr, null); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
   else opts.push({ label: 'Ask for a hand with your duty', run: () => { const r = D.askHelp(pr); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
@@ -560,6 +562,7 @@ function newRun() {
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
   G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks }) : null; if (G.sim) G.sim.setPlayer(G.player);
+  G.social = G.sim ? generateSocial(G.roster, { seed: G.runSeed, plan: G.plan, data: commsData(), clock: G.comms.clock, ship: G.ship }) : null; if (G.social) G.sim.setSocial(G.social);   // js/social.js: groups, friendships, rivalries (before setupDuty: seeds trust)
   setupDuty();
   hideScreens(); fade(0);
   loadDeck(1);
@@ -1440,6 +1443,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();
