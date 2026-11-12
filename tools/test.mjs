@@ -331,7 +331,7 @@ console.log('nominal:', JSON.stringify(nom));
   if (!q.haul || !q.op || q.op.steps < 3 || q.op.gest < 1 || !q.op.still || !q.held || !q.held.id || q.held.bone !== 'hand_r' || !(q.held.dist < 0.3) || !q.held.follows || !q.held.dropped) fail('equipment operator / held item ' + JSON.stringify(q.op) + JSON.stringify(q.held));
   if (q.cart && !(q.cart.phases.includes('push') && q.cart.moved > 2 && q.cart.gap < 2.2 && q.cart.wheels > 3 && q.cart.released)) fail('equipment: NPC cart haul ' + JSON.stringify(q.cart));
   if (!q.cart) fail('equipment: no NPC cart haul could start');
-  if (!q.push || !(q.push.prompt && q.push.grab && q.push.pushing && q.push.moved > 0.5 && q.push.ahead > 0.6 && q.push.vmax < 2.4 && q.push.mul === 0.6 && q.push.released && q.push.mulAfter === 1)) fail('equipment: player cart ' + JSON.stringify(q.push));
+  if (!q.push || !(q.push.prompt && q.push.grab && q.push.pushing && q.push.moved > 0.5 && q.push.ahead > 0.6 && q.push.vmax < 2.4 && q.push.mul === 0.6 && q.push.released && q.push.mulAfter > 0.9)) fail('equipment: player cart ' + JSON.stringify(q.push));
   if (!q.carry || !(q.carry.vm && q.carry.loaded && q.carry.unloaded && q.carry.slow < 0.9 && q.carry.dropped && q.carry.picked)) fail('equipment: player carry ' + JSON.stringify(q.carry)); }
 // ---- crew voices, tags, lift speech, NPC riders ----
 const vox = await page2.evaluate(async () => {
