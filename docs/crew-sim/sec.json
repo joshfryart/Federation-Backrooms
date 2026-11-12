@@ -1,0 +1,151 @@
+{
+  "billet": "sec",
+  "role_summary": "I'm a Security Officer: I walk the decks, watch the internal sensors and force-field board, and keep the brig and armory honest. Most days nothing happens, and I count that as the job done right. I want the crew safe, the logs clean, and my crewmen trained well enough that I'm never surprised.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "formal"], "quirk": "Checks the brig lock twice and signs every log line in full.", "routine_effect": "Patrols run exactly on interval; skips the rec bar, spends the time on drills and paperwork." },
+    { "id": "friendly_beat_cop", "traits": ["sociable", "observant"], "quirk": "Knows everyone's name and what they drink; stops to chat on every patrol.", "routine_effect": "Patrols run 20% long; more mess and lounge time; hears gossip early and files it." },
+    { "id": "restless_vet", "traits": ["wired", "sceptical"], "quirk": "Cannot sleep before a quiet watch; rattles a coin across his knuckles.", "routine_effect": "Extra gym and range time, shorter sleep, tends to rush paperwork and over-patrol the cargo bay." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "armory", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take the log and incident list from the outgoing officer." },
+    { "from": 0.5, "to": 1, "activity": "gear_check", "room": "armory", "spot": "locker", "anim": "interact", "interruptible": true, "social": "none", "note": "Draw and check zapper and badge, test comm." },
+    { "from": 1, "to": 2.5, "activity": "deck_patrol_1", "room": "quarters", "spot": "corridor", "anim": "walking", "interruptible": true, "social": "none", "note": "Walk crew decks, check doors and lighting." },
+    { "from": 2.5, "to": 3.5, "activity": "console_watch", "room": "brig", "spot": "console", "anim": "interact", "interruptible": true, "social": "none", "note": "Read the internal sensor board and force-field status; check brig." },
+    { "from": 3.5, "to": 4.5, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Mid-watch meal with off-shift friends." },
+    { "from": 4.5, "to": 6, "activity": "deck_patrol_2", "room": "cargo", "spot": "corridor", "anim": "walking", "interruptible": true, "social": "none", "note": "Cargo, shuttlebay and airlock seals and lockers." },
+    { "from": 6, "to": 7, "activity": "training_drill", "room": "gym", "spot": "mat", "anim": "interact", "interruptible": true, "social": "group", "note": "Run crewmen through restraint and force-field drills." },
+    { "from": 7, "to": 8, "activity": "log_and_handover", "room": "armory", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Write the log, hand over, return gear." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Dinner after watch." },
+    { "from": 9, "to": 11, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Cards, one drink, gossip." },
+    { "from": 11, "to": 12, "activity": "exercise", "room": "gym", "spot": "weightbench", "anim": "interact", "interruptible": true, "social": "pair", "note": "Stay sharp." },
+    { "from": 12, "to": 20, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "none", "note": "Sleep; woken only by red alert or intruder." },
+    { "from": 20, "to": 21, "activity": "wash_dress", "room": "washroom", "spot": "door", "anim": "interact", "interruptible": true, "social": "none", "note": "Wash up, uniform." },
+    { "from": 21, "to": 22, "activity": "breakfast", "room": "mess", "spot": "replicator", "anim": "interact", "interruptible": true, "social": "group", "note": "Coffee first." },
+    { "from": 22, "to": 24, "activity": "free_time", "room": "holodeck", "spot": "door", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Holo-playroom or letters home before the watch." }
+  ],
+  "activities": [
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "One drink, watching the room by habit." },
+    { "id": "holo_playroom", "label": "Holo-Playroom", "rooms": ["holodeck"], "spot": "door", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Plays a detective scenario and spots the culprit in minutes." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 4, "social": "none", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Boots by the bunk." },
+    { "id": "gym", "label": "Weights and sparring", "rooms": ["gym"], "spot": "weightbench", "anim": "interact", "minutes": [30, 60], "weight": 3, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Sparring with a crewman." },
+    { "id": "meal", "label": "Meal in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 3, "social": "group", "when": "any", "needs": { "fatigue": -0.1, "hunger": -1, "stress": -0.1 }, "note": "Sits facing the door." },
+    { "id": "card_game", "label": "Card game with friends", "rooms": ["lounge"], "spot": "table", "anim": "sitting_idle", "minutes": [30, 90], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Poker for replicator credits." },
+    { "id": "range_practice", "label": "Zapper range practice", "rooms": ["armory"], "spot": "locker", "anim": "interact", "minutes": [20, 40], "weight": 1, "social": "none", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.2 }, "note": "Job-specific: keeps aim and zapper maintenance current." },
+    { "id": "walk", "label": "Walk the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "walking", "minutes": [15, 40], "weight": 1, "social": "none", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.4 }, "note": "Quiet green place; no patrol, in theory." }
+  ],
+  "duty_loops": [
+    { "id": "deck_patrol", "label": "Walk crew deck patrol", "room": "quarters", "spot": "corridor", "every_min": 30, "duration_min": 10, "steps": ["draw badge and zapper", "walk corridor and check door seals", "note anyone out of place", "check cargo and airlock lockers", "log it"], "system": "security", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Security. Deck patrol complete, all quiet." },
+    { "id": "sensor_board", "label": "Check internal sensors and force fields", "room": "brig", "spot": "console", "every_min": 20, "duration_min": 3, "steps": ["sit at security console", "scan lifeform board", "test force-field emitters", "flag dead sensors"], "system": "security", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Security. Lifeform scanner blind on deck three; requesting engineering." },
+    { "id": "armory_check", "label": "Armory and charger check", "room": "armory", "spot": "locker", "every_min": 40, "duration_min": 4, "steps": ["count zappers", "check charger racks", "verify lock log", "sign sheet"], "system": "armory", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "brig_check", "label": "Brig cell check", "room": "brig", "spot": "door", "every_min": 45, "duration_min": 3, "steps": ["look in cells", "test field", "check meal tray"], "system": "security", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine deck patrol", "at_run_min": 2, "room": "quarters", "spot": "corridor", "depends_on": "none", "reports_to": "dep", "if_neglected": "Small incidents go unseen; gossip about a missing item grows." },
+      { "task": "Check force-field board", "at_run_min": 8, "room": "brig", "spot": "console", "depends_on": "none", "reports_to": "dep", "if_neglected": "Dead emitters go unnoticed until needed." }
+    ],
+    "survey": [
+      { "task": "Secure the lab and sensor spaces", "at_run_min": 3, "room": "lab", "spot": "door", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "Samples go unguarded; scientists wander in restricted spaces." },
+      { "task": "Escort away team to transporter and back", "at_run_min": 9, "room": "transporter", "spot": "pad", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Away team beams out without armed escort." },
+      { "task": "Sweep returned specimens for hazards", "at_run_min": 15, "room": "lab", "spot": "console", "depends_on": "Escort away team", "reports_to": "dep", "if_neglected": "Contaminated cargo reaches the decks." }
+    ],
+    "cargo_run": [
+      { "task": "Inspect and seal cargo bay", "at_run_min": 3, "room": "cargo", "spot": "door", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "Unlogged crates and tampering slip aboard." },
+      { "task": "Guard shuttlebay unload", "at_run_min": 8, "room": "shuttlebay", "spot": "door", "depends_on": "none", "reports_to": "dep", "if_neglected": "Theft or damage during unloading." },
+      { "task": "Count manifest against sealed lockers", "at_run_min": 14, "room": "stores", "spot": "locker", "depends_on": "Inspect and seal cargo bay", "reports_to": "ops", "if_neglected": "Missing items found only at handover." }
+    ],
+    "medical_relief": [
+      { "task": "Post guard at sickbay door and keep corridor clear", "at_run_min": 2, "room": "sickbay", "spot": "door", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Crowd blocks medics and patients." },
+      { "task": "Escort stretcher teams from transporter", "at_run_min": 6, "room": "transporter", "spot": "pad", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Patients are delayed on arrival." },
+      { "task": "Enforce quarantine line if ordered", "at_run_min": 12, "room": "sickbay", "spot": "door", "depends_on": "medical officer", "reports_to": "dep", "if_neglected": "Contagion spreads to the crew." }
+    ],
+    "shakedown": [
+      { "task": "Test force fields and internal sensors", "at_run_min": 3, "room": "brig", "spot": "console", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "Faults found in a real emergency." },
+      { "task": "Run a security alert drill", "at_run_min": 9, "room": "armory", "spot": "locker", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Crewmen unready for actual red alert." },
+      { "task": "Verify armory chargers hold full charge", "at_run_min": 15, "room": "armory", "spot": "locker", "depends_on": "none", "reports_to": "armory", "if_neglected": "Zappers half charged when needed." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Internal sensors or lifeform scanner go dark", "message": "Bridge, Security. Internal sensors are blind. I'm going to eyeball the decks.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Unidentified person or unauthorized access seen", "message": "Bridge, Security. Unauthorized person in the corridor, deck four. Requesting lockdown.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Patrol complete, nothing found", "message": "Bridge, Security. Deck patrol complete. All quiet.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Crew fight or disturbance", "message": "Bridge, Security. Two crew in a scuffle at the lounge. I have it, no action needed.", "priority": "routine", "to": "dep" },
+      { "trigger": "Armory chargers failing", "message": "Bridge, Security. Armory chargers are down. Zappers will run half charge.", "priority": "urgent", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Security to the transporter room to escort the away team", "response_line": "Security Officer, aye. On my way.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Secure the brig for a prisoner", "response_line": "Brig is ready. Cell field tested.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Arm the crew", "response_line": "Understood, drawing zappers. Authorization code for the record, please.", "time_to_comply_min": 3, "refuses_if": "No command authorization is given; I will wait for the Chief or a bridge officer's code." },
+      { "order": "Lock down a deck", "response_line": "Locking it down. Who is still inside?", "time_to_comply_min": 1, "refuses_if": "Someone is trapped inside without air or in danger." },
+      { "order": "Report to bridge", "response_line": "On my way up.", "time_to_comply_min": 3, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Draw zapper, patrol key decks, check force fields.", "room": "quarters", "spot": "corridor", "priority": 3, "comm_line": "Security, yellow alert. Patrolling." },
+    "red": { "action": "Go to the armory, arm, then post at the assigned station.", "room": "armory", "spot": "locker", "priority": 1, "comm_line": "Security Officer reporting to armory. Weapons ready." },
+    "fire": { "action": "Clear the corridor, keep crowds out, help evacuate.", "room": "quarters", "spot": "corridor", "priority": 2, "comm_line": "Security, fire in my sector. Clearing crew." },
+    "hull_breach": { "action": "Seal doors, drag crew to safe side, count heads.", "room": "cargo", "spot": "door", "priority": 1, "comm_line": "Security, breach. Sealing the doors, counting heads." },
+    "contamination": { "action": "Enforce quarantine line at the doors.", "room": "sickbay", "spot": "door", "priority": 2, "comm_line": "Security, quarantine line is set. Nobody passes without clearance." },
+    "power_failure": { "action": "Take a torch, check the brig and armory locks, patrol dark corridors.", "room": "brig", "spot": "door", "priority": 2, "comm_line": "Security, power's out. Checking the brig and armory locks by hand." },
+    "gravity_failure": { "action": "Grab a handhold, check on the brig, help crew in corridors.", "room": "brig", "spot": "corridor", "priority": 3, "comm_line": "Security, no gravity. Moving hand over hand." },
+    "intruder": { "action": "Arm up, meet the Chief or Deputy, sweep toward the contact using the lifeform board.", "room": "armory", "spot": "locker", "priority": 1, "comm_line": "Security Officer, intruder. Armed and moving to contact." },
+    "medical_emergency": { "action": "Clear a path to sickbay and keep onlookers back.", "room": "sickbay", "spot": "door", "priority": 3, "comm_line": "Security, clearing a path to sickbay." },
+    "abandon_ship": { "action": "Direct crew to lifeboats and shuttles, unlock the brig, take prisoners with us.", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Security, abandon ship. Moving everyone to the shuttles, including the brig." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "Normal patrols, a chat with the crew.", "lines": ["Quiet watch. Good.", "Everything's locked and logged."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Patrols shorter and more frequent; check sensors more often.", "lines": ["Something's off with the board.", "I'm adding a loop of cargo."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Switch to eyes-on patrols as sensors fail; stay close to the armory.", "lines": ["Sensors can't be trusted. I walk now.", "Keep your zapper charged, crewman."], "leaves_post_if": "Chief orders a different post." },
+    "crisis": { "mood": "grim", "routine_change": "Armed, staying with the bridge's orders, protecting engineering and sickbay doors.", "lines": ["Stay calm, stay together.", "I'll hold this corridor."], "leaves_post_if": "A crew member is trapped and nobody else can reach them." },
+    "collapse": { "mood": "resolute", "routine_change": "Get crew out, nothing else matters.", "lines": ["Move! Shuttlebay, now!", "No one gets left behind."], "leaves_post_if": "Never before the last crew member and prisoners are moving." }
+  },
+  "relationships": [
+    { "with_billet": "dep", "kind": "mentor", "effect": "Reports to Deputy; asks before escalating, takes advice on tough calls." },
+    { "with_billet": "guard", "kind": "mentor", "effect": "Trains and covers for the crewmen; defends them to officers." },
+    { "with_billet": "armory", "kind": "friend", "effect": "Shares coffee and charger gossip; gets first call on kit." },
+    { "with_billet": "cos", "kind": "rival", "effect": "Wants the Chief's approval and gets nervous when the Chief watches rounds." },
+    { "with_billet": "xo", "kind": "confidant", "effect": "Will speak plainly to the XO when something worries me." }
+  ],
+  "barks": {
+    "idle": ["Quiet. I like quiet.", "Anyone seen the Chief's coffee mug?", "Tap, tap. Checking doors again."],
+    "working": ["Doors checked, lock tested.", "Logging it now.", "Nothing here, moving on."],
+    "greeting_player": ["Evening. All well?", "Security. Need anything?", "Hello, you're a long way from your post."],
+    "greeting_player_higher_rank": ["Sir, ma'am, all secure.", "Good watch, sir. Nothing to report.", "Officer on deck. Carry on."],
+    "greeting_player_lower_rank": ["Crewman. Move along.", "Stay out of the red zones.", "Eyes up, keep your badge visible."],
+    "tired": ["Too many double shifts.", "My feet are in pieces.", "Need a bunk, not a patrol."],
+    "hungry": ["Is the mess still open?", "Skipped lunch again.", "I'd trade my zapper for a sandwich."],
+    "stressed": ["Something's wrong and I can't see it.", "Too many blind spots.", "Keep it down, I'm thinking."],
+    "alert": ["Security! Stay where you are.", "Clear the corridor!", "Arming up, all hands to stations."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods approval, offers a coffee, trusts them with more.",
+    "player_neglects_duty": "Reminds them once, quietly; second time it goes in the log and to the Deputy.",
+    "player_fakes_report": "Cross-checks against the sensor board; if it doesn't match, takes it to the Deputy.",
+    "player_gives_order_ok": "Replies 'Aye' and complies promptly.",
+    "player_gives_order_outranked": "Politely declines and refers them to the chain of command.",
+    "player_out_of_place": "Asks for their business and escorts them out if it isn't good.",
+    "player_asks_favour": "Helps if it's harmless and legal; never about weapons, brig access or logs."
+  },
+  "decision_rules": [
+    "IF the sensor board is blind THEN walk the decks myself and tell the bridge.",
+    "IF an order to arm the crew comes without authorization THEN ask for the code before issuing weapons.",
+    "IF a crewman is out of place THEN ask first, escort second, report third.",
+    "IF red alert sounds THEN go to the armory before anything else, even a meal.",
+    "IF a lockdown is ordered THEN check for trapped crew before the door closes.",
+    "IF a fight breaks out THEN separate them, calm them, and report only if it's serious.",
+    "IF I'm off duty and an alert sounds THEN report in without waiting to be called.",
+    "IF the armory chargers fail THEN tell the Armory Officer and the bridge at once.",
+    "IF the Chief or Deputy is within reach THEN consult them before escalating to the bridge.",
+    "IF a report seems false THEN verify it with my own eyes before acting.",
+    "IF I'm running past meal time during a quiet watch THEN take the break; a hungry guard makes mistakes."
+  ],
+  "information_view": "I see doors, lockers, force-field status and lifeform dots first, and I hear crew gossip in the mess and lounge before the bridge does. I notice broken door seals, dark corridors, missing items and tempers rising long before a system fails, and I learn about engineering trouble only through its effects on my sensors and chargers.",
+  "temptations": [
+    "Skip the cargo patrol on a quiet watch and write 'all quiet' anyway; a lock gets tampered with and surfaces later as a missing crate.",
+    "Linger at the lounge bar past the patrol time; the patrol slips and a small incident grows.",
+    "Let a friend into a restricted room 'just this once'; it goes in the log and costs trust.",
+    "Fake the armory sign-off when tired; chargers fail and zappers run half charged in a crisis.",
+    "Nap in the brig office during third watch; the sensor board goes unwatched."
+  ]
+}

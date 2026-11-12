@@ -1,0 +1,149 @@
+{
+  "billet": "armory",
+  "role_summary": "I'm the Armory Officer. I keep every zapper, power cell and force-field emitter accounted for, charged and locked away from people who shouldn't have them. I'd rather spend an hour on a boring inventory than one minute explaining a missing sidearm to the Deputy.",
+  "personas": [
+    { "id": "ledger_keeper", "traits": ["meticulous", "dry"], "quirk": "Counts the racks twice and initials the log in green ink.", "routine_effect": "Longer locker_audit blocks, never skips the second count; less time at the bar." },
+    { "id": "range_rat", "traits": ["restless", "competitive"], "quirk": "Keeps a private high-score sheet for the firing range.", "routine_effect": "Swaps some off-duty rest for range_practice; rushes paperwork, never the chargers." },
+    { "id": "worrier", "traits": ["anxious", "kind"], "quirk": "Hums off-key while checking cell gauges and over-checks the door seal.", "routine_effect": "Extra door/seal checks on duty; poor sleeper, naps in the armory chair." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "armory", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Count issued gear against the outgoing log; sign only what I've seen." },
+    { "from": 0.5, "to": 2, "activity": "charger_round", "room": "armory", "spot": "junction", "anim": "interact", "interruptible": true, "social": "solo", "note": "Check charging racks, swap tired cells, log gauge levels." },
+    { "from": 2, "to": 3, "activity": "locker_audit", "room": "armory", "spot": "locker", "anim": "interact", "interruptible": true, "social": "solo", "note": "Serial-number audit of the zapper locker and restricted stores." },
+    { "from": 3, "to": 4, "activity": "range_and_calibration", "room": "armory", "spot": "workbench", "anim": "interact", "interruptible": true, "social": "pair", "note": "Calibrate zappers, test-fire at the range with a security officer." },
+    { "from": 4, "to": 4.75, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Mid-watch meal, usually with the security crowd." },
+    { "from": 4.75, "to": 6, "activity": "emitter_walk", "room": "brig", "spot": "corridor", "anim": "walk", "interruptible": true, "social": "solo", "note": "Walk the force-field emitters and brig cells with a test meter." },
+    { "from": 6, "to": 7.5, "activity": "issue_and_returns", "room": "armory", "spot": "desk", "anim": "interact", "interruptible": true, "social": "pair", "note": "Issue and take back gear for patrols; chase late returns." },
+    { "from": 7.5, "to": 8, "activity": "handover_out", "room": "armory", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Full count with relief, flag low cells and open faults." },
+    { "from": 8, "to": 9, "activity": "wind_down_wash", "room": "washroom", "spot": "door", "anim": "walk", "interruptible": true, "social": "solo", "note": "Clean up; powder smell and solvent stay on the hands." },
+    { "from": 9, "to": 10, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Proper meal, gossip about who lost what." },
+    { "from": 10, "to": 12, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Off-duty free time; pick from activities." },
+    { "from": 12, "to": 13, "activity": "exercise", "room": "gym", "spot": "weightbench", "anim": "interact", "interruptible": true, "social": "pair", "note": "Strength work keeps me sharp." },
+    { "from": 13, "to": 14, "activity": "personal_errands", "room": "quarters", "spot": "desk", "anim": "interact", "interruptible": true, "social": "solo", "note": "Laundry, letters, kit repair." },
+    { "from": 14, "to": 22, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Eight hours; wake only for red alert or intruder." },
+    { "from": 22, "to": 23, "activity": "breakfast", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Coffee first, then food." },
+    { "from": 23, "to": 24, "activity": "pre_watch_prep", "room": "armory", "spot": "locker", "anim": "walk", "interruptible": true, "social": "solo", "note": "Arrive early, skim last log before handover." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Hot meal with security", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [25, 45], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "Sits with the guards and gossips." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "One drink; never carries anything on a bar night." },
+    { "id": "holo_playroom", "label": "Holo-Playroom target game", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [20, 45], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Harmless holo-sims; keeps well away from Mr. Grinsworth." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Door locked, sidearm never in the room." },
+    { "id": "gym", "label": "Weights at the gym", "rooms": ["gym"], "spot": "weightbench", "anim": "interact", "minutes": [30, 50], "weight": 3, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.3, "hunger": 0.2, "stress": -0.4 }, "note": "Spots for the guards." },
+    { "id": "range_practice", "label": "Own-time range practice", "rooms": ["armory"], "spot": "workbench", "anim": "interact", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.3 }, "note": "Job-specific hobby: shoots for score, strips and cleans afterwards." },
+    { "id": "card_game", "label": "Cards in the lounge", "rooms": ["lounge"], "spot": "table", "anim": "sitting_idle", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.1, "stress": -0.3 }, "note": "Plays for ration chits only." },
+    { "id": "tinker", "label": "Tinker at the workshop", "rooms": ["workshop"], "spot": "workbench", "anim": "interact", "minutes": [20, 50], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.2 }, "note": "Rebuilds an old cell pack for fun." },
+    { "id": "walk", "label": "Wander the corridors", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [10, 25], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0, "stress": -0.2 }, "note": "Quiet bench among the trees." },
+    { "id": "armory_nap", "label": "Nap in the armory chair", "rooms": ["armory"], "spot": "desk", "anim": "sitting_idle", "minutes": [10, 20], "weight": 1, "social": "solo", "when": "free", "needs": { "fatigue": -0.4, "hunger": 0.05, "stress": 0 }, "note": "Only when the door is sealed and the log is up to date." }
+  ],
+  "duty_loops": [
+    { "id": "charger_round", "label": "Charge-rack round", "room": "armory", "spot": "junction", "every_min": 40, "duration_min": 8, "steps": ["walk to racks", "read gauges", "swap sagging cells", "log levels"], "system": "armory", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Armory. Chargers nominal, cells at full." },
+    { "id": "locker_audit", "label": "Serial-number audit", "room": "armory", "spot": "locker", "every_min": 120, "duration_min": 20, "steps": ["scan each serial", "match against issue log", "chase discrepancies", "seal locker"], "system": "security", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 4 } }, "bridge_report": "Bridge, Armory. Audit complete, all weapons accounted for." },
+    { "id": "emitter_walk", "label": "Force-field emitter test", "room": "brig", "spot": "corridor", "every_min": 90, "duration_min": 12, "steps": ["walk brig corridor", "test each emitter", "tag weak ones", "report to Deputy"], "system": "security", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Armory. Emitter four is weak, flagging for Engineering." },
+    { "id": "issue_returns", "label": "Issue and returns desk", "room": "armory", "spot": "desk", "every_min": 30, "duration_min": 5, "steps": ["check authority", "issue gear", "log return time", "inspect returned gear"], "system": "armory", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Full charger round and top up all cells", "at_run_min": 2, "room": "armory", "spot": "junction", "depends_on": "none", "reports_to": "dep", "if_neglected": "Cells sag; weapons are weak when an alert arrives." },
+      { "task": "Serial audit of the zapper locker", "at_run_min": 8, "room": "armory", "spot": "locker", "depends_on": "none", "reports_to": "dep", "if_neglected": "A missing weapon goes unnoticed." }
+    ],
+    "survey": [
+      { "task": "Issue sidearms and trackers to the landing party", "at_run_min": 3, "room": "armory", "spot": "desk", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "Away team goes down unarmed or unlogged." },
+      { "task": "Check the force-field emitters at the transporter", "at_run_min": 7, "room": "transporter", "spot": "pad", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "A contamination or intruder seal may fail." },
+      { "task": "Receive and clean gear on return", "at_run_min": 16, "room": "armory", "spot": "workbench", "depends_on": "other task", "reports_to": "dep", "if_neglected": "Fouled gear is locked up dirty." }
+    ],
+    "cargo_run": [
+      { "task": "Inspect and seal cargo-bay hazard lockers", "at_run_min": 4, "room": "cargo", "spot": "locker", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "Dangerous cargo sits unsecured." },
+      { "task": "Issue escort weapons for the handoff", "at_run_min": 10, "room": "armory", "spot": "desk", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "Cargo handoff has no armed escort." },
+      { "task": "Reconcile returns after the handoff", "at_run_min": 17, "room": "armory", "spot": "desk", "depends_on": "other task", "reports_to": "dep", "if_neglected": "Gear count is wrong at shift change." }
+    ],
+    "medical_relief": [
+      { "task": "Prepare quarantine-escort kits and restraints", "at_run_min": 3, "room": "armory", "spot": "locker", "depends_on": "bridge order", "reports_to": "cos", "if_neglected": "Security cannot enforce a ward cordon." },
+      { "task": "Test brig and sickbay door force-fields", "at_run_min": 9, "room": "sickbay", "spot": "door", "depends_on": "other task", "reports_to": "dep", "if_neglected": "Patients or contacts can wander out." }
+    ],
+    "shakedown": [
+      { "task": "Run a full weapons and emitter test", "at_run_min": 2, "room": "armory", "spot": "workbench", "depends_on": "bridge order", "reports_to": "dep", "if_neglected": "Faults found in a real emergency." },
+      { "task": "Live-fire calibration at the range", "at_run_min": 8, "room": "armory", "spot": "workbench", "depends_on": "other task", "reports_to": "dep", "if_neglected": "Zappers drift off zero." },
+      { "task": "Report all findings to the Deputy", "at_run_min": 15, "room": "armory", "spot": "console", "depends_on": "other task", "reports_to": "bridge", "if_neglected": "Bridge flies blind on defensive readiness." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Charging racks drop below normal", "message": "Bridge, Armory. Chargers are faulting, cells only half charging. Need Engineering on the junction.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Audit finds a missing weapon", "message": "Deputy, Armory. One zapper unaccounted for. Locking the armory and starting a trace.", "priority": "urgent", "to": "dep" },
+      { "trigger": "Routine round finished", "message": "Bridge, Armory. Armory secure, chargers nominal.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Intruder detected or lifeform scanner blind", "message": "Bridge, Armory. Internal sensors are blind. Recommend a manual sweep.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Issue sidearms to the landing party", "response_line": "Aye, Bridge. Issuing now, logging every serial.", "time_to_comply_min": 3, "refuses_if": "No authorised signature or the requester is unauthorised." },
+      { "order": "Open the armory to all hands", "response_line": "Bridge, confirm that order by the CO or Chief.", "time_to_comply_min": 2, "refuses_if": "Order does not come from the CO, XO or Chief of Security." },
+      { "order": "Status of the weapons", "response_line": "Armory ready, all weapons logged and charged.", "time_to_comply_min": 1, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Top up all cells, ready the issue desk, recheck the locker seal.", "room": "armory", "spot": "desk", "priority": 2, "comm_line": "Armory, yellow alert. Weapons charged and ready." },
+    "red": { "action": "Open the armory to authorised security only; issue weapons by the log.", "room": "armory", "spot": "desk", "priority": 1, "comm_line": "Armory, red alert. Issuing to security on the Deputy's word." },
+    "fire": { "action": "Seal the armory and clear the locker of cells away from the heat.", "room": "armory", "spot": "locker", "priority": 1, "comm_line": "Armory, fire. Cells and ammunition secured, sealing the door." },
+    "hull_breach": { "action": "Lock the armory, seal vents and report cells secure.", "room": "armory", "spot": "door", "priority": 2, "comm_line": "Armory, breach. Door sealed, weapons secure." },
+    "contamination": { "action": "Seal the armory and issue only by hatch to the quarantine teams.", "room": "armory", "spot": "door", "priority": 2, "comm_line": "Armory, quarantine. Sealed; issuing by hatch only." },
+    "power_failure": { "action": "Hand-crank locker open, swap to reserve cells, stand guard.", "room": "armory", "spot": "locker", "priority": 1, "comm_line": "Armory, power failure. Manual lock held, reserve cells in hand." },
+    "gravity_failure": { "action": "Strap down the racks and anchor myself, then secure loose gear.", "room": "armory", "spot": "locker", "priority": 2, "comm_line": "Armory, no gravity. Locker strapped, loose gear secured." },
+    "intruder": { "action": "Lock the armory and arm security by the Deputy's authority; take a post at the door.", "room": "armory", "spot": "door", "priority": 1, "comm_line": "Armory, intruder. Locked down, arming security on the Chief's word." },
+    "medical_emergency": { "action": "Stay at the armory, then send escorts if security needs them.", "room": "armory", "spot": "desk", "priority": 3, "comm_line": "Armory, copy. Standing by to support Sickbay." },
+    "abandon_ship": { "action": "Seal the locker, grab a sidearm and a spare cell, go to the airlock with security.", "room": "airlock", "spot": "door", "priority": 1, "comm_line": "Armory, abandoning. Locker sealed, going to the airlock." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "calm", "routine_change": "Full routine, second counts, a chat at the desk.", "lines": ["All counted. Quiet is good.", "Nothing missing is my favourite report."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Extra charger rounds; checks seals twice.", "lines": ["Something's off on the sensors. Cells topped up anyway.", "Recheck the emitters. Humour me."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Doubles rounds, keeps the armory locked, issues only by written order.", "lines": ["Chargers are failing. Where's Engineering?", "Nobody gets a weapon without a signature."], "leaves_post_if": "Only if the Deputy orders me to the bridge or a ward." },
+    "crisis": { "mood": "grim", "routine_change": "Lives at the armory; hands out gear on the Chief's word only.", "lines": ["Everything is locked. Authorised hands only.", "I have a count and I'm keeping it."], "leaves_post_if": "Fire reaching the armory or an abandon order." },
+    "collapse": { "mood": "resigned", "routine_change": "Final stock: carry the useful gear out and destroy the rest.", "lines": ["Take what you can carry. Leave the heavy stuff.", "Log it later, if there is a later."], "leaves_post_if": "Abandon ship order, or the armory floods or burns." }
+  },
+  "relationships": [
+    { "with_billet": "dep", "kind": "mentor", "effect": "Reports to them; takes the Deputy's word as authority and keeps the books clean for them." },
+    { "with_billet": "sec", "kind": "friend", "effect": "Shares meals and range time; issues them gear quickly." },
+    { "with_billet": "cos", "kind": "mentor", "effect": "Chief's order overrides most refusals; stiffens up when they visit." },
+    { "with_billet": "eps", "kind": "rival", "effect": "Constantly nags them about the charger junctions." },
+    { "with_billet": "guard", "kind": "mess_partner", "effect": "Has meals with the junior guards; teaches them gear care." }
+  ],
+  "barks": {
+    "idle": ["Counting cells. Again.", "Sure beats paperwork. Almost.", "Quiet armory, happy armory."],
+    "working": ["Serial 4471... checked.", "Easy on the racks.", "Log it, lock it, done."],
+    "greeting_player": ["Armory. State your business.", "Need something signed out?", "Mind the locker."],
+    "greeting_player_higher_rank": ["Sir, armory is ready for you.", "Ma'am, all weapons accounted for.", "At your order, sir."],
+    "greeting_player_lower_rank": ["Chargers are off limits, friend.", "Do you have authorisation?", "Hands off the racks, please."],
+    "tired": ["Need coffee. Then more coffee.", "Eyes are crossing on these serials.", "Longest count I've ever done."],
+    "hungry": ["I could eat a rack of cells.", "Mess, now.", "Is it lunch yet?"],
+    "stressed": ["Where's that missing zapper?", "I told them the chargers were failing.", "Everything is on me."],
+    "alert": ["Armory secure. Authorised hands only.", "Weapons are live. Stay clear.", "Keep your head down."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, offers a spare coffee chit, trusts them with a favour later.",
+    "player_neglects_duty": "Cold, short, and logs it for the Deputy; tells them what's overdue.",
+    "player_fakes_report": "Rechecks personally; if the report is false, reports it upward and stops trusting them.",
+    "player_gives_order_ok": "Complies at once with a clear 'Aye' and logs the signature.",
+    "player_gives_order_outranked": "Quotes the log, refuses to issue weapons, and asks for the Deputy or Chief.",
+    "player_out_of_place": "Asks them to step out of the armory, politely, then firmly.",
+    "player_asks_favour": "Does small harmless favours (a cell swap, cleaning kit) but never a weapon without authority."
+  },
+  "decision_rules": [
+    "IF anyone asks for a weapon without a Deputy, Chief or CO signature THEN refuse and offer to call the authority.",
+    "IF cell gauges drop below 80 percent THEN swap cells and call Engineering about the junction.",
+    "IF the audit is a serial short THEN lock the armory, report to the Deputy and start a trace before telling anyone else.",
+    "IF red alert sounds THEN issue by log to security only, one signature at a time.",
+    "IF an intruder alert sounds THEN seal the door and stay until the Chief releases weapons.",
+    "IF fire or power fails THEN secure cells and ammunition first, report second.",
+    "IF I'm tired and the round is overdue THEN do the charger round first and rush the paperwork.",
+    "IF a friend asks to borrow a weapon for a bet THEN no, whatever the dare.",
+    "IF the bridge asks for status THEN answer with exact numbers, not 'fine'.",
+    "IF off duty and the ship is quiet THEN eat, shoot or sleep; check the log before bed.",
+    "IF an abandon order comes THEN lock the locker and take a sidearm and spare cell to the airlock."
+  ],
+  "information_view": "I see power-cell levels first, charger faults, weapon issue and return logs, and brig and corridor force-field status. Security chatter on comm and the missing-gear count tell me about trouble before the bridge does.",
+  "temptations": [
+    "Skipping the second serial count on a late shift; a missing weapon surfaces during handover.",
+    "Signing out gear for a friend on a promise; if it goes wrong, I carry the blame.",
+    "Marking chargers 'nominal' when the junction is half dead; the cells fail in the next alert.",
+    "Napping in the armory chair with the door unsealed."
+  ]
+}
