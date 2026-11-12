@@ -4,7 +4,7 @@ Iteration of the first brainstorm. Goal: you are dealt a random billet (Captain 
 working ship, and you can do that person's job, cut corners, or ignore it, and the ship answers back.
 Working mode name stays **Full Complement**; madness becomes one failure mode among several.
 
-Grounded in the code as it is: `js/crew.js` already has 8 departments, 36 billets (rank 0–6, reporting lines),
+Grounded in the code as it is: `js/crew.js` already has 8 departments, 41 billets (rank 0–6, reporting lines),
 21 systems with parts/effects, cascades, `ShipState.effects()` as the one consequence hub, a roster of 60–90 named
 people and a pacing director. This design adds a *player-as-roster-member*, a *duty/orders/consequence layer* and a
 *living NPC schedule*, on top of those.
@@ -104,7 +104,7 @@ A duty card is data per billet: `{ station, routine, standing duties, order sour
 A **duty** is a small loop: *go to a station → perform an action → (optional) minigame or timed hold → result*,
 with quality `proper | rushed | skipped | faked`. The player and NPCs use the same duty definitions.
 
-### 5.1 Billet table (all 36)
+### 5.1 Billet table (all 41)
 
 | Billet | Station / system | Duty loop | If neglected |
 |---|---|---|---|
@@ -378,3 +378,20 @@ Every step stays seed-deterministic so `tools/test.mjs` can run headless sim-day
 2. How much **hand-holding** at the start (duty board tutorial) versus discovery?
 3. **Multiplayer-ish asynchrony** later (other humans as NPC slots)? Not now, but worth not blocking.
 4. Is the **ship day compression** right at ~36 min, or should runs be shorter?
+
+---
+
+## 16. Owner decisions (v2.1)
+
+- **Death is not the end of the run.** When the player's character dies the player chooses: *continue as another
+  living crew member* (the ship's story carries on, with that person's duty card and standing) or *back to the menu*.
+- **Run length: ~20 minutes** (about 6 ship hours; see `docs/crew-sim/SCHEMA.md` for the clock).
+- **Bridge-centric operation.** Everything is set by the bridge crew's main goal, the mission. The bridge is
+  responsive: bridge staff communicate with the crew and the crew communicate with the bridge as needed. When a
+  ship-wide alert sounds, the **HUD shows the alert and what it means** to the player.
+- **Whole ship at once, fully walkable.** All decks persist and are travelable. **The turbolift is a real lift**:
+  step in, choose a deck, ride, step out.
+- **Crew behaviour comes from role-play.** One Sonnet agent plays each billet (41), deciding what that person
+  would really do: duty loops, off-duty (rec bar, holo-playroom, gym, sleep), bridge calls, alert responses,
+  reactions to the player. Output is `docs/crew-sim/<billet>.json` (validated by `tools/check-crew-sim.mjs`) and
+  becomes the data behind `js/sim.js`.
