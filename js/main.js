@@ -318,13 +318,12 @@ function fidgetStep(e, dt, d) {
 // ---- dodging: step aside when the player sprints at someone standing still, then drift back to the spot
 const DODGE_LINES = ['Whoa!', 'Watch it!', 'Hey, careful!', 'Coming through, huh?'];
 function dodgeCheck(e, dt, d) {
-  if (e.retT > 0) { e.retT -= dt; if (e.retT <= 0 && !e.walk && e.returnTo) { startWalk(e, e.returnTo[0], e.returnTo[1], false); e.returnTo = null; } }
-  e.dodgeCool = (e.dodgeCool || 0) - dt; if (e.walk || e.dodgeCool > 0 || d > 2.8 || G.phase !== 'play') return;
-  const sp = Math.hypot(P.vx || 0, P.vz || 0); if (sp < 3.0) return;
-  const vx = P.vx / sp, vz = P.vz / sp, rx = e.x - P.x, rz = e.z - P.z, ahead = rx * vx + rz * vz, lat = rx * -vz + rz * vx; if (ahead < 0.1 || ahead > 2.9 || Math.abs(lat) > 0.85) return;
-  const [ex, ey] = world.tile(e.x, e.z), s = lat >= 0 ? 1 : -1, cand = [[-vz * s, vx * s], [vz * s, -vx * s]].flatMap(([dx, dz]) => [[Math.round(dx), Math.round(dz)], [Math.sign(dx), Math.sign(dz)]]);
-  for (const [dx, dy] of [...cand, ...WALK_DIRS]) { const x = ex + dx, y = ey + dy; if ((dx || dy) && world.grid[y]?.[x] === 0 && !world.isTube(x, y) && (Math.abs(dx) + Math.abs(dy)) === 1) { const [cx, cz] = world.center(x, y); if (Math.hypot(cx - P.x, cz - P.z) < 1.0) continue; e.dodgeCool = 5; startWalk(e, x, y, false, { run: true, dodge: true, returnTo: e.returnTo || [ex, ey] }); if (e.person && Math.random() < 0.5) { const t = DODGE_LINES[Math.floor(Math.random() * DODGE_LINES.length)]; G.say(`${e.person.short}: ${t}`, 'npc'); try { speak(e.person, t); } catch (er) { } } return; }
-  }
+  if (e.retT > 0) { e.retT -= dt; if (e.retT <= 0 && !e.walk && e.returnTo) { const r = e.returnTo; e.returnTo = null; startWalk(e, 0, 0, false, { point: r, run: false }); } }
+  e.dodgeCool = (e.dodgeCool || 0) - dt; if (e.walk || e.dodgeCool > 0 || d > 3.4 || G.phase !== 'play') return;
+  const sp = Math.hypot(P.vx || 0, P.vz || 0); if (sp < 2.6) return;
+  const vx = P.vx / sp, vz = P.vz / sp, rx = e.x - P.x, rz = e.z - P.z, ahead = rx * vx + rz * vz, lat = rx * -vz + rz * vx; if (ahead < 0.1 || ahead > 3.3 || Math.abs(lat) > 1.0) return;
+  const s = lat >= 0 ? 1 : -1, home = e.returnTo || [e.x, e.z];
+  for (const k of [s, -s]) { const px = e.x + -vz * k * 0.95, pz = e.z + vx * k * 0.95; if (world.los(e.x, e.z, px, pz) && world.los(e.x + -vz * k * 0.3, e.z + vx * k * 0.3, px + -vz * k * 0.3, pz + vx * k * 0.3)) { e.dodgeCool = 5; startWalk(e, 0, 0, false, { point: [px, pz], run: true, returnTo: home }); if (e.person && Math.random() < 0.5) { const t = DODGE_LINES[Math.floor(Math.random() * DODGE_LINES.length)]; G.say(`${e.person.short}: ${t}`, 'npc'); try { speak(e.person, t); } catch (er) { } } return; } }
 }
 // collapse: the crew make for the shuttlebay (running, crawling through tubes when it is quicker) and the sim keeps them there
 function evacuationStep(dt) {
@@ -339,41 +338,63 @@ function gaitFor(e) {   // this walker's gait right now: their own mix of parts,
   return e.gaitCtx;
 }
 function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, opts }; e.run = !!opts.run; }
-function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, yielding to others.
-  const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, [tx, ty] = world.tile(e.x, e.z), cur = f[tx + ty * W];
-  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
-  if (cur < 0) return finish();
+function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, right-hand passing, braking, wall clearance.
+  const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, gt = gaitFor(e);
+  const clampY = () => { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading || 0) * 0.6, e.z + Math.cos(e.heading || 0) * 0.6), gy = (e.v || 0) > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0, dy = gy - y0; e.y = y0 + Math.max(-2.4 * dt, Math.min(3.2 * dt, dy * Math.min(1, dt * 9))); e.mesh.position.y = e.y; };
+  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
+  if (e.heading === undefined) e.heading = e.mesh.rotation.y;
+  const turnTo = (gx, gz, k = 1) => { const want = Math.atan2(gx - e.x, gz - e.z); const err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading)); const mt = Math.min(5.2, e.v > 0.3 ? gt.turn : gt.turn * 1.3) * dt * k; e.heading += Math.max(-mt, Math.min(mt, err)); e.mesh.rotation.y = e.heading; return err; };
+  const animate = (clip, scale) => { if (!H) return; if (!e.walking || e.clip !== clip) { try { H.play(clip, { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = clip; } };
+  const [mx0, my0] = world.tile(e.x, e.z);
+  // short sidestep / settle to a point (dodging): straight toward it, no path field
+  if (w.opts.point) {
+    const [px, pz] = w.opts.point, dist = Math.hypot(px - e.x, pz - e.z); if (dist < 0.07) return finish();
+    const err = turnTo(px, pz, 1.4), sp0 = (w.opts.run ? 3.0 : 1.5) * Math.max(0.2, Math.cos(Math.min(1.3, Math.abs(err)))) * Math.min(1, 0.25 + dist / 0.6);
+    e.v = (e.v || 0) + Math.max(-12 * dt, Math.min(9 * dt, sp0 - e.v)); const sp = Math.min(e.v * dt, dist); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.27); e.x = q.x; e.z = q.z; e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
+    animate(w.opts.run ? gt.clip : 'walk'); if (H && d <= 22) { H.add = null; H.lookYaw += (0 - H.lookYaw) * Math.min(1, dt * 4); H.update(dt * Math.max(0.5, Math.min(2.2, e.v / (w.opts.run ? 3.0 : 0.95)))); } return true;
+  }
+  let cur = f[mx0 + my0 * W];
+  if (cur < 0) {   // grazed a blocked corner: step back onto the nearest walkable tile instead of giving up
+    let best = null, bd = 1e9; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = mx0 + dx, y = my0 + dy; if (x < 0 || y < 0 || x >= W || y >= world.H || f[x + y * W] < 0) continue; const [cx, cz] = world.center(x, y), dd = Math.hypot(cx - e.x, cz - e.z); if (dd < bd) { bd = dd; best = [cx, cz]; } }
+    if (!best) return finish(); e.x += (best[0] - e.x) * Math.min(1, dt * 6); e.z += (best[1] - e.z) * Math.min(1, dt * 6); e.mesh.position.x = e.x; e.mesh.position.z = e.z; cur = 1;
+  }
+  const [tx, ty] = world.tile(e.x, e.z); cur = f[tx + ty * W] >= 0 ? f[tx + ty * W] : cur;
+  e.crawl = world.isTube(tx, ty); e.climbing = world.tubeKind(tx, ty) === 'lad'; const vault = world.grid[ty]?.[tx] === 2;
   const [fx, fz] = world.center(w.tx, w.ty), toEnd = Math.hypot(fx - e.x, fz - e.z);
-  const gt = gaitFor(e), [mx, my] = world.tile(e.x, e.z);
-  e.crawl = world.isTube(mx, my); e.climbing = world.tubeKind(mx, my) === 'lad'; const vault = world.grid[my]?.[mx] === 2;
-  // look-ahead: follow the field downhill up to 4 tiles and aim at the furthest one that is in clear sight
-  let gx, gz, ax = tx, ay = ty, av = cur; const chain = [];
-  for (let k = 0; k < (e.crawl || e.climbing || w.opts.tubes ? 1 : gt.cut ? 6 : 4) && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
-  if (!chain.length) { gx = fx; gz = fz; } else { let pick = chain[0]; for (const c of chain) { const [cx, cz] = world.center(c[0], c[1]); if (world.los(e.x, e.z, cx, cz) && (c === chain[0] || world.los(e.x + 0.28, e.z, cx + 0.28, cz) && world.los(e.x - 0.28, e.z, cx - 0.28, cz) && world.los(e.x, e.z + 0.28, cx, cz + 0.28) && world.los(e.x, e.z - 0.28, cx, cz - 0.28))) pick = c; else break; } [gx, gz] = world.center(pick[0], pick[1]); }
+  // look-ahead: follow the field downhill and aim at the furthest tile in clear sight (with body-width clearance)
+  let gx, gz, ax = tx, ay = ty, av = cur; const chain = [], tubeish = e.crawl || e.climbing || w.opts.tubes;
+  for (let k = 0; k < (tubeish ? 1 : gt.cut ? 6 : 4) && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
+  if (!chain.length) { gx = fx; gz = fz; } else { let pick = chain[0]; for (const c of chain) { const [cx, cz] = world.center(c[0], c[1]); if (c === chain[0] || (world.los(e.x, e.z, cx, cz) && [[0.34, 0], [-0.34, 0], [0, 0.34], [0, -0.34]].every(([ox, oz]) => world.los(e.x + ox, e.z + oz, cx + ox, cz + oz)))) pick = c; else break; } [gx, gz] = world.center(pick[0], pick[1]); }
   if (av === 0 && chain.length && chain[chain.length - 1][0] === w.tx && chain[chain.length - 1][1] === w.ty && world.los(e.x, e.z, fx, fz)) { gx = fx; gz = fz; }
   if (cur === 0) { gx = fx; gz = fz; }
-  // yield to / sidestep other walkers and the player
-  let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg;
-  for (const o of ents) { if (o === e || (o.kind !== 'crew' && o !== null) || !o.mesh) continue; const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 1.3 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.35) continue; const side = (ox * -uz + oz * ux) > 0 ? -1 : 1; gx += -uz * side * (gt.space * 0.6); gz += ux * side * (gt.space * 0.6); if (od < gt.space && (o.walk ? o.person.id < e.person.id : true)) slow = Math.min(slow, 0.15 + od * 0.4); }
-  const pd = Math.hypot(P.x - e.x, P.z - e.z); if (pd < 1.5 && ((P.x - e.x) * ux + (P.z - e.z) * uz) / (pd || 1) > 0.4) slow = Math.min(slow, pd < 0.9 ? 0 : 0.3);
-  // heading steers toward the goal at a capped rate; speed eases with turn error, nearness to the end and obstacles
-  if (e.heading === undefined) e.heading = e.mesh.rotation.y;
-  const want = Math.atan2(gx - e.x, gz - e.z); let err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading));
-  const maxTurn = (e.v > 0.3 ? gt.turn : gt.turn * 1.3) * dt; e.heading += Math.max(-maxTurn, Math.min(maxTurn, err)); e.mesh.rotation.y = e.heading;
+  // pass others on the right-hand side (so two people meeting both step the same way), slow for anyone you cannot get round
+  let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg, rx = uz, rz = -ux;   // (rx, rz) = right of travel
+  const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh), { x: P.x, z: P.z, player: true }];
+  for (const o of others) {
+    const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 3.0 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.3) continue; const lat = ox * rx + oz * rz; if (Math.abs(lat) > 1.3) continue;
+    const need = gt.space * 1.05 - (o.player ? 0.1 : 0) - lat * 0.0, k = Math.max(0.25, 1 - od / 3.0) * 1.2; gx += rx * need * k; gz += rz * need * k;   // always bear right of them
+    if (od < 0.8 + gt.space * 0.3 && (!(e.ghost > 0) || o.player)) slow = Math.min(slow, Math.max(0.05, (od - 0.35) / 0.8));
+  }
+  // heading steers toward the goal at a capped rate; speed eases with turn error, nearness to the end, braking distance and obstacles
+  const err = turnTo(gx, gz);
   e.pauseCool = (e.pauseCool || 0) - dt; if ((e.pauseT || 0) > 0) { e.pauseT -= dt; slow = Math.min(slow, 0.05); } else if (Math.abs(err) > 0.8 && e.v > 0.7 && e.pauseCool <= 0 && gt.pause > 0 && Math.random() < gt.pause * dt * 8) { e.pauseT = 0.5 + Math.random() * 0.8; e.pauseCool = 5; }
-  const turnK = Math.abs(err) > 1.2 ? 0 : Math.max(0.25, Math.cos(Math.abs(err))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = gt.v * slow * turnK * (w.vanish ? 1 : arrive) * (e.climbing ? 0.4 : e.crawl ? 0.5 : vault ? 0.55 : 1);
+  const turnK = (Math.abs(err) > 1.2 && toEnd > 0.5) ? 0 : Math.max(0.25, Math.cos(Math.min(1.3, Math.abs(err)))), brake = Math.sqrt(2 * 1.5 * gt.accel * Math.max(0, toEnd - 0.04)) + 0.12;
+  let target = gt.v * slow * turnK * (e.climbing ? 0.4 : e.crawl ? 0.5 : vault ? 0.55 : 1); if (!w.vanish) target = Math.min(target, brake);
   e.v = (e.v || 0); e.v += Math.max(-1.5 * gt.accel * dt, Math.min(gt.accel * dt, target - e.v));
   if (toEnd < 0.05 && !w.vanish) return finish();
   if (w.vanish && cur === 0 && toEnd < 0.2) return finish();
-  if (e.v < 0.02 && slow < 0.2) { if ((w.stuck += dt) > 7) return finish(); } else w.stuck = 0;
-  const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; e.mesh.position.x = e.x; e.mesh.position.z = e.z;
-  { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading) * 0.6, e.z + Math.cos(e.heading) * 0.6), gy = e.v > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0; e.y = y0 + Math.max(-7 * dt, Math.min(3.2 * dt, gy - y0)); e.mesh.position.y = e.y; }
+  // blocked by someone for a while: squeeze past (ghost through NPCs) rather than teleport; a player in a one-tile corridor is simply waited for
+  if (e.v < 0.05 && slow < 0.3) { w.stuck += dt; if (w.stuck > 2.5) e.ghost = 1.5; if (w.stuck > 30) return finish(); } else w.stuck = Math.max(0, w.stuck - dt);
+  if (e.ghost > 0) e.ghost -= dt;
+  const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp;
+  if (!e.climbing) { const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.26); e.x = q.x; e.z = q.z; }   // never clip walls
+  if (toEnd < 0.35 && !w.vanish) { const k = Math.min(1, dt * 7); e.x += (fx - e.x) * k; e.z += (fz - e.z) * k; }   // ease onto the exact spot
+  e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
   if (H) {
-    const clip = e.climbing ? 'push' : e.crawl || vault ? 'crouch_fwd' : gt.clip;
-    if (!e.walking || e.clip !== clip) { try { H.play(clip, { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = clip; }
+    const clip = e.climbing ? 'push' : e.crawl || vault ? 'crouch_fwd' : gt.clip; animate(clip);
     if (d > 22) return true;
     if (!e.run && !e.crawl && !e.climbing && !vault) fidgetStep(e, dt, d); else { H.add = null; }
-    const ph = e.gaitBase.phase; e.gt = (e.gt || 0) + dt; let look = Math.sin(e.gt * 0.7 + ph) * gt.sway * (gt.look ? 3 : 1);
+    const ph = e.gaitBase.phase; e.gt = (e.gt || 0) + dt; let look = Math.sin(e.gt * 0.7 + ph) * gt.sway * (gt.look ? 3 : 1); const pd = Math.hypot(P.x - e.x, P.z - e.z);
     if (pd < 3.8 && Math.abs(Math.atan2(P.x - e.x, P.z - e.z) - e.heading) < 1.2 && hash01('glance', e.person.id, Math.floor(e.gt / 3)) < gt.glance) look = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(Math.atan2(P.x - e.x, P.z - e.z) - e.heading), Math.cos(Math.atan2(P.x - e.x, P.z - e.z) - e.heading))));
     H.lookYaw += (look - H.lookYaw) * Math.min(1, dt * 3.5); H.update(dt * (e.climbing ? 1.4 : e.crawl || vault ? Math.max(0.8, e.v / 0.6) : Math.max(0.3, Math.min(2.2, e.v / gt.stride))));
   }
