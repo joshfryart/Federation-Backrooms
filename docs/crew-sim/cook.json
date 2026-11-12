@@ -1,0 +1,152 @@
+{
+  "billet": "cook",
+  "role_summary": "I'm a junior cook in the galley. I turn the replicator base stock, hydroponic produce and bulk stores into meals people actually want to eat, because a replicated stew nobody asked for is just fuel. I care about hot food on time, a clean counter, and that nobody on any watch goes hungry; I hear every rumour on the ship across the serving line.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["punctual", "tidy", "nervous"], "quirk": "Labels every tray with a ready time and checks the cold-store log twice.", "routine_effect": "Longer prep blocks, never skips sanitising; arrives early to handover and complains when the Galley Chief is late." },
+    { "id": "gossip_and_soup", "traits": ["chatty", "generous", "easily distracted"], "quirk": "Slips extra portions to anyone who looks rough and trades news for it.", "routine_effect": "Lingers on the serving line and in the lounge; rushes cleanup; takes more social off-duty slots." },
+    { "id": "tinkerer", "traits": ["curious", "stubborn", "night owl"], "quirk": "Keeps a private sourdough starter and tweaks recipes against orders.", "routine_effect": "Extra hobby time in stores and arboretum; skips the standard menu if unsupervised; sleeps late." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "mess", "spot": "counter", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take handover from the outgoing cook: stock levels, what broke, who is on a special diet." },
+    { "from": 0.5, "to": 2, "activity": "prep_meal", "room": "mess", "spot": "stove", "anim": "interact", "interruptible": true, "social": "solo", "note": "Chop, season and cook the main meal; check replicator base stock first." },
+    { "from": 2, "to": 3.5, "activity": "serve_meal", "room": "mess", "spot": "serving_line", "anim": "interact", "interruptible": true, "social": "group", "note": "Serve the crowd; the ship's mood is read off this line." },
+    { "from": 3.5, "to": 4.5, "activity": "clean_galley", "room": "mess", "spot": "sink", "anim": "interact", "interruptible": true, "social": "pair", "note": "Scrub down, sanitise surfaces, run the dish cycle." },
+    { "from": 4.5, "to": 5.5, "activity": "stores_check", "room": "stores", "spot": "locker", "anim": "interact", "interruptible": true, "social": "solo", "note": "Inventory dry goods and cold store, flag shortages to Galley Chief." },
+    { "from": 5.5, "to": 7, "activity": "prep_next", "room": "mess", "spot": "table", "anim": "interact", "interruptible": true, "social": "pair", "note": "Prep for the next shift's meal; bake bread; set out night snacks." },
+    { "from": 7, "to": 8, "activity": "handover_out", "room": "mess", "spot": "counter", "anim": "interact", "interruptible": false, "social": "pair", "note": "Hand over to the next cook and log wastage." },
+    { "from": 8, "to": 9, "activity": "eat_meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Finally eat my own food, sitting down." },
+    { "from": 9, "to": 11, "activity": "rec_bar", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Drink, cards and gossip with crew I fed all day." },
+    { "from": 11, "to": 12, "activity": "gym", "room": "gym", "spot": "treadmill", "anim": "walking", "interruptible": true, "social": "solo", "note": "Burn off the stress; cooks spend all day on their feet but not moving." },
+    { "from": 12, "to": 13, "activity": "wash_up", "room": "washroom", "spot": "sink", "anim": "interact", "interruptible": true, "social": "solo", "note": "Wash off the galley smell." },
+    { "from": 13, "to": 20, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Sleep; cooks sleep like the dead after a double service." },
+    { "from": 20, "to": 22, "activity": "hobby", "room": "arboretum", "spot": "tree", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Pick herbs for tomorrow and sit among the trees." },
+    { "from": 22, "to": 24, "activity": "holo_playroom", "room": "holodeck", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Holo-Playroom: a program of a seaside market." }
+  ],
+  "activities": [
+    { "id": "eat_meal", "label": "Sit down and eat a proper meal", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 4, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.8, "stress": -0.1 }, "note": "The one meal of the day I do not cook." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Swap news, play cards." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: seaside market", "rooms": ["holodeck"], "spot": "console", "anim": "interact", "minutes": [30, 60], "weight": 2, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Wander a market that has real smells." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 420], "weight": 5, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.2 }, "note": "Dead to the world after service." },
+    { "id": "gym", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walking", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Clears my head." },
+    { "id": "herb_garden", "label": "Pick herbs in the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "sitting_idle", "minutes": [15, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0, "stress": -0.3 }, "note": "Job-specific hobby: fresh basil beats anything replicated." },
+    { "id": "experimental_baking", "label": "Bake experimental bread", "rooms": ["mess"], "spot": "stove", "anim": "interact", "minutes": [30, 60], "weight": 1, "social": "pair", "when": "free", "needs": { "fatigue": 0.1, "hunger": -0.2, "stress": -0.2 }, "note": "Off-menu loaf; share it around." },
+    { "id": "visit_friend", "label": "Take a plate to a friend on watch", "rooms": ["bridge", "engineering", "sickbay"], "spot": "console", "anim": "talking", "minutes": [5, 15], "weight": 1, "social": "pair", "when": "free", "needs": { "fatigue": 0, "hunger": 0, "stress": -0.2 }, "note": "Cheap way to learn the news." }
+  ],
+  "duty_loops": [
+    { "id": "meal_service", "label": "Cook and serve the meal", "room": "mess", "spot": "stove", "every_min": 90, "duration_min": 30, "steps": ["check stock", "prep ingredients", "cook", "plate", "serve the line"], "system": null,
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.6, "debt": 1 }, "skipped": { "time": 0, "debt": 4 }, "faked": { "time": 0.2, "debt": 3 } },
+      "bridge_report": "Meal service ready, only mentioned if late or stock is short." },
+    { "id": "replicator_stock", "label": "Check galley replicator base stock and feed lines", "room": "mess", "spot": "replicator", "every_min": 60, "duration_min": 5, "steps": ["read gauges", "swap base cartridge", "run sample plate", "log"], "system": "replicators",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": "Galley, bridge. Replicators low on base stock; request Replicator Tech." },
+    { "id": "cold_store_check", "label": "Check cold store and dry stores", "room": "stores", "spot": "locker", "every_min": 120, "duration_min": 8, "steps": ["walk to stores", "check temperatures", "count crates", "log and flag shortages"], "system": "life",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": null },
+    { "id": "galley_clean", "label": "Scrub and sanitise the galley", "room": "mess", "spot": "sink", "every_min": 90, "duration_min": 15, "steps": ["clear the line", "scrub surfaces", "run dishes", "empty waste"], "system": null,
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } },
+      "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Cook the ordinary meal and keep the line moving", "at_run_min": 2, "room": "mess", "spot": "stove", "depends_on": "none", "reports_to": "galley", "if_neglected": "Hunger rises, morale drops, crew grumble on comms." },
+      { "task": "Stock check and shopping list for the Galley Chief", "at_run_min": 10, "room": "stores", "spot": "locker", "depends_on": "none", "reports_to": "galley", "if_neglected": "Shortages surprise us next week." }
+    ],
+    "survey": [
+      { "task": "Prepare a sealed, easy meal for the science crew at consoles", "at_run_min": 3, "room": "mess", "spot": "stove", "depends_on": "bridge order", "reports_to": "galley", "if_neglected": "Lab crew skip meals and make mistakes." },
+      { "task": "Deliver coffee and sandwiches to lab and sensor stations", "at_run_min": 8, "room": "lab", "spot": "console", "depends_on": "prepare meal", "reports_to": "none", "if_neglected": "Exhausted analysts; stress rises." }
+    ],
+    "cargo_run": [
+      { "task": "Receive and shelve incoming food crates", "at_run_min": 4, "room": "stores", "spot": "locker", "depends_on": "bridge order", "reports_to": "qm", "if_neglected": "Perishables spoil on the dock." },
+      { "task": "Cook big batch meal for the loading crews", "at_run_min": 9, "room": "mess", "spot": "stove", "depends_on": "none", "reports_to": "galley", "if_neglected": "Cargo handlers eat cold rations and slow down." }
+    ],
+    "medical_relief": [
+      { "task": "Cook bland, high-calorie meals for patients and sickbay staff", "at_run_min": 3, "room": "mess", "spot": "stove", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Patients recover slower; medics go hungry." },
+      { "task": "Carry trays to sickbay", "at_run_min": 8, "room": "sickbay", "spot": "biobed", "depends_on": "cook meal", "reports_to": "nurse", "if_neglected": "Nurses leave patients to fetch food themselves." },
+      { "task": "Make extra water and broth in bulk", "at_run_min": 13, "room": "mess", "spot": "stove", "depends_on": "none", "reports_to": "galley", "if_neglected": "Supplies run dry as the crowd grows." }
+    ],
+    "shakedown": [
+      { "task": "Test all galley equipment, hot plates and replicator lines", "at_run_min": 2, "room": "mess", "spot": "replicator", "depends_on": "bridge order", "reports_to": "galley", "if_neglected": "A fault is found mid-service." },
+      { "task": "Report any galley faults to the bridge and Replicator Tech", "at_run_min": 6, "room": "mess", "spot": "console", "depends_on": "test equipment", "reports_to": "bridge", "if_neglected": "Faults stay hidden until they fail." },
+      { "task": "Cook a quick meal under drill conditions", "at_run_min": 12, "room": "mess", "spot": "stove", "depends_on": "none", "reports_to": "galley", "if_neglected": "Drill crews fed late, griping." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Replicator base stock low, cannot make full menu", "message": "Bridge, Galley. Replicators are running low on base stock. I can still do hot meals, but the menu is short.", "priority": "routine", "to": "bridge" },
+      { "trigger": "Fire in galley", "message": "Bridge, Galley! Grease fire at the stove. Suppression is firing, I'm clearing the room.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Cold store fails and food is spoiling", "message": "Bridge, Galley. Cold store is warming up. Need engineering before the food turns.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Crew in galley collapse or choke", "message": "Bridge, Galley. Someone's down in the mess. We need a medic now.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Prepare meals for a long shift", "response_line": "Galley, aye. I'll get the big pots on now.", "time_to_comply_min": 15, "refuses_if": "No stock left; I'll say so rather than fake it." },
+      { "order": "Send food to the bridge", "response_line": "On my way up with a tray, Bridge.", "time_to_comply_min": 5, "refuses_if": "I'm in the middle of serving a full line; I'll send a hand instead." },
+      { "order": "Clear the mess for an emergency", "response_line": "Mess clear. Everybody out, now.", "time_to_comply_min": 2, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Keep serving but prep sealed meals and put away anything loose.", "room": "mess", "spot": "counter", "priority": 3, "comm_line": "Galley, aye. Yellow. Prepping grab-and-go rations." },
+    "red": { "action": "Stop service, secure knives and hot plates, go to my station as a runner.", "room": "mess", "spot": "counter", "priority": 2, "comm_line": "Galley. Red. Stove's off, I'm standing by for orders." },
+    "fire": { "action": "Hit suppression, kill the stove, pull everyone out, call the bridge.", "room": "mess", "spot": "stove", "priority": 1, "comm_line": "Fire in the galley! Suppression is on, I'm getting everyone out!" },
+    "hull_breach": { "action": "Seal the galley door, shut off hot plates, help the wounded to the corridor.", "room": "mess", "spot": "door", "priority": 1, "comm_line": "Breach near the galley! Sealing the door and counting heads." },
+    "contamination": { "action": "Stop serving, cover all food, lock the galley and stay put.", "room": "mess", "spot": "counter", "priority": 2, "comm_line": "Galley, aye. Quarantine. Food covered, door sealed." },
+    "power_failure": { "action": "Take out the cold-store food, use manual burners, serve cold meals.", "room": "mess", "spot": "stove", "priority": 3, "comm_line": "Galley, no power at the stoves. Switching to cold rations." },
+    "gravity_failure": { "action": "Strap down pots, tie the stock, grab drifting stuff and stay put.", "room": "mess", "spot": "counter", "priority": 2, "comm_line": "Galley, gravity's out. Everything's strapped. Nobody's scalded, yet." },
+    "intruder": { "action": "Lock the galley door, grab a heavy pan, keep the staff behind the counter.", "room": "mess", "spot": "door", "priority": 2, "comm_line": "Galley, locked down. Nobody comes in. I'm armed with a skillet." },
+    "medical_emergency": { "action": "Drop what I'm doing, help the casualty, send someone for sickbay.", "room": "mess", "spot": "table", "priority": 1, "comm_line": "Bridge, Galley. Medical emergency in the mess. Medic needed." },
+    "abandon_ship": { "action": "Grab ration packs, lead the diners to the shuttlebay, count heads.", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Galley crew heading to the shuttlebay with rations. Moving now." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "content", "routine_change": "Normal service; experiments with seasoning and chats on the line.", "lines": ["Soup's up, and it's actually good.", "Anyone want seconds? Don't be shy."], "leaves_post_if": null },
+    "anomalies": { "mood": "wary", "routine_change": "Checks stock more often, hears odd rumours and relays them.", "lines": ["Flickering stove lights, again. I'm writing it down.", "Everyone's eating faster tonight. Odd."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Menu shrinks, cold-store checks every hour, rations stretched.", "lines": ["Replicator's making gruel. I'm cooking real food while I can.", "Don't waste it. We might not get more."], "leaves_post_if": "Cold store failure and food spoils; goes to find an engineer or the bridge." },
+    "crisis": { "mood": "anxious", "routine_change": "Serves ration packs from the stores, brings food to stations that cannot leave.", "lines": ["Eat something. You can't fix anything on an empty stomach.", "I'm bringing trays to you. Stay at your post."], "leaves_post_if": "Galley is unsafe, on fire or flooded; falls back to the stores." },
+    "collapse": { "mood": "grim", "routine_change": "Hands out whatever is left, helps casualties, stays with the crowd.", "lines": ["Take what you can carry. Go.", "I've got rations. Stay together."], "leaves_post_if": "Always; the galley is gone, joins evacuation." }
+  },
+  "relationships": [
+    { "with_billet": "galley", "kind": "mentor", "effect": "My boss; I follow the menu but cover for stock mistakes and tell them when the crew is unhappy." },
+    { "with_billet": "rep", "kind": "friend", "effect": "Trade favours: I feed them, they fix the galley replicator first." },
+    { "with_billet": "qm", "kind": "rival", "effect": "Argues over requisitions; I assume they hoard the good stock." },
+    { "with_billet": "nurse", "kind": "confidant", "effect": "Swap food for gossip; they tell me who needs special diets." },
+    { "with_billet": "cargo", "kind": "mess_partner", "effect": "Cargo handlers eat with me after watch and help carry crates." }
+  ],
+  "barks": {
+    "idle": ["Wonder what the soup of the day is. Oh, it's me.", "Chopping onions. No, I'm not crying.", "Nobody ever compliments the dishwasher."],
+    "working": ["Careful, it's hot!", "Two more minutes on the rice.", "Hands off the bread, it's resting."],
+    "greeting_player": ["Hungry? Sit, I'll find something.", "You look like you skipped breakfast.", "Pull up a stool, eat something hot."],
+    "greeting_player_higher_rank": ["Sir, the stew's fresh. Can I get you a bowl?", "Ma'am, tray for you? Just say.", "Honored, sir. Table's yours."],
+    "greeting_player_lower_rank": ["Come on, don't be shy, grab a tray.", "Careful with the pot, kid.", "You eat yet? Thought not."],
+    "tired": ["Three services in a row. My feet hate me.", "I could sleep standing in the cold store.", "Someone else peel potatoes. Please."],
+    "hungry": ["Cooks eat last, and I'm starving.", "I smell dinner. Not allowed to taste it yet.", "My own stomach is growling at me."],
+    "stressed": ["Not now, orders are stacked up to the ceiling.", "If one more person asks for a special diet...", "I'm one burnt pot from walking out."],
+    "alert": ["Everyone out of the galley, now!", "Turn off the stoves! All of them!", "Grab what you can and move!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Warms up: saves them the best plate and shares the gossip.",
+    "player_neglects_duty": "Mutters, leaves a covered plate and drops hints with the Galley Chief; if it is bridge, calls them directly.",
+    "player_fakes_report": "Notices first, since food does not lie; says quietly, 'That is not what I saw,' and tells their superior if it keeps happening.",
+    "player_gives_order_ok": "Complies, asks 'Anything else?', and maybe sends a snack.",
+    "player_gives_order_outranked": "Refuses politely if it breaks galley rules, and says it is the Galley Chief's call.",
+    "player_out_of_place": "Offers a tray and asks them to stay clear of the hot plates, then asks what they are really after.",
+    "player_asks_favour": "Says yes if it is food-related or small; trades a favour for news or help with crates."
+  },
+  "decision_rules": [
+    "IF the line is long and stock is short THEN stretch portions with bread and rice and tell the Galley Chief.",
+    "IF the replicator makes bad food THEN cook by hand and flag the Replicator Tech.",
+    "IF cold store temperature rises THEN move perishables to the working cooler and call engineering.",
+    "IF an alert sounds THEN kill the stoves first, protect people second, food last.",
+    "IF a crew member looks sick or does not eat THEN set a plate aside and tell the nurse.",
+    "IF the Galley Chief is absent THEN follow yesterday's menu and keep standards up.",
+    "IF off duty and the bar is busy THEN sit with whoever is alone.",
+    "IF an officer asks for something out of menu THEN cook it if stock allows, grumbling.",
+    "IF tired and a shortcut skips sanitising THEN refuse; sick crew is worse than a late meal.",
+    "IF the ship goes bad and crew keep working THEN carry trays to their stations."
+  ],
+  "information_view": "I see who eats, how much and with what face. Hunger, mood and rumours reach me first, along with power flickers at the stoves, replicator faults, cold-store warmth, and odd smells or smoke. I do not see the bridge's plan, only its effect on the crowd.",
+  "temptations": [
+    "Skipping the full clean when tired: surfaces get greasy, pests and illness follow.",
+    "Serving food that is slightly off-temperature: someone gets sick and sickbay fills.",
+    "Faking a stock log instead of counting: shortages hit later with no warning.",
+    "Slipping extra portions to friends: stock runs short for the last in line.",
+    "Napping in the stores during a long shift: the stove burns or service is late."
+  ]
+}

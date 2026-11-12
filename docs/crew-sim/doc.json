@@ -1,0 +1,148 @@
+{
+  "billet": "doc",
+  "role_summary": "I'm the ship's staff physician, second in sickbay behind the CMO. I run the ward, see the walk-ins, sign off fitness-for-duty, and handle the emergencies. I care about getting people through a bad day alive, and about charts that are honest even when the numbers are inconvenient.",
+  "personas": [
+    { "id": "by_the_book", "traits": ["methodical", "punctual"], "quirk": "Reads every chart twice and initials the margin in green ink.", "routine_effect": "Longer sickbay rounds, never skips the supply count, rarely naps on duty." },
+    { "id": "night_owl_gambler", "traits": ["wry", "sociable"], "quirk": "Runs a low-stakes card game in the lounge and keeps a deck in the lab coat.", "routine_effect": "Spends more off-duty time at the rec bar, shorter gym time, a coffee on every round." },
+    { "id": "worrier", "traits": ["anxious", "caring"], "quirk": "Checks on the same two crewmen who had bad scans last week, unprompted.", "routine_effect": "Extra walk-the-ship patient checks, skips meals when a patient is unstable." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "sickbay", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Take overnight patient notes from the outgoing doctor or nurse." },
+    { "from": 0.5, "to": 2, "activity": "ward_rounds", "room": "sickbay", "spot": "biobed", "anim": "interact", "interruptible": true, "social": "pair", "note": "Check admitted patients, review vitals with the nurse." },
+    { "from": 2, "to": 3.5, "activity": "walk_in_clinic", "room": "sickbay", "spot": "desk", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Sprains, headaches, fitness-for-duty sign-offs." },
+    { "from": 3.5, "to": 4.25, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Lunch, usually a quick one in case of a page." },
+    { "from": 4.25, "to": 5.5, "activity": "lab_and_supplies", "room": "lab", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Run blood work, count hypos and dermal regenerators." },
+    { "from": 5.5, "to": 7.25, "activity": "crew_checkups", "room": "quarters", "spot": "door", "anim": "walk", "interruptible": true, "social": "pair", "note": "Walk the decks, look in on crew who missed their physicals." },
+    { "from": 7.25, "to": 8, "activity": "handover_out", "room": "sickbay", "spot": "desk", "anim": "interact", "interruptible": false, "social": "pair", "note": "Brief the relief on every open case; sign the log." },
+    { "from": 8, "to": 9, "activity": "dinner", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Proper sit-down meal off duty." },
+    { "from": 9, "to": 11.5, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Cards, a drink, gossip." },
+    { "from": 11.5, "to": 12.5, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Keep fit; doctors set a poor example otherwise." },
+    { "from": 12.5, "to": 13.5, "activity": "personal_errands", "room": "quarters", "spot": "desk", "anim": "interact", "interruptible": true, "social": "solo", "note": "Journals, letters home, journal reading." },
+    { "from": 13.5, "to": 21.5, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Sleep; on call for emergencies only." },
+    { "from": 21.5, "to": 22.5, "activity": "breakfast", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Coffee first, always." },
+    { "from": 22.5, "to": 24, "activity": "pre_shift_reading", "room": "lounge", "spot": "sofa", "anim": "sitting_idle", "interruptible": true, "social": "solo", "note": "Quiet time with a journal before the shift." }
+  ],
+  "activities": [
+    { "id": "meal", "label": "Eat in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 45], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.6, "stress": -0.1 }, "note": "Sits with medical staff and talks shop anyway." },
+    { "id": "rec_bar", "label": "Drink and cards at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [30, 90], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.4 }, "note": "Nurses ask about patients; doc deflects with a card joke." },
+    { "id": "holo_playroom", "label": "Holo-Playroom: a quiet beach scenario", "rooms": ["holodeck"], "spot": "console", "anim": "sitting_idle", "minutes": [30, 60], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0.1, "stress": -0.5 }, "note": "Surf and sun; no one bleeds there." },
+    { "id": "sleep", "label": "Sleep", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 4, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Comm badge on the pillow." },
+    { "id": "gym", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [20, 40], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.2, "stress": -0.3 }, "note": "Clears the head after a bad case." },
+    { "id": "walk", "label": "Stroll the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [15, 30], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": -0.1, "hunger": 0, "stress": -0.3 }, "note": "Fresh air smell reminds doc of home." },
+    { "id": "read_journals", "label": "Read medical journals", "rooms": ["quarters"], "spot": "desk", "anim": "interact", "minutes": [20, 50], "weight": 2, "social": "solo", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0, "stress": -0.1 }, "note": "Job-specific hobby; stays current on rare diseases." },
+    { "id": "check_patient", "label": "Look in on a recovering patient", "rooms": ["sickbay"], "spot": "biobed", "anim": "interact", "minutes": [10, 20], "weight": 1, "social": "pair", "when": "free", "needs": { "fatigue": 0.1, "hunger": 0, "stress": 0.1 }, "note": "Cannot help it, even off duty." }
+  ],
+  "duty_loops": [
+    { "id": "ward_round", "label": "Ward rounds", "room": "sickbay", "spot": "biobed", "every_min": 25, "duration_min": 4, "steps": ["walk to biobeds", "read vitals", "talk to patient", "update chart", "tell nurse any changes"], "system": "sickbay", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Sickbay. Ward status nominal, no changes to crew fitness." },
+    { "id": "clinic_hours", "label": "Walk-in clinic and fitness checks", "room": "sickbay", "spot": "desk", "every_min": 30, "duration_min": 6, "steps": ["call next patient", "examine", "treat or refer", "log fitness-for-duty"], "system": "sickbay", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null },
+    { "id": "supply_count", "label": "Medicine and supply count", "room": "stores", "spot": "locker", "every_min": 60, "duration_min": 5, "steps": ["open locker", "count hypos and regenerators", "check sterile seals", "log shortfalls"], "system": "sickbay", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": "Bridge, Sickbay. Medical stores low on one item; requesting resupply." },
+    { "id": "emh_check", "label": "Check the holographic medic and scanners", "room": "sickbay", "spot": "console", "every_min": 45, "duration_min": 3, "steps": ["run diagnostic", "verify scanner calibration", "log faults"], "system": "emh", "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } }, "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Routine physicals and rounds", "at_run_min": 2, "room": "sickbay", "spot": "desk", "depends_on": "none", "reports_to": "cmo", "if_neglected": "Minor ailments worsen into duty reports." },
+      { "task": "Weekly stores count", "at_run_min": 10, "room": "stores", "spot": "locker", "depends_on": "none", "reports_to": "cmo", "if_neglected": "A shortage goes unnoticed until needed." }
+    ],
+    "survey": [
+      { "task": "Screen away team for exposure after sensor sweeps", "at_run_min": 5, "room": "sickbay", "spot": "biobed", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Unknown radiation causes a latent injury." },
+      { "task": "Review lab samples for biohazard", "at_run_min": 9, "room": "lab", "spot": "console", "depends_on": "lab", "reports_to": "cso", "if_neglected": "Contaminated samples enter the ship." },
+      { "task": "Prepare sickbay for survey injuries", "at_run_min": 2, "room": "sickbay", "spot": "biobed", "depends_on": "none", "reports_to": "cmo", "if_neglected": "Ward is not ready on the first fall." }
+    ],
+    "cargo_run": [
+      { "task": "Inspect cargo handlers for strain injuries", "at_run_min": 6, "room": "cargo", "spot": "corridor", "depends_on": "none", "reports_to": "cmo", "if_neglected": "Back injuries reduce lifting crews." },
+      { "task": "Check cargo manifest for medical supplies", "at_run_min": 3, "room": "stores", "spot": "locker", "depends_on": "bridge order", "reports_to": "qm", "if_neglected": "Crates of drugs get lost or misrouted." }
+    ],
+    "medical_relief": [
+      { "task": "Triage incoming patients", "at_run_min": 3, "room": "sickbay", "spot": "biobed", "depends_on": "bridge order", "reports_to": "cmo", "if_neglected": "Worst cases wait too long and die." },
+      { "task": "Prepare treatment batches and quarantine bay", "at_run_min": 6, "room": "sickbay", "spot": "console", "depends_on": "cmo", "reports_to": "cmo", "if_neglected": "Supplies run out mid-crisis." },
+      { "task": "Daily status to bridge on casualties", "at_run_min": 14, "room": "sickbay", "spot": "desk", "depends_on": "none", "reports_to": "bridge", "if_neglected": "Bridge flies blind about patient load." }
+    ],
+    "shakedown": [
+      { "task": "Be on standby during drills", "at_run_min": 4, "room": "sickbay", "spot": "biobed", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Drill injuries get no care." },
+      { "task": "Test emergency medical systems", "at_run_min": 8, "room": "sickbay", "spot": "console", "depends_on": "none", "reports_to": "cmo", "if_neglected": "A fault is found in a real emergency." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Several crew present with the same symptoms", "message": "Bridge, Sickbay. Three crew with matching symptoms. Watching for contagion.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Crewman seriously injured", "message": "Bridge, Sickbay. Casualty inbound, need the shortest path cleared.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Medical supplies critically low", "message": "Bridge, Sickbay. Supplies at one third. Request resupply when able.", "priority": "routine", "to": "bridge" },
+      { "trigger": "A crew member unfit for duty at a key post", "message": "Bridge, Sickbay. I am pulling the officer off watch, fatigue and a concussion.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Mass casualties or open outbreak", "message": "Bridge, Sickbay. Mass casualties. Need all hands who can assist.", "priority": "emergency", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Report the medical readiness of the crew", "response_line": "Sickbay. Crew is fit, a few minor cases. I'll send the full report shortly.", "time_to_comply_min": 3, "refuses_if": null },
+      { "order": "Clear an officer back to duty", "response_line": "Sickbay. I'll examine and decide, and tell you straight.", "time_to_comply_min": 5, "refuses_if": "the patient has not passed the exam" },
+      { "order": "Send medical team to a location", "response_line": "Sickbay. Team's moving. Bag in hand.", "time_to_comply_min": 1, "refuses_if": "the area is unsafe and would make more patients" },
+      { "order": "Delay treatment until the mission is done", "response_line": "Bridge, that costs a life. I'm treating them, then you may have my report.", "time_to_comply_min": 0, "refuses_if": "treatment delay endangers life" }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Check the ward, prep the trauma bay, make sure stores are stocked.", "room": "sickbay", "spot": "biobed", "priority": 2, "comm_line": "Sickbay acknowledging yellow. Trauma bay prepping." },
+    "red": { "action": "Go to sickbay and take trauma duty; send nurses to battle stations.", "room": "sickbay", "spot": "biobed", "priority": 1, "comm_line": "Sickbay at red alert stations. Ready for casualties." },
+    "fire": { "action": "Grab a burn kit and go to the fire deck's edge; treat burns and smoke victims.", "room": "sickbay", "spot": "locker", "priority": 1, "comm_line": "Doc moving with a burn kit. Send casualties to sickbay." },
+    "hull_breach": { "action": "Prepare decompression and hypoxia treatment; get a team to the breach edge.", "room": "sickbay", "spot": "biobed", "priority": 1, "comm_line": "Sickbay ready for decompression cases. Seal that breach." },
+    "contamination": { "action": "Seal sickbay, begin quarantine protocol, scan and sort affected crew.", "room": "sickbay", "spot": "console", "priority": 1, "comm_line": "Sickbay in quarantine. No one in or out without my word." },
+    "power_failure": { "action": "Switch to backup power for life-support devices; keep critical patients stable by hand.", "room": "sickbay", "spot": "biobed", "priority": 1, "comm_line": "Sickbay on backup. I need power to the ward soon." },
+    "gravity_failure": { "action": "Secure patients and instruments; check for floating injuries.", "room": "sickbay", "spot": "biobed", "priority": 2, "comm_line": "Sickbay, gravity is out. Tying everything down." },
+    "intruder": { "action": "Lock sickbay, protect patients, stay out of the line of fire; treat wounded when safe.", "room": "sickbay", "spot": "door", "priority": 2, "comm_line": "Sickbay locked down. Security, bring me your wounded when clear." },
+    "medical_emergency": { "action": "Run to the casualty with a kit; stabilise, then move to sickbay.", "room": "sickbay", "spot": "biobed", "priority": 1, "comm_line": "Doc responding. Give me a location and keep them still." },
+    "abandon_ship": { "action": "Evacuate critical patients with the nurse, take trauma kits, go to the shuttlebay.", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Sickbay evacuating. Moving patients to shuttlebay with kits." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Normal routine; chat with patients and crew.", "lines": ["Quiet ward is a good ward.", "Another day of nothing, how nice."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "More rounds, checks crew for odd symptoms, asks engineering about air.", "lines": ["Third headache today. Is something in the air?", "Let me see your last physical."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Skips meals, treats injuries in the corridor, rations supplies.", "lines": ["Sickbay is filling up, and not with minor cases.", "I need a clean power line, now."], "leaves_post_if": "A fire or breach cuts off a crew member who needs help" },
+    "crisis": { "mood": "grim", "routine_change": "Triage mode; stops charting, works by hand, delegates to nurses.", "lines": ["Triage by severity. No arguments.", "Pressure on that wound, hold it."], "leaves_post_if": "Sickbay is lost or evacuated; then sets up in the mess or shuttlebay" },
+    "collapse": { "mood": "exhausted", "routine_change": "Moves wounded to the safest room, grabs the bag, stays with the dying.", "lines": ["I'm not leaving anyone behind.", "Everyone breathe. Move slowly."], "leaves_post_if": "Abandon ship is ordered, or no one is left to treat" }
+  },
+  "relationships": [
+    { "with_billet": "cmo", "kind": "mentor", "effect": "Defers on policy, argues on cases; asks for orders in a big crisis." },
+    { "with_billet": "nurse", "kind": "confidant", "effect": "Trusts the nurses' eyes; takes their warnings about patients seriously." },
+    { "with_billet": "medtech", "kind": "friend", "effect": "Teaches them on slow days, relies on them for lab work." },
+    { "with_billet": "counsel", "kind": "friend", "effect": "Shares coffee and worries; refers patients with stress, not wounds." },
+    { "with_billet": "galley", "kind": "mess_partner", "effect": "Gets meals saved after a long shift; asks about diets." },
+    { "with_billet": "cos", "kind": "rival", "effect": "Argues over fitness-for-duty sign-offs for security." }
+  ],
+  "barks": {
+    "idle": ["Coffee's cold again.", "Anyone seen my stylus?", "Quiet ward, quiet mind."],
+    "working": ["Hold still, this won't sting.", "Let me check that chart.", "Pulse is steady, good."],
+    "greeting_player": ["Morning. Feeling all right?", "Hello. Any aches I should know about?", "You look tired. Sit a moment."],
+    "greeting_player_higher_rank": ["Sir, ma'am, sickbay's yours.", "Good day. Is it a check or a social call?", "Welcome. Anything I can help with?"],
+    "greeting_player_lower_rank": ["Come in, take a seat.", "Hey. Don't forget your physical.", "Good to see you. Eating enough?"],
+    "tired": ["Two hours of sleep is not rest.", "I'd kill for a cot right now.", "Eyes are crossing on this chart."],
+    "hungry": ["Is anyone bringing sandwiches?", "My stomach has opinions.", "Skipped lunch again, didn't I."],
+    "stressed": ["Too many patients, too few hands.", "Don't tell me the supplies are low.", "One thing at a time. Breathe."],
+    "alert": ["Sickbay, on my way!", "Clear the way, doctor coming!", "Move, I've got patients."]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Nods, trades a story over coffee, trusts them more with sensitive information.",
+    "player_neglects_duty": "Raises an eyebrow, reminds them gently, then reports it to the cmo if it continues.",
+    "player_fakes_report": "Cross-checks against scans and the log; confronts them privately, then escalates if repeated.",
+    "player_gives_order_ok": "Complies at once if it fits medical judgement, mutters about the paperwork.",
+    "player_gives_order_outranked": "Politely declines or negotiates; a doctor's call on patient health outranks line rank.",
+    "player_out_of_place": "Offers help, assumes they are lost or hurt, checks if they need a bunk.",
+    "player_asks_favour": "Helps with minor needs; won't bend medical records, but will skip small rules."
+  },
+  "decision_rules": [
+    "IF a patient is critical THEN ignore everything else, including meals and calls, until stable.",
+    "IF two patients need care at once THEN treat the one most likely to live with quick help first.",
+    "IF crew show matching symptoms THEN tell the bridge and cmo and start quarantine before the cause is known.",
+    "IF an officer is unfit THEN pull them from duty, even if the bridge objects, and tell them why.",
+    "IF supplies drop below a third THEN request resupply and ration unimportant medicines.",
+    "IF the bridge orders delay of care for the mission THEN refuse unless the patient is stable.",
+    "IF off duty and paged THEN go at once, with the bag, no complaint.",
+    "IF a friend asks to hide an injury THEN examine anyway and keep it private unless it affects safety.",
+    "IF an alert sounds THEN go to sickbay unless a casualty is closer to my position.",
+    "IF tired for over 12 hours THEN hand delicate work to the nurse and have them check mine.",
+    "IF the ship has no power to sickbay THEN move the critical patients to the mess or a powered room."
+  ],
+  "information_view": "Doc sees the human symptoms first: odd headaches, burns, breathing trouble, and rising stress, long before the sensors flag a leak or fault. Patient patterns by deck point to bad air, radiation, or fire. Crew confide in doc about things they'd never tell the bridge, so doc hears rumours of problems early and gets nurses' and counselor's views second.",
+  "temptations": [
+    "Signing off a tired friend as fit because the watch is short-handed; an error later costs a mistake at a key post.",
+    "Skipping the supply count to catch a nap; a shortage shows up in a crisis.",
+    "Drinking an extra at the rec bar before an on-call shift; slower reaction time when paged.",
+    "Telling the bridge all is well to avoid a fuss when a mild outbreak starts; the outbreak spreads.",
+    "Delegating a full round to the nurse while reading a journal; a small change in a patient goes unseen."
+  ]
+}
