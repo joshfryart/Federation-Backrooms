@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SEARCHABLE } from './items.js';
+import { SEARCHABLE, clutterFor } from './items.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -344,9 +344,11 @@ export function buildLift(accent) {
 // Set dressing: room light colours, grime textures and merged, vertex-coloured wall fixtures (instanced per kind)
 // ------------------------------------------------------------------
 // which bulkhead / deck variant a room gets (see tools/build-textures.mjs for the generated sets)
-const WALL_OF = { quarters: 'wallq', holodeck: 'wallq', sickbay: 'wallp', mess: 'wallp', bridge: 'wallp', arboretum: 'wallp', engineering: 'wallg', cargo: 'wallg', shuttlebay: 'wallg', transporter: 'wallg' };
+const WALL_OF = { quarters: 'wallq', holodeck: 'wallq', sickbay: 'wallp', mess: 'wallp', bridge: 'wallp', arboretum: 'wallp', engineering: 'wallg', cargo: 'wallg', shuttlebay: 'wallg', transporter: 'wallg',
+  readyroom: 'wallq', lounge: 'wallq', gym: 'wallp', lab: 'wallp', datacore: 'wallp', laundry: 'wallp', morgue: 'wallp', washroom: 'wallp', brig: 'wallg', armory: 'wallg', workshop: 'wallg', plant: 'wallg', stores: 'wallg', airlock: 'wallg' };
 const CORRIDOR_WALL = { cairn: 'wall', longhouse: 'wallp', tandem: 'wall', cruller: 'wallp', plough: 'wall' };
-export const ROOM_LIGHT = { bridge: 0xbcd6ff, engineering: 0xffb060, sickbay: 0xd2fff2, mess: 0xffd49a, transporter: 0x9cc2ff, shuttlebay: 0xfff0b4, cargo: 0xffc472, holodeck: 0xffe070, quarters: 0xffc48c, arboretum: 0xd6ffae };
+export const ROOM_LIGHT = { bridge: 0xbcd6ff, engineering: 0xffb060, sickbay: 0xd2fff2, mess: 0xffd49a, transporter: 0x9cc2ff, shuttlebay: 0xfff0b4, cargo: 0xffc472, holodeck: 0xffe070, quarters: 0xffc48c, arboretum: 0xd6ffae,
+  readyroom: 0xffd8a8, brig: 0xc8d4ff, armory: 0xffe8c0, gym: 0xf4fff0, lab: 0xe8f4ff, laundry: 0xf0f0e8, lounge: 0xffcf9a, workshop: 0xffe2a0, plant: 0xffd0a0, morgue: 0xcfe8ff, datacore: 0x9cb8ff, stores: 0xffe0b0, washroom: 0xf0fbff, airlock: 0xfff0c0 };
 let dressCache = null;
 function dressTex() {
   if (dressCache) return dressCache;
@@ -438,6 +440,10 @@ const ROOM_DECOR = {
   bridge: ['monitorB', 'monitorO', 'monitorB', 'comm'], engineering: ['gauges', 'pipes', 'toolboard', 'monitorO', 'breaker', 'pipes'], sickbay: ['medcab', 'monitorG', 'medcab', 'kit', 'locker'], mess: ['menu', 'shelf', 'fountain', 'shelf'],
   transporter: ['coil', 'monitorB', 'comm'], shuttlebay: ['hose', 'toolboard', 'pipes', 'rack', 'extinguisher'], cargo: ['rack', 'rack', 'rack', 'extinguisher', 'breaker'], holodeck: ['comm'], quarters: ['locker', 'picture', 'mirror', 'shelf', 'picture'], arboretum: ['planter', 'planter', 'fountain'],
   corridor: ['extinguisher', 'comm', 'fountain', 'ventgrille', 'ventgrille', 'breaker', 'kit'],
+  readyroom: ['picture', 'shelf', 'monitorB', 'locker'], brig: ['locker', 'monitorO', 'comm', 'extinguisher'], armory: ['rack', 'locker', 'rack', 'extinguisher'], gym: ['mirror', 'fountain', 'shelf', 'extinguisher'],
+  lab: ['monitorG', 'shelf', 'locker', 'medcab', 'monitorB'], laundry: ['shelf', 'pipes', 'locker', 'hose'], lounge: ['picture', 'shelf', 'fountain', 'mirror', 'monitorB'], workshop: ['toolboard', 'rack', 'toolboard', 'pipes', 'breaker', 'hose'],
+  plant: ['pipes', 'gauges', 'pipes', 'breaker', 'monitorO', 'hose'], morgue: ['medcab', 'locker', 'monitorG', 'kit'], datacore: ['monitorB', 'monitorO', 'comm', 'breaker', 'coil'], stores: ['rack', 'rack', 'shelf', 'locker', 'extinguisher'],
+  washroom: ['mirror', 'fountain', 'shelf', 'kit'], airlock: ['locker', 'hose', 'rack', 'extinguisher', 'comm'],
 };
 const kitCache = {};
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
@@ -607,7 +613,8 @@ export class World {
     const FLOOR_MAT = { deck: { metalness: 0.55, roughness: 0.9, ns: 1.3 }, tile: { metalness: 0.0, roughness: 0.55, ns: 0.8 }, carpet: { metalness: 0, roughness: 1, ns: T.real ? 1.6 : 0.9 }, holo: { metalness: 0, roughness: 0.3, ns: 0.9 },
       grate: { ns: 1.2, gain: 1.15 }, rubber: { ns: 1.0, gain: 1.1 }, hex: { ns: 0.8, white: 0.4 }, paver: { ns: 1.3, gain: 1.15 } };
     const fk = (k, fb) => T.d[k] ? k : fb;
-    const FLOOR_OF = { engineering: fk('grate', 'deck'), shuttlebay: 'deck', cargo: 'deck', transporter: fk('rubber', 'deck'), jefferies: fk('grate', 'deck'), sickbay: fk('hex', 'tile'), mess: 'tile', holodeck: 'holo', arboretum: fk('paver', 'carpet') };
+    const FLOOR_OF = { engineering: fk('grate', 'deck'), shuttlebay: 'deck', cargo: 'deck', transporter: fk('rubber', 'deck'), jefferies: fk('grate', 'deck'), sickbay: fk('hex', 'tile'), mess: 'tile', holodeck: 'holo', arboretum: fk('paver', 'carpet'),
+      brig: 'deck', armory: 'deck', airlock: 'deck', workshop: 'deck', stores: 'deck', plant: fk('grate', 'deck'), gym: fk('rubber', 'deck'), datacore: fk('rubber', 'deck'), laundry: 'tile', morgue: 'tile', lab: 'tile', washroom: fk('hex', 'tile') };
     const corridorFloor = fk({ longhouse: 'rubber', plough: 'rubber', cruller: 'tile' }[ship.hull] || 'carpet', 'carpet');
     const byKind = {};
     for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? FLOOR_OF[r] || 'carpet' : corridorFloor; (byKind[k] || (byKind[k] = [])).push(t); }
@@ -634,7 +641,7 @@ export class World {
     {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
       const ck = (k) => T.d[k] ? k : 'ceil';
-      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm') };
+      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg') };
       const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
       const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
       for (const [kind, list] of Object.entries(byC)) {
@@ -797,6 +804,23 @@ export class World {
       if (p.kind === 'viewscreen') { m.position.z -= TS * 0.35; }
       g.add(m); if (m.userData.top) this.tops[p.tx + p.ty * this.W] = m.userData.top;
       m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
+    }
+    // loose clutter from the ship inventory: small things on the floor near walls and on tables (look at one for its name; see nearestClutter in js/main.js)
+    this.clutter = [];
+    {
+      const shapes = [new THREE.BoxGeometry(1, 1, 1), new THREE.CylinderGeometry(0.5, 0.5, 1, 10), new THREE.BoxGeometry(1, 1, 1)], lists = [[], [], []];
+      const ph = (str) => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
+      const add = (it, x, y, z, k) => { const h = ph(it[0]), sz = [[0.12 + h * 0.16, 0.08 + h * 0.12, 0.1 + h * 0.14], [0.07 + h * 0.05, 0.12 + h * 0.14, 0.07 + h * 0.05], [0.26, 0.025, 0.2]][it[2]]; lists[it[2]].push({ x, y: y + sz[1] / 2, z, sx: sz[0], sy: sz[1], sz: sz[2], ry: rndv() * 6.28, h });
+        this.clutter.push({ x, y: y + sz[1] / 2, z, name: it[0], real: it[1] }); };
+      for (const r of d.rooms) {
+        const pool = clutterFor(r.type); if (!pool.length) continue;
+        const tiles = []; for (let ty = r.y; ty < r.y + r.h; ty++) for (let tx = r.x; tx < r.x + r.w; tx++) if (this.grid[ty][tx] === 0 && (tx === r.x || ty === r.y || tx === r.x + r.w - 1 || ty === r.y + r.h - 1)) tiles.push([tx, ty]);
+        const n = Math.min(tiles.length, 3 + Math.floor(r.w * r.h / 9)); for (let i = 0; i < n; i++) { const [tx, ty] = tiles.splice(Math.floor(rndv() * tiles.length), 1)[0]; const it = pool[Math.floor(rndv() * pool.length)]; add(it, (tx + 0.5 + (rndv() - 0.5) * 0.7) * TS, 0, (ty + 0.5 + (rndv() - 0.5) * 0.7) * TS, 0); }
+        for (const p of d.props) if (p.kind === 'table' && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h && rndv() < 0.7) { const [cx, cz] = this.center(p.tx, p.ty); add(pool[Math.floor(rndv() * pool.length)], cx + (rndv() - 0.5) * 0.7, 0.78, cz + (rndv() - 0.5) * 0.7, 0); }
+      }
+      const cm = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.2 });
+      shapes.forEach((geo, k) => { const l = lists[k]; if (!l.length) return; const im = new THREE.InstancedMesh(geo, cm, l.length); l.forEach((c, i) => { dummy.position.set(c.x, c.y, c.z); dummy.rotation.set(0, c.ry, 0); dummy.scale.set(c.sx, c.sy, c.sz); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, new THREE.Color().setHSL(c.h, k === 2 ? 0.08 : 0.35, k === 2 ? 0.75 : 0.45)); }); im.castShadow = im.receiveShadow = true; g.add(im); });
+      dummy.scale.set(1, 1, 1); dummy.rotation.set(0, 0, 0);
     }
     // lift
     {
@@ -1038,7 +1062,8 @@ export class World {
       }
       // guaranteed searchable fixtures: two per room (suited to the room), two along corridors, on wall faces the random pass left free
       {
-        const FIT = { sickbay: ['medcab', 'kit'], engineering: ['toolboard', 'locker'], shuttlebay: ['toolboard', 'hose', 'locker'], cargo: ['rack', 'locker'], mess: ['shelf', 'locker'], quarters: ['locker', 'shelf'], bridge: ['locker', 'kit'], transporter: ['locker', 'toolboard'], holodeck: ['locker'], arboretum: ['shelf', 'toolboard'], corridor: ['kit', 'locker'] };
+        const FIT = { sickbay: ['medcab', 'kit'], engineering: ['toolboard', 'locker'], shuttlebay: ['toolboard', 'hose', 'locker'], cargo: ['rack', 'locker'], mess: ['shelf', 'locker'], quarters: ['locker', 'shelf'], bridge: ['locker', 'kit'], transporter: ['locker', 'toolboard'], holodeck: ['locker'], arboretum: ['shelf', 'toolboard'], corridor: ['kit', 'locker'],
+          readyroom: ['locker', 'shelf'], brig: ['locker'], armory: ['rack', 'locker'], gym: ['locker', 'shelf'], lab: ['medcab', 'shelf', 'locker'], laundry: ['shelf', 'locker'], lounge: ['shelf'], workshop: ['toolboard', 'rack', 'hose'], plant: ['toolboard', 'hose', 'locker'], morgue: ['medcab', 'kit', 'locker'], datacore: ['toolboard', 'locker'], stores: ['rack', 'shelf', 'locker'], washroom: ['kit', 'shelf'], airlock: ['locker', 'hose', 'rack'] };
         const free = {}; for (const f of faces) { if (f.deco || f.win || f.sign) continue; const r = f.room || 'corridor'; if (FIT[r] && (r !== 'corridor' || (f.tx + f.ty) % 3 === 0)) (free[r] || (free[r] = [])).push(f); }
         for (const [r, fl] of Object.entries(free)) { for (let i = fl.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [fl[i], fl[j]] = [fl[j], fl[i]]; }
           for (const f of fl.slice(0, 2)) { let k = FIT[r][Math.floor(rnd() * FIT[r].length)]; if (k === 'rack' && ceilOf(f) < WH) k = 'locker'; f.deco = true; (byKind[k] || (byKind[k] = [])).push(f); } }

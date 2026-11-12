@@ -4,7 +4,8 @@ import fs from 'fs';
 const dir = 'docs/ship-inventory/', spaces = {};
 for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) for (const s of JSON.parse(fs.readFileSync(dir + f, 'utf8')).spaces) spaces[s.id] = s;
 // game room type → plan space ids that feed it
-const ROOM_SPACES = { bridge: [1, 4], engineering: [44, 46, 47, 48, 52, 53], sickbay: [20, 21, 22], mess: [15, 16, 18], transporter: [40, 41], shuttlebay: [55, 56, 57], cargo: [60, 61, 109], holodeck: [42, 98], quarters: [9, 10, 7, 67, 87], arboretum: [31, 32], corridor: [62, 66, 83, 84], jefferies: [63] };
+const ROOM_SPACES = { bridge: [1, 4], engineering: [44, 46, 47, 48, 52, 53], sickbay: [20, 21, 22], mess: [15, 16, 18], transporter: [40, 41], shuttlebay: [55, 56, 57], cargo: [60, 61, 109], holodeck: [42, 98], quarters: [9, 10, 7, 67, 87], arboretum: [31, 32], corridor: [62, 66, 83, 84], jefferies: [63],
+  readyroom: [2, 3, 68, 91], brig: [35, 33, 75], armory: [34, 72], gym: [43], lab: [26, 28, 29, 27], laundry: [12, 88], lounge: [13, 5, 69], workshop: [52, 53, 123], plant: [49, 50, 51], morgue: [25], datacore: [38, 39, 97], stores: [17, 19, 92], washroom: [11, 110, 84], airlock: [58, 122] };
 // searchable fixture kinds → which inventory rows can be inside/on them
 const MEDICAL = /bandage|gauze|splint|syringe|hypo|antiseptic|gloves|dressing|medic|first.?aid|ointment|tablet|analges|saline|swab|thermometer|tourniquet|oxygen mask|burn|suture|forceps|cuff/i;
 const TOOLS = /wrench|screwdriver|pliers|hammer|spanner|socket|drill|cutter|crimp|multimeter|torch|flashlight|clamp|file\b|chisel|saw|allen|hex key|tape|gauge|probe|solder|driver|bit set|ratchet|level\b/i;
@@ -28,6 +29,24 @@ for (const [room, ids] of Object.entries(ROOM_SPACES)) {
     const R = rng(seed(room + kind)); const a = pool.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     const items = a.slice(0, CAP).map(r => [r[0], Math.min(r[1], 99)]); if (items.length) { out.rooms[room][kind] = items; n += items.length; }
   }
+}
+// examine text per prop kind: the inventory row that best names that prop in this room's spaces → [name, real-world equivalent]
+const PROP = { console: /console|workstation|operator station/i, chair: /command chair|captain.?s chair|\bchair\b/i, viewscreen: /view ?screen|main screen|panoramic|observation window|window/i, warpcore: /reactor|core/i,
+  shuttle: /shuttle|craft/i, holocube: /holo|emitter/i, pad: /\bpad\b|platform/i, bunk: /bunk|berth|\bbed\b|cot\b/i, table: /table|bench|counter|desk/i, biobed: /bio-?bed|\bbed\b|stretcher|gurney|examination couch/i,
+  crate: /crate|container|\bcase\b|drum|pallet|\bbox\b/i, tree: /tree|planter|grow bed|plant/i, lonechair: /armchair|chair|seat/i, plant: /planter|plant/i, cart: /cart|trolley/i, replicator: /replicator/i };
+const bulk = (r) => ({ huge: 4, large: 3, medium: 2, small: 1, tiny: 0 }[r[4]] ?? 1) + (['floor', 'built-in'].includes(r[3]) ? 2 : 0);
+out.examine = {}; out.clutter = {};
+const CYL = /cup|mug|bottle|can\b|canister|cylinder|flask|jar|tube|pen\b|pens|drum|thermos|roll|candle|vial|tin\b/i, FLAT = /pad\b|tablet|book|paper|card|tray|plate|disc|folder|manual|map|log|binder|clipboard|photo/i;
+for (const [room, ids] of Object.entries(ROOM_SPACES)) {
+  const allRows = ids.flatMap(id => spaces[id]?.rows || []); out.examine[room] = {};
+  for (const [kind, re] of Object.entries(PROP)) {
+    const m = allRows.filter(r => re.test(r[0]) && r[2] !== 'inside' && !/\(decor|sticker|label|sign\b|photo|picture/i.test(r[0]) && !/^no /i.test(r[0]) && r[0].length < 70).sort((a, b) => (kind === 'chair' ? (/command|captain/i.test(b[0]) - /command|captain/i.test(a[0])) : 0) || bulk(b) - bulk(a) || a[0].length - b[0].length);
+    const seen = new Set(), pick = m.filter(r => !seen.has(r[0].toLowerCase()) && seen.add(r[0].toLowerCase()));
+    if (pick.length) out.examine[room][kind] = pick.slice(0, 3).map(r => [r[0], r[7] || '']);
+  }
+  const small = allRows.filter(r => ['tiny', 'small'].includes(r[4]) && ['table', 'floor', 'portable', 'shelf'].includes(r[3]) && r[0].length < 60 && !/\(decor|stain|smudge|scuff|dust|print/i.test(r[0]));
+  const R = rng(seed(room + 'clutter')); for (let i = small.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [small[i], small[j]] = [small[j], small[i]]; }
+  out.clutter[room] = small.slice(0, 50).map(r => [r[0], r[7] || '', CYL.test(r[0]) ? 1 : FLAT.test(r[0]) ? 2 : 0]);
 }
 fs.writeFileSync('assets/data/ship-items.json', JSON.stringify(out));
 console.log('assets/data/ship-items.json', n, 'entries', (fs.statSync('assets/data/ship-items.json').size / 1024).toFixed(0) + ' KB');

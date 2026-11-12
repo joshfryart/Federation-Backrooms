@@ -12,7 +12,7 @@ import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon } from './sysview.js';
 import { Director } from './director.js';
-import { loadItems, searchFixture, fixtureName } from './items.js';
+import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
@@ -469,6 +469,23 @@ function nearestSite() {
   for (const s of world.searchSites) { if (s.used) continue; const dx = s.x - P.x, dz = s.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.35) { bd = d; best = s; } }
   return best;
 }
+// true when the real-world equivalent adds nothing to the name
+const same = (a, b) => !b || a.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(a.toLowerCase());
+// loose clutter in reach and in front of the player
+function nearestClutter() {
+  if (!world?.clutter) return null;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 2.0;
+  for (const c of world.clutter) { const dx = c.x - P.x, dz = c.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.8) { bd = d; best = c; } }
+  return best;
+}
+// the prop under the crosshair (within reach): its inventory name and real-world equivalent
+function lookedProp() {
+  if (!world) return null;
+  const o = camera.position, dir = camera.getWorldDirection(new THREE.Vector3()), h = world.raycast(o.x, o.y, o.z, dir.x, dir.y, dir.z, 3.6);
+  if (!h || h.kind !== 'prop') return null;
+  const p = world.d.props.find(p => p.tx === h.tx && p.ty === h.ty); if (!p) return null;
+  const e = examineProp(world.d.room[p.ty][p.tx] || 'corridor', p.kind, p.tx, p.ty); return e ? { name: e[0], real: e[1] } : null;
+}
 function giveLoot(forced) {
   const r = Math.random();
   if (r < 0.45) { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 1200); }
@@ -625,6 +642,7 @@ function step(dt, t) {
   else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
+  if (!prompt) { const c = nearestClutter(); if (c) prompt = same(c.name, c.real) ? c.name : `${c.name} (${c.real})`; else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   $('prompt').textContent = prompt;
 
   // room label + exploration

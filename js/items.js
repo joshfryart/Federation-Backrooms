@@ -20,3 +20,11 @@ export function searchFixture(room, kind, rnd = Math.random) {
   const loot = rnd() < (MEDICAL_KINDS.has(kind) ? 0.7 : TOOL_KINDS.has(kind) ? 0.3 : 0.2) ? (MEDICAL_KINDS.has(kind) ? 'heal' : 'cell') : null;
   return { text: `${clean(fixtureName(kind))}: ${found.join(', ')}.`, loot };
 }
+
+// examine text for a prop kind in a room: [name, real-world equivalent] (varied by tile), or null
+export function examineProp(room, kind, tx = 0, ty = 0) {
+  const l = DATA?.examine?.[room]?.[kind] || DATA?.examine?.corridor?.[kind]; if (!l || !l.length) return null;
+  return l[Math.abs(tx * 7 + ty * 13) % l.length];
+}
+// small loose items for a room: [[name, real, shape 0 box | 1 cylinder | 2 flat]]
+export const clutterFor = (room) => DATA?.clutter?.[room] || [];

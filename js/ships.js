@@ -9,6 +9,8 @@ const disc = (u, v, r, cu = 0, cv = 0) => (u - cu) ** 2 + (v - cv) ** 2 <= r * r
 export const CLASSES = {
   cairn: {   // a stack of discs of different sizes, like a trail cairn; drive fins hang off the lowest stone
     name: 'Cairn', decks: 9, role: 'deep-range explorer', length: 310,
+    // a long-haul science ship (USF Ontario, USF Québec): more labs, stores and long-mission comforts, fewer cells and armouries
+    bias: { lab: 2, stores: 1.6, arboretum: 1.5, gym: 1.6, laundry: 1.5, lounge: 1.4, morgue: 1.5, brig: 0.6, armory: 0.6 },
     inside(u, v, f) { const r = f < 0.12 ? 0.5 : f < 0.46 ? 1.0 : f < 0.58 ? 0.55 : f < 0.82 ? 0.82 : 0.6; return disc(u, v, r, 0, f >= 0.58 ? 0.15 : 0); },
     pods: [{ u: 0.78, v0: 0.35, v1: 1.15, f0: 0.62, f1: 0.8 }, { u: -0.78, v0: 0.35, v1: 1.15, f0: 0.62, f1: 0.8 }],
   },
@@ -51,17 +53,18 @@ export const SHIPS = [
 
 // what a deck is for, by how far down the ship it is
 export const ZONES = [
-  { to: 0.13, label: 'Command', weights: { bridge: 5, quarters: 2, transporter: 1, holodeck: 1 } },
-  { to: 0.46, label: 'Habitat', weights: { quarters: 4, mess: 3, sickbay: 2, holodeck: 2, arboretum: 2, transporter: 1 } },
-  { to: 0.72, label: 'Services', weights: { mess: 2, sickbay: 2, cargo: 3, transporter: 2, shuttlebay: 2, quarters: 1 } },
-  { to: 2, label: 'Engineering', weights: { engineering: 4, cargo: 3, shuttlebay: 2, transporter: 1 } },
+  { to: 0.13, label: 'Command', weights: { bridge: 5, quarters: 2, transporter: 1, holodeck: 1, readyroom: 2, lounge: 1, datacore: 1 } },
+  { to: 0.46, label: 'Habitat', weights: { quarters: 4, mess: 3, sickbay: 2, holodeck: 2, arboretum: 2, transporter: 1, lab: 3, lounge: 2, gym: 1, laundry: 1, washroom: 1, morgue: 1 } },
+  { to: 0.72, label: 'Services', weights: { mess: 2, sickbay: 2, cargo: 3, transporter: 2, shuttlebay: 2, quarters: 1, brig: 1, armory: 1, datacore: 1, stores: 2, airlock: 1, laundry: 1 } },
+  { to: 2, label: 'Engineering', weights: { engineering: 4, cargo: 3, shuttlebay: 2, transporter: 1, workshop: 2, plant: 2, stores: 1, airlock: 1, datacore: 1 } },
 ];
 export const zoneOf = (f) => ZONES.find(z => f <= z.to);
 // which of a ship's decks game deck n (1..8, then endless) lands on: you ride the tubelift down through the hulls
 export function shipDeckFor(ship, n, winDeck = 8) { return n <= winDeck ? Math.round((n - 1) / (winDeck - 1) * (ship.decks - 1)) : (n * 5) % ship.decks; }
 export function deckOptions(ship, shipDeck) {
   const f = ship.decks > 1 ? shipDeck / (ship.decks - 1) : 0, c = CLASSES[ship.hull];
-  return { inside: (u, v) => c.inside(u, v, f), weights: zoneOf(f).weights };
+  const weights = { ...zoneOf(f).weights }; if (c.bias) for (const k in weights) if (c.bias[k]) weights[k] = Math.max(1, Math.round(weights[k] * c.bias[k]));
+  return { inside: (u, v) => c.inside(u, v, f), weights };
 }
 
 // ---- schematic: side elevation (all decks, current one lit) + plan of the current deck ----

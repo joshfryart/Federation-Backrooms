@@ -14,6 +14,21 @@ export const ROOMS = {
   holodeck:    { label: 'Holo-Playroom',          floor: 0x111111, weight: 2, size: [5, 5] },
   quarters:    { label: 'Crew Quarters',     floor: 0x6a5a58, weight: 3, size: [3, 3] },
   arboretum:   { label: 'Arboretum',         floor: 0x3d5a35, weight: 1, size: [5, 5], big: [7, 9], bigP: 0.5 },
+  // rooms from the ship inventory (docs/ship-inventory): weight 0 = only rolled where a zone's weights ask for them (js/ships.js ZONES)
+  readyroom:   { label: 'Ready Room',        floor: 0x4a4552, weight: 0, size: [3, 3] },
+  brig:        { label: 'Brig',              floor: 0x4c5058, weight: 0, size: [3, 5] },
+  armory:      { label: 'Armory',            floor: 0x3f4448, weight: 0, size: [3, 3] },
+  gym:         { label: 'Fitness Centre',    floor: 0x5a6a5c, weight: 0, size: [3, 5] },
+  lab:         { label: 'Science Lab',       floor: 0x5c6e7a, weight: 0, size: [3, 5] },
+  laundry:     { label: 'Laundry',           floor: 0x6a6a72, weight: 0, size: [3, 3] },
+  lounge:      { label: 'Crew Lounge',       floor: 0x6a5666, weight: 0, size: [3, 5] },
+  workshop:    { label: 'Machine Shop',      floor: 0x50524a, weight: 0, size: [3, 5] },
+  plant:       { label: 'Plant Room',        floor: 0x4a5a58, weight: 0, size: [3, 5] },
+  morgue:      { label: 'Morgue',            floor: 0x70828a, weight: 0, size: [3, 3] },
+  datacore:    { label: 'Computer Core',     floor: 0x384660, weight: 0, size: [3, 5] },
+  stores:      { label: 'Stores',            floor: 0x655e4c, weight: 0, size: [3, 5] },
+  washroom:    { label: 'Washroom',          floor: 0x7a9098, weight: 0, size: [3, 3] },
+  airlock:     { label: 'EVA Prep',          floor: 0x555a60, weight: 0, size: [3, 3] },
   jefferies:   { label: 'Jiffy Tube',          floor: 0x3a3d42, weight: 0, size: [1, 1] },   // crawl ducts; carved by generate(), never rolled as a room
 };
 

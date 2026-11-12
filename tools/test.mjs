@@ -167,6 +167,21 @@ const srch = await page.evaluate(async () => {
   return out;
 });
 console.log('search:', JSON.stringify(srch)); if (!(srch.sites > 0 && srch.searched && /Search/.test(srch.prompt))) fail('fixture search');
+const inv = await page.evaluate(async () => {
+  const g = __game, P = g.P, out = { newRooms: [], clutter: 0, examine: '', examineKind: '', clutterPrompt: '' };
+  const NEW = new Set(['readyroom', 'brig', 'armory', 'gym', 'lab', 'laundry', 'lounge', 'workshop', 'plant', 'morgue', 'datacore', 'stores', 'washroom', 'airlock']), seen = new Set();
+  { const { generate } = await import('./js/gen.js'), { SHIPS, deckOptions } = await import('./js/ships.js');
+    for (let i = 0; i < 120; i++) { const ship = SHIPS[i % SHIPS.length], sd = i % ship.decks, d = generate(sd, i * 7919 + 3, deckOptions(ship, sd)); for (const r of d.rooms) if (NEW.has(r.type)) seen.add(r.type); } }
+  for (let i = 0; i < 4; i++) { g.newRun(); g.setQuality('low'); out.clutter += g.world.clutter?.length || 0; }
+  out.newRooms = [...seen];
+  g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
+  for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
+  const w = g.world, pr = w.d.props.find(p => ['crate', 'table', 'bunk', 'biobed'].includes(p.kind));
+  if (pr) { const [cx, cz] = w.center(pr.tx, pr.ty); for (const [ox, oz] of [[1.7, 0], [-1.7, 0], [0, 1.7], [0, -1.7]]) { P.x = cx + ox; P.z = cz + oz; P.yaw = Math.atan2(ox, oz); P.pitch = -0.6; P.vx = P.vz = 0; g.step(1 / 60, 950); g.step(1 / 60, 950.02); const t = document.getElementById('prompt').textContent; if (t && !/Search/.test(t)) { out.examine = t; out.examineKind = pr.kind; break; } } }
+  const c = w.clutter?.find(c => !g.ents.some(e => Math.hypot(e.x - c.x, e.z - c.z) < 3.5) && !(w.searchSites || []).some(s => Math.hypot(s.x - c.x, s.z - c.z) < 3)); if (c) { P.x = c.x - 0.9; P.z = c.z; P.yaw = Math.atan2(c.x - P.x, c.z - P.z) + Math.PI; P.pitch = 0; g.step(1 / 60, 960); out.clutterPrompt = document.getElementById('prompt').textContent; }
+  return out;
+});
+console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.newRooms.length >= 12 && inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

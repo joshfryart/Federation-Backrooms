@@ -86,6 +86,20 @@ export function generate(deck, seed, opts = {}) {
       case 'sickbay': for (const [x, y] of interior) if (rnd() < 0.7 || (x === cx && y === cy)) put(x, y, 'biobed'); break;
       case 'cargo': for (const [x, y] of interior) if (rnd() < 0.65) put(x, y, 'crate'); break;
       case 'arboretum': for (const [x, y] of interior) if (rnd() < 0.8) put(x, y, 'tree'); break;
+      // rooms from the ship inventory: laid out from the existing prop kinds (a 3×3 room gets one centrepiece, bigger ones a pattern)
+      case 'readyroom': put(cx, cy, 'table'); break;
+      case 'brig': for (const [x, y] of interior) if ((x + y) % 2 === 0 && rnd() < 0.8) put(x, y, 'bunk'); break;
+      case 'armory': put(cx, cy, 'crate'); break;
+      case 'gym': for (const [x, y] of interior) if ((x + y) % 3 === 0) put(x, y, 'cart'); break;
+      case 'lab': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : 'table'); break;
+      case 'laundry': put(cx, cy, 'crate'); break;
+      case 'lounge': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x * 3 + y) % 4 === 0 ? 'table' : 'lonechair'); break;
+      case 'workshop': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'cart' : 'table'); break;
+      case 'plant': for (const [x, y] of interior) if ((x + y) % 3 === 0) put(x, y, (x + y) % 2 ? 'console' : 'crate'); break;
+      case 'morgue': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, 'biobed'); break;
+      case 'datacore': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, 'console'); break;
+      case 'stores': for (const [x, y] of interior) if (rnd() < 0.7) put(x, y, (x + y) % 3 === 0 ? 'cart' : 'crate'); break;
+      case 'airlock': put(cx, cy, 'crate'); break;
     }
   }
   // connectivity safety: a tile put as prop must not isolate things. Verify below.

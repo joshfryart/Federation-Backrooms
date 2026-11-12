@@ -143,12 +143,13 @@ main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 18
 (() => {
 const L = ShipLib, $ = (id) => document.getElementById(id);
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const RMAP = { bridge: ['command', 'flight'], engineering: ['engineering'], sickbay: ['medical'], mess: ['services'], transporter: ['operations'], shuttlebay: ['flight'], cargo: ['services'], holodeck: ['services'], quarters: ['services'], arboretum: ['sciences'], jefferies: ['engineering'] };
+const RMAP = { bridge: ['command', 'flight'], engineering: ['engineering'], sickbay: ['medical'], mess: ['services'], transporter: ['operations'], shuttlebay: ['flight'], cargo: ['services'], holodeck: ['services'], quarters: ['services'], arboretum: ['sciences'], jefferies: ['engineering'],
+  readyroom: ['command'], brig: ['security'], armory: ['security'], gym: ['services'], lab: ['sciences'], laundry: ['services'], lounge: ['services'], workshop: ['engineering'], plant: ['engineering'], morgue: ['medical'], datacore: ['operations'], stores: ['services'], washroom: ['services'], airlock: ['flight'] };
 const DIVVAR = { command: '--cmd', operations: '--ops', sciences: '--sci' };
 const divOfRoom = (r) => L.DEPT[RMAP[r][0]].division;
 const PROP_NAME = { console: 'Console', chair: 'Command chair', viewscreen: 'Viewscreen', warpcore: 'Reactor core', shuttle: 'Shuttle', holocube: 'Holo-grid emitter', pad: 'Transporter pad', bunk: 'Bunk', table: 'Galley table', biobed: 'Biobed', crate: 'Cargo', tree: 'Grow bed', lonechair: 'Chair', plant: 'Planter', cart: 'Cart', replicator: 'Replicator' };
-const RCODE = { bridge: 'BR', engineering: 'EN', sickbay: 'SB', mess: 'GA', transporter: 'BM', shuttlebay: 'SH', cargo: 'CG', holodeck: 'HP', quarters: 'CQ', arboretum: 'AR' };
-const RSHADE = { bridge: 0.34, engineering: 0.3, sickbay: 0.16, mess: 0.24, transporter: 0.2, shuttlebay: 0.26, cargo: 0.14, holodeck: 0.36, quarters: 0.18, arboretum: 0.3 };   // fill strength per room type, so rooms of one division still read apart
+const RCODE = { bridge: 'BR', engineering: 'EN', sickbay: 'SB', mess: 'GA', transporter: 'BM', shuttlebay: 'SH', cargo: 'CG', holodeck: 'HP', quarters: 'CQ', arboretum: 'AR', readyroom: 'RR', brig: 'BG', armory: 'AM', gym: 'FC', lab: 'LB', laundry: 'LN', lounge: 'LG', workshop: 'WS', plant: 'PL', morgue: 'MG', datacore: 'DC', stores: 'ST', washroom: 'WR', airlock: 'EV' };
+const RSHADE = { bridge: 0.34, engineering: 0.3, sickbay: 0.16, mess: 0.24, transporter: 0.2, shuttlebay: 0.26, cargo: 0.14, holodeck: 0.36, quarters: 0.18, arboretum: 0.3, readyroom: 0.32, brig: 0.22, armory: 0.28, gym: 0.2, lab: 0.26, laundry: 0.12, lounge: 0.22, workshop: 0.24, plant: 0.28, morgue: 0.1, datacore: 0.34, stores: 0.16, washroom: 0.08, airlock: 0.3 };   // fill strength per room type, so rooms of one division still read apart
 const RHATCH = { cargo: 'diag', shuttlebay: 'diag', engineering: 'cross', holodeck: 'grid', arboretum: 'dots', sickbay: 'plus' };
 const CLIMB = new Set(['console', 'table', 'bunk', 'biobed', 'shuttle', 'cart', 'crate']);
 const S = { ship: 0, deck: 0, seed: 1867, view: 'deck', layers: { rooms: true, props: true, tubes: true, hardware: true, route: true } };
