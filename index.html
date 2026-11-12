@@ -57,6 +57,7 @@
   #prompt { bottom:34%; left:0; right:0; text-align:center; font-size:15px; color:#ffe9a8; text-shadow:0 0 6px #000, 0 0 2px #000; letter-spacing:.14em; }
   #toast { top:70%; left:0; right:0; text-align:center; font-size:15px; text-shadow:0 0 6px #000, 0 0 2px #000; opacity:0; transition:opacity .4s; padding:0 20px; }
   #toast.warn { color:#ff7766; } #toast.good { color:#8fffb0; } #toast.npc { color:#ffd69a; text-transform:none; letter-spacing:.03em; font-family:'Helvetica Neue',Arial,sans-serif; } #toast.comp { color:#8fd8ff; font-family:var(--f-m); font-size:13px; }
+  #subs { bottom:22%; left:0; right:0; display:flex; flex-direction:column; align-items:center; gap:4px; padding:0 20px; z-index:6; } #subs .sub { max-width:min(760px,92vw); background:rgba(5,8,14,.62); padding:4px 12px; font-size:15px; text-transform:none; letter-spacing:.02em; font-family:'Helvetica Neue',Arial,sans-serif; color:#eef4fb; text-shadow:0 0 4px #000; transition:opacity .5s; border-left:2px solid rgba(255,255,255,.25); } #subs .sub b { font-family:var(--f-d); letter-spacing:.06em; }
   #phaser { bottom:16px; right:16px; text-align:right; border-left:1px solid var(--line); border-right:3px solid #3cc8ff; padding:6px 10px 8px 14px; clip-path:polygon(11px 0,100% 0,100% 100%,0 100%,0 11px); }
   #phaser #lbl3 { font-size:9.5px; letter-spacing:.2em; color:var(--dim); margin-bottom:5px; } #phaser #lbl3 .ico { color:#7fdcff; margin-right:4px; }
   #phaser .cells span { display:inline-block; width:12px; height:20px; margin-left:4px; background:linear-gradient(#8fe6ff,#2bb6ee); box-shadow:0 0 8px #3cf; clip-path:polygon(0 3px,3px 0,100% 0,100% calc(100% - 3px),calc(100% - 3px) 100%,0 100%); }
@@ -239,6 +240,7 @@
 <div class="screen" id="pause"><div class="in"><div class="eyebrow">Console locked · shift in progress</div><h2>Paused</h2><p>Click to resume. The hostiles do not pause.</p><div><button class="btn" id="resume">Resume</button> <button class="btn alt noresume" id="companybtn">Ship's company</button></div>
   <div class="settings"><label>Mouse sensitivity <input id="sens" type="range" min="0.3" max="2.5" step="0.05" value="1"></label>
   <label>Volume <input id="vol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+  <label>Crew voices <select id="vsel"><option value="babble">Babble (procedural)</option><option value="synth">System voices</option><option value="subs">Subtitles only</option></select></label>
   <label>Graphics <select id="qsel"><option value="high">High (bloom, shadows)</option><option value="low">Performance</option></select></label></div></div></div>
 <div class="screen noresume" id="company" style="justify-content:flex-start;overflow:auto;text-align:left;align-items:stretch"><div style="max-width:1200px;margin:0 auto;width:100%"><button class="btn" id="companyback">Back</button><div id="companybody"></div></div></div>
 <div class="screen" id="perkscreen"><div class="in"><div class="eyebrow">Quartermaster · requisition form Q-7</div><h2>Deck cleared</h2><p id="perkinfo">Choose a requisition for the next deck.</p><div class="cards" id="cards"></div></div></div>

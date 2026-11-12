@@ -5,7 +5,7 @@ import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
-import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor } from './humans.js';
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
@@ -14,6 +14,8 @@ import { makeJunction, setLamp, makeBeacon } from './sysview.js';
 import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
+import { liftLine, loadPersonas, bark as voiceBark, habitCue, TAG_EFFECTS } from './voice.js';
+import { speak, cue as voiceCue, attach as attachSpeech, getMode as voiceMode, setMode as setVoiceMode, MODES as VOICE_MODES } from './speech.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
 const $ = (id) => document.getElementById(id);
@@ -92,7 +94,7 @@ function screenSplat(n, persist = false) {
 function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e => e.remove()); }
 
 const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
-const sound = new Sound(); sound.vol = CFG.vol;
+const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
 function setQuality(q) {
   CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
@@ -172,7 +174,7 @@ function loadDeck(n) {
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck)); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
   world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
-  if (NM) { world.mountCar(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored) world.explored.set(SD.st.explored); G.lift = { state: 'idle', armed: false }; }
+  if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored) world.explored.set(SD.st.explored); G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
@@ -290,6 +292,8 @@ function newRun() {
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
   G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p);
+  G.player = G.roster.byBillet.comp?.[0] || G.roster.people[G.roster.people.length - 1];   // placeholder until the player has a billet of their own: a stable crew member whose voice speaks for you
+  G.liftRnd = mulberry32((G.runSeed ^ 0x11f7a3) >>> 0);
   G.shipState = new ShipState(G.ship, G.runSeed); G.shipState.auto = false; if (NOM()) for (const sy of SYSTEMS) G.shipState.repair(sy.id); /* Systems Nominal: nothing is broken when you start */ G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
   G.director = NOM() ? null : new Director();   // no pacing pressure in Systems Nominal
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
@@ -409,7 +413,8 @@ function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
 $('qsel').onchange = (e) => setQuality(e.target.value);
-$('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
+$('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(G.player, 'Crew voice check.'); };
+$('vsel').value = voiceMode(); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
 if (CFG.quality === 'low') setQuality('low');
 $('resume').onmousedown = (e) => e.stopPropagation();
 $('credbtn').onclick = () => showScreen('credits'); $('companybtn').onclick = (e) => { e.stopPropagation(); showCompany(); }; $('companyback').onclick = (e) => { e.stopPropagation(); showScreen('pause'); }; $('credback').onclick = () => showScreen('title');
@@ -614,7 +619,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) carStep(dt);
+  updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -947,13 +952,60 @@ function chooseDeck(i) {
   if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — the car will not move.', 'warn'); return; }
   const D = G.ship.decks, dist = Math.abs(i - G.shipDeck);
   Object.assign(L, { state: 'ride', from: G.shipDeck, to: i, disp: G.shipDeck, t: 0, dur: 3 + 5 * (dist - 1) / Math.max(1, D - 2), hum: 0 });
+  // you say where you are going (in your own voice), then anyone already in the car says their stop
+  const said = speak(G.player, liftLine(G.player, destOf(i), { rank: L.rider?.person.rank })); L.said = said.text;
+  if (L.rider) boardLift(L.rider.person, destOf(riderDest(L.rider.person, G.shipDeck, i)), said.dur + 0.4);
   G.phase = 'ride'; sound.lift(); renderLiftPanel(); requestLock();
+}
+// ---------------- NPC riders: someone is sometimes already in the car. Tags (js/voice.js) decide where they stand and what they do; ----------------
+// liftLine / speak / boardLift(person, dest) are the pieces the future NPC sim reuses for anyone taking the lift.
+G.riderChance = 0.35; G.liftLog = [];
+const destOf = (i) => ({ deckNo: i + 1, zone: deckZone(i), rooms: deckNotes(i) });
+function riderDest(person, from, to) {   // a stop on the way (or the player's own), preferring decks of their department's zone
+  const dir = Math.sign(to - from), cands = []; for (let k = from + dir; k !== to + dir; k += dir) cands.push(k);
+  const mine = cands.filter(k => deckZone(k) === DEPT[person.dept].zone), pool = mine.length ? mine : cands; return pool[Math.floor(G.liftRnd() * pool.length)];
+}
+function pickRider() {
+  const zone = deckZone(G.shipDeck), pool = G.roster.people.filter(p => p !== G.player && p.billet !== 'co' && !['dead', 'crazed'].includes(p.status)), local = pool.filter(p => DEPT[p.dept].zone === zone);
+  const from = local.length && G.liftRnd() < 0.7 ? local : pool; return from[Math.floor(G.liftRnd() * from.length)];
+}
+function placeRider(person) {
+  const c = world.car; if (!c) return null; clearRider(); const T = new Set(person.tags || []), px = -c.dy, pz = c.dx, side = person.id % 2 ? 1 : -1;
+  const spot = T.has('lift:stands-at-back') ? [-0.85, 0.55] : T.has('lift:holds-door') ? [0.7, 0.75] : [-0.35, 0.85];   // along the doors' axis, sideways: a tidy spot at the back or against the side wall
+  const m = world.carMode ? makeHuman({ person, kind: person.body, rank: person.rank, uniform: person.uniform ?? G.roster.uniformOf(person), rnd: mulberry32(person.id + 77) }) : null;
+  const x = c.x + c.dx * spot[0] + px * spot[1] * side, z = c.z + c.dy * spot[0] + pz * spot[1] * side;
+  if (m) { m.position.set(x, 0, z); m.rotation.y = T.has('lift:small-talk') ? Math.atan2(c.x - x, c.z - z) : Math.atan2(c.dx, c.dy); scene.add(m);   // everyone faces the doors; the chatty ones face you
+    m.userData.human.play('idle', { fade: 0 }); }
+  return G.lift.rider = { person, mesh: m, h: m?.userData.human || null, x, z, dest: null, destIdx: -1, left: false, clock: 0, events: [] };
+}
+function rollRider(force = false) { if (!world?.car || G.lift.rider || !G.roster) return null; if (!force && G.liftRnd() >= G.riderChance) return null; const p = pickRider(); return p ? placeRider(p) : null; }
+function boardLift(person, dest, delay = 0) {   // person is (now) in the car; they announce their stop and behave by their lift: tags
+  let r = G.lift.rider; if (!r || r.person !== person) r = placeRider(person); if (!r) return null;
+  r.dest = dest; r.destIdx = dest.deckNo - 1; const T = new Set(person.tags || []), rnd = G.liftRnd, say = speak(person, liftLine(person, dest, { rank: G.player?.rank }), { delay }); r.said = say.text; G.liftLog.push(`board:${person.id}:${dest.deckNo}`);
+  if (!T.has('lift:rides-in-silence')) {
+    if (T.has('lift:small-talk') && rnd() < 0.8) r.events.push({ t: 1.2 + delay, fn: () => { r.h?.has('idle_talking') && r.h.play('idle_talking'); speak(person, voiceBark(person, 'smalltalk')); } });
+    else if (T.has('lift:corrects-others') && Math.abs(r.destIdx - G.shipDeck) >= 1 && rnd() < 0.6) r.events.push({ t: 1 + delay, fn: () => speak(person, voiceBark(person, 'correct')) });
+    const hc = habitCue(person, rnd); if (hc && (T.has('lift:hums-in-lift') || rnd() < 0.5)) r.events.push({ t: 2 + delay, fn: () => voiceCue(person, T.has('lift:hums-in-lift') ? 'hum' : hc.sound) });
+  }
+  if (T.has('lift:presses-twice')) r.events.push({ t: 0.2 + delay, fn: () => voiceCue(person, 'click2') });
+  return r;
+}
+function leaveRider() {
+  const r = G.lift.rider; if (!r || r.left) return; r.left = true; G.liftLog.push(`leave:${r.person.id}:${r.destIdx + 1}`);
+  const th = (r.person.tags || []).includes('lift:says-thanks') && TAG_EFFECTS['lift:says-thanks'].leave; if (th) speak(r.person, th[r.person.id % th.length]);
+  if (r.mesh) scene.remove(r.mesh); r.mesh = null; r.h = null;
+}
+function clearRider() { const r = G.lift?.rider; if (r?.mesh) scene.remove(r.mesh); if (r) { r.mesh = null; r.h = null; } if (G.lift) G.lift.rider = null; }
+function riderStep(dt) {
+  const r = G.lift?.rider; if (!r) return; r.clock += dt; if (r.h) { r.h.update(dt); liveFace(r.h, G.time, r.person.id * 3.1); }
+  for (const e of r.events) if (!e.done && r.clock >= e.t) { e.done = true; e.fn(); }
 }
 function carStep(dt) {
   const c = world.car, L = G.lift; if (!c || G.phase !== 'play') return;
   const dx = P.x - c.x, dz = P.z - c.z, d = Math.hypot(dx, dz), inT = inCarTile(), s = dx * c.dx + dz * c.dy, locked = !!G.fx.liftLocked;
   world.setCarLocked(locked);
   if (!inT) L.armed = true;   // the panel only pops up when you walk into the car, not when you arrive in it
+  if (d > 10) { L.far = true; if (L.rider) clearRider(); } else if (d < 6.5 && L.far) { L.far = false; rollRider(); }   // wander off and the rider is gone; come back and someone may be waiting
   if (!locked && !world.liftOpen && d < 4.4) world.setLiftOpen(true);
   else if (!inT && world.liftOpen && (locked || d > 5.6)) world.setLiftOpen(false);
   if (inT && L.armed && !locked && s < 0.25 && P.grounded) openLiftPanel();
@@ -965,9 +1017,11 @@ function liftStep(dt, t) {
   if (G.phase === 'ride') {
     L.t += dt; const k = Math.min(1, L.t / L.dur), e = k * k * (3 - 2 * k), disp = Math.round(L.from + (L.to - L.from) * e);
     if (disp !== L.disp) { L.disp = disp; sound.tone(1500, 0.05, 'square', 0.035); renderLiftPanel(); }
+    const R = L.rider; if (R && !R.left && R.destIdx !== L.to && (L.to > L.from ? disp >= R.destIdx : disp <= R.destIdx)) { sound.ding(); leaveRider(); }   // their stop is on the way: they step out, you ride on
+    riderStep(dt);
     L.hum -= dt; if (L.hum <= 0) { L.hum = 0.5; sound.tone(58 + 4 * Math.sin(L.t), 0.65, 'sine', 0.06); }
     sh = 0.006 + (k < 0.12 || k > 0.88 ? 0.008 : 0);
-    if (k >= 1) { $('liftui').className = ''; loadDeck(L.to + 1); G.phase = 'play'; sound.ding(); sound.thud(0.3); return; }
+    if (k >= 1) { if (L.rider) leaveRider(); $('liftui').className = ''; loadDeck(L.to + 1); G.phase = 'play'; sound.ding(); sound.thud(0.3); return; }
   }
   camera.position.set(P.x + (Math.random() - 0.5) * sh, P.y + P.eye + (Math.random() - 0.5) * sh * 1.5, P.z + (Math.random() - 0.5) * sh);
   camera.rotation.order = 'YXZ'; camera.rotation.set(P.pitch + (Math.random() - 0.5) * sh * 0.5, P.yaw + (Math.random() - 0.5) * sh * 0.5, (Math.random() - 0.5) * sh * 0.4);
@@ -1106,8 +1160,8 @@ function frame() {
 }
 
 // expose for debugging/tests
-const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

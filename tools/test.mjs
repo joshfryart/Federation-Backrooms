@@ -254,6 +254,76 @@ console.log('nominal:', JSON.stringify(nom));
     && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
     && n.locked.fx && n.locked.panel === 'play' && n.unlocked === 'select';
   if (!ok) fail('nominal ship / turbolift'); }
+// ---- crew voices, tags, lift speech, NPC riders ----
+const vox = await page2.evaluate(async () => {
+  const V = await import('./js/voice.js'), SP = await import('./js/speech.js'), { SHIPS } = await import('./js/ships.js'), { makeComplement } = await import('./js/crew.js');
+  const bad = [], all = V.allTags(), sig = (r) => r.people.map(p => V.voiceSig(p.voice, p.tags)); let people = 0, tagTotal = 0, personas = 0;
+  if (!V.havePersonas()) bad.push('personas.json not loaded');
+  for (const ship of SHIPS) for (const seed of [1, 7, 4242]) {
+    const a = makeComplement(ship, seed), b = makeComplement(ship, seed), sa = sig(a);
+    if (JSON.stringify(sa) !== JSON.stringify(sig(b)) || JSON.stringify(a.people.map(p => p.persona)) !== JSON.stringify(b.people.map(p => p.persona))) bad.push(`${ship.name}/${seed}: voices not deterministic`);
+    if (new Set(sa).size !== sa.length) bad.push(`${ship.name}/${seed}: two people share a voice+tag set`);
+    if (new Set(a.people.map(p => p.voice.hash)).size !== a.people.length) bad.push(`${ship.name}/${seed}: voice hash collision`);
+    for (const p of a.people) {
+      people++; tagTotal += p.tags.length; if (p.persona) personas++;
+      if (p.tags.length < 8 || p.tags.length > 14) bad.push(`${p.short}: ${p.tags.length} tags`);
+      for (const c of V.CATEGORIES) if (!p.tags.some(t => V.catOf(t) === c)) bad.push(`${p.short}: no ${c} tag`);
+      const cf = V.conflictsIn(p.tags); if (cf.length) bad.push(`${p.short}: conflicts ${JSON.stringify(cf)}`);
+      for (const t of p.tags) if (!all.includes(t)) bad.push(`${p.short}: unknown tag ${t}`);
+      const v = p.voice; if (!(v.pitch >= 0.5 && v.pitch <= 1.8 && v.rate >= 0.7 && v.rate <= 1.5 && v.volume >= 0.5 && v.volume <= 1 && v.formant >= 0.8 && v.formant <= 1.25 && v.breath >= 0 && v.breath <= 1 && v.rough >= 0 && v.rough <= 1 && v.vibrato >= 0 && v.vibrato <= 1 && Number.isInteger(v.hash))) bad.push(`${p.short}: voice out of range`);
+    }
+    if (bad.length > 8) break;
+  }
+  const noFx = all.filter(t => !V.hasEffect(t)), extra = Object.keys(V.TAG_EFFECTS).filter(t => !all.includes(t));
+  let asym = 0; for (const [t, cs] of Object.entries(V.CONFLICTS)) for (const c of cs) if (!V.CONFLICTS[c]?.includes(t)) asym++;
+  const bodies = {}; for (const p of makeComplement(SHIPS[0], 1).people) (bodies[p.body] ||= []).push(p.voice.pitch); const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  // lift lines: 30 sampled people x random destinations
+  const ship = SHIPS[2], R = makeComplement(ship, 3), lines = [], lbad = []; let sd = 5; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 30; k++) {
+    const p = R.people[Math.floor(rnd() * R.people.length)], rooms = ['Bridge', 'Engineering', 'Sickbay', 'Galley', 'Cargo', 'Lab'].filter(() => rnd() < 0.4), d = { deckNo: 1 + Math.floor(rnd() * 9), zone: ['Command', 'Habitat', 'Services', 'Engineering'][Math.floor(rnd() * 4)], rooms };
+    const l = V.liftLine(p, d), lo = l.toLowerCase(), place = V.pickPlace(p, d).toLowerCase(); lines.push(l);
+    if (!l || !(lo.includes(V.numWord(d.deckNo)) || lo.includes(String(d.deckNo)) || (place && lo.includes(place.slice(2))))) lbad.push(`${p.short}: "${l}" for deck ${d.deckNo} ${place}`);
+    if (V.liftLine(p, d) !== l) lbad.push('liftLine not deterministic');
+  }
+  // tag-shaped examples from the spec
+  const mk = (tags, extra = {}) => ({ id: 1, rank: 2, dept: 'command', body: 'crew_m', voice: { hash: 5 }, tags, ...extra }), D1 = { deckNo: 1, zone: 'Command', rooms: ['Bridge'] }, DE = { deckNo: 5, zone: 'Engineering', rooms: ['Engineering'] };
+  const ex = { terse: V.liftLine(mk(['speech:terse', 'lift:one-word']), D1), formal: V.liftLine(mk(['speech:formal', 'lift:full-sentence']), D1), casual: V.liftLine(mk(['speech:casual', 'lift:names-place']), DE), mumble: V.liftLine(mk(['lift:mumbles', 'lift:names-place']), DE), please: V.liftLine(mk(['lift:says-please', 'lift:says-deck-number']), D1) };
+  const exOk = /^Bridge\.$/.test(ex.terse) && /^Deck one, the bridge, please\.$/.test(ex.formal) && /^(Uh|Yeah|Okay), engineering\.$/.test(ex.casual) && /^…ngineering\.$/.test(ex.mumble) && /please/.test(ex.please);
+  // speaking in headless: every mode must work without throwing, always leave a subtitle
+  const sp = [], p0 = R.people[0]; for (const m of ['babble', 'synth', 'subs']) { SP.setMode(m); try { const r = SP.speak(p0, V.liftLine(p0, { deckNo: 4, zone: 'Habitat', rooms: ['Sickbay'] })); sp.push([m, r.mode, r.dur > 0]); SP.cue(p0, 'hum'); } catch (e) { sp.push([m, 'THREW ' + e.message]); } }
+  try { SP.speak(null, 'Neutral voice test.'); SP.speak(p0, ''); } catch (e) { sp.push(['null', 'THREW']); } SP.setMode('babble');
+  const subs = document.getElementById('subs')?.children.length || 0, desc = V.describeVoice(p0);
+  return { people, avgTags: +(tagTotal / people).toFixed(1), personas, bad, noFx, extra, asym, tags: all.length, pitch: Object.fromEntries(Object.entries(bodies).map(([k, a]) => [k, +avg(a).toFixed(2)])), lbad, sample: lines.slice(0, 4), ex, exOk, sp, subs, desc };
+});
+console.log('voices:', JSON.stringify({ ...vox, bad: vox.bad.slice(0, 4) }));
+{ const o = vox; if (!(o.bad.length === 0 && o.noFx.length === 0 && o.extra.length === 0 && o.asym === 0 && o.personas === o.people && o.lbad.length === 0 && o.exOk && o.sp.every(x => x[1] !== undefined && !/THREW/.test(x[1])) && o.sp.length === 3 && o.subs > 0 && o.desc.length > 10 && o.pitch.crew_heavy < o.pitch.crew_m && o.pitch.crew_m < o.pitch.crew_f2)) fail('crew voices: ' + JSON.stringify({ bad: o.bad.slice(0, 3), noFx: o.noFx.slice(0, 3), extra: o.extra, asym: o.asym, lbad: o.lbad.slice(0, 3), exOk: o.exOk, ex: o.ex, sp: o.sp, subs: o.subs })); }
+const rid = await page2.evaluate(async () => {
+  const g = __game, G = g.G, out = { rides: [] }; G.forceShip = 1; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.hp = G.maxHp = 1e6;
+  let t = 0; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); } }; const D = G.ship.decks; tick(10);
+  out.player = G.player && G.player.voice ? G.player.short : null;
+  // chance: ~35% of the times someone walks up to the car
+  let hits = 0, N = 120; G.riderChance = 0.35; for (let i = 0; i < N; i++) { if (g.rollRider()) { hits++; g.leaveRider(); } G.lift.rider = null; } out.rate = +(hits / N).toFixed(2);
+  const ride = (to, midDest) => {
+    G.riderChance = 1; G.lift.rider = null; const r = g.rollRider(true); if (!r) return { err: 'no rider' }; const inScene = !!r.mesh && g.scene.children.includes(r.mesh), who = r.person;
+    g.openLiftPanel(); if (G.phase !== 'select') return { err: 'panel', phase: G.phase }; const from = G.shipDeck, logN = G.liftLog.length; g.liftTo(to); if (G.phase !== 'ride') return { err: 'no ride' };
+    if (midDest !== undefined) g.boardLift(who, g.destOf(midDest));
+    const spoke = G.lift.said, rd = g.rider.dest, rsaid = g.rider.said; let n = 0, leftAt = null, leftRiding = false, meshGone = false; const subsBefore = document.getElementById('subs')?.children.length || 0;
+    while (G.phase === 'ride' && n < 30 * 14) { tick(1); n++; if (leftAt === null && g.rider?.left) { leftAt = G.lift.disp; leftRiding = G.phase === 'ride'; meshGone = !g.rider.mesh; } }
+    const log = G.liftLog.slice(logN);
+    return { from, to, phase: G.phase, deck: G.shipDeck, inScene, playerSaid: !!spoke && spoke.length > 0, riderSaid: !!rsaid && rsaid.length > 0, riderDest: rd.deckNo - 1, board: log.some(l => l.startsWith('board:' + who.id + ':' + rd.deckNo)), left: log.some(l => l.startsWith('leave:' + who.id)), leftAt, leftRiding, meshGone, cleared: !g.rider, };
+  };
+  out.rides.push(ride(D - 1));          // rider picks their own stop (on the way or the same deck)
+  out.rides.push(ride(0, D - 3));       // the way back up: rider's stop is mid-ride; they get out there, the player rides on
+  out.rides.push(ride(D - 1, 3));
+  G.riderChance = 0; G.lift.rider = null; out.none = !g.rollRider(); return out;
+});
+console.log('lift riders:', JSON.stringify(rid));
+{ const o = rid, ok = o.player && o.rate > 0.2 && o.rate < 0.5 && o.rides.length === 3 && o.rides.every(r => !r.err && r.inScene && r.playerSaid && r.riderSaid && r.board && r.left && r.cleared && r.phase === 'play') && o.rides[1].leftRiding && o.rides[1].leftAt === o.rides[1].riderDest && o.rides[1].deck === 0 && o.rides[2].leftRiding && o.rides[2].deck === o.rides[2].to && o.none;
+  if (!ok) fail('NPC lift riders'); }
+const vpage = await browser.newPage({ viewport: { width: 900, height: 600 } }); vpage.on('pageerror', e => errors.push('voices.html: ' + e.message)); vpage.on('console', m => { if (m.type() === 'error') errors.push('voices.html: ' + m.text()); });
+await vpage.goto(`http://localhost:${port}/voices.html?ship=3&seed=2`); await vpage.waitForFunction(() => window.__ready, null, { timeout: 15000 });
+const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
+console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && vp.chips > vp.rows * 8 && /\[/.test(vp.said) && vp.eng > 0 && vp.eng < vp.total)) fail('voices.html');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();
 console.log(failed ? 'FAILED' : 'OK'); process.exit(failed ? 1 : 0);

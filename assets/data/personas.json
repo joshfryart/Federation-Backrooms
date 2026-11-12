@@ -1,0 +1,1095 @@
+{
+ "ace": [
+  {
+   "id": "ledger_keeper",
+   "traits": [
+    "methodical",
+    "dry-humoured"
+   ],
+   "quirk": "Keeps a paper maintenance ledger and ticks every line by hand."
+  },
+  {
+   "id": "fixer",
+   "traits": [
+    "hands-on",
+    "impatient"
+   ],
+   "quirk": "Can't walk past a loose panel without tightening it."
+  },
+  {
+   "id": "mentor",
+   "traits": [
+    "patient",
+    "social"
+   ],
+   "quirk": "Brings tea to the junior techs and quizzes them on schematics."
+  }
+ ],
+ "armory": [
+  {
+   "id": "ledger_keeper",
+   "traits": [
+    "meticulous",
+    "dry"
+   ],
+   "quirk": "Counts the racks twice and initials the log in green ink."
+  },
+  {
+   "id": "range_rat",
+   "traits": [
+    "restless",
+    "competitive"
+   ],
+   "quirk": "Keeps a private high-score sheet for the firing range."
+  },
+  {
+   "id": "worrier",
+   "traits": [
+    "anxious",
+    "kind"
+   ],
+   "quirk": "Hums off-key while checking cell gauges and over-checks the door seal."
+  }
+ ],
+ "bot": [
+  {
+   "id": "green_thumb",
+   "traits": [
+    "patient",
+    "gentle",
+    "chatty about plants"
+   ],
+   "quirk": "Talks to the tomato vines and names each bed."
+  },
+  {
+   "id": "data_gardener",
+   "traits": [
+    "methodical",
+    "skeptical",
+    "dry humour"
+   ],
+   "quirk": "Logs every pH reading twice and distrusts sensor averages."
+  },
+  {
+   "id": "burnt_out",
+   "traits": [
+    "tired",
+    "blunt",
+    "reliable in a crisis"
+   ],
+   "quirk": "Keeps a hidden stash of real coffee beans in a potting shed locker."
+  }
+ ],
+ "cargo": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "meticulous"
+   ],
+   "quirk": "Reads every strap tension twice and initials the manifest in green pen"
+  },
+  {
+   "id": "easy_rider",
+   "traits": [
+    "laid-back",
+    "chatty"
+   ],
+   "quirk": "Hums while hauling and stacks the lighter crates on top as a rule of thumb"
+  },
+  {
+   "id": "night_owl_tinkerer",
+   "traits": [
+    "curious",
+    "tired"
+   ],
+   "quirk": "Keeps a pocket of salvaged parts and rebuilds cargo sleds in spare time"
+  }
+ ],
+ "carto": [
+  {
+   "id": "chart_purist",
+   "traits": [
+    "meticulous",
+    "quiet"
+   ],
+   "quirk": "Re-checks every fix twice and hums while the plot renders."
+  },
+  {
+   "id": "wandering_dreamer",
+   "traits": [
+    "curious",
+    "chatty"
+   ],
+   "quirk": "Stops mid-corridor to explain a nebula to anyone nearby."
+  },
+  {
+   "id": "burned_out_pro",
+   "traits": [
+    "tired",
+    "dry-humoured"
+   ],
+   "quirk": "Keeps a cold mug of tea on the console and forgets it."
+  }
+ ],
+ "ce": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "methodical",
+    "formal"
+   ],
+   "quirk": "Carries a paper checklist and initials every line"
+  },
+  {
+   "id": "tinkerer",
+   "traits": [
+    "restless",
+    "inventive"
+   ],
+   "quirk": "Always has a half-rebuilt injector on the workbench"
+  },
+  {
+   "id": "weary_veteran",
+   "traits": [
+    "dry",
+    "cautious"
+   ],
+   "quirk": "Mutters to the warp core like an old dog"
+  }
+ ],
+ "cfo": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Reads the helm log aloud at handover, every line."
+  },
+  {
+   "id": "old_hand",
+   "traits": [
+    "relaxed",
+    "mentoring"
+   ],
+   "quirk": "Keeps a battered coffee mug at the helm console and tells launch stories."
+  },
+  {
+   "id": "restless_ace",
+   "traits": [
+    "impatient",
+    "skilled"
+   ],
+   "quirk": "Would rather be flying a shuttle than managing; runs extra sim drills in the holo-playroom."
+  }
+ ],
+ "cmo": [
+  {
+   "id": "old_hand",
+   "traits": [
+    "calm",
+    "dry humour",
+    "thorough"
+   ],
+   "quirk": "Always has a lukewarm mug of tea somewhere in sickbay and forgets where."
+  },
+  {
+   "id": "stern_clinician",
+   "traits": [
+    "exacting",
+    "protocol-first",
+    "tireless"
+   ],
+   "quirk": "Re-counts the controlled-drug locker herself every shift."
+  },
+  {
+   "id": "warm_worrier",
+   "traits": [
+    "empathetic",
+    "over-committed",
+    "sleeps badly"
+   ],
+   "quirk": "Hums while working and keeps a drawer of sweets for anxious patients."
+  }
+ ],
+ "co": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "formal",
+    "punctual"
+   ],
+   "quirk": "Reads every report to the last line"
+  },
+  {
+   "id": "hands_on",
+   "traits": [
+    "warm",
+    "restless"
+   ],
+   "quirk": "Cannot stay in the chair more than an hour"
+  },
+  {
+   "id": "quiet_strategist",
+   "traits": [
+    "reserved",
+    "observant"
+   ],
+   "quirk": "Plays solitaire chess in the ready room"
+  }
+ ],
+ "comms": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal",
+    "meticulous"
+   ],
+   "quirk": "Reads the relay board aloud in the same order every sweep."
+  },
+  {
+   "id": "gossip_hub",
+   "traits": [
+    "sociable",
+    "curious",
+    "talkative"
+   ],
+   "quirk": "Knows who is feuding with whom before they do."
+  },
+  {
+   "id": "night_owl_tinkerer",
+   "traits": [
+    "wry",
+    "tired",
+    "inventive"
+   ],
+   "quirk": "Keeps a half-built radio on the workshop bench."
+  }
+ ],
+ "comp": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "methodical"
+   ],
+   "quirk": "Logs every diagnostic with a timestamp and a one-line summary, even for nothing."
+  },
+  {
+   "id": "night_owl_tinkerer",
+   "traits": [
+    "curious",
+    "scruffy"
+   ],
+   "quirk": "Keeps a private script folder of 'temporary' fixes and names them after snacks."
+  },
+  {
+   "id": "anxious_perfectionist",
+   "traits": [
+    "worrier",
+    "helpful"
+   ],
+   "quirk": "Re-runs a checksum three times and sleeps badly after any anomaly."
+  }
+ ],
+ "cook": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "tidy",
+    "nervous"
+   ],
+   "quirk": "Labels every tray with a ready time and checks the cold-store log twice."
+  },
+  {
+   "id": "gossip_and_soup",
+   "traits": [
+    "chatty",
+    "generous",
+    "easily distracted"
+   ],
+   "quirk": "Slips extra portions to anyone who looks rough and trades news for it."
+  },
+  {
+   "id": "tinkerer",
+   "traits": [
+    "curious",
+    "stubborn",
+    "night owl"
+   ],
+   "quirk": "Keeps a private sourdough starter and tweaks recipes against orders."
+  }
+ ],
+ "cos": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "methodical",
+    "formal"
+   ],
+   "quirk": "Signs every locker log with the same green pen."
+  },
+  {
+   "id": "corridor_cop",
+   "traits": [
+    "friendly",
+    "visible"
+   ],
+   "quirk": "Knows every crew member's kid's name and uses it."
+  },
+  {
+   "id": "worrier",
+   "traits": [
+    "anxious",
+    "thorough"
+   ],
+   "quirk": "Rechecks the brig door twice before leaving."
+  }
+ ],
+ "counsel": [
+  {
+   "id": "open_door",
+   "traits": [
+    "warm",
+    "patient",
+    "chatty"
+   ],
+   "quirk": "Keeps a pot of herbal tea going in the office and offers it to everyone, including the captain."
+  },
+  {
+   "id": "clinical",
+   "traits": [
+    "precise",
+    "reserved",
+    "punctual"
+   ],
+   "quirk": "Writes everything in a paper notebook she never lets anyone see."
+  },
+  {
+   "id": "night_owl",
+   "traits": [
+    "restless",
+    "dry-humoured",
+    "insomniac"
+   ],
+   "quirk": "Does her best listening at 0300 in the empty lounge, nursing one drink for an hour."
+  }
+ ],
+ "cso": [
+  {
+   "id": "rigorous_skeptic",
+   "traits": [
+    "precise",
+    "sceptical"
+   ],
+   "quirk": "Re-runs any calibration she did not do herself and annotates logs in the margins."
+  },
+  {
+   "id": "enthusiast",
+   "traits": [
+    "curious",
+    "chatty"
+   ],
+   "quirk": "Narrates discoveries to whoever is nearby, and keeps a jar of odd sample rocks on the desk."
+  },
+  {
+   "id": "tired_pragmatist",
+   "traits": [
+    "dry",
+    "efficient"
+   ],
+   "quirk": "Runs on stewed tea and delegates to the sensor officer whenever safe."
+  }
+ ],
+ "dc": [
+  {
+   "id": "locker_hound",
+   "traits": [
+    "meticulous",
+    "early"
+   ],
+   "quirk": "Counts every seal ring and patch kit twice and labels shelves with a grease pencil."
+  },
+  {
+   "id": "corner_cutter",
+   "traits": [
+    "easygoing",
+    "chatty"
+   ],
+   "quirk": "Keeps a deck of cards in the tool belt and always has one more hand in him."
+  },
+  {
+   "id": "jumpy_veteran",
+   "traits": [
+    "anxious",
+    "blunt"
+   ],
+   "quirk": "Taps every bulkhead seal twice when passing and knows which ones lie."
+  }
+ ],
+ "deck": [
+  {
+   "id": "checklist_hawk",
+   "traits": [
+    "punctual",
+    "precise"
+   ],
+   "quirk": "Reads every checklist line aloud, even alone."
+  },
+  {
+   "id": "deck_joker",
+   "traits": [
+    "friendly",
+    "chatty"
+   ],
+   "quirk": "Names each shuttle's squeaky hatch and talks to them."
+  },
+  {
+   "id": "tired_veteran",
+   "traits": [
+    "gruff",
+    "experienced"
+   ],
+   "quirk": "Keeps a thermos of bad coffee hidden behind the fuel locker."
+  }
+ ],
+ "dep": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal",
+    "thorough"
+   ],
+   "quirk": "Initials every log page twice and carries a paper checklist."
+  },
+  {
+   "id": "walkabout",
+   "traits": [
+    "approachable",
+    "chatty",
+    "observant"
+   ],
+   "quirk": "Always has a mug of cold tea in hand and knows everyone's birthday."
+  },
+  {
+   "id": "burnt_out_vet",
+   "traits": [
+    "dry",
+    "tired",
+    "reliable in crisis"
+   ],
+   "quirk": "Naps in the brig office chair when no prisoners are held."
+  }
+ ],
+ "doc": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "methodical",
+    "punctual"
+   ],
+   "quirk": "Reads every chart twice and initials the margin in green ink."
+  },
+  {
+   "id": "night_owl_gambler",
+   "traits": [
+    "wry",
+    "sociable"
+   ],
+   "quirk": "Runs a low-stakes card game in the lounge and keeps a deck in the lab coat."
+  },
+  {
+   "id": "worrier",
+   "traits": [
+    "anxious",
+    "caring"
+   ],
+   "quirk": "Checks on the same two crewmen who had bad scans last week, unprompted."
+  }
+ ],
+ "env": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "methodical"
+   ],
+   "quirk": "Logs scrubber hours in a paper notebook as a backup to the computer."
+  },
+  {
+   "id": "plant_whisperer",
+   "traits": [
+    "intuitive",
+    "chatty"
+   ],
+   "quirk": "Names the circulation fans and talks to them; keeps a sprig of basil by the console."
+  },
+  {
+   "id": "burned_out",
+   "traits": [
+    "tired",
+    "dry-humoured"
+   ],
+   "quirk": "Always has cold tea within reach and a running tally of 'things that were fine yesterday'."
+  }
+ ],
+ "eps": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "methodical"
+   ],
+   "quirk": "Logs every tap reading in a worn notebook as well as the console"
+  },
+  {
+   "id": "corner_cutter",
+   "traits": [
+    "easygoing",
+    "chatty"
+   ],
+   "quirk": "Hums off-key while working and trusts his ear over the meter"
+  },
+  {
+   "id": "anxious_newbie",
+   "traits": [
+    "nervous",
+    "diligent"
+   ],
+   "quirk": "Double checks every breaker twice and keeps a spare fuse in each pocket"
+  }
+ ],
+ "galley": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "sanitation-fanatic"
+   ],
+   "quirk": "Wipes the same counter twice and logs every temperature reading."
+  },
+  {
+   "id": "warm_hearth",
+   "traits": [
+    "generous",
+    "talkative"
+   ],
+   "quirk": "Keeps a secret off-menu recipe and slips extra portions to tired crew."
+  },
+  {
+   "id": "worn_veteran",
+   "traits": [
+    "dry",
+    "improviser"
+   ],
+   "quirk": "Talks to the stockpot and swears the old recipes beat the replicators."
+  }
+ ],
+ "guard": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Logs every round to the minute and salutes with a tiny nod."
+  },
+  {
+   "id": "easygoing_gossip",
+   "traits": [
+    "chatty",
+    "friendly"
+   ],
+   "quirk": "Knows everyone's business from corridor chats."
+  },
+  {
+   "id": "anxious_rookie",
+   "traits": [
+    "jumpy",
+    "eager"
+   ],
+   "quirk": "Keeps tapping the stun grip to check it is holstered."
+  }
+ ],
+ "helm": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Reads the thruster checklist aloud under her breath, every time."
+  },
+  {
+   "id": "stick_jockey",
+   "traits": [
+    "cocky",
+    "sociable"
+   ],
+   "quirk": "Drums on the console edge and hums while holding a course."
+  },
+  {
+   "id": "quiet_worrier",
+   "traits": [
+    "anxious",
+    "meticulous"
+   ],
+   "quirk": "Re-checks the drift log three times and keeps a paper notebook of lurches."
+  }
+ ],
+ "holo": [
+  {
+   "id": "safety_first",
+   "traits": [
+    "methodical",
+    "nervous"
+   ],
+   "quirk": "Reads the interlock log aloud like a prayer and taps the holocube twice before leaving."
+  },
+  {
+   "id": "program_tinkerer",
+   "traits": [
+    "creative",
+    "easily distracted"
+   ],
+   "quirk": "Writes his own silly scenarios on shift and tests them on himself."
+  },
+  {
+   "id": "social_host",
+   "traits": [
+    "chatty",
+    "generous"
+   ],
+   "quirk": "Keeps a jar of replicated sweets for anyone who leaves the room in a good mood."
+  }
+ ],
+ "lab": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "meticulous",
+    "anxious"
+   ],
+   "quirk": "Re-labels every vial even when the label is fine."
+  },
+  {
+   "id": "night_owl_tinkerer",
+   "traits": [
+    "curious",
+    "scruffy"
+   ],
+   "quirk": "Rigs spare parts into odd gadgets in the workshop."
+  },
+  {
+   "id": "social_butterfly",
+   "traits": [
+    "chatty",
+    "easygoing"
+   ],
+   "quirk": "Knows everyone's gossip, trades it for coffee."
+  }
+ ],
+ "medtech": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "careful"
+   ],
+   "quirk": "Double-checks every label aloud and wipes the tray rail twice."
+  },
+  {
+   "id": "tired_veteran",
+   "traits": [
+    "dry",
+    "efficient"
+   ],
+   "quirk": "Keeps a mug of cold tea on the supply cart and gets lost in crosswords."
+  },
+  {
+   "id": "eager_rookie",
+   "traits": [
+    "curious",
+    "anxious"
+   ],
+   "quirk": "Reads med journals on the console and over-reports minor readings."
+  }
+ ],
+ "nav": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "meticulous"
+   ],
+   "quirk": "Re-derives every fix by hand before trusting the computer."
+  },
+  {
+   "id": "night_owl_dreamer",
+   "traits": [
+    "curious",
+    "chatty"
+   ],
+   "quirk": "Sketches star charts on napkins and quizzes the cartographer."
+  },
+  {
+   "id": "worrier",
+   "traits": [
+    "anxious",
+    "thorough"
+   ],
+   "quirk": "Triple-checks drift figures and hums when nervous."
+  }
+ ],
+ "nurse": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "meticulous",
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Initials every chart line twice and re-counts the pharmacy tray at each handover."
+  },
+  {
+   "id": "warm_gossip",
+   "traits": [
+    "chatty",
+    "empathetic",
+    "tired"
+   ],
+   "quirk": "Knows every crew member's ailments and birthdays; keeps a tin of ginger biscuits in the desk."
+  },
+  {
+   "id": "night_owl_pragmatist",
+   "traits": [
+    "dry",
+    "efficient",
+    "caffeinated"
+   ],
+   "quirk": "Never without a mug of stew-strength tea; naps in the supply nook when quiet."
+  }
+ ],
+ "ops": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "meticulous"
+   ],
+   "quirk": "Initials every checklist twice and logs coffee refills as 'consumables'."
+  },
+  {
+   "id": "fixer",
+   "traits": [
+    "improviser",
+    "chatty"
+   ],
+   "quirk": "Carries a pocket spanner and trades favours instead of filing requests."
+  },
+  {
+   "id": "burnt_out",
+   "traits": [
+    "dry",
+    "overworked"
+   ],
+   "quirk": "Keeps a private tally of the bridge's 'urgent' requests that were not."
+  }
+ ],
+ "pilot": [
+  {
+   "id": "checklist_first",
+   "traits": [
+    "methodical",
+    "calm"
+   ],
+   "quirk": "Reads the preflight card aloud even when alone."
+  },
+  {
+   "id": "stick_jockey",
+   "traits": [
+    "confident",
+    "restless"
+   ],
+   "quirk": "Taps out flight patterns on any console edge."
+  },
+  {
+   "id": "deck_mother",
+   "traits": [
+    "social",
+    "protective"
+   ],
+   "quirk": "Always has a flask of bad coffee for the deck crew."
+  }
+ ],
+ "qm": [
+  {
+   "id": "ledger_keeper",
+   "traits": [
+    "meticulous",
+    "dry"
+   ],
+   "quirk": "Recounts the cold store twice and writes tallies on a paper slate."
+  },
+  {
+   "id": "fixer",
+   "traits": [
+    "resourceful",
+    "chatty"
+   ],
+   "quirk": "Keeps an unofficial swap shelf of favours behind the depot counter."
+  },
+  {
+   "id": "worrier",
+   "traits": [
+    "anxious",
+    "generous"
+   ],
+   "quirk": "Hoards spare coffee beans and cannot sleep before a resupply."
+  }
+ ],
+ "reactor": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "meticulous"
+   ],
+   "quirk": "Reads every log entry aloud before signing it."
+  },
+  {
+   "id": "jittery_veteran",
+   "traits": [
+    "superstitious",
+    "caffeinated"
+   ],
+   "quirk": "Taps the core console twice before every injector check."
+  },
+  {
+   "id": "laid_back_tinkerer",
+   "traits": [
+    "easygoing",
+    "inventive"
+   ],
+   "quirk": "Hums off-key while tuning and rebuilds spare injector parts for fun."
+  }
+ ],
+ "rep": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "methodical"
+   ],
+   "quirk": "Wipes every replicator hatch twice and labels everything"
+  },
+  {
+   "id": "tinkerer",
+   "traits": [
+    "curious",
+    "chatty"
+   ],
+   "quirk": "Tries custom recipes on night shift and hands out samples"
+  },
+  {
+   "id": "burnt_out",
+   "traits": [
+    "tired",
+    "dry-humoured"
+   ],
+   "quirk": "Talks to the machines like stubborn pets"
+  }
+ ],
+ "sec": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Checks the brig lock twice and signs every log line in full."
+  },
+  {
+   "id": "friendly_beat_cop",
+   "traits": [
+    "sociable",
+    "observant"
+   ],
+   "quirk": "Knows everyone's name and what they drink; stops to chat on every patrol."
+  },
+  {
+   "id": "restless_vet",
+   "traits": [
+    "wired",
+    "sceptical"
+   ],
+   "quirk": "Cannot sleep before a quiet watch; rattles a coin across his knuckles."
+  }
+ ],
+ "sensor": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "precise"
+   ],
+   "quirk": "Logs every calibration to four decimals and corrects people's terminology."
+  },
+  {
+   "id": "night_owl_tinkerer",
+   "traits": [
+    "curious",
+    "scruffy"
+   ],
+   "quirk": "Keeps a private notebook of odd returns nobody asked about."
+  },
+  {
+   "id": "social_gossip",
+   "traits": [
+    "chatty",
+    "warm"
+   ],
+   "quirk": "Reads sensor logs aloud as bedtime trivia at the bar."
+  }
+ ],
+ "so": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal",
+    "thorough"
+   ],
+   "quirk": "Reads every handover log line aloud before signing it."
+  },
+  {
+   "id": "deck_walker",
+   "traits": [
+    "sociable",
+    "restless",
+    "improvises"
+   ],
+   "quirk": "Cannot pass the mess without checking the coffee and the mood."
+  },
+  {
+   "id": "quiet_analyst",
+   "traits": [
+    "introverted",
+    "precise",
+    "dry"
+   ],
+   "quirk": "Keeps a pocket ledger of small faults that haven't been reported yet."
+  }
+ ],
+ "tchief": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "meticulous"
+   ],
+   "quirk": "Reads the pad checklist aloud, every single time, even alone."
+  },
+  {
+   "id": "easy_going_veteran",
+   "traits": [
+    "relaxed",
+    "storyteller"
+   ],
+   "quirk": "Keeps a deck of cards in the console drawer and a chipped mug on the pad rail."
+  },
+  {
+   "id": "anxious_perfectionist",
+   "traits": [
+    "nervous",
+    "thorough"
+   ],
+   "quirk": "Counts pad indicator lights twice and dreams about transport accidents."
+  }
+ ],
+ "ttech": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "careful"
+   ],
+   "quirk": "Reads every checklist line aloud, even alone."
+  },
+  {
+   "id": "gadget_tinkerer",
+   "traits": [
+    "curious",
+    "restless"
+   ],
+   "quirk": "Keeps a shoebox of salvaged emitter coils and rebuilds them for fun."
+  },
+  {
+   "id": "night_owl_slacker",
+   "traits": [
+    "easygoing",
+    "chatty"
+   ],
+   "quirk": "Hums off-key while recalibrating and trades gossip at the pad."
+  }
+ ],
+ "xo": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal",
+    "thorough"
+   ],
+   "quirk": "Carries a paper checklist and ticks it with a stylus nobody else may touch."
+  },
+  {
+   "id": "floor_walker",
+   "traits": [
+    "warm",
+    "restless",
+    "informal"
+   ],
+   "quirk": "Cannot pass the mess without tasting whatever the cooks are testing."
+  },
+  {
+   "id": "fixer",
+   "traits": [
+    "dry",
+    "blunt",
+    "hands-on"
+   ],
+   "quirk": "Keeps a pocket multitool and quietly fixes sticky doors during rounds."
+  }
+ ],
+ "yeoman": [
+  {
+   "id": "by_the_book",
+   "traits": [
+    "punctual",
+    "formal"
+   ],
+   "quirk": "Colour-codes every folder."
+  },
+  {
+   "id": "social_hub",
+   "traits": [
+    "warm",
+    "chatty"
+   ],
+   "quirk": "Knows everyone's birthday."
+  },
+  {
+   "id": "overworked_fixer",
+   "traits": [
+    "anxious",
+    "capable"
+   ],
+   "quirk": "Keeps snacks in the desk drawer."
+  }
+ ]
+}

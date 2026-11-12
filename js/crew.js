@@ -6,6 +6,7 @@
 // Pure data/logic, no three.js: used by the game (js/main.js) and the review page (crew.html).
 import { RANKS, mulberry32 } from './data.js';
 import { zoneOf } from './ships.js';
+import { makeVoice } from './voice.js';
 
 // uniform colours by division (matches js/humans.js DIVISIONS)
 export const DIVISION = {
@@ -149,6 +150,9 @@ export function makeComplement(ship, seed = 1) {
       people.push(p); byBillet[b.key].push(p);
     }
   }
+  // voices and mannerism tags (js/voice.js): own seeded stream per person, so adding or reordering them never disturbs names/bodies; unique per ship
+  const sigs = new Set(), vseed = ((seed * 2246822519) ^ h) >>> 0;
+  for (const p of people) { const v = makeVoice(p, mulberry32((vseed + Math.imul(p.id + 1, 668265263)) >>> 0), sigs); p.voice = v.voice; p.tags = v.tags; p.persona = v.persona; }
   const heads = DEPARTMENTS.map(d => people.find(p => p.dept === d.id));   // first billet of each department is its head
   return { people, byBillet, heads, ship, seed, uniformOf: (p) => DIVISION[DEPT[p.dept].division].color };
 }

@@ -1,0 +1,57 @@
+<!doctype html><meta charset="utf-8"><title>Crew voices — Starfarers: The Backdecks</title>
+<style>body{margin:0;background:#05070c;background-image:linear-gradient(rgba(120,170,220,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,170,220,.05) 1px,transparent 1px);background-size:32px 32px;color:#e8eef6;font-family:"Helvetica Neue",Arial,sans-serif;padding:22px;--f-d:"Avenir Next Condensed","Roboto Condensed","Arial Narrow",Arial,sans-serif;--f-m:ui-monospace,Menlo,Consolas,monospace;--am:#f2a03d;--tl:#58c9b9;--line:rgba(150,180,210,.26)}
+.top{display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.top svg{width:46px;height:46px;color:var(--am);flex:none}
+.eyebrow{font-family:var(--f-m);font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#8fa0b6}
+h1{font-family:var(--f-d);font-weight:300;letter-spacing:.24em;font-size:22px;text-transform:uppercase;margin:2px 0 0}h1 b{color:var(--am);font-weight:800}
+p{opacity:.72;font-size:13px;max-width:980px;line-height:1.55}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}nav a{color:#bcd0e6;text-decoration:none;font-size:12px;font-family:var(--f-d);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line);padding:3px 10px}nav a:hover{border-color:var(--am)}nav a.on{background:var(--am);color:#0a0d12;font-weight:800;border-color:var(--am)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--f-m);font-size:11px;color:#9fb0c6;margin:8px 0 14px;text-transform:uppercase;letter-spacing:.08em}.legend i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+body{font-size:13px}h2{font-family:var(--f-d);font-weight:400;letter-spacing:.22em;text-transform:uppercase;font-size:14px;color:#ffd9a0;margin:24px 0 8px;border-left:3px solid var(--tl);padding-left:9px}
+canvas{width:100%;max-width:960px;display:block;background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--am);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.fx{font-family:var(--f-m);font-size:11px;background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--tl);padding:10px;white-space:pre-wrap;max-width:960px}
+table{border-collapse:collapse;width:100%;max-width:1500px;font-size:12px}th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}th{font-family:var(--f-d);letter-spacing:.12em;text-transform:uppercase;font-weight:400;color:#ffd9a0;font-size:11px;position:sticky;top:0;background:#05070c}
+.chip{display:inline-block;margin:1px 3px 1px 0;padding:1px 6px;font-family:var(--f-m);font-size:10px;border:1px solid currentColor;border-radius:9px;cursor:pointer;white-space:nowrap}.chip.on{background:currentColor}.chip.on b{color:#05070c}.chip b{font-weight:400}
+.bar{display:flex;align-items:center;gap:6px;font-family:var(--f-m);font-size:10px;color:#9fb0c6;white-space:nowrap}.bar i{display:block;height:5px;background:var(--tl);min-width:1px}.bar span{width:46px}
+button,select,input{font:inherit;font-size:12px;background:#0c1220;color:#e8eef6;border:1px solid var(--line);padding:4px 10px}button{cursor:pointer;border-color:var(--am);color:var(--am)}button:hover{background:var(--am);color:#05070c}
+.ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:10px 0}.ctl label{font-family:var(--f-m);font-size:11px;color:#9fb0c6;text-transform:uppercase;letter-spacing:.08em}.said{font-family:var(--f-m);font-size:11px;color:#bcd0e6;margin-top:4px;max-width:340px}
+#subs{position:fixed;bottom:14px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}#subs .sub{background:rgba(5,8,14,.85);padding:4px 12px;font-size:15px;transition:opacity .5s}</style>
+<div class="top"><svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="50" cy="50" r="44"/><circle cx="50" cy="50" r="36" stroke-dasharray="2.2 20.42" stroke-width="7" opacity=".85"/><path d="M50 16l7 27 27 7-27 7-7 27-7-27-27-7 27-7z" fill="currentColor" fill-opacity=".16"/><path d="M30 62h40M34 69h32M39 76h22" stroke-width="2" opacity=".8"/></g><circle cx="50" cy="50" r="4.5" fill="currentColor"/></svg><div><div class="eyebrow">United Starfarers' Fleet · Personnel &amp; systems</div><h1 id="t"></h1></div></div><nav id="nav"></nav>
+<p>Every crew member's generated voice profile and mannerism tags (docs/crew-sim/VOICE.md, js/voice.js). <b>Speak</b> plays a sample lift line and a bark with the chosen output mode. Click a chip to filter by that tag.</p>
+<div class="ctl"><label>Output <select id="mode"></select></label><label>Department <select id="dept"><option value="">all</option></select></label><label>Tag <select id="tag"><option value="">any</option></select></label><label>Lift to <select id="dest"></select></label><label>Name <input id="q" placeholder="search" size="12"></label><span id="count" class="eyebrow"></span><span id="osv" class="eyebrow"></span></div>
+<table><thead><tr><th>Crew</th><th>Voice</th><th>Tags</th><th>Audition</th></tr></thead><tbody id="rows"></tbody></table>
+<script type="module">
+import { SHIPS } from './js/ships.js';
+import { makeComplement, DEPARTMENTS, DEPT, DIVISION } from './js/crew.js';
+import { loadPersonas, describeVoice, tagGroups, liftLine, bark, allTags, TAG_COLORS, CATEGORIES, catOf, weightsOf } from './js/voice.js';
+import { speak, attach, getMode, setMode, MODES, pickOsVoice } from './js/speech.js';
+import { Sound } from './js/audio.js';
+await loadPersonas();
+const q = new URLSearchParams(location.search), i = Math.max(0, Math.min(SHIPS.length - 1, +(q.get('ship') || 0))), seed = +(q.get('seed') || 1), ship = SHIPS[i];
+const sound = new Sound(); attach(sound);
+document.getElementById('t').textContent = `${ship.name} - crew voices`;
+document.getElementById('nav').innerHTML = '<a href="crew.html">Ship\'s company</a>' + SHIPS.map((s, k) => `<a class="${k === i ? 'on' : ''}" href="?ship=${k}&seed=${seed}">${s.province}</a>`).join('');
+const roster = makeComplement(ship, seed), $ = (id) => document.getElementById(id), hex = (c) => '#' + c.toString(16).padStart(6, '0');
+const DESTS = [{ deckNo: 1, zone: 'Command', rooms: ['Bridge', 'Ready Room'] }, { deckNo: 3, zone: 'Habitat', rooms: ['Sickbay', 'Lounge', 'Holodeck'] }, { deckNo: 5, zone: 'Engineering', rooms: ['Engineering', 'Cargo'] }, { deckNo: 6, zone: 'Services', rooms: ['Galley', 'Transporter', 'Armory'] }, { deckNo: 8, zone: 'Habitat', rooms: [] }];
+$('dest').innerHTML = DESTS.map((d, k) => `<option value="${k}">Deck ${d.deckNo} - ${d.rooms[0] || d.zone}</option>`).join('');
+$('mode').innerHTML = MODES.map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); $('mode').value = getMode(); $('mode').onchange = (e) => setMode(e.target.value);
+$('dept').innerHTML += DEPARTMENTS.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+$('tag').innerHTML += CATEGORIES.map(c => `<optgroup label="${c}">${allTags().filter(t => catOf(t) === c).map(t => `<option>${t}</option>`).join('')}</optgroup>`).join('');
+const bar = (l, v, lo, hi) => `<div class="bar"><span>${l}</span><i style="width:${Math.round((v - lo) / (hi - lo) * 70) + 1}px"></i>${v.toFixed(2)}</div>`;
+const chips = (p) => Object.entries(tagGroups(p)).map(([c, vs]) => vs.map(v => { const t = c + ':' + v; return `<span class="chip${$('tag').value === t ? ' on' : ''}" style="color:${TAG_COLORS[c]}" data-tag="${t}" title="${c}"><b>${v}</b></span>`; }).join('')).join('');
+function draw() {
+  const d = $('dept').value, t = $('tag').value, n = $('q').value.toLowerCase(), list = roster.people.filter(p => (!d || p.dept === d) && (!t || p.tags.includes(t)) && (!n || p.full.toLowerCase().includes(n) || p.title.toLowerCase().includes(n)));
+  $('count').textContent = `${list.length} of ${roster.people.length} - ${new Set(roster.people.map(p => JSON.stringify([p.voice, p.tags]))).size} distinct voices`;
+  $('rows').innerHTML = list.map(p => { const v = p.voice; return `<tr><td><b style="color:${hex(DIVISION[DEPT[p.dept].division].color)}">${p.full}</b><br>${p.title}<br><span class="eyebrow">${DEPT[p.dept].name} - ${p.body} - persona ${p.persona?.id || 'none'}</span></td>
+    <td style="min-width:230px">${describeVoice(p)}${bar('pitch', v.pitch, 0.5, 1.8)}${bar('rate', v.rate, 0.7, 1.5)}${bar('volume', v.volume, 0.5, 1)}${bar('formant', v.formant, 0.8, 1.25)}${bar('breath', v.breath, 0, 1)}${bar('rough', v.rough, 0, 1)}${bar('vibrato', v.vibrato, 0, 1)}</td>
+    <td style="max-width:520px">${chips(p)}</td><td><button data-say="${p.id}">Speak</button> <button data-bark="${p.id}">Bark</button><div class="said" id="s${p.id}"></div></td></tr>`; }).join('');
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.dataset; if (b.tag) { $('tag').value = b.tag; draw(); return; }
+  if (b.say === undefined && b.bark === undefined) return; sound.init(); const p = roster.people[+(b.say ?? b.bark)], dest = DESTS[+$('dest').value];
+  if (b.say !== undefined) { const l = liftLine(p, dest), r = speak(p, l); const b2 = bark(p, 'idle'); speak(p, b2, { delay: r.dur + 0.5 }); $('s' + p.id).textContent = `[${r.mode}] "${l}" / "${b2}"`; }
+  else { const pool = ['idle', 'working', 'stressed', 'alert'][(Math.random() * 4) | 0], l = bark(p, pool); const r = speak(p, l); $('s' + p.id).textContent = `[${r.mode}/${pool}] "${l}"`; }
+});
+for (const id of ['dept', 'tag', 'q']) $(id).addEventListener('input', draw);
+try { const n = speechSynthesis.getVoices().length; $('osv').textContent = `${n} system voice${n === 1 ? '' : 's'} available`; speechSynthesis.onvoiceschanged = () => { $('osv').textContent = `${speechSynthesis.getVoices().length} system voices available`; }; } catch (e) { $('osv').textContent = 'no speechSynthesis'; }
+draw(); window.__ready = true; window.__voices = { roster, speak, liftLine };
+</script>

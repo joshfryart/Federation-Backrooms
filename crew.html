@@ -21,7 +21,7 @@ import { makeComplement, ShipState, renderOrgChart, renderLoadout, STATUS_CSS } 
 const q = new URLSearchParams(location.search), i = Math.max(0, Math.min(SHIPS.length - 1, +(q.get('ship') || 0))), seed = +(q.get('seed') || 1), ship = SHIPS[i];
 document.head.insertAdjacentHTML('beforeend', `<style>${STATUS_CSS}</style>`);
 document.getElementById('t').textContent = `${ship.name} — ship's company`;
-document.getElementById('nav').innerHTML = SHIPS.map((s, k) => `<a class="${k === i ? 'on' : ''}" href="?ship=${k}&seed=${seed}">${s.province}</a>`).join('');
+document.getElementById('nav').innerHTML = `<a href="voices.html?ship=${i}&seed=${seed}">Crew voices</a>` + SHIPS.map((s, k) => `<a class="${k === i ? 'on' : ''}" href="?ship=${k}&seed=${seed}">${s.province}</a>`).join('');
 const roster = makeComplement(ship, seed), state = new ShipState(ship, seed);
 drawSchematic(document.getElementById('sch'), ship, 0);
 document.getElementById('org').innerHTML = renderOrgChart(roster);
