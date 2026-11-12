@@ -151,6 +151,22 @@ const dir = await page.evaluate(async () => {
   return { quietActs, acts, peaked, relaxed: phases.has('relax'), backToBuild: D.phase === 'build', cascadeReactor: S.status('reactor'), repairer: !!rep, crewFixed: g.shipState.status('lighting') === 'nominal', secs: +secs.toFixed(0) };
 });
 console.log('director:', JSON.stringify(dir)); if (!(dir.quietActs >= 4 && dir.peaked && dir.relaxed && dir.cascadeReactor !== 'nominal' && dir.repairer && dir.crewFixed)) fail('director');
+const srch = await page.evaluate(async () => {
+  const g = __game, P = g.P, out = { sites: 0, kinds: {}, searched: false, prompt: '', say: '' };
+  for (let tries = 0; tries < 6 && !out.sites; tries++) { g.newRun(); g.setQuality('low'); out.sites = g.world.searchSites?.length || 0; }
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
+  for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
+  for (const s of g.world.searchSites) out.kinds[s.kind] = (out.kinds[s.kind] || 0) + 1;
+  const site = g.world.searchSites[0]; if (site) {
+    P.x = site.x + site.nx * 0.9; P.z = site.z + site.nz * 0.9; P.yaw = Math.atan2(site.nx, site.nz); P.vx = P.vz = 0;   // stand in front, look at the wall
+    g.step(1 / 60, 900); out.prompt = document.getElementById('prompt').textContent;
+    const before = document.getElementById('msgs')?.textContent || '';
+    for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code: 'KeyE', key: 'e', bubbles: true }));
+    out.searched = site.used; out.say = (document.getElementById('msgs')?.textContent || '').slice(-160) !== before.slice(-160) ? 'changed' : 'same';
+  }
+  return out;
+});
+console.log('search:', JSON.stringify(srch)); if (!(srch.sites > 0 && srch.searched && /Search/.test(srch.prompt))) fail('fixture search');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

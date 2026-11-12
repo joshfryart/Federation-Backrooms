@@ -12,6 +12,7 @@ import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon } from './sysview.js';
 import { Director } from './director.js';
+import { loadItems, searchFixture, fixtureName } from './items.js';
 import { mulberry32 } from './data.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
@@ -446,12 +447,27 @@ function interact() {
     else if (near.kind === 'emh') { G.say('Hologram: "Please describe your medical emergency. Or don\'t. I\'m a projection, not a mind-reader." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
     updateHUD(); return;
   }
+  const site = nearestSite();
+  if (site) {
+    site.used = true; sound.pickup();
+    const r = searchFixture(site.room, site.kind);
+    if (r) { G.say(r.text, 'npc'); if (r.loot === 'heal') { G.hp = Math.min(G.maxHp, G.hp + 15); setTimeout(() => G.say('Found a hypospray (+15 health)', 'good'), 900); sound.heal(); } else if (r.loot === 'cell') { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 900); } }
+    else G.say(`${fixtureName(site.kind)}: nothing useful.`, 'npc');
+    updateHUD(); return;
+  }
   // lift
   if (world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) {
     if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — repair it at the lift controls (hold E)', 'warn'); }
     else if (G.chips >= world.d.chips.length) completeDeck();
     else { sound.denied(); G.say(`Tubelift offline — ${world.d.chips.length - G.chips} logic chip(s) missing`, 'warn'); }
   }
+}
+// the nearest unsearched wall fixture within reach that the player is facing
+function nearestSite() {
+  if (!world?.searchSites) return null;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 1.9;
+  for (const s of world.searchSites) { if (s.used) continue; const dx = s.x - P.x, dz = s.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.35) { bd = d; best = s; } }
+  return best;
 }
 function giveLoot(forced) {
   const r = Math.random();
@@ -606,6 +622,7 @@ function step(dt, t) {
   const rp = nearestRepair(true);
   if (rp && SHIP().status(rp.sys) !== 'nominal') prompt = G.repairT > 0 ? `Repairing ${SYS[rp.sys].name}… ${Math.floor(G.repairT / repairTime(rp) * 100)}%` : `[Hold E] Repair ${SYS[rp.sys].name} (${SHIP().status(rp.sys)})`;
   else if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
+  else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
   $('prompt').textContent = prompt;
@@ -989,7 +1006,7 @@ function frame() {
 }
 
 // expose for debugging/tests
-const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';

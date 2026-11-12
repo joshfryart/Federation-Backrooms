@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SEARCHABLE } from './items.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -1035,7 +1036,16 @@ export class World {
         let k = pool[Math.floor(rnd() * pool.length)]; if ((k === 'pipes' || k === 'breaker' || k === 'planter' || k === 'coil' || k === 'rack') && ceilOf(f) < WH) k = 'ventgrille';
         f.deco = true; (byKind[k] || (byKind[k] = [])).push(f);
       }
+      // guaranteed searchable fixtures: two per room (suited to the room), two along corridors, on wall faces the random pass left free
+      {
+        const FIT = { sickbay: ['medcab', 'kit'], engineering: ['toolboard', 'locker'], shuttlebay: ['toolboard', 'hose', 'locker'], cargo: ['rack', 'locker'], mess: ['shelf', 'locker'], quarters: ['locker', 'shelf'], bridge: ['locker', 'kit'], transporter: ['locker', 'toolboard'], holodeck: ['locker'], arboretum: ['shelf', 'toolboard'], corridor: ['kit', 'locker'] };
+        const free = {}; for (const f of faces) { if (f.deco || f.win || f.sign) continue; const r = f.room || 'corridor'; if (FIT[r] && (r !== 'corridor' || (f.tx + f.ty) % 3 === 0)) (free[r] || (free[r] = [])).push(f); }
+        for (const [r, fl] of Object.entries(free)) { for (let i = fl.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [fl[i], fl[j]] = [fl[j], fl[i]]; }
+          for (const f of fl.slice(0, 2)) { let k = FIT[r][Math.floor(rnd() * FIT[r].length)]; if (k === 'rack' && ceilOf(f) < WH) k = 'locker'; f.deco = true; (byKind[k] || (byKind[k] = [])).push(f); } }
+      }
       for (const [k, list] of Object.entries(byKind)) kit(k, DECOR[k], list);
+      // searchable fixtures (see js/items.js): a spot just in front of the wall face, facing back at it
+      this.searchSites = []; for (const [k, list] of Object.entries(byKind)) if (SEARCHABLE.has(k)) for (const f of list) this.searchSites.push({ x: f.px + f.dx * 0.35, z: f.pz + f.dy * 0.35, nx: f.dx, nz: f.dy, kind: k, room: f.room || 'corridor', used: false });
       this.decorCount = Object.values(byKind).reduce((a, l) => a + l.length, 0);
     }
     // --- ribbed bulkheads and conduit runs along corridor walls
