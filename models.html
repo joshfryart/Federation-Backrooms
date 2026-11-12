@@ -2,15 +2,15 @@
 <style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
 #l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.75;line-height:1.6}#l a{color:#9cf;margin-right:10px;text-decoration:none}
 .tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000}</style>
-<canvas id="c"></canvas><div id="l"><a href="?set=crew">crew</a><a href="?set=enemies">enemies</a><a href="?set=misc">items &amp; creatures</a><a href="?set=props">props</a><br>drag to orbit · wheel to zoom · ?clip=walk|jog|sprint|dance|death01|sitting_idle… · ?only=name</div>
+<canvas id="c"></canvas><div id="l"><a href="?set=crew">crew</a><a href="?set=enemies">enemies</a><a href="?set=misc">items &amp; creatures</a><a href="?set=props">props</a><a href="?set=decor">wall fixtures</a><br>drag to orbit · wheel to zoom · ?clip=walk|jog|sprint|dance|death01|sitting_idle… · ?only=name</div>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import { makeGorn, animateGorn, makeCrew, makeTribble, makeItem, makeViewmodel } from './js/actors.js';
 import { loadModels, loadTextures } from './js/assets.js';
-import { makeHuman, holoMaterial, DIVISIONS, liveFace } from './js/humans.js';
+import { makeHuman, makeCorpse, markImpostor, holoMaterial, DIVISIONS, liveFace } from './js/humans.js';
 import { MODELS } from './js/enemies.js';
-import { buildProp, PROP_KINDS } from './js/world.js';
+import { buildProp, PROP_KINDS, buildDecor, DECOR_KINDS } from './js/world.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 const q = new URLSearchParams(location.search); const set = q.get('set') || 'crew', only = q.get('only'), clip = q.get('clip');
 const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
@@ -25,11 +25,12 @@ const list = []; const add = (name, mesh, tick, w = 1.1) => { if (mesh && (!only
 const hum = (o, c = clip || 'idle', face) => { const m = makeHuman(o); if (!m) return [null]; const H = m.userData.human; H.play(c); if (face) H.face(face); return [m, (dt, t) => { if (!face) liveFace(H, t, m.id); H.update(dt); }]; };
 const enemy = (k, speed, flags = {}) => { const m = MODELS[k](); return [m.mesh, (dt) => m.tick(dt, speed, flags), 1.5]; };
 if (set === 'crew') {
-  add('Command (m)', ...hum({ kind: 'crew_m', uniform: DIVISIONS[1], rank: 6 })); add('Security (f)', ...hum({ kind: 'crew_f', uniform: DIVISIONS[0], rank: 2 }, clip || 'idle_talking')); add('Science (f)', ...hum({ kind: 'crew_f2', uniform: DIVISIONS[2], rank: 4 }));
-  add('Engineer', ...hum({ kind: 'crew_heavy', uniform: 0xb8862a, rank: 3 }, clip || 'idle')); add('Walking', ...hum({ kind: 'crew_m', uniform: DIVISIONS[0] }, clip || 'walk'));
+  add('Command (m)', ...hum({ kind: 'crew_m', uniform: DIVISIONS[1], rank: 6, name: 'Tremblay' })); add('Security (f)', ...hum({ kind: 'crew_f', uniform: DIVISIONS[0], rank: 2, name: 'Okafor' }, clip || 'idle_talking')); add('Science (f)', ...hum({ kind: 'crew_f2', uniform: DIVISIONS[2], rank: 4, name: 'Nguyen' }));
+  add('Engineer', ...hum({ kind: 'crew_heavy', uniform: 0xb8862a, rank: 3, name: 'MacLeod' }, clip || 'idle')); add('Walking', ...hum({ kind: 'crew_m', uniform: DIVISIONS[0] }, clip || 'walk'));
   add('Cowering survivor', ...hum({ kind: 'crew_f', uniform: DIVISIONS[2] }, clip || 'crouch_idle')); add('Sitting', ...hum({ kind: 'crew_f2', uniform: DIVISIONS[1] }, clip || 'sitting_idle'));
   add('Medical hologram', ...hum({ kind: 'crew_f2', material: holoMaterial(0x6ad8ff, 0.8), shadow: false }, clip || 'idle_talking'));
-  { const m = makeHuman({ kind: 'crew_m', uniform: DIVISIONS[0], bloody: 1, pale: 0.4, shadow: false }); if (m) { m.userData.human.pose('death01', 1); m.userData.human.face({ JawDrop: 0.5, LeftUpperLidClosed: 0.6, RightUpperLidClosed: 0.8 }); } add('Fallen crewman', m, null, 2.2); }
+  { const [m, tk] = hum({ kind: 'crew_f', uniform: DIVISIONS[1], rank: 1, name: 'Roy' }); if (m) markImpostor(m); add('Impostor (disguised)', m, tk); }
+  for (const pose of ['back', 'facedown', 'slumped']) add('Fallen: ' + pose, makeCorpse(Math.random, null, pose), null, pose === 'slumped' ? 1.4 : 2.2);
 } else if (set === 'enemies') {
   { const g = makeGorn(); let t = 0; add('Gronk', g, (dt) => { t += dt; animateGorn(g, 1.2, t, Math.sin(t * 0.5) > 0.7); }, 2.2); }
   add('Space-madness (run)', ...enemy('crazed', 4.6)); add('Space-madness (attack)', ...enemy('crazed', 0, { attacking: true }));
@@ -40,6 +41,7 @@ if (set === 'crew') {
   add('Furble', makeTribble(), null, 0.8); const f2 = makeTribble(); f2.scale.setScalar(2.5); add('Furble (close)', f2, null, 1.3);
   const vm = makeViewmodel(); if (vm) { vm.group.position.y = 1.2; vm.group.scale.setScalar(3); add('Zapper (viewmodel ×3)', vm.group, null, 2); }
 } else if (set === 'props') { for (const k of PROP_KINDS) add(k, buildProp(k), null, 2.6); }
+else if (set === 'decor') { for (const k of DECOR_KINDS) add(k, buildDecor(k), null, 2.3); }   // wall fixtures (instanced set dressing)
 let x = 0; const total = list.reduce((a, l) => a + l.w, 0);
 for (const l of list) { l.mesh.position.x = x + l.w / 2 - total / 2; x += l.w; l.mesh.traverse(o => { if (o.isMesh && o.material?.type !== 'ShaderMaterial' && !o.material?.transparent) { o.castShadow = true; o.receiveShadow = true; } }); s.add(l.mesh);
   l.el = document.createElement('div'); l.el.className = 'tag'; l.el.textContent = l.name; document.body.appendChild(l.el); }

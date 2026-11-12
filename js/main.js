@@ -5,13 +5,14 @@ import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
-import { makeSurvivor, makeCorpse, makeMedHolo, liveFace } from './humans.js';
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon } from './sysview.js';
 import { Director } from './director.js';
+import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
@@ -51,7 +52,7 @@ const decals = new Decals(scene);
 const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
 const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d0, 0, 10, 1.5); scene.add(l); return l; });
-let panelSel = [], panelT = 0;
+let panelSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
 function updatePanelLights(dt) {
   panelT -= dt;
   if (panelT <= 0 && world) {
@@ -65,7 +66,7 @@ function updatePanelLights(dt) {
     const e = panelSel[i];
     if (!e) { l.intensity = 0; return; }
     l.position.set(e[1].x, e[1].y, e[1].z);
-    l.color.set(ship.light).lerp(new THREE.Color(0xff2010), al * 0.7);
+    l.color.set(ship.light); if (e[1].col) l.color.multiply(e[1].col); l.color.lerp(ALERT_RED, al * 0.7);
     l.intensity = 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3);
   });
   // fluorescent buzz, loudest right under a working panel
@@ -187,7 +188,8 @@ function loadDeck(n) {
     const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen';
     const m = makeSurvivor(rnd, person) || makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
     if (person) m.userData.rank = person.short;
-    add('crew', t, m, { used: false, fake: n >= 2 && rnd() < 0.3, person });
+    const fake = n >= 2 && rnd() < 0.3; if (fake) markImpostor(m);   // a Slimeling wearing a face: small tells (js/humans.js)
+    add('crew', t, m, { used: false, fake, person });
   }
   for (let i = 0; i < (n >= 3 ? 2 : 1); i++) { const t = data.pickTile(() => true); if (!t) continue; const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'corpse'; add('body', t, makeCorpse(rnd, person) || makeCrew(0xb02a20, true), { used: false, person }); }
   { const t = data.rooms.find(r => r.type === 'sickbay'); if (t) {
@@ -234,7 +236,7 @@ function spawnThreats(data, n, rnd) {
   if (n >= 2 && ents.some(e => e.fake)) G.threats.push('slimeling');
 }
 function showCard(n, ship, flooded) {
-  const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg} · ship deck ${String(G.shipDeck + 1).padStart(2, '0')} of ${ship.decks}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}<div class="thr">${(G.threats || []).map(t => THREATS[t]).join('<br>')}</div>`;
+  const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg} · ship deck ${String(G.shipDeck + 1).padStart(2, '0')} of ${ship.decks}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}<div class="thr">${(G.threats || []).map(t => '<i>▲</i>' + THREATS[t]).join('<br>')}</div>`;
   { const cv = document.createElement('canvas'); cv.width = 640; cv.height = 250; drawSchematic(cv, ship, G.shipDeck); c.insertBefore(cv, c.querySelector('.thr')); }
   c.classList.remove('show'); void c.offsetWidth; c.classList.add('show');
 }
@@ -294,7 +296,7 @@ function completeDeck() {
   setTimeout(() => {
     if (G.deck >= winDeck() && !G.endless) {
       document.exitPointerLock?.();
-      $('winstats').textContent = `${winDeck()} decks of the ${G.ship.name}, ${G.tribbles} furbles, ${G.stuns} hostiles stunned. Time: ${fmtTime(G.time)}.`;
+      $('winstats').innerHTML = `${winDeck()} decks of the ${G.ship.name} · ${G.tribbles} furbles rescued · ${G.stuns} hostiles stunned<br>Time on shift ${fmtTime(G.time)}`;
       localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck);
       showScreen('win'); G.phase = 'win'; return;
     }
@@ -309,7 +311,7 @@ function offerPerks() {
   const cards = $('cards'); cards.innerHTML = '';
   choices.forEach((p, i) => {
     const el = document.createElement('div'); el.className = 'card';
-    el.innerHTML = `<h3>${i + 1}. ${p.name}</h3><p>${p.desc}</p><small>${perk(p.id) ? 'Owned ×' + perk(p.id) : 'New'}</small>`;
+    el.innerHTML = `<svg class="pi" viewBox="0 0 40 40"><use href="#pk-${p.id}"/></svg><h3>${i + 1}. ${p.name}</h3><p>${p.desc}</p><small>${perk(p.id) ? 'Owned ×' + perk(p.id) : 'New'}</small>`;
     el.onclick = () => choosePerk(p.id); cards.appendChild(el);
   });
   G.perkChoices = choices.map(p => p.id);
@@ -332,7 +334,7 @@ function die(by, line = null) {
   const deckReached = G.deck;
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
   $('deathline').textContent = line || pick(DEATH_LINES);
-  $('stats').innerHTML = `Reached <b>Deck ${deckReached}</b> aboard the ${ship.name} (${ship.reg}).<br>Furbles rescued: ${G.tribbles} · Hostiles stunned: ${G.stuns} · Time: ${fmtTime(G.time)}<br>Best: Deck ${G.best}`;
+  $('stats').innerHTML = [['Last known position', `Deck ${deckReached} · ${ship.name}`], ['Registry', ship.reg], ['Cause', by?.name || 'Unknown'], ['Furbles rescued', G.tribbles], ['Hostiles stunned', G.stuns], ['Time on shift', fmtTime(G.time)], ['Best run', `Deck ${G.best}`]].map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('');
   setTimeout(() => showScreen('dead'), 2400);
 }
 
@@ -428,7 +430,7 @@ function interact() {
     near.used = true; sound.pickup();
     if (near.kind === 'crew' && near.fake) {
       scene.remove(near.mesh); ents.splice(ents.indexOf(near), 1); if (near.person) near.person.status = 'dead';   // the real one is long gone
-      const en = makeEnemy('slimeling', world, world.tile(near.x, near.z), G.deck, 0, scene, sound); en.state = S.PATROL; en.mesh.visible = true; en.x = near.x; en.z = near.z; en.pickPatrol(P); en.state = S.CHASE; en.timer = 6; en.setTarget(...world.tile(P.x, P.z)); gorns.push(en);
+      const en = makeEnemy('slimeling', world, world.tile(near.x, near.z), G.deck, 0, scene, sound, near.person ? { human: { person: near.person, uniform: near.person.uniform, rank: near.person.rank } } : {}); en.yaw = near.mesh.rotation.y; en.state = S.PATROL; en.mesh.visible = true; en.x = near.x; en.z = near.z; en.pickPatrol(P); en.state = S.CHASE; en.timer = 6; en.setTarget(...world.tile(P.x, P.z)); gorns.push(en);
       G.say('"Hello fellow crewman! I am definitely not— *SCHLOOORP*"', 'warn'); sound.shriek(0.3); flash('#240', 0.4); P.shake = 0.5; return;
     }
     if (near.kind === 'crew') {
@@ -445,12 +447,44 @@ function interact() {
     else if (near.kind === 'emh') { G.say('Hologram: "Please describe your medical emergency. Or don\'t. I\'m a projection, not a mind-reader." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
     updateHUD(); return;
   }
+  const site = nearestSite();
+  if (site) {
+    site.used = true; sound.pickup();
+    const r = searchFixture(site.room, site.kind);
+    if (r) { G.say(r.text, 'npc'); if (r.loot === 'heal') { G.hp = Math.min(G.maxHp, G.hp + 15); setTimeout(() => G.say('Found a hypospray (+15 health)', 'good'), 900); sound.heal(); } else if (r.loot === 'cell') { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 900); } }
+    else G.say(`${fixtureName(site.kind)}: nothing useful.`, 'npc');
+    updateHUD(); return;
+  }
   // lift
   if (world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) {
     if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — repair it at the lift controls (hold E)', 'warn'); }
     else if (G.chips >= world.d.chips.length) completeDeck();
     else { sound.denied(); G.say(`Tubelift offline — ${world.d.chips.length - G.chips} logic chip(s) missing`, 'warn'); }
   }
+}
+// the nearest unsearched wall fixture within reach that the player is facing
+function nearestSite() {
+  if (!world?.searchSites) return null;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 1.9;
+  for (const s of world.searchSites) { if (s.used) continue; const dx = s.x - P.x, dz = s.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.35) { bd = d; best = s; } }
+  return best;
+}
+// true when the real-world equivalent adds nothing to the name
+const same = (a, b) => !b || a.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(a.toLowerCase());
+// loose clutter in reach and in front of the player
+function nearestClutter() {
+  if (!world?.clutter) return null;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let best = null, bd = 2.0;
+  for (const c of world.clutter) { const dx = c.x - P.x, dz = c.z - P.z, d = Math.hypot(dx, dz); if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.8) { bd = d; best = c; } }
+  return best;
+}
+// the prop under the crosshair (within reach): its inventory name and real-world equivalent
+function lookedProp() {
+  if (!world) return null;
+  const o = camera.position, dir = camera.getWorldDirection(new THREE.Vector3()), h = world.raycast(o.x, o.y, o.z, dir.x, dir.y, dir.z, 3.6);
+  if (!h || h.kind !== 'prop') return null;
+  const p = world.d.props.find(p => p.tx === h.tx && p.ty === h.ty); if (!p) return null;
+  const e = examineProp(world.d.room[p.ty][p.tx] || 'corridor', p.kind, p.tx, p.ty); return e ? { name: e[0], real: e[1] } : null;
 }
 function giveLoot(forced) {
   const r = Math.random();
@@ -500,7 +534,7 @@ let gunVM = null, gunKick = 0, muzzle = null, vm = null;
 function buildViewmodel() {
   vm = makeViewmodel(); gunVM = vm.group; muzzle = vm.flash;
   gunVM.traverse(o => { if (o.isMesh) o.renderOrder = 10; });
-  gunVM.rotation.set(0.05, 0.1, 0); gunVM.scale.setScalar(0.9);
+  gunVM.rotation.set(0.05, 0.1, 0); gunVM.userData.baseRx = 0.05; gunVM.scale.setScalar(0.9);
   vmScene.add(gunVM); vmScene.environment = scene.environment; vmScene.environmentIntensity = 0.25; updateHUD();
 }
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
@@ -605,8 +639,10 @@ function step(dt, t) {
   const rp = nearestRepair(true);
   if (rp && SHIP().status(rp.sys) !== 'nominal') prompt = G.repairT > 0 ? `Repairing ${SYS[rp.sys].name}… ${Math.floor(G.repairT / repairTime(rp) * 100)}%` : `[Hold E] Repair ${SYS[rp.sys].name} (${SHIP().status(rp.sys)})`;
   else if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
+  else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
+  if (!prompt) { const c = nearestClutter(); if (c) prompt = same(c.name, c.real) ? c.name : `${c.name} (${c.real})`; else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   $('prompt').textContent = prompt;
 
   // room label + exploration
@@ -655,7 +691,7 @@ function step(dt, t) {
   if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
 
-  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
+  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
     { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play'; }
   // camera
   P.shake = Math.max(0, P.shake - dt * 1.5);
@@ -893,7 +929,7 @@ function turnStep(e, dt, d) {
   const H = e.mesh.userData.human; e.turning -= dt;
   e.mesh.rotation.y += (Math.random() - 0.5) * 0.25; if (H) { H.face({ JawDrop: 0.6 + Math.random() * 0.4 }); if (d < 30) H.update(dt); }
   if (e.turning > 0) return;
-  const p = e.person, en = makeEnemy('crazed', world, world.tile(e.x, e.z), G.deck, 0, scene, sound, { human: { uniform: p.uniform, rank: p.rank, kind: p.body }, cfg: { name: `${p.short} (space madness)`, spawnMsg: '' } });
+  const p = e.person, en = makeEnemy('crazed', world, world.tile(e.x, e.z), G.deck, 0, scene, sound, { human: { uniform: p.uniform, rank: p.rank, kind: p.body, person: p }, cfg: { name: `${p.short} (space madness)`, spawnMsg: '' } });
   en.mad = true; en.person = p; en.hp = 2; en.x = e.x; en.z = e.z; en.yaw = e.mesh.rotation.y; en.state = S.PATROL; en.mesh.visible = true; en.place(); gorns.push(en);
   p.status = 'crazed'; scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); G.mad.pending = null;
 }
@@ -988,7 +1024,7 @@ function frame() {
 }
 
 // expose for debugging/tests
-const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';

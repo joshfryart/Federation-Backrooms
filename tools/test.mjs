@@ -57,6 +57,7 @@ const run = await page.evaluate(async () => {
     if (g.shipState.status('lifts') === 'offline') g.shipState.repair('lifts');
     for (let k = 0; k < 4 && g.G.phase === 'play'; k++) { g.P.clung = 0; g.P.kbx = g.P.kbz = 0; g.P.x = g.world.liftPos.x; g.P.z = g.world.liftPos.z; tick(2); key('KeyE'); tick(1); }
     await new Promise(r => setTimeout(r, 2600)); tick(4);
+    for (let w = 0; w < 36 && g.G.deck === deck && g.G.phase !== 'win' && g.G.phase !== 'perk'; w++) { await new Promise(r => setTimeout(r, 500)); tick(4); }   // slow machine: keep waiting for the lift transition (up to ~20 s)
     if (g.G.phase === 'perk') { key('Digit1'); await new Promise(r => setTimeout(r, 300)); }
     if (g.G.phase === 'paused') { document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; }   // no pointer lock in headless
     log.push(`${deck}→${g.G.deck}:${g.G.phase}`);
@@ -150,6 +151,46 @@ const dir = await page.evaluate(async () => {
   return { quietActs, acts, peaked, relaxed: phases.has('relax'), backToBuild: D.phase === 'build', cascadeReactor: S.status('reactor'), repairer: !!rep, crewFixed: g.shipState.status('lighting') === 'nominal', secs: +secs.toFixed(0) };
 });
 console.log('director:', JSON.stringify(dir)); if (!(dir.quietActs >= 4 && dir.peaked && dir.relaxed && dir.cascadeReactor !== 'nominal' && dir.repairer && dir.crewFixed)) fail('director');
+const srch = await page.evaluate(async () => {
+  const g = __game, P = g.P, out = { sites: 0, kinds: {}, searched: false, prompt: '', say: '' };
+  for (let tries = 0; tries < 6 && !out.sites; tries++) { g.newRun(); g.setQuality('low'); out.sites = g.world.searchSites?.length || 0; }
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
+  for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
+  for (const s of g.world.searchSites) out.kinds[s.kind] = (out.kinds[s.kind] || 0) + 1;
+  const site = g.world.searchSites[0]; if (site) {
+    P.x = site.x + site.nx * 0.9; P.z = site.z + site.nz * 0.9; P.yaw = Math.atan2(site.nx, site.nz); P.vx = P.vz = 0;   // stand in front, look at the wall
+    g.step(1 / 60, 900); out.prompt = document.getElementById('prompt').textContent;
+    const before = document.getElementById('msgs')?.textContent || '';
+    for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code: 'KeyE', key: 'e', bubbles: true }));
+    out.searched = site.used; out.say = (document.getElementById('msgs')?.textContent || '').slice(-160) !== before.slice(-160) ? 'changed' : 'same';
+  }
+  return out;
+});
+console.log('search:', JSON.stringify(srch)); if (!(srch.sites > 0 && srch.searched && /Search/.test(srch.prompt))) fail('fixture search');
+const inv = await page.evaluate(async () => {
+  const g = __game, P = g.P, out = { newRooms: [], clutter: 0, examine: '', examineKind: '', clutterPrompt: '' };
+  const NEW = new Set(['readyroom', 'brig', 'armory', 'gym', 'lab', 'laundry', 'lounge', 'workshop', 'plant', 'morgue', 'datacore', 'stores', 'washroom', 'airlock']), seen = new Set();
+  { const { generate } = await import('./js/gen.js'), { SHIPS, deckOptions } = await import('./js/ships.js');
+    for (let i = 0; i < 120; i++) { const ship = SHIPS[i % SHIPS.length], sd = i % ship.decks, d = generate(sd, i * 7919 + 3, deckOptions(ship, sd)); for (const r of d.rooms) if (NEW.has(r.type)) seen.add(r.type); } }
+  for (let i = 0; i < 4; i++) { g.newRun(); g.setQuality('low'); out.clutter += g.world.clutter?.length || 0; }
+  out.newRooms = [...seen];
+  g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
+  for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
+  const w = g.world, pr = w.d.props.find(p => ['crate', 'table', 'bunk', 'biobed'].includes(p.kind));
+  if (pr) { const [cx, cz] = w.center(pr.tx, pr.ty); for (const [ox, oz] of [[1.7, 0], [-1.7, 0], [0, 1.7], [0, -1.7]]) { P.x = cx + ox; P.z = cz + oz; P.yaw = Math.atan2(ox, oz); P.pitch = -0.6; P.vx = P.vz = 0; g.step(1 / 60, 950); g.step(1 / 60, 950.02); const t = document.getElementById('prompt').textContent; if (t && !/Search/.test(t)) { out.examine = t; out.examineKind = pr.kind; break; } } }
+  const cands = (w.clutter || []).filter(c => !g.ents.some(e => Math.hypot(e.x - c.x, e.z - c.z) < 3.5) && !(w.searchSites || []).some(s => Math.hypot(s.x - c.x, s.z - c.z) < 3) && !(g.repairPts || []).some(r => Math.hypot(r.x - c.x, r.z - c.z) < 4) && Math.hypot(w.liftPos.x - c.x, w.liftPos.z - c.z) > 4);
+  find: for (const c of cands.slice(0, 15)) for (const [ox, oz] of [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]]) {
+    P.x = c.x + ox; P.z = c.z + oz; P.yaw = Math.atan2(ox, oz); P.pitch = 0; P.vx = P.vz = 0; g.step(1 / 60, 960); g.step(1 / 60, 960.02);
+    const t = document.getElementById('prompt').textContent; if (t && !/\[E\]|nominal|Repair/.test(t)) { out.clutterPrompt = t; break find; } }
+  return out;
+});
+console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.newRooms.length >= 12 && inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
+const propsOk = await page.evaluate(async () => {
+  const { PROP_KINDS, buildProp } = await import('./js/world.js'), bad = [];
+  for (const k of PROP_KINDS) { try { const g = buildProp(k); if (!g || !g.children.length) bad.push(k); } catch (e) { bad.push(k + ': ' + e.message); } }
+  return { n: PROP_KINDS.length, bad };
+});
+console.log('props:', JSON.stringify(propsOk)); if (propsOk.bad.length || propsOk.n < 32) fail('prop models');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

@@ -9,6 +9,8 @@ const disc = (u, v, r, cu = 0, cv = 0) => (u - cu) ** 2 + (v - cv) ** 2 <= r * r
 export const CLASSES = {
   cairn: {   // a stack of discs of different sizes, like a trail cairn; drive fins hang off the lowest stone
     name: 'Cairn', decks: 9, role: 'deep-range explorer', length: 310,
+    // a long-haul science ship (USF Ontario, USF Québec): more labs, stores and long-mission comforts, fewer cells and armouries
+    bias: { lab: 2, stores: 1.6, arboretum: 1.5, gym: 1.6, laundry: 1.5, lounge: 1.4, morgue: 1.5, brig: 0.6, armory: 0.6 },
     inside(u, v, f) { const r = f < 0.12 ? 0.5 : f < 0.46 ? 1.0 : f < 0.58 ? 0.55 : f < 0.82 ? 0.82 : 0.6; return disc(u, v, r, 0, f >= 0.58 ? 0.15 : 0); },
     pods: [{ u: 0.78, v0: 0.35, v1: 1.15, f0: 0.62, f1: 0.8 }, { u: -0.78, v0: 0.35, v1: 1.15, f0: 0.62, f1: 0.8 }],
   },
@@ -51,17 +53,18 @@ export const SHIPS = [
 
 // what a deck is for, by how far down the ship it is
 export const ZONES = [
-  { to: 0.13, label: 'Command', weights: { bridge: 5, quarters: 2, transporter: 1, holodeck: 1 } },
-  { to: 0.46, label: 'Habitat', weights: { quarters: 4, mess: 3, sickbay: 2, holodeck: 2, arboretum: 2, transporter: 1 } },
-  { to: 0.72, label: 'Services', weights: { mess: 2, sickbay: 2, cargo: 3, transporter: 2, shuttlebay: 2, quarters: 1 } },
-  { to: 2, label: 'Engineering', weights: { engineering: 4, cargo: 3, shuttlebay: 2, transporter: 1 } },
+  { to: 0.13, label: 'Command', weights: { bridge: 5, quarters: 2, transporter: 1, holodeck: 1, readyroom: 2, lounge: 1, datacore: 1 } },
+  { to: 0.46, label: 'Habitat', weights: { quarters: 4, mess: 3, sickbay: 2, holodeck: 2, arboretum: 2, transporter: 1, lab: 3, lounge: 2, gym: 1, laundry: 1, washroom: 1, morgue: 1 } },
+  { to: 0.72, label: 'Services', weights: { mess: 2, sickbay: 2, cargo: 3, transporter: 2, shuttlebay: 2, quarters: 1, brig: 1, armory: 1, datacore: 1, stores: 2, airlock: 1, laundry: 1 } },
+  { to: 2, label: 'Engineering', weights: { engineering: 4, cargo: 3, shuttlebay: 2, transporter: 1, workshop: 2, plant: 2, stores: 1, airlock: 1, datacore: 1 } },
 ];
 export const zoneOf = (f) => ZONES.find(z => f <= z.to);
 // which of a ship's decks game deck n (1..8, then endless) lands on: you ride the tubelift down through the hulls
 export function shipDeckFor(ship, n, winDeck = 8) { return n <= winDeck ? Math.round((n - 1) / (winDeck - 1) * (ship.decks - 1)) : (n * 5) % ship.decks; }
 export function deckOptions(ship, shipDeck) {
   const f = ship.decks > 1 ? shipDeck / (ship.decks - 1) : 0, c = CLASSES[ship.hull];
-  return { inside: (u, v) => c.inside(u, v, f), weights: zoneOf(f).weights };
+  const weights = { ...zoneOf(f).weights }; if (c.bias) for (const k in weights) if (c.bias[k]) weights[k] = Math.max(1, Math.round(weights[k] * c.bias[k]));
+  return { inside: (u, v) => c.inside(u, v, f), weights };
 }
 
 // ---- schematic: side elevation (all decks, current one lit) + plan of the current deck ----
@@ -71,25 +74,68 @@ function spans(c, f, n = 72) {   // fore-aft extent(s) of the hull at deck fract
   for (let i = 0; i <= n; i++) { const v = -1 + 2 * i / n; let hit = false; for (let j = 0; j <= 24 && !hit; j++) hit = c.inside(-1 + j / 12, v, f); if (hit && open === null) open = v; if ((!hit || i === n) && open !== null) { out.push([open, hit ? v : v - 2 / n]); open = null; } }
   return out;
 }
+export const ZONE_COLORS = { Command: '#e2bb4d', Habitat: '#58c9b9', Services: '#7f9be6', Engineering: '#f2803d' };
+// Blueprint sheet: grid, title block, side elevation with zone-coloured decks (current one lit and flagged), engine pods,
+// scale bar, bow/stern, zone legend, and the plan of the current deck. `labels: false` keeps only the drawing.
 export function drawSchematic(canvas, ship, shipDeck = 0, { labels = true } = {}) {
   const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height, c = CLASSES[ship.hull], D = ship.decks, col = hex(ship.accent);
-  g.clearRect(0, 0, W, H); g.lineJoin = 'round';
-  const pad = W * 0.03, sideW = W * 0.52, x0 = pad, top = H * (labels ? 0.2 : 0.08), bot = H * 0.86, dh = (bot - top) / (D + 0.6), sx = (v) => x0 + (v + 1.3) / 2.6 * (sideW - pad);
-  g.font = `${Math.round(H * 0.052)}px Arial`; g.textBaseline = 'middle';
-  if (labels) { g.fillStyle = col; g.font = `bold ${Math.round(H * 0.075)}px Arial`; g.fillText(ship.name.toUpperCase(), pad, H * 0.065); g.font = `${Math.round(H * 0.05)}px Arial`; g.fillStyle = 'rgba(255,255,255,.7)'; g.fillText(`${ship.reg} · ${c.name.toUpperCase()}-CLASS ${c.role.toUpperCase()} · ${c.length} M · ${D} DECKS`, pad, H * 0.135); }
-  // engine pods (not walkable)
-  g.fillStyle = 'rgba(120,200,255,.28)'; g.strokeStyle = 'rgba(120,200,255,.8)'; g.lineWidth = 1;
-  for (const p of c.pods) { const y = top + p.f0 * D * dh, h = (p.f1 - p.f0) * D * dh; g.beginPath(); g.roundRect(sx(p.v0), y, sx(p.v1) - sx(p.v0), h, h / 2); g.fill(); g.stroke(); }
+  const F = 'Arial, sans-serif', M = 'ui-monospace, Menlo, Consolas, monospace', px = (k) => Math.max(7, Math.round(H * k));
+  g.clearRect(0, 0, W, H); g.lineJoin = 'round'; g.textAlign = 'left'; g.textBaseline = 'middle';
+  // blueprint grid
+  const gs = Math.max(8, Math.round(H / 16)); g.lineWidth = 1;
+  for (let x = 0.5, i = 0; x < W; x += gs, i++) { g.strokeStyle = i % 4 ? 'rgba(120,170,220,.06)' : 'rgba(120,170,220,.13)'; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  for (let y = 0.5, i = 0; y < H; y += gs, i++) { g.strokeStyle = i % 4 ? 'rgba(120,170,220,.06)' : 'rgba(120,170,220,.13)'; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  const pad = W * 0.03, sideW = W * 0.52, x0 = pad, top = H * (labels ? 0.25 : 0.08), bot = H * (labels ? 0.8 : 0.9), dh = (bot - top) / (D * Math.max(1, ...c.pods.map(p => p.f1)) + 0.25), sx = (v) => x0 + (v + 1.3) / 2.6 * (sideW - pad);
+  const zc = (i) => ZONE_COLORS[zoneOf(D > 1 ? i / (D - 1) : 0).label];
+  if (labels) {   // title block
+    g.fillStyle = col; g.fillRect(pad, H * 0.035, Math.max(3, W * 0.006), H * 0.14);
+    g.font = `bold ${px(0.075)}px ${F}`; g.fillText(ship.name.toUpperCase(), pad + W * 0.016, H * 0.07);
+    g.font = `${px(0.044)}px ${M}`; g.fillStyle = 'rgba(255,255,255,.72)'; g.fillText(`${ship.reg} · ${c.name.toUpperCase()}-CLASS ${c.role.toUpperCase()} · ${c.length} M · ${D} DECKS`, pad + W * 0.016, H * 0.145);
+    g.textAlign = 'right'; g.fillStyle = 'rgba(160,190,220,.5)'; g.font = `${px(0.036)}px ${M}`; g.fillText('USF BUREAU OF HULLS · SHEET ' + String(SHIPS.indexOf(ship) + 1).padStart(2, '0') + '/' + SHIPS.length, W - pad, H * 0.07); g.textAlign = 'left';
+  }
+  // engine pods (not walkable): glow + body
+  for (const p of c.pods) {
+    const y = top + p.f0 * D * dh, h = (p.f1 - p.f0) * D * dh, xa = sx(p.v0), xb = sx(p.v1);
+    const gl = g.createRadialGradient(xb, y + h / 2, 0, xb, y + h / 2, h * 2.2); gl.addColorStop(0, 'rgba(140,215,255,.45)'); gl.addColorStop(1, 'rgba(120,200,255,0)');
+    g.fillStyle = gl; g.fillRect(xb - h * 2.2, y + h / 2 - h * 2.2, h * 4.4, h * 4.4);
+    g.fillStyle = 'rgba(120,200,255,.3)'; g.strokeStyle = 'rgba(150,215,255,.9)'; g.lineWidth = 1; g.beginPath(); g.roundRect(xa, y, xb - xa, h, h / 2); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(200,240,255,.85)'; g.beginPath(); g.roundRect(xb - h * 0.6, y + h * 0.2, h * 0.5, h * 0.6, h * 0.25); g.fill();
+  }
+  // decks
   for (let i = 0; i < D; i++) {
-    const f = D > 1 ? i / (D - 1) : 0, y = top + i * dh, cur = i === shipDeck;
-    for (const [a, b] of spans(c, f)) { g.beginPath(); g.roundRect(sx(a), y + 1, Math.max(4, sx(b) - sx(a)), dh - 2, Math.min(5, dh / 3)); g.fillStyle = cur ? col : 'rgba(255,255,255,.1)'; g.fill(); g.strokeStyle = cur ? '#fff' : 'rgba(255,255,255,.45)'; g.lineWidth = cur ? 1.6 : 1; g.stroke(); }
-    if (labels) { g.fillStyle = cur ? '#fff' : 'rgba(255,255,255,.45)'; g.font = `${cur ? 'bold ' : ''}${Math.round(Math.min(dh * 0.62, H * 0.045))}px Arial`; g.fillText(String(i + 1).padStart(2, '0'), sx(1.3) - W * 0.012, y + dh / 2); }
+    const f = D > 1 ? i / (D - 1) : 0, y = top + i * dh, cur = i === shipDeck, z = zc(i);
+    for (const [a, b] of spans(c, f)) {
+      const w = Math.max(4, sx(b) - sx(a)); g.beginPath(); g.roundRect(sx(a), y + 1, w, dh - 2, Math.min(5, dh / 3));
+      g.globalAlpha = cur ? 1 : 0.2; g.fillStyle = cur ? col : z; g.fill(); g.globalAlpha = 1;
+      g.strokeStyle = cur ? '#fff' : z; g.globalAlpha = cur ? 1 : 0.75; g.lineWidth = cur ? 1.6 : 1; g.stroke(); g.globalAlpha = 1;
+      if (dh > 9) { g.strokeStyle = cur ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.1)'; g.lineWidth = 1; g.beginPath(); for (let k = 1, n = Math.floor(w / (dh * 1.6)); k <= n; k++) { const xx = sx(a) + k * w / (n + 1); g.moveTo(xx, y + 3); g.lineTo(xx, y + dh - 3); } g.stroke(); }   // frames
+    }
+    if (cur) { const xm = sx(-1.3) + W * 0.004, ym = y + dh / 2, s = Math.min(dh * 0.42, H * 0.03); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(xm, ym - s); g.lineTo(xm + s * 1.5, ym); g.lineTo(xm, ym + s); g.closePath(); g.fill(); }
+    if (labels) { g.fillStyle = cur ? '#fff' : 'rgba(255,255,255,.5)'; g.font = `${cur ? 'bold ' : ''}${Math.round(Math.min(dh * 0.62, H * 0.045))}px ${M}`; g.textAlign = 'right'; g.fillText(String(i + 1).padStart(2, '0'), sx(1.3) + W * 0.012, y + dh / 2); g.textAlign = 'left'; }
   }
   // zone brackets
-  if (labels) { let f0 = 0; g.font = `${Math.round(H * 0.038)}px Arial`; for (const z of ZONES) { const i0 = Math.ceil(f0 * (D - 1) - 1e-6), i1 = Math.min(D - 1, Math.floor(Math.min(1, z.to) * (D - 1) + 1e-6)); if (i1 >= i0) { const ya = top + i0 * dh + 2, yb = top + (i1 + 1) * dh - 2, x = sx(1.3) + W * 0.022; g.strokeStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.moveTo(x - 4, ya); g.lineTo(x, ya); g.lineTo(x, yb); g.lineTo(x - 4, yb); g.stroke(); g.fillStyle = 'rgba(255,255,255,.55)'; g.fillText(z.label.toUpperCase(), x + 6, (ya + yb) / 2); } f0 = z.to + 1e-3; } }
+  if (labels) { let f0 = 0; g.font = `${px(0.038)}px ${F}`; for (const z of ZONES) { const i0 = Math.ceil(f0 * (D - 1) - 1e-6), i1 = Math.min(D - 1, Math.floor(Math.min(1, z.to) * (D - 1) + 1e-6)); if (i1 >= i0) { const ya = top + i0 * dh + 2, yb = top + (i1 + 1) * dh - 2, x = sx(1.3) + W * 0.024; g.strokeStyle = g.fillStyle = ZONE_COLORS[z.label]; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x - 4, ya); g.lineTo(x, ya); g.lineTo(x, yb); g.lineTo(x - 4, yb); g.stroke(); g.fillText(z.label.toUpperCase(), x + 6, (ya + yb) / 2); } f0 = z.to + 1e-3; } }
+  // scale bar + bow/stern under the profile
+  if (labels) {
+    const yb = bot + H * 0.055, xa = sx(-1), xb = sx(1), half = (xa + xb) / 2;
+    g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 1; g.beginPath(); g.moveTo(xa, yb); g.lineTo(xb, yb); for (const x of [xa, half, xb]) { g.moveTo(x, yb - 3); g.lineTo(x, yb + 3); } g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(xa, yb - 1.5, half - xa, 3);
+    g.font = `${px(0.036)}px ${M}`; g.fillStyle = 'rgba(255,255,255,.65)'; g.textAlign = 'left'; g.fillText('◂ BOW', xa, yb + H * 0.05); g.textAlign = 'center'; g.fillText(`${c.length} M`, half, yb + H * 0.05); g.textAlign = 'right'; g.fillText('STERN ▸', xb, yb + H * 0.05); g.textAlign = 'left';
+  }
   // plan of the current deck (bow up)
-  const f = D > 1 ? shipDeck / (D - 1) : 0, px = sideW + W * 0.2, pw = W - px - pad, ph = bot - top, s = Math.min(pw, ph) / 2.5, cx = px + pw / 2, cy = top + ph / 2, n = 44, cell = 2.5 * s / n;
-  g.fillStyle = 'rgba(120,200,255,.28)'; for (const p of c.pods) if (p.u !== 0 || p.f0 < 0 || p.f0 > 1) { const w = 0.16 * s; g.beginPath(); g.roundRect(cx + p.u * s - w / 2, cy + p.v0 * s, w, (p.v1 - p.v0) * s, w / 2); g.fill(); }
-  g.fillStyle = col; for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const u = -1.25 + 2.5 * (i + 0.5) / n, v = -1.25 + 2.5 * (j + 0.5) / n; if (c.inside(u, v, f)) g.fillRect(cx + u * s - cell / 2, cy + v * s - cell / 2, cell + 0.6, cell + 0.6); }
-  if (labels) { g.fillStyle = 'rgba(255,255,255,.7)'; g.font = `${Math.round(H * 0.045)}px Arial`; g.textAlign = 'center'; g.fillText(`DECK ${String(shipDeck + 1).padStart(2, '0')} · ${zoneOf(f).label.toUpperCase()}`, cx, bot + H * 0.07); g.fillText('▲ BOW', cx, top - H * 0.035); g.textAlign = 'left'; g.fillText('PROFILE', pad, bot + H * 0.07); }
+  const f = D > 1 ? shipDeck / (D - 1) : 0, pxl = sideW + W * 0.2, pw = W - pxl - pad, ph = bot - top, s = Math.min(pw, ph) / 2.5, cx = pxl + pw / 2, cy = top + ph / 2, n = 44, cell = 2.5 * s / n;
+  g.strokeStyle = 'rgba(150,190,230,.3)'; g.lineWidth = 1; g.setLineDash([3, 4]); g.beginPath(); g.moveTo(cx, cy - 1.3 * s); g.lineTo(cx, cy + 1.3 * s); g.moveTo(cx - 1.3 * s, cy); g.lineTo(cx + 1.3 * s, cy); g.stroke(); g.setLineDash([]);   // centre lines
+  g.fillStyle = 'rgba(120,200,255,.3)'; for (const p of c.pods) if (p.u !== 0 || p.f0 < 0 || p.f0 > 1) { const w = 0.16 * s; g.beginPath(); g.roundRect(cx + p.u * s - w / 2, cy + p.v0 * s, w, (p.v1 - p.v0) * s, w / 2); g.fill(); }
+  const ins = (i, j) => i >= 0 && j >= 0 && i < n && j < n && c.inside(-1.25 + 2.5 * (i + 0.5) / n, -1.25 + 2.5 * (j + 0.5) / n, f);
+  g.fillStyle = col; g.globalAlpha = 0.85; for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (ins(i, j)) g.fillRect(cx - 1.25 * s + i * cell, cy - 1.25 * s + j * cell, cell + 0.6, cell + 0.6); g.globalAlpha = 1;
+  g.strokeStyle = '#fff'; g.lineWidth = 1.2; g.beginPath();   // hull outline
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (ins(i, j)) { const xa = cx - 1.25 * s + i * cell, ya = cy - 1.25 * s + j * cell; if (!ins(i - 1, j)) { g.moveTo(xa, ya); g.lineTo(xa, ya + cell); } if (!ins(i + 1, j)) { g.moveTo(xa + cell, ya); g.lineTo(xa + cell, ya + cell); } if (!ins(i, j - 1)) { g.moveTo(xa, ya); g.lineTo(xa + cell, ya); } if (!ins(i, j + 1)) { g.moveTo(xa, ya + cell); g.lineTo(xa + cell, ya + cell); } }
+  g.stroke();
+  if (labels) {
+    const zl = zoneOf(f).label; g.font = `${px(0.042)}px ${M}`; g.textAlign = 'center'; g.fillStyle = 'rgba(255,255,255,.7)'; g.fillText('▲ BOW', cx, top - H * 0.04);
+    g.fillStyle = ZONE_COLORS[zl]; g.fillText(`DECK ${String(shipDeck + 1).padStart(2, '0')} · ${zl.toUpperCase()}`, cx, bot + H * 0.055); g.textAlign = 'left';
+    // zone legend
+    let lx = pxl + pw / 2; g.font = `${px(0.034)}px ${F}`; const items = ZONES.map(z => z.label), tw = items.reduce((a, t) => a + g.measureText(t.toUpperCase()).width + H * 0.075, 0); lx = Math.min(W - pad - tw, Math.max(sideW + W * 0.06, cx - tw / 2));
+    for (const t of items) { g.fillStyle = ZONE_COLORS[t]; g.fillRect(lx, bot + H * 0.118, H * 0.03, H * 0.03); g.fillStyle = 'rgba(255,255,255,.6)'; g.fillText(t.toUpperCase(), lx + H * 0.042, bot + H * 0.135); lx += g.measureText(t.toUpperCase()).width + H * 0.075; }
+  }
 }

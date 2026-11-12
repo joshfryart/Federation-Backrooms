@@ -1,16 +1,25 @@
 <!doctype html><meta charset="utf-8"><title>Fleet schematics — Starfarers: The Backdecks</title>
-<style>body{margin:0;background:#070a12;color:#fff;font-family:Arial;padding:18px}h1{font-weight:200;letter-spacing:.3em;font-size:20px;text-transform:uppercase}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:14px}.ship{background:#0d1220;border:1px solid #232b40;border-radius:10px;padding:10px}
-canvas{width:100%;display:block}input{width:100%}p{opacity:.6;font-size:13px;max-width:900px;line-height:1.5}</style>
-<h1>United Starfarers' Fleet — provincial squadron</h1>
+<style>body{margin:0;background:#05070c;background-image:linear-gradient(rgba(120,170,220,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,170,220,.05) 1px,transparent 1px);background-size:32px 32px;color:#e8eef6;font-family:"Helvetica Neue",Arial,sans-serif;padding:22px;--f-d:"Avenir Next Condensed","Roboto Condensed","Arial Narrow",Arial,sans-serif;--f-m:ui-monospace,Menlo,Consolas,monospace;--am:#f2a03d;--tl:#58c9b9;--line:rgba(150,180,210,.26)}
+.top{display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.top svg{width:46px;height:46px;color:var(--am);flex:none}
+.eyebrow{font-family:var(--f-m);font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:#8fa0b6}
+h1{font-family:var(--f-d);font-weight:300;letter-spacing:.24em;font-size:22px;text-transform:uppercase;margin:2px 0 0}h1 b{color:var(--am);font-weight:800}
+p{opacity:.72;font-size:13px;max-width:980px;line-height:1.55}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}nav a{color:#bcd0e6;text-decoration:none;font-size:12px;font-family:var(--f-d);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line);padding:3px 10px}nav a:hover{border-color:var(--am)}nav a.on{background:var(--am);color:#0a0d12;font-weight:800;border-color:var(--am)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--f-m);font-size:11px;color:#9fb0c6;margin:8px 0 14px;text-transform:uppercase;letter-spacing:.08em}.legend i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:14px}
+.ship{background:rgba(9,14,24,.92);border:1px solid var(--line);border-left:3px solid var(--u,var(--am));padding:10px 12px;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.ship .dk{display:flex;justify-content:space-between;font-family:var(--f-m);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#8fa0b6;margin-top:6px}
+canvas{width:100%;display:block}input{width:100%;accent-color:var(--u,var(--am))}@media(max-width:600px){.grid{grid-template-columns:1fr}}</style>
+<div class="top"><svg viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="50" cy="50" r="44"/><circle cx="50" cy="50" r="36" stroke-dasharray="2.2 20.42" stroke-width="7" opacity=".85"/><path d="M50 16l7 27 27 7-27 7-7 27-7-27-27-7 27-7z" fill="currentColor" fill-opacity=".16"/><path d="M30 62h40M34 69h32M39 76h22" stroke-width="2" opacity=".8"/></g><circle cx="50" cy="50" r="4.5" fill="currentColor"/></svg><div><div class="eyebrow">United Starfarers' Fleet · Bureau of Hulls</div><h1>Provincial squadron — <b>fleet schematics</b></h1></div></div>
 <p>Five original hull classes, two ships each. The lit deck in the profile is the deck whose plan is drawn on the right; that plan is the outline the level generator carves the maze into. Drag a slider to step through a ship's decks.</p>
+<div class="legend"><span><i style="background:#e2bb4d"></i>Command</span><span><i style="background:#58c9b9"></i>Habitat</span><span><i style="background:#7f9be6"></i>Services</span><span><i style="background:#f2803d"></i>Engineering</span><span><i style="background:rgba(120,200,255,.6)"></i>Engine pods (not walkable)</span><span>▶ current deck</span></div>
 <div class="grid" id="g"></div>
 <script type="module">
 import { SHIPS, drawSchematic } from './js/ships.js';
 const q = new URLSearchParams(location.search), fixed = q.get('deck');
 for (const s of SHIPS) {
-  const d = document.createElement('div'); d.className = 'ship'; const c = document.createElement('canvas'); c.width = 960; c.height = 380; const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = s.decks - 1; r.value = fixed !== null ? Math.min(s.decks - 1, +fixed) : Math.floor(s.decks / 2);
-  const draw = () => drawSchematic(c, s, +r.value); r.oninput = draw; draw(); d.append(c, r); document.getElementById('g').append(d);
+  const d = document.createElement('div'); d.className = 'ship'; d.style.setProperty('--u', '#' + s.accent.toString(16).padStart(6, '0')); const lb = document.createElement('div'); lb.className = 'dk'; const c = document.createElement('canvas'); c.width = 960; c.height = 380; const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = s.decks - 1; r.value = fixed !== null ? Math.min(s.decks - 1, +fixed) : Math.floor(s.decks / 2);
+  const draw = () => { drawSchematic(c, s, +r.value); lb.innerHTML = `<span>Deck ${String(+r.value + 1).padStart(2, '0')} / ${s.decks}</span><span>${s.cls}-class</span>`; }; r.oninput = draw; draw(); d.append(c, r, lb); document.getElementById('g').append(d);
 }
 window.__ready = true;
 </script>
