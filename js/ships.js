@@ -61,10 +61,29 @@ export const ZONES = [
 export const zoneOf = (f) => ZONES.find(z => f <= z.to);
 // which of a ship's decks game deck n (1..8, then endless) lands on: you ride the tubelift down through the hulls
 export function shipDeckFor(ship, n, winDeck = 8) { return n <= winDeck ? Math.round((n - 1) / (winDeck - 1) * (ship.decks - 1)) : (n * 5) % ship.decks; }
-export function deckOptions(ship, shipDeck) {
+export function deckOptions(ship, shipDeck, { require = false } = {}) {
   const f = ship.decks > 1 ? shipDeck / (ship.decks - 1) : 0, c = CLASSES[ship.hull];
   const weights = { ...zoneOf(f).weights }; if (c.bias) for (const k in weights) if (c.bias[k]) weights[k] = Math.max(1, Math.round(weights[k] * c.bias[k]));
-  return { inside: (u, v) => c.inside(u, v, f), weights };
+  const o = { inside: (u, v) => c.inside(u, v, f), weights }; if (require) o.require = requirePlan(ship)[shipDeck]; return o;
+}
+// Ship-level room guarantees (Systems Nominal): the room types every ship must have, by zone. requirePlan(ship) gives, per ship deck, the
+// types generate() is told to place (opts.require); bridge, ready room and engineering are pinned to the first deck of their zone, the rest
+// are dealt round-robin over the zone's decks. Where each room landed is in shipPlan(ship, seed) (js/gen.js).
+export const ZONE_NEEDS = {
+  Command: ['bridge', 'readyroom'],
+  Habitat: ['sickbay', 'mess', 'lounge', 'gym', 'holodeck', 'lab', 'arboretum', 'quarters', 'quarters', 'quarters'],
+  Services: ['shuttlebay', 'cargo', 'transporter', 'armory', 'brig', 'datacore', 'stores'],
+  Engineering: ['engineering'],
+};
+const PINNED = new Set(['bridge', 'readyroom', 'engineering']);
+export function requirePlan(ship) {
+  const out = Array.from({ length: ship.decks }, () => []);
+  for (const z of ZONES) {
+    const decks = []; for (let i = 0; i < ship.decks; i++) if (zoneOf(ship.decks > 1 ? i / (ship.decks - 1) : 0) === z) decks.push(i);
+    if (!decks.length) continue;
+    let k = 0; for (const t of ZONE_NEEDS[z.label]) out[PINNED.has(t) ? decks[0] : decks[k++ % decks.length]].push(t);
+  }
+  return out;
 }
 
 // ---- schematic: side elevation (all decks, current one lit) + plan of the current deck ----

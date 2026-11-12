@@ -1,6 +1,8 @@
 // Headless smoke test:  node tools/test.mjs   (needs `playwright` + Chromium; starts its own static server)
 // 1) generator: every chip and the exit are reachable on decks 0-11 × 25 seeds
-// 2) bot run: collect chips, ride the lift, pick a perk, through to the win screen, with every enemy type ticking
+// 2) bot run (page loaded with ?mode=madness, the old roguelike): collect chips, ride the lift, pick a perk, through to the win screen, with every enemy type ticking
+// 3) Systems Nominal (default mode, second page): every deck of every ship generates, ship-level rooms exist per shipPlan, no hostiles / madness / faults,
+//    and a bot rides the real turbolift from the top deck to the bottom and back (locked when the lifts system is offline)
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, dirname } from 'node:path';
@@ -20,8 +22,9 @@ const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-an
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-await page.goto(`http://localhost:${port}/index.html`);
+await page.goto(`http://localhost:${port}/index.html?mode=madness`);
 await page.evaluate(async () => { await __game.ready; __game.setQuality('low'); });
+if (await page.evaluate(() => __game.G.mode) !== 'madness') fail('?mode=madness did not select madness mode');
 
 const gen = await page.evaluate(async () => {
   const { generate } = await import('./js/world.js'); const { SHIPS, deckOptions } = await import('./js/ships.js'); const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0;
@@ -144,7 +147,7 @@ const dir = await page.evaluate(async () => {
   run(240, 0); const quietActs = Object.values(acts).reduce((a, b) => a + b, 0);
   run(60, 1); const peaked = phases.has('peak'); run(90, 0);
   const S = new ShipState(SHIPS[0], 5); S.repair('reactor'); S.damage('coolant', 1); for (let i = 0; i < 450; i++) S.tick(0.1, { deckTime: 0, tension: 0, deck: 1 });
-  const g = __game; g.newRun(); g.setQuality('low'); for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null; for (const e of g.ents.filter(e => e.opener)) { g.scene.remove(e.mesh); g.ents.splice(g.ents.indexOf(e), 1); }
+  const g = __game; for (let a = 0; a < 6; a++) { g.newRun(); if (g.repairPts.some(p => p.sys === 'lighting')) break; }   /* a layout with no wall space for the junction would make the probe meaningless */ g.setQuality('low'); for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null; for (const e of g.ents.filter(e => e.opener)) { g.scene.remove(e.mesh); g.ents.splice(g.ents.indexOf(e), 1); }
   g.shipState.damage('lighting', 0.9, { quiet: true }); for (const e of g.ents.filter(e => e.repairing)) e.repairing = null; g.spawnRepairer('lighting');
   const rep = g.ents.find(e => e.repairing?.sys === 'lighting'); let tt = 500, secs = 0;
   if (rep) { g.P.x = rep.x + 30; for (let i = 0; i < 60 * 70 && g.shipState.status('lighting') !== 'nominal'; i++) { g.G.phase = 'play'; g.G.hp = 1e6; tt += 1 / 60; g.step(1 / 60, tt); secs = i / 60; } }
@@ -167,7 +170,7 @@ const srch = await page.evaluate(async () => {
   return out;
 });
 console.log('search:', JSON.stringify(srch)); if (!(srch.sites > 0 && srch.searched && /Search/.test(srch.prompt))) fail('fixture search');
-const inv = await page.evaluate(async () => {
+const invRun = () => page.evaluate(async () => {
   const g = __game, P = g.P, out = { newRooms: [], clutter: 0, examine: '', examineKind: '', clutterPrompt: '' };
   const NEW = new Set(['readyroom', 'brig', 'armory', 'gym', 'lab', 'laundry', 'lounge', 'workshop', 'plant', 'morgue', 'datacore', 'stores', 'washroom', 'airlock']), seen = new Set();
   { const { generate } = await import('./js/gen.js'), { SHIPS, deckOptions } = await import('./js/ships.js');
@@ -184,6 +187,7 @@ const inv = await page.evaluate(async () => {
     const t = document.getElementById('prompt').textContent; if (t && !/\[E\]|nominal|Repair/.test(t)) { out.clutterPrompt = t; break find; } }
   return out;
 });
+let inv = await invRun(); for (let a = 0; a < 3 && !(inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt)); a++) inv = await invRun();   // random layouts: the look-at probe can miss on one ship, so retry on fresh runs
 console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.newRooms.length >= 12 && inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
 const propsOk = await page.evaluate(async () => {
   const { PROP_KINDS, buildProp } = await import('./js/world.js'), bad = [];
@@ -192,6 +196,64 @@ const propsOk = await page.evaluate(async () => {
 });
 console.log('props:', JSON.stringify(propsOk)); if (propsOk.bad.length || propsOk.n < 32) fail('prop models');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
+// ---- Systems Nominal (default mode) on its own page ----
+const page2 = await browser.newPage({ viewport: { width: 640, height: 360 } });
+page2.on('pageerror', e => errors.push('nominal: ' + e.message)); page2.on('console', m => { if (m.type() === 'error') errors.push('nominal: ' + m.text()); });
+await page2.goto(`http://localhost:${port}/index.html`);
+await page2.evaluate(async () => { await __game.ready; __game.setQuality('low'); });
+const shipTest = await page2.evaluate(async () => {
+  const { SHIPS } = await import('./js/ships.js'); const { genShip, shipPlan } = await import('./js/gen.js');
+  const NEED = ['bridge', 'readyroom', 'engineering', 'sickbay', 'mess', 'lounge', 'gym', 'holodeck', 'lab', 'quarters', 'shuttlebay', 'cargo', 'transporter', 'armory', 'brig', 'datacore', 'arboretum', 'stores'];
+  const bad = [], dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]; let decks = 0;
+  for (const ship of SHIPS) for (const seed of [0, 1, 2, 3, 4, 5]) {
+    const ds = genShip(ship, seed), plan = shipPlan(ship, seed, ds); decks += ds.length;
+    if (ds.length !== ship.decks) bad.push(`${ship.name}: ${ds.length} decks`);
+    for (const t of NEED) if (!plan[t]) bad.push(`${ship.name}/${seed}: no ${t}`); else for (const r of plan[t]) if (ds[r.deck].room[r.ty][r.tx] !== t) bad.push(`${ship.name}/${seed}: ${t} not at ${r.deck},${r.tx},${r.ty}`);
+    if (plan.bridge?.[0].deck !== 0 || plan.readyroom?.[0].deck !== 0) bad.push(`${ship.name}/${seed}: bridge/ready room not on the Command deck`);
+    if ((plan.quarters || []).length < 3) bad.push(`${ship.name}/${seed}: few quarters`);
+    if (!ds.some(d => d.props.some(p => p.kind === 'warpcore'))) bad.push(`${ship.name}/${seed}: no warp core`);
+    ds.forEach((d, i) => { if (!d.exitBlocks) bad.push(`${ship.name}/${seed}/${i}: lift is not a dead-end car`); });
+  }
+  return { decks, bad };
+});
+console.log(`ship decks: ${shipTest.decks} generated, ${shipTest.bad.length} problems`); if (shipTest.bad.length) fail('ship decks: ' + shipTest.bad.slice(0, 6).join('; '));
+const nom = await page2.evaluate(async () => {
+  const g = __game, P = g.P, out = { log: [] }; g.G.forceShip = 0; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.hp = g.G.maxHp = 1e6;
+  const key = (code) => { for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code, key: code, bubbles: true })); };
+  let t = 0; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); } };
+  const G = g.G, D = G.ship.decks;
+  out.start = { mode: G.mode, deck: G.deck, shipDeck: G.shipDeck, inCar: g.inCarTile(), decks: G.shipDecks.length, D, director: g.director, auto: g.shipState.auto, objective: getComputedStyle(document.getElementById('objective')).display };
+  tick(900);   // 30 s: nothing hostile, no madness, no faults
+  out.calm = { gorns: g.gorns.length, mad: G.mad, faults: g.shipState.faulted().length, hostileEnts: g.ents.filter(e => e.fake || e.kind === 'body').length };
+  // walk out and back in: doors open as you approach, the panel opens when you step into the car
+  const w = g.world, c = w.car; const far = (k) => { P.x = c.x + c.dx * k; P.z = c.z + c.dy * k; P.vx = P.vz = 0; };
+  far(5.0); tick(5); const nearOpen = w.liftOpen; far(9); tick(5); out.doors = { nearOpen, farShut: !w.liftOpen };
+  far(3.0); tick(5); P.x = c.x; P.z = c.z; tick(3); out.walkIn = { phase: G.phase, panel: document.getElementById('liftui').className, rows: [...document.querySelectorAll('#liftrows .lr')].map(r => r.textContent) };
+  key('Escape'); tick(2); out.cancel = G.phase;
+  // search a fixture on deck 1, ride down to the bottom deck and back up
+  const site = w.searchSites[0]; if (site) site.used = true;
+  const ride = (n) => { g.openLiftPanel(); if (G.phase !== 'select') return { err: 'panel did not open on deck ' + (G.shipDeck + 1) }; const from = G.shipDeck; key('Digit' + n); if (G.phase !== 'ride') return { err: 'no ride started', phase: G.phase }; let ticks = 0, shaken = false, seen = new Set(); const cam0 = g.camera.position.y;
+    while (G.phase === 'ride' && ticks < 30 * 12) { tick(1); ticks++; seen.add(document.getElementById('liftbig').textContent); if (Math.abs(g.camera.position.y - (P.y + P.eye)) > 1e-4) shaken = true; }
+    return { from, to: G.shipDeck, secs: +(ticks / 30).toFixed(1), phase: G.phase, inCar: g.inCarTile(), doorsOpening: g.world.liftOpen, indicator: seen.size, shaken }; };
+  out.down = ride(D); tick(40); out.mid = { deck: G.deck, zone: document.getElementById('liftrows') && true };
+  out.one = null; out.up = ride(1); tick(10);
+  out.persist = site ? g.world.searchSites[0].used : null;
+  // one deck at a time = the shortest ride
+  out.hop = ride(2);
+  // locked while the lifts system is offline
+  g.shipState.damage('lifts', 1); tick(5); out.locked = { fx: G.fx.liftLocked, panel: (G.phase = 'play', g.openLiftPanel(), G.phase) }; g.shipState.repair('lifts'); tick(5);
+  out.unlocked = (g.openLiftPanel(), G.phase); key('Escape'); tick(2);
+  out.tabs = { hud: ['phaser', 'perks'].map(i => getComputedStyle(document.getElementById(i)).display), gun: G.phase };
+  return out;
+});
+console.log('nominal:', JSON.stringify(nom));
+{ const n = nom, D = n.start.D, ok = n.start.mode === 'nominal' && n.start.deck === 1 && n.start.shipDeck === 0 && n.start.inCar && n.start.decks === D && n.start.director === null && n.start.auto === false && n.start.objective === 'none'
+    && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
+    && n.doors.nearOpen && n.doors.farShut && n.walkIn.phase === 'select' && n.walkIn.rows.length === D && /^1Deck 1 — Command · Bridge/.test(n.walkIn.rows[0]) && n.cancel === 'play'
+    && n.down.to === D - 1 && n.down.secs >= 7.5 && n.down.secs <= 9 && n.down.inCar && n.down.indicator >= D - 1 && n.down.shaken
+    && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
+    && n.locked.fx && n.locked.panel === 'play' && n.unlocked === 'select';
+  if (!ok) fail('nominal ship / turbolift'); }
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();
 console.log(failed ? 'FAILED' : 'OK'); process.exit(failed ? 1 : 0);

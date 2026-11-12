@@ -148,7 +148,7 @@ export function textures() {
 // ------------------------------------------------------------------
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-export { generate } from './gen.js';
+export { generate, genShip, shipPlan } from './gen.js';
 
 // ------------------------------------------------------------------
 // Prop meshes
@@ -1209,11 +1209,22 @@ export class World {
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
 
-  setLiftOpen(open) {
+  setLiftOpen(open, keepWalkable = false) {
     this.liftStatus.material.color.set(open ? 0x40ff70 : 0xff3030);
-    if (this.liftLight) this.liftLight.color.set(open ? 0x40ff70 : 0xff3030);
+    if (this.liftLight && !this.carMode) this.liftLight.color.set(open ? 0x40ff70 : 0xff3030);
     this.liftOpen = open;
+    if (this.carMode && this.d.exitBlocks && !keepWalkable) this.grid[this.car.ty][this.car.tx] = open ? 0 : 2;   // closed doors block the car tile
   }
+  // Systems Nominal: the exit tile (a dead end) becomes the lift car and the doors move to its mouth; closed doors block it, open ones do not
+  mountCar() {
+    const d = this.d, [ex, ey] = d.exit, [dx, dy] = d.exitDir, [cx, cz] = this.center(ex, ey);
+    this.carMode = true; this.car = { tx: ex, ty: ey, x: cx, z: cz, dx, dy };
+    this.lift.position.set(cx + dx * (TS / 2 - 0.12), 0, cz + dy * (TS / 2 - 0.12));
+    const fill = box(TS, WH - 2.8, 0.3, new THREE.MeshLambertMaterial({ color: 0x3a3f48 }), 0, 2.8, 0); this.lift.add(fill);
+    if (this.liftLight) { this.liftLight.color.set(0xfff0d8); this.liftLight.intensity = 3.5; this.liftLight.distance = 6; }
+    this.setLiftOpen(false);
+  }
+  setCarLocked(on) { if (this.carMode && this.carLocked !== on) { this.carLocked = on; if (on) this.liftStatus.material.color.set(0xff3030); } }
 
   update(dt, t) {
     this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
@@ -1238,9 +1249,9 @@ export class World {
     if (this.emergMat) { const a = this.alertAmt, off = 1 - this.powerAmt, k = Math.max(0.1, off * 0.85, a * (0.35 + 0.9 * (0.5 + 0.5 * Math.sin(t * 6 + 1.5)))); this.emergMat.color.setRGB(2.6 * k, 0.2 * k, 0.12 * k); this.emergHalo.opacity = Math.min(0.55, k * 0.5); }
     if (M.kitGlow) M.kitGlow.color.setScalar(0.12 + 0.88 * this.powerAmt * (this.flickerF < 0.5 && Math.random() < 0.02 ? 0.6 : 1));
     if (this.shaftMat) { this.shaftMat.opacity = 0.05 * (0.45 + 0.55 * this.powerAmt); this.poolMat.opacity = 0.07 * (0.45 + 0.55 * this.powerAmt); }
-    if (this.liftOpen) {
-      const L = this.lift.getObjectByName('doorL'), R = this.lift.getObjectByName('doorR');
-      L.position.x += (-1.3 - L.position.x) * Math.min(1, dt * 2); R.position.x += (1.3 - R.position.x) * Math.min(1, dt * 2);
+    if (this.liftOpen || this.carMode) {
+      const L = this.lift.getObjectByName('doorL'), R = this.lift.getObjectByName('doorR'), o = this.liftOpen ? 1.3 : 0.5, k = Math.min(1, dt * (this.carMode ? 3 : 2));
+      L.position.x += (-o - L.position.x) * k; R.position.x += (o - R.position.x) * k;
     }
   }
 

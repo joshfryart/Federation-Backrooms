@@ -1,6 +1,7 @@
 // Level generation (pure data, no three.js): maze + rooms + props + Jiffy tubes, masked to the ship's hull.
 // Used by the game (js/world.js re-exports it) and by standalone tools (ship map page, tests).
 import { ROOMS, mulberry32 } from './data.js';
+import { deckOptions, requirePlan } from './ships.js';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -8,7 +9,7 @@ export function generate(deck, seed, opts = {}) {
   const rnd = mulberry32(seed);
   const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
   // opts.inside(u, v): hull outline for this deck (u port..starboard, v bow..stern, both -1..1); opts.weights: room-type weights
-  const N = Math.min(6 + Math.floor(deck * 0.7), 11) + (opts.inside ? 2 : 0);
+  const N = Math.min(6 + Math.floor(deck * 0.7), 11) + (opts.inside ? 2 : 0) + (opts.grow || 0);   // grow: a ship-level required room did not fit, so retry on a bigger deck
   const W = 2 * N + 1, H = 2 * N + 1;
   const grid = Array.from({ length: H }, () => new Uint8Array(W).fill(1));
   const room = Array.from({ length: H }, () => Array(W).fill(null));
@@ -45,7 +46,27 @@ export function generate(deck, seed, opts = {}) {
   for (const [k, v] of Object.entries(ROOMS)) for (let i = 0; i < (opts.weights ? (opts.weights[k] || 0) : v.weight); i++) typeBag.push(k);
   const want = Math.floor(N * 0.9) + 1;
   let bridgeUsed = false, bigRooms = 0;
-  for (let tries = 0; tries < 200 && rooms.length < want; tries++) {
+  // opts.require: room types that must exist on this deck (ship-level guarantees, requirePlan in js/ships.js). Placed first, wherever they fit and join the maze.
+  const missing = [];
+  for (const type of opts.require || []) {
+    const def = ROOMS[type]; let placed = false;
+    for (const [w, h] of [[ri(def.size[0], def.size[1]) | 1, ri(def.size[0], def.size[1]) | 1], [def.size[0] | 1, def.size[0] | 1]]) {
+      const cands = [];
+      for (let y0 = 1; y0 <= H - 1 - h; y0++) for (let x0 = 1; x0 <= W - 1 - w; x0++) {
+        if (rooms.some(r => x0 < r.x + r.w + 1 && x0 + w + 1 > r.x && y0 < r.y + r.h + 1 && y0 + h + 1 > r.y)) continue;
+        let ok = true, touch = false; for (let y = y0; y < y0 + h && ok; y++) for (let x = x0; x < x0 + w; x++) { if (!hull(x, y)) { ok = false; break; } if (grid[y][x] === 0) touch = true; }
+        if (ok && touch) cands.push([x0, y0]);
+      }
+      if (!cands.length) continue;
+      const [x0, y0] = cands[Math.floor(rnd() * cands.length)];
+      for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) { grid[y][x] = 0; room[y][x] = type; }
+      rooms.push({ type, x: x0, y: y0, w, h, big: false, required: true }); if (type === 'bridge') bridgeUsed = true; placed = true; break;
+    }
+    if (!placed) missing.push(type);
+  }
+  if (missing.length && (opts.grow || 0) < 9) return generate(deck, seed, { ...opts, grow: (opts.grow || 0) + 1 });
+  const nReq = rooms.length;
+  for (let tries = 0; tries < 200 && rooms.length < want + nReq; tries++) {
     let type = typeBag[Math.floor(rnd() * typeBag.length)];
     if (type === 'bridge' && (bridgeUsed || (deck < 1 && !opts.weights))) continue;
     const def = ROOMS[type];
@@ -166,6 +187,21 @@ export function generate(deck, seed, opts = {}) {
   let exit;
   if (exitCands.length) exit = exitCands[Math.floor(rnd() * exitCands.length)];
   else exit = openTiles.slice().sort((a, b) => dist(b[0], b[1]) - dist(a[0], a[1]))[0];
+  if (opts.require && openNeighbors(exit[0], exit[1]) !== 1) {   // Systems Nominal: the tubelift car is the exit tile, so it must be a dead end
+    const de = openTiles.filter(([x, y]) => openNeighbors(x, y) === 1 && !room[y][x] && !(x === start[0] && y === start[1])).sort((a, b) => dist(b[0], b[1]) - dist(a[0], a[1]));
+    if (de.length) exit = de[Math.floor(rnd() * Math.min(3, de.length))];
+    let best = null;
+    if (!de.length) {   // no dead end at all: carve an alcove off the farthest corridor
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        if (grid[y][x] !== 1 || !hull(x, y)) continue;
+        const nb = DIRS.filter(([dx, dy]) => grid[y + dy][x + dx] === 0); if (nb.length !== 1 || DIRS.some(([dx, dy]) => grid[y + dy]?.[x + dx] === 0 && (room[y + dy][x + dx] || (x + dx === start[0] && y + dy === start[1])))) continue;
+        if (DIRS.some(([dx, dy]) => grid[y + dy]?.[x + dx] === 2)) continue;
+        const dd = dist(x + nb[0][0], y + nb[0][1]); if (!best || dd > best.dd) best = { x, y, dd };
+      }
+      if (best) { grid[best.y][best.x] = 0; openTiles.push([best.x, best.y]); reach[best.x + best.y * W] = best.dd + 1; exit = [best.x, best.y]; }
+    }
+    if (!best && !de.length && (opts.grow || 0) < 9) return generate(deck, seed, { ...opts, grow: (opts.grow || 0) + 1 });   // too cramped for a lift alcove: bigger deck
+  }
   const exitBlocks = openNeighbors(exit[0], exit[1]) === 1;
   const exitDir = DIRS.find(([dx, dy]) => grid[exit[1] + dy]?.[exit[0] + dx] === 0) || [1, 0];
   if (exitBlocks) grid[exit[1]][exit[0]] = 2;
@@ -195,7 +231,7 @@ export function generate(deck, seed, opts = {}) {
   used.delete(gornSpawn.join(','));
 
   const data = { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis, tubeLevel,
-           masked: !!opts.inside, inHull: hull,
+           masked: !!opts.inside, inHull: hull, missing,
            openTiles, maxD, dist: reach, rnd, used, pickTile, bfsFrom };
   furnish(data);
   return data;
@@ -215,4 +251,15 @@ function furnish(d) {
     d.grid[y][x] = 2; d.used.add(x + ',' + y);
     d.props.push({ kind, tx: x, ty: y, rot: kind === 'lonechair' ? Math.atan2(ox, oy) : Math.atan2(-ox, -oy), liminal: true });
   }
+}
+
+// ---- whole ship (Systems Nominal): every deck's data at once ----
+export const deckSeed = (seed, i) => seed * 131 + i * 7919 + 11;
+// data for every deck of a ship, with the ship-level room guarantees applied (deterministic per ship + seed)
+export function genShip(ship, seed = 0) { return Array.from({ length: ship.decks }, (_, i) => generate(i, deckSeed(seed, i), deckOptions(ship, i, { require: true }))); }
+// where each room type landed: { roomType: [{ deck (0 = top, Deck N = deck + 1), deckNo, tx, ty }] } (tile coordinates of the room centre on that deck's grid)
+export function shipPlan(ship, seed = 0, decks = genShip(ship, seed)) {
+  const out = {};
+  decks.forEach((d, i) => { for (const r of d.rooms) { const tx = r.x + (r.w >> 1), ty = r.y + (r.h >> 1); let live = false; for (let y = r.y; y < r.y + r.h && !live; y++) for (let x = r.x; x < r.x + r.w; x++) if (d.grid[y][x] !== 1) { live = true; break; } if (live) (out[r.type] ||= []).push({ deck: i, deckNo: i + 1, tx, ty }); } });
+  return out;
 }

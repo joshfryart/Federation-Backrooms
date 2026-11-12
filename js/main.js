@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
-import { generate, World, TS } from './world.js';
+import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
@@ -18,7 +18,9 @@ import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 
 const $ = (id) => document.getElementById(id);
 { const st = document.createElement('style'); st.textContent = STATUS_CSS; document.head.appendChild(st); }
+const NOM = () => G.mode === 'nominal';
 const winDeck = () => G.ship ? G.ship.decks : 8;   // a run is one ship, top deck to keel
+const ANN_NOM = ['All decks report nominal.', 'Reminder: tubelift maintenance window is at 0300.', 'Galley: second seating begins in twenty minutes.', 'Engineering: warp core output is steady.', 'Shift change on all decks in forty minutes.', 'Holodeck reservations are now open for tomorrow.', 'Cargo: please clear the loading corridor on Deck 6.'];
 const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder alert.', 'Warning: structural integrity field fluctuating.', 'Beam room 3 reports unauthorized biosign.',
   'Please remain calm. All decks are safe.', 'Hull breach detected. Sealing bulkheads.', 'Unable to locate captain.', 'Gravity plating offline in section 12.', 'Security teams respond to the cargo bay.', 'Self-destruct sequence: cancelled.', 'There are no lifeforms aboard.'];
 
@@ -105,6 +107,7 @@ let beamT = 0;
 
 // ---------------- game state ----------------
 const G = {
+  mode: new URLSearchParams(location.search).get('mode') === 'madness' ? 'madness' : 'nominal',   // 'nominal' = Systems Nominal (default); 'madness' = the roguelike
   phase: 'title', deck: 0, runSeed: 1, shipOrder: [], hp: 100, maxHp: 100, stamina: 100,
   phaser: 3, maxPhaser: 3, perks: {}, chips: 0, tribbles: 0, kills: 0, stuns: 0, time: 0, deckTime: 0,
   shield: false, endless: false, best: +(localStorage.getItem('fb_best') || 0),
@@ -134,7 +137,7 @@ function updateHUD() {
   for (let i = 0; i < G.maxPhaser; i++) h += `<span class="${i < G.phaser ? '' : 'off'}"></span>`; cells.innerHTML = h;
   if (vm) { vm.cells.forEach((c, i) => c.material.color.set(i < Math.ceil(G.phaser / G.maxPhaser * 3) ? 0x40c8ff : 0x10222c)); vm.ring.material.color.set(G.phaser > 0 ? 0xff9a3a : 0x30180a); }
   const need = world ? world.d.chips.length : 0;
-  $('objective').innerHTML = G.chips >= need
+  $('objective').innerHTML = NOM() ? '' : G.chips >= need
     ? `<b>Tubelift online</b> — reach the lift<br>Chips ${G.chips}/${need}`
     : `Logic chips <b>${G.chips}/${need}</b><br>Restore power to the tubelift`;
   const pl = Object.entries(G.perks).map(([id, n]) => PERKS.find(p => p.id === id).name + (n > 1 ? ' ×' + n : '')).join(' · ');
@@ -150,22 +153,35 @@ function clearLevel() {
   gorns = []; ents = []; repairPts = [];
 }
 
+// per-deck state of the persistent ship (Systems Nominal): what was searched and explored survives leaving the deck
+const siteKey = (s) => `${Math.round(s.x * 10)},${Math.round(s.z * 10)},${s.kind}`;
+function saveDeckState() {
+  const S = NOM() && world && G.shipDecks && G.shipDecks[G.shipDeck]; if (!S) return;
+  for (const s of world.searchSites || []) if (s.used) S.st.sites.add(siteKey(s));
+  S.st.explored = world.explored.slice();
+}
+
 function loadDeck(n) {
+  saveDeckState();
   clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
   resetMover(P); rope.visible = hook.visible = false;
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = G.ship;
   G.shipDeck = shipDeckFor(ship, n, winDeck());
-  const data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck));
-  data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25);
+  const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
+  if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
+  else { data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck)); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
   world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
+  if (NM) { world.mountCar(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored) world.explored.set(SD.st.explored); G.lift = { state: 'idle', armed: false }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
 
+  if (NM) { const c = world.car; P.x = c.x; P.z = c.z; P.yaw = Math.atan2(-c.dx, -c.dy); P.pitch = 0; P.vx = P.vz = 0; }   // standing in the lift car, facing the doors
+  else {
   const [sx, sy] = data.start; [P.x, P.z] = world.center(sx, sy);
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => data.grid[sy + dy]?.[sx + dx] === 0);
-  const [dx, dy] = dirs[0] || [1, 0]; P.yaw = Math.atan2(-dx, -dy); P.pitch = 0; P.vx = P.vz = 0;
+  const [dx, dy] = dirs[0] || [1, 0]; P.yaw = Math.atan2(-dx, -dy); P.pitch = 0; P.vx = P.vz = 0; }
   world.reveal(P.x, P.z, 3);
 
   const rnd = data.rnd;
@@ -175,48 +191,49 @@ function loadDeck(n) {
     mesh.position.x = cx + (extra.ox || 0); mesh.position.z = cz + (extra.oz || 0);
     scene.add(mesh); const e = { kind, mesh, x: mesh.position.x, z: mesh.position.z, t: rnd() * 6, ...extra }; ents.push(e); return e;
   };
-  for (const c of data.chips) add('chip', c, makeItem('chip'));
+  if (!NM) for (const c of data.chips) add('chip', c, makeItem('chip'));
   const sup = G.fx ? G.fx.supplies : 0;   // broken replicators = emptier supply lockers
   const nb = Math.max(0, 1 + (n > 2 ? 1 : 0) + luck + sup), nm = Math.max(1, 1 + luck + (n > 3 ? 1 : 0) + sup);
-  for (let i = 0; i < nb; i++) { const t = data.pickTile(() => true); if (t) add('battery', t, makeItem('battery')); }
-  for (let i = 0; i < nm; i++) { const t = data.pickTile(() => true); if (t) add('medkit', t, makeItem('medkit')); }
+  for (let i = 0; i < (NM ? 0 : nb); i++) { const t = data.pickTile(() => true); if (t) add('battery', t, makeItem('battery')); }
+  for (let i = 0; i < (NM ? 0 : nm); i++) { const t = data.pickTile(() => true); if (t) add('medkit', t, makeItem('medkit')); }
   const nt = 3 + Math.floor(rnd() * 4);
   for (let i = 0; i < nt; i++) { const t = data.pickTile(() => true); if (t) add('tribble', t, makeTribble(), { ox: (rnd() - 0.5) * 1.2, oz: (rnd() - 0.5) * 1.2 }); }
   // survivors + bodies
-  for (let i = 0; i < 3 + (n > 2 ? 1 : 0); i++) {
+  for (let i = 0; i < (NM ? 4 : 3 + (n > 2 ? 1 : 0)); i++) {
     const t = data.pickTile(() => true); if (!t) continue;
     const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen';
     const m = makeSurvivor(rnd, person) || makeCrew([0xb02a20, 0xd0a020, 0x2a5fb0][Math.floor(rnd() * 3)]); m.rotation.y = rnd() * 6.28;
     if (person) m.userData.rank = person.short;
-    const fake = n >= 2 && rnd() < 0.3; if (fake) markImpostor(m);   // a Slimeling wearing a face: small tells (js/humans.js)
+    const fake = !NM && n >= 2 && rnd() < 0.3; if (fake) markImpostor(m);   // a Slimeling wearing a face: small tells (js/humans.js)
     add('crew', t, m, { used: false, fake, person });
   }
-  for (let i = 0; i < (n >= 3 ? 2 : 1); i++) { const t = data.pickTile(() => true); if (!t) continue; const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'corpse'; add('body', t, makeCorpse(rnd, person) || makeCrew(0xb02a20, true), { used: false, person }); }
+  for (let i = 0; i < (NM ? 0 : n >= 3 ? 2 : 1); i++) { const t = data.pickTile(() => true); if (!t) continue; const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'corpse'; add('body', t, makeCorpse(rnd, person) || makeCrew(0xb02a20, true), { used: false, person }); }
   { const t = data.rooms.find(r => r.type === 'sickbay'); if (t) {
       const tile = data.pickTile(([x, y]) => data.room[y][x] === 'sickbay');
       if (tile && (!G.fx || G.fx.emh)) add('emh', tile, makeMedHolo() || makeHologram(), { used: false });
   } }
 
   // Jiffy tubes: something worth crawling for in the middle, and sometimes something waiting
-  for (const t of data.tubes) {
+  for (const t of NM ? [] : data.tubes) {
     const mid = t.tiles[(t.ladder > 0 ? t.ladder : t.tiles.length) >> 1];   // on the lower run
     const kind = rnd() < 0.5 ? 'battery' : 'medkit'; add(kind, mid, makeItem(kind));
   }
-  spawnThreats(data, n, rnd);
-  for (const t of data.tubes) if (n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[t.ladder === 1 ? 0 : 1], n, 0, scene, sound));
-  placeGore(data, rnd, n);
+  if (NM) G.threats = []; else spawnThreats(data, n, rnd);
+  for (const t of data.tubes) if (!NM && n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[t.ladder === 1 ? 0 : 1], n, 0, scene, sound));
+  if (!NM) placeGore(data, rnd, n);
   placeRepairPoints(data);
-  startDeckMadness(data, n, rnd);
+  if (NM) G.mad = null; else startDeckMadness(data, n, rnd);
   G.director?.reset(n);
-  world.setLiftOpen(false); world.setAlert(false); world.setPower(true); sound.setPower(true);
-  G.blackout = 0; G.blackT = 40 + Math.random() * 50; G.lurchT = 20 + Math.random() * 20; G.repairT = 0; G.distT = 20 + Math.random() * 20; G.hints = {};
+  world.setLiftOpen(NM); world.setAlert(false); world.setPower(true); sound.setPower(true);
+  G.blackout = 0; G.blackT = NM ? 1e9 : 40 + Math.random() * 50; G.lurchT = 20 + Math.random() * 20; G.repairT = 0; G.distT = NM ? 1e9 : 20 + Math.random() * 20; G.hints = {};
   showCard(n, ship, data.flooded);
   $('decklbl').textContent = 'DECK ' + n;
   $('shipcls').textContent = ship.cls + '-class';
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
-  G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
-  if (n === 1) setTimeout(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
+  if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; setTimeout(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
+  else G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
+  if (n === 1 && !NM) setTimeout(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
 }
 
 function spawnThreats(data, n, rnd) {
@@ -271,10 +288,13 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 function newRun() {
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: Math.floor(Math.random() * 1e6) });
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
-  G.ship = SHIPS[G.shipOrder[0]];
+  G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
   G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p);
-  G.shipState = new ShipState(G.ship, G.runSeed); G.shipState.auto = false; G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
-  G.director = new Director();
+  G.shipState = new ShipState(G.ship, G.runSeed); G.shipState.auto = false; if (NOM()) for (const sy of SYSTEMS) G.shipState.repair(sy.id); /* Systems Nominal: nothing is broken when you start */ G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
+  G.director = NOM() ? null : new Director();   // no pacing pressure in Systems Nominal
+  document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
+  if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
+  else { G.plan = null; G.shipDecks = null; }
   hideScreens(); fade(0);
   loadDeck(1);
   requestLock();
@@ -367,6 +387,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Tab') { e.preventDefault(); if (!e.repeat && G.phase === 'play') showStatus(true); }
   if (!e.repeat) { if (e.code === 'Space') pressed.jump = true; if (e.code === 'KeyC' || e.code === 'ControlLeft') pressed.crouch = true; }
   keys[e.code] = true;
+  if (G.phase === 'select') { const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code); if (m && +m[1] >= 1 && +m[1] <= G.ship.decks) chooseDeck(+m[1] - 1); else if (e.code === 'Escape' || e.code === 'KeyE') closeLiftPanel(); }
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
   if (G.phase === 'play') {
     if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
@@ -379,11 +400,11 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; if (e.code === 'Tab') showStatus(false); });
 addEventListener('mousemove', (e) => {
-  if (!locked || G.phase !== 'play') return;
+  if (!locked || (G.phase !== 'play' && G.phase !== 'ride')) return;
   P.yaw -= e.movementX * 0.0022 * CFG.sens; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022 * CFG.sens));
 });
 addEventListener('contextmenu', (e) => e.preventDefault());
-addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); });
+addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); else if (G.phase === 'play' && !locked && !e.target.closest('#liftui')) requestLock(); });
 function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
@@ -398,7 +419,7 @@ $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offer
 // ---------------- actions ----------------
 const _v = new THREE.Vector3(), _f = new THREE.Vector3();
 function fire() {
-  if (G.phase !== 'play' || shot > 0) return;
+  if (G.phase !== 'play' || shot > 0 || NOM()) return;   // no zapper in Systems Nominal
   if (G.phaser <= 0) { sound.empty(); G.say('Zapper depleted — find a power cell', 'warn'); shot = 0.3; return; }
   gunKick = 1; G.phaser--; shot = 0.45; sound.phaser(); noiseNow = Math.max(noiseNow, 16); updateHUD();
   camera.getWorldDirection(_f);
@@ -437,7 +458,7 @@ function interact() {
       const pr = near.person, who = pr ? `${pr.short}, ${pr.title}` : 'Crewman';
       if (near.repairing) { near.used = false; G.say(`${who}: "Cover me — ${SYS[near.repairing.sys].name} is ${Math.floor(near.repairing.t / near.repairing.need * 100)}% there. Keep that thing off me."`, 'npc'); return; }
       const line = pr && Math.random() < 0.7 ? pick(DEPT_LINES[pr.dept]) : pick(REDSHIRT_LINES);
-      if (G.fx.evac) {   // transporters up: beam them to safety
+      if (G.fx.evac && !NOM()) {   // transporters up: beam them to safety
         G.say(`${who}: ${line} — Transporter room, one to beam out!`, 'npc'); if (pr) pr.status = 'evacuated';
         for (let i = 0; i < 40; i++) sparks.add(near.x + (Math.random() - 0.5) * 0.6, Math.random() * 1.9, near.z + (Math.random() - 0.5) * 0.6, 0, 0.4 + Math.random(), 0, BEAM, 0.9);
         sound.tone(880, 0.9, 'sine', 0.06, 600); setTimeout(() => { scene.remove(near.mesh); const i = ents.indexOf(near); if (i >= 0) ents.splice(i, 1); }, 650); giveLoot();
@@ -458,6 +479,7 @@ function interact() {
   // lift
   if (world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) {
     if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — repair it at the lift controls (hold E)', 'warn'); }
+    else if (NOM()) { if (inCarTile()) openLiftPanel(); }
     else if (G.chips >= world.d.chips.length) completeDeck();
     else { sound.denied(); G.say(`Tubelift offline — ${world.d.chips.length - G.chips} logic chip(s) missing`, 'warn'); }
   }
@@ -514,7 +536,7 @@ function drawMap() {
   const blip = (x, z, c, r = 1.4) => { mctx.fillStyle = c; mctx.beginPath(); mctx.arc(x / TS * s, z / TS * s, r, 0, 7); mctx.fill(); };
   if (G.fx.mapItems) for (const e of ents) if (e.kind === 'chip' && Math.hypot(e.x - P.x, e.z - P.z) < R * TS) blip(e.x, e.z, '#40ffa0');
   const lp = world.liftPos; const ld = Math.hypot(lp.x - P.x, lp.z - P.z);
-  if ((G.fx.liftOnMap && ld < (R + 3) * TS) || world.explored[world.d.exit[0] + world.d.exit[1] * W]) blip(lp.x, lp.z, G.chips >= world.d.chips.length ? '#6f6' : '#f55', 2);
+  if ((G.fx.liftOnMap && ld < (R + 3) * TS) || world.explored[world.d.exit[0] + world.d.exit[1] * W]) blip(lp.x, lp.z, NOM() || G.chips >= world.d.chips.length ? '#6f6' : '#f55', 2);
   for (const r of repairPts) { const st = SHIP().status(r.sys); if (st === 'nominal') continue; const pulse = 1.6 + Math.sin(performance.now() / 160) * 0.8; mctx.fillStyle = st === 'offline' ? '#ff4a3a' : '#ffb347'; const x = r.x / TS * s, y = r.z / TS * s; mctx.beginPath(); mctx.moveTo(x, y - pulse - 1); mctx.lineTo(x + pulse + 1, y + pulse); mctx.lineTo(x - pulse - 1, y + pulse); mctx.fill(); }
   if (perk('scan') && G.fx.lifeScan) for (const g of gorns) if (g.active && Math.hypot(g.x - P.x, g.z - P.z) < 18) blip(g.x, g.z, '#f33', 2);
   blip(P.x, P.z, '#fff', 1.8);
@@ -592,7 +614,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension);
+  updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) carStep(dt);
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -640,7 +662,7 @@ function step(dt, t) {
   if (rp && SHIP().status(rp.sys) !== 'nominal') prompt = G.repairT > 0 ? `Repairing ${SYS[rp.sys].name}… ${Math.floor(G.repairT / repairTime(rp) * 100)}%` : `[Hold E] Repair ${SYS[rp.sys].name} (${SHIP().status(rp.sys)})`;
   else if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
   else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
-  else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
+  else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
   if (!prompt) { const c = nearestClutter(); if (c) prompt = same(c.name, c.real) ? c.name : `${c.name} (${c.real})`; else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   $('prompt').textContent = prompt;
@@ -668,7 +690,7 @@ function step(dt, t) {
   world.powerTarget = G.blackout > 0 ? 0 : G.fx.power; world.lightFault = G.fx.lightFlicker;
   G.distT -= dt; if (G.distT <= 0) { G.distT = 25 + Math.random() * 30; sound.distant(pick(['steps', 'steps', 'scrape', 'door', 'whisper'])); }
   for (const dr of world.drips) if (dr.fire) { dr.fire = false; if (Math.hypot(dr.x - P.x, dr.z - P.z) < 16) { for (let i = 0; i < 4; i++) water.add(dr.x, dr.y - 0.1, dr.z, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3, WATER, 1.2); sound.drip(); } }
-  if (G.phase === 'play' && G.deck === 1) {
+  if (G.phase === 'play' && G.deck === 1 && !NOM()) {
     const h = G.hints, dt2 = G.deckTime;
     if (dt2 > 4 && !h.a) { h.a = 1; G.say('WASD to move · mouse to look · find the green logic chips', 'comp'); }
     if (dt2 > 16 && !h.b) { h.b = 1; G.say('Check the scan-o-matic map (top right). Hold C to creep silently.', 'comp'); }
@@ -686,13 +708,13 @@ function step(dt, t) {
     if (st.t <= 0 && Math.hypot(st.x - P.x, st.z - P.z) < 20) { st.t = 0.08; steam.add(st.x, 0.3, st.z, (Math.random() - 0.5) * 0.4, 1.2 + Math.random(), (Math.random() - 0.5) * 0.4, STEAM, 2.2); }
   }
   G.annT = (G.annT ?? 40) - dt;
-  if (G.annT <= 0) { G.annT = 50 + Math.random() * 40; if (G.fx.comms < 2) { sound.chirp(); G.say('Computer: ' + garble(pick(COMPUTER)), 'comp'); } }
+  if (G.annT <= 0) { G.annT = 50 + Math.random() * 40; if (G.fx.comms < 2) { sound.chirp(); G.say('Computer: ' + garble(pick(NOM() ? ANN_NOM : COMPUTER)), 'comp'); } }
   G.clangT = (G.clangT ?? 20) - dt;
-  if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; sound.clang(0.15); }
+  if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; if (!NOM()) sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
 
   if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
-    { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play'; }
+    { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play' && !NOM(); }
   // camera
   P.shake = Math.max(0, P.shake - dt * 1.5);
   const onFoot = P.grounded && P.mode !== 'slide';
@@ -892,6 +914,65 @@ function showCompany() {
   showScreen('company');
 }
 
+// ---------------- tubelift (Systems Nominal): a real car at every deck's lift ----------------
+// The exit tile of each deck is the car; its doors sit at the mouth. Walk in and the doors close behind you, the deck panel opens, you pick a deck,
+// the car rides for 3-8 s (by distance, deck indicator ticking, hum, shake) and the doors open on the destination deck with you still inside.
+const NOTABLE = ['bridge', 'readyroom', 'engineering', 'sickbay', 'mess', 'lounge', 'gym', 'holodeck', 'lab', 'arboretum', 'shuttlebay', 'cargo', 'transporter', 'armory', 'brig', 'datacore', 'stores', 'quarters'];
+const NOTE_LABEL = { mess: 'Galley', holodeck: 'Holodeck', transporter: 'Transporter', lab: 'Lab', gym: 'Gym', lounge: 'Lounge', datacore: 'Datacore', cargo: 'Cargo', stores: 'Stores', quarters: 'Quarters', readyroom: 'Ready Room' };
+const deckNotes = (i) => NOTABLE.filter(t => G.plan?.[t]?.some(r => r.deck === i)).map(t => NOTE_LABEL[t] || ROOMS[t].label);
+const deckZone = (i) => zoneOf(i / Math.max(1, G.ship.decks - 1)).label;
+const inCarTile = () => { const c = world?.car; if (!c) return false; const [tx, ty] = world.tile(P.x, P.z); return tx === c.tx && ty === c.ty && P.y < 0.5; };
+function renderLiftPanel() {
+  const L = G.lift, D = G.ship.decks, ride = L.state === 'ride';
+  $('liftsub').textContent = `${G.ship.name} · ${G.ship.reg}`;
+  $('liftbig').textContent = ride ? `${L.to > L.from ? '▼' : '▲'} DECK ${String(L.disp + 1).padStart(2, '0')}` : '';
+  $('liftfoot').textContent = ride ? `Riding to Deck ${L.to + 1} — ${deckZone(L.to)}` : 'Press 1–' + D + ' or click a deck · Esc to step out';
+  $('liftrows').innerHTML = Array.from({ length: D }, (_, i) => { const nt = deckNotes(i); return `<div class="lr${!ride && i === G.shipDeck ? ' cur' : ''}${ride && i === L.to ? ' dest' : ''}${ride && i === L.disp ? ' here' : ''}" data-i="${i}"><i>${i + 1}</i><b>Deck ${i + 1} — ${deckZone(i)} </b><span>${nt.length ? '· ' + nt.join(' · ') : ''}</span></div>`; }).join('');
+  $('liftui').className = 'show' + (ride ? ' ride' : '');
+}
+$('liftrows').onclick = (e) => { const r = e.target.closest('.lr'); if (r && G.phase === 'select') chooseDeck(+r.dataset.i); };
+function openLiftPanel() {
+  if (!world?.car || G.phase !== 'play') return;
+  if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — repair it at the lift controls (hold E)', 'warn'); return; }
+  G.phase = 'select'; G.lift.state = 'select'; world.setLiftOpen(false, true); sound.clang(0.2); sound.thud(0.3);
+  P.vx = P.vz = 0; P.kbx = P.kbz = 0; $('prompt').textContent = ''; renderLiftPanel(); document.exitPointerLock?.();
+}
+function closeLiftPanel() {
+  if (G.phase !== 'select') return;
+  $('liftui').className = ''; G.lift.state = 'idle'; G.lift.armed = false; world.setLiftOpen(true); G.phase = 'play'; requestLock();
+}
+function chooseDeck(i) {
+  const L = G.lift; if (G.phase !== 'select' || !(i >= 0 && i < G.ship.decks)) return;
+  if (i === G.shipDeck) { G.say(`You are already on Deck ${i + 1}.`, 'comp'); closeLiftPanel(); return; }
+  if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — the car will not move.', 'warn'); return; }
+  const D = G.ship.decks, dist = Math.abs(i - G.shipDeck);
+  Object.assign(L, { state: 'ride', from: G.shipDeck, to: i, disp: G.shipDeck, t: 0, dur: 3 + 5 * (dist - 1) / Math.max(1, D - 2), hum: 0 });
+  G.phase = 'ride'; sound.lift(); renderLiftPanel(); requestLock();
+}
+function carStep(dt) {
+  const c = world.car, L = G.lift; if (!c || G.phase !== 'play') return;
+  const dx = P.x - c.x, dz = P.z - c.z, d = Math.hypot(dx, dz), inT = inCarTile(), s = dx * c.dx + dz * c.dy, locked = !!G.fx.liftLocked;
+  world.setCarLocked(locked);
+  if (!inT) L.armed = true;   // the panel only pops up when you walk into the car, not when you arrive in it
+  if (!locked && !world.liftOpen && d < 4.4) world.setLiftOpen(true);
+  else if (!inT && world.liftOpen && (locked || d > 5.6)) world.setLiftOpen(false);
+  if (inT && L.armed && !locked && s < 0.25 && P.grounded) openLiftPanel();
+}
+function liftStep(dt, t) {
+  const L = G.lift; G.time += dt; world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); updatePanelLights(dt);
+  SHIP().tick(dt, { deckTime: G.deckTime, tension: 0, deck: G.deck }); G.fx = SHIP().effects();
+  let sh = 0;
+  if (G.phase === 'ride') {
+    L.t += dt; const k = Math.min(1, L.t / L.dur), e = k * k * (3 - 2 * k), disp = Math.round(L.from + (L.to - L.from) * e);
+    if (disp !== L.disp) { L.disp = disp; sound.tone(1500, 0.05, 'square', 0.035); renderLiftPanel(); }
+    L.hum -= dt; if (L.hum <= 0) { L.hum = 0.5; sound.tone(58 + 4 * Math.sin(L.t), 0.65, 'sine', 0.06); }
+    sh = 0.006 + (k < 0.12 || k > 0.88 ? 0.008 : 0);
+    if (k >= 1) { $('liftui').className = ''; loadDeck(L.to + 1); G.phase = 'play'; sound.ding(); sound.thud(0.3); return; }
+  }
+  camera.position.set(P.x + (Math.random() - 0.5) * sh, P.y + P.eye + (Math.random() - 0.5) * sh * 1.5, P.z + (Math.random() - 0.5) * sh);
+  camera.rotation.order = 'YXZ'; camera.rotation.set(P.pitch + (Math.random() - 0.5) * sh * 0.5, P.yaw + (Math.random() - 0.5) * sh * 0.5, (Math.random() - 0.5) * sh * 0.4);
+}
+
 // ---------------- space madness ----------------
 // One crew member at a time loses their mind, lowest rank first. They hunt the deck's other crew before you. Kill them
 // and, shortly after, someone else on the deck starts screaming.
@@ -1013,6 +1094,7 @@ function frame() {
   requestAnimationFrame(frame);
   const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; elapsed += dt; const t = elapsed;
   if (G.phase === 'play' && world) step(dt, t);
+  else if ((G.phase === 'ride' || G.phase === 'select') && world) liftStep(dt, t);
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
   // auto-downgrade if the machine struggles
@@ -1026,6 +1108,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems()]).then(([, env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

@@ -132,6 +132,21 @@
   @media (max-height:470px), (max-width:700px) { .card { width:186px; padding:10px 12px; } .card .pi { width:24px; height:24px; margin-bottom:4px; } .cards { gap:10px; margin-top:6px; } }
   @media (max-height:470px), (max-width:700px) { #minimap { width:112px; height:112px; } #faults { top:186px; font-size:9.5px; } #faults div:nth-child(n+4) { display:none; } #bars { width:200px; } #topleft { min-width:0; } #perks { display:none; } }
   @media (prefers-reduced-motion: reduce) { .screen h1, #title .stars, #title .bgart .pulse, #win .pod { animation:none; } }
+  /* Systems Nominal: hide what only makes sense with chips and hostiles; the turbolift deck panel */
+  body.nominal #objective, body.nominal #phaser, body.nominal #perks, body.nominal #danger { display:none !important; }
+  #liftui { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:7; display:none; min-width:min(560px,92vw); max-width:92vw; background:rgba(7,11,19,.9); border:1px solid var(--line); border-left:3px solid var(--lc1); padding:14px 16px; font-family:var(--f-m,monospace); color:var(--ink); pointer-events:auto; clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%); }
+  #liftui.show { display:block; }
+  #liftui .lh { display:flex; justify-content:space-between; align-items:baseline; letter-spacing:.2em; font-size:13px; color:var(--lc4); margin-bottom:10px; }
+  #liftui .lh b { font-size:15px; color:var(--lc1); }
+  #liftui .lr { display:flex; gap:10px; align-items:baseline; padding:6px 8px; margin:2px 0; border:1px solid transparent; cursor:pointer; font-size:13px; letter-spacing:.04em; }
+  #liftui .lr:hover { background:rgba(242,160,61,.12); border-color:var(--line); }
+  #liftui .lr i { font-style:normal; min-width:22px; text-align:center; color:#05070c; background:var(--dim); font-weight:bold; padding:1px 0; }
+  #liftui .lr b { font-weight:normal; color:var(--ink); } #liftui .lr span { color:var(--dim); font-size:12px; }
+  #liftui .lr.cur i { background:var(--lc2); } #liftui .lr.cur b::after { content:'  ◂ you are here'; color:var(--lc2); font-size:11px; }
+  #liftui .lr.dest i { background:var(--lc1); } #liftui .lr.here { background:rgba(88,201,185,.16); border-color:var(--lc2); }
+  #liftui.ride .lr { cursor:default; opacity:.55; } #liftui.ride .lr.here, #liftui.ride .lr.dest { opacity:1; } #liftui.ride .lr:hover { background:none; border-color:transparent; }
+  #liftui .big { display:none; font-size:30px; letter-spacing:.2em; text-align:center; color:var(--lc2); margin:2px 0 8px; } #liftui.ride .big { display:block; }
+  #liftui .lf { margin-top:8px; font-size:11px; color:var(--dim); letter-spacing:.12em; }
 </style>
 </head>
 <body>
@@ -170,6 +185,7 @@
 <div class="hud" id="repbar"><i></i></div>
 <pre class="hud" id="dirdbg" style="display:none"></pre>
 <div class="layer" id="shipstatus" style="display:none"></div>
+<div id="liftui" role="dialog" aria-label="Tubelift deck selection"><div class="lh"><b>TUBELIFT</b><span id="liftsub"></span></div><div class="big" id="liftbig"></div><div id="liftrows"></div><div class="lf" id="liftfoot"></div></div>
 <div class="hud pnl" id="bars">
   <div class="mrow hp"><svg class="ico"><use href="#i-hull"/></svg><span id="lbl">HULL INTEGRITY</span><div class="bar"><i id="hpbar"></i></div></div>
   <div class="mrow st"><svg class="ico"><use href="#i-stam"/></svg><span id="lbl2">STAMINA</span><div class="bar"><i id="stbar"></i></div></div></div>
