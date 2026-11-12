@@ -179,4 +179,23 @@ Suggested by groups A, F, H, I, J and K and merged (duplicates folded together; 
 | 108 | Docking Port & Boarding Tube (second airlock) | Flight | S | NEW | N4 |
 | 109 | Cargo Handlers' Office / Shipping & Receiving | Services | S | NEW | N4 |
 
-Count: 66 spaces in 12 groups (A–L), 22 added spaces in Group M and 21 gap rooms in Group N (109 in all). Existing game rooms covered: bridge, engineering, sickbay, mess, transporter, shuttlebay, cargo, holodeck, quarters, arboretum, jefferies.
+## Group P — Third round: gaps reported by the Group M and N agents
+| # | Space | Dept | Size | Game | Batch |
+|---|---|---|---|---|---|
+| 110 | Crew Shower & Locker Facility | Services | M | NEW | P1 |
+| 111 | Nursery, Child Care & Classroom | Services | M | NEW | P1 |
+| 112 | Interfaith Ceremony & Memorial Hall | Services | M | NEW | P1 |
+| 113 | Crew Mail & Parcel Room | Services / Operations | S | NEW | P1 |
+| 114 | Vacuum Sewage & Grey-Water Treatment Room | Engineering | M | NEW | P1 |
+| 115 | Medical Waste & Biohazard Disposal Room | Medical | S | NEW | P2 |
+| 116 | Probe Recovery & Decontamination Lock | Sciences / Flight | S | NEW | P2 |
+| 117 | Sensor Array EVA Service Platform & Airlock | Sciences / Engineering | S | NEW | P2 |
+| 118 | Holo Programme Archive & Render Closet | Services | S | NEW | P2 |
+| 119 | Cryogenic Plant & Helium Compressor Room | Engineering | M | NEW | P3 |
+| 120 | Fuel Cell & Hydrogen Storage Room | Engineering | S | NEW | P3 |
+| 121 | Deflector Dish Maintenance Crawlway | Engineering / Flight | S | NEW | P3 |
+| 122 | Pressure Suit & EVA Locker Room | Flight / Security | S | NEW | P3 |
+| 123 | Small Craft Maintenance Bay & Flight Deck Tool Crib | Flight / Engineering | M | NEW | P3 |
+| 124 | Hazardous Cargo Cage / Contraband Hold | Services / Security | S | NEW | P3 |
+
+Count: 66 spaces in 12 groups (A–L), 22 added spaces in Group M, 21 gap rooms in Group N and 15 in Group P (124 in all). Existing game rooms covered: bridge, engineering, sickbay, mess, transporter, shuttlebay, cargo, holodeck, quarters, arboretum, jefferies.
