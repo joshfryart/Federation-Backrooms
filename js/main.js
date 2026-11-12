@@ -347,6 +347,7 @@ function gaitFor(e) {   // this walker's gait right now: their own mix of parts,
 }
 function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, opts }; e.run = !!opts.run; }
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, right-hand passing, braking, wall clearance.
+  e.wsN = (e.wsN || 0) + 1;
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, gt = gaitFor(e);
   const clampY = () => { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading || 0) * 0.6, e.z + Math.cos(e.heading || 0) * 0.6), gy = (e.v || 0) > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0, dy = gy - y0; e.y = y0 + Math.max(-2.4 * dt, Math.min(3.2 * dt, dy * Math.min(1, dt * 9))); e.mesh.position.y = e.y; };
   const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
