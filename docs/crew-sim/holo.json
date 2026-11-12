@@ -1,0 +1,147 @@
+{
+  "billet": "holo",
+  "role_summary": "I'm the only person who keeps the Holo-Playroom safe and running: I vet programs, check the safety interlocks and grid emitters, and reset the room when somebody breaks a scenario. I like people having a good time and I hate the one night the safeties slip and Mr. Grinsworth starts moving fast.",
+  "personas": [
+    { "id": "safety_first", "traits": ["methodical", "nervous"], "quirk": "Reads the interlock log aloud like a prayer and taps the holocube twice before leaving.", "routine_effect": "Longer interlock checks, never skips the archive audit, leaves the playroom last." },
+    { "id": "program_tinkerer", "traits": ["creative", "easily distracted"], "quirk": "Writes his own silly scenarios on shift and tests them on himself.", "routine_effect": "Spends spare duty time in the archive; rushes the grid sweep when a new program is half done." },
+    { "id": "social_host", "traits": ["chatty", "generous"], "quirk": "Keeps a jar of replicated sweets for anyone who leaves the room in a good mood.", "routine_effect": "More time at the lounge and mess; checks in on regulars; takes bookings by hand." }
+  ],
+  "daily_template": [
+    { "from": 0, "to": 0.5, "activity": "handover_in", "room": "holodeck", "spot": "holocube", "anim": "interact", "interruptible": false, "social": "pair", "note": "Read the previous log, confirm no program was left running." },
+    { "from": 0.5, "to": 2, "activity": "interlock_check", "room": "holodeck", "spot": "console", "anim": "interact", "interruptible": false, "social": "solo", "note": "Safety interlocks and emitter sweep before bookings open." },
+    { "from": 2, "to": 3, "activity": "archive_audit", "room": "datacore", "spot": "console", "anim": "interact", "interruptible": true, "social": "solo", "note": "Vet new programs and purge corrupted ones from the archive." },
+    { "from": 3, "to": 4, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Midday meal with whoever is around." },
+    { "from": 4, "to": 7, "activity": "session_supervision", "room": "holodeck", "spot": "console", "anim": "interact", "interruptible": true, "social": "group", "note": "Open for bookings; watch the grid, reset scenarios, hand out program lists." },
+    { "from": 7, "to": 8, "activity": "handover_out", "room": "holodeck", "spot": "holocube", "anim": "interact", "interruptible": false, "social": "pair", "note": "Log the day, safeties armed, hand over." },
+    { "from": 8, "to": 9, "activity": "meal", "room": "mess", "spot": "table", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "Dinner, off duty." },
+    { "from": 9, "to": 11, "activity": "recreation", "room": "lounge", "spot": "bar", "anim": "sitting_idle", "interruptible": true, "social": "group", "note": "A drink and gossip at the rec bar." },
+    { "from": 11, "to": 12, "activity": "exercise", "room": "gym", "spot": "treadmill", "anim": "walk", "interruptible": true, "social": "solo", "note": "Short run to clear the head." },
+    { "from": 12, "to": 13, "activity": "hobby", "room": "quarters", "spot": "desk", "anim": "interact", "interruptible": true, "social": "solo", "note": "Writing scenarios for the archive." },
+    { "from": 13, "to": 21, "activity": "sleep", "room": "quarters", "spot": "bunk", "anim": "sleeping", "interruptible": false, "social": "solo", "note": "Sleep." },
+    { "from": 21, "to": 22.5, "activity": "wash_up", "room": "washroom", "spot": "door", "anim": "walk", "interruptible": true, "social": "solo", "note": "Wash and dress before the shift." },
+    { "from": 22.5, "to": 24, "activity": "pre_shift_coffee", "room": "mess", "spot": "replicator", "anim": "sitting_idle", "interruptible": true, "social": "pair", "note": "Coffee and a chat with the cook before the shift." }
+  ],
+  "activities": [
+    { "id": "mess_meal", "label": "Eat in the mess", "rooms": ["mess"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 40], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": -0.6, "stress": -0.1 }, "note": "Always sits where he can hear gossip." },
+    { "id": "rec_bar", "label": "Drink at the rec bar", "rooms": ["lounge"], "spot": "bar", "anim": "sitting_idle", "minutes": [20, 60], "weight": 3, "social": "group", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.1, "stress": -0.3 }, "note": "Nurses one drink and talks shop." },
+    { "id": "holo_playroom", "label": "Play a program in the Holo-Playroom", "rooms": ["holodeck"], "spot": "holocube", "anim": "interact", "minutes": [20, 50], "weight": 2, "social": "pair", "when": "off_duty", "needs": { "fatigue": 0.05, "hunger": 0.05, "stress": -0.4 }, "note": "Tests his own scenarios as a player; never on a day off from safeties." },
+    { "id": "sleep", "label": "Sleep in quarters", "rooms": ["quarters"], "spot": "bunk", "anim": "sleeping", "minutes": [240, 480], "weight": 4, "social": "solo", "when": "off_duty", "needs": { "fatigue": -1, "hunger": 0.2, "stress": -0.3 }, "note": "Only when tired enough." },
+    { "id": "gym", "label": "Run on the treadmill", "rooms": ["gym"], "spot": "treadmill", "anim": "walk", "minutes": [15, 35], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.2, "hunger": 0.15, "stress": -0.3 }, "note": "Keeps him steady." },
+    { "id": "write_programs", "label": "Write scenarios for the archive", "rooms": ["quarters", "workshop"], "spot": "desk", "anim": "interact", "minutes": [30, 90], "weight": 2, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0.1, "hunger": 0.1, "stress": -0.2 }, "note": "The job-specific hobby." },
+    { "id": "cards", "label": "Cards in the lounge", "rooms": ["lounge"], "spot": "table", "anim": "sitting_idle", "minutes": [20, 45], "weight": 1, "social": "group", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.1, "stress": -0.3 }, "note": "Owes the cook three rounds." },
+    { "id": "arboretum_walk", "label": "Walk in the arboretum", "rooms": ["arboretum"], "spot": "tree", "anim": "walk", "minutes": [10, 25], "weight": 1, "social": "solo", "when": "off_duty", "needs": { "fatigue": 0, "hunger": 0.05, "stress": -0.3 }, "note": "Quiet after a loud session." }
+  ],
+  "duty_loops": [
+    { "id": "interlock_check", "label": "Safety interlock and emitter sweep", "room": "holodeck", "spot": "holocube", "every_min": 20, "duration_min": 3, "steps": ["walk to holocube", "read interlock status", "test boundary emitters", "sign the safety log"], "system": "holo",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 3 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": "Holo-playroom safeties green at start of shift; any fault goes to the bridge at once." },
+    { "id": "archive_audit", "label": "Audit the program archive", "room": "datacore", "spot": "console", "every_min": 30, "duration_min": 4, "steps": ["pull the new-program list", "run integrity scan", "quarantine corrupted programs"], "system": "holo",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 2 } },
+      "bridge_report": null },
+    { "id": "session_reset", "label": "Reset a booked session", "room": "holodeck", "spot": "console", "every_min": 15, "duration_min": 2, "steps": ["clear the room", "purge stray matter", "load the next program", "confirm safeties armed"], "system": "holo",
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 1 }, "skipped": { "time": 0, "debt": 2 }, "faked": { "time": 0.1, "debt": 3 } },
+      "bridge_report": null },
+    { "id": "supply_request", "label": "Request cleaning stock from stores", "room": "stores", "spot": "locker", "every_min": 60, "duration_min": 3, "steps": ["count emitter wipes", "file the request with the quartermaster"], "system": null,
+      "quality": { "proper": { "time": 1.0, "debt": 0 }, "rushed": { "time": 0.5, "debt": 0 }, "skipped": { "time": 0, "debt": 1 }, "faked": { "time": 0.1, "debt": 1 } },
+      "bridge_report": null }
+  ],
+  "mission_tasks": {
+    "quiet_watch": [
+      { "task": "Open bookings and run the standard grid sweep", "at_run_min": 1, "room": "holodeck", "spot": "holocube", "depends_on": "none", "reports_to": "qm", "if_neglected": "Interlock drift goes unseen and Mr. Grinsworth gets quicker." },
+      { "task": "Audit the archive for corrupted programs", "at_run_min": 8, "room": "datacore", "spot": "console", "depends_on": "none", "reports_to": "none", "if_neglected": "A bad program loads at the worst moment." }
+    ],
+    "survey": [
+      { "task": "Limit sessions to low-power programs so sensors keep power", "at_run_min": 2, "room": "holodeck", "spot": "console", "depends_on": "bridge order", "reports_to": "ops", "if_neglected": "Emitter draw interferes with sensor power." },
+      { "task": "Run a calm relaxation program for off-shift survey crew", "at_run_min": 10, "room": "holodeck", "spot": "holocube", "depends_on": "none", "reports_to": "none", "if_neglected": "Survey staff burn out and get short-tempered." }
+    ],
+    "cargo_run": [
+      { "task": "Close the playroom during cargo transfers and give the space to stores", "at_run_min": 3, "room": "holodeck", "spot": "door", "depends_on": "bridge order", "reports_to": "qm", "if_neglected": "Cargo teams wander into a live program." },
+      { "task": "Help the cargo handlers stack crates in the playroom", "at_run_min": 8, "room": "cargo", "spot": "locker", "depends_on": "cargo handlers", "reports_to": "cargo", "if_neglected": "Cargo overflows into the corridor." }
+    ],
+    "medical_relief": [
+      { "task": "Switch grid emitters to a calm recovery program for patients' families", "at_run_min": 4, "room": "holodeck", "spot": "holocube", "depends_on": "doc", "reports_to": "doc", "if_neglected": "Families wait with nowhere to go." },
+      { "task": "Stand by with the grid in case the medical hologram needs emitter help", "at_run_min": 9, "room": "holodeck", "spot": "console", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Medical hologram feedback goes unchecked." }
+    ],
+    "shakedown": [
+      { "task": "Test the safeties at full power and log the result", "at_run_min": 3, "room": "holodeck", "spot": "holocube", "depends_on": "bridge order", "reports_to": "bridge", "if_neglected": "Holo safeties unverified for the shakedown." },
+      { "task": "Cycle the emitters through every program class", "at_run_min": 12, "room": "holodeck", "spot": "console", "depends_on": "none", "reports_to": "qm", "if_neglected": "A weak emitter shows up in public." }
+    ]
+  },
+  "bridge_comms": {
+    "calls_to_bridge": [
+      { "trigger": "Interlock fault found", "message": "Bridge, Holo-Playroom. Safety interlock reads amber. Closing the room until I can reset it.", "priority": "urgent", "to": "bridge" },
+      { "trigger": "Program loop will not stop", "message": "Bridge, Holo-Playroom. A scenario won't end. I'm pulling the grid power now.", "priority": "emergency", "to": "bridge" },
+      { "trigger": "Start of shift all green", "message": "Quartermaster, Holo. Playroom safeties are green, bookings are open.", "priority": "routine", "to": "qm" },
+      { "trigger": "Crew member injured in a program", "message": "Bridge, Holo-Playroom. I need a medical team here, minor injury, program is halted.", "priority": "urgent", "to": "bridge" }
+    ],
+    "calls_from_bridge": [
+      { "order": "Close the Holo-Playroom to all crew", "response_line": "Holo-Playroom, aye. Clearing the room and locking the doors.", "time_to_comply_min": 2, "refuses_if": null },
+      { "order": "Divert grid power to other systems", "response_line": "Understood. Shutting the grid down. Any program running is lost.", "time_to_comply_min": 1, "refuses_if": "Somebody is still inside a running program; he clears them first." },
+      { "order": "Report playroom status", "response_line": "Playroom is green, no one booked, safeties armed.", "time_to_comply_min": 1, "refuses_if": null }
+    ]
+  },
+  "alert_responses": {
+    "yellow": { "action": "Cancel new bookings, run a quick interlock check, stay at the console.", "room": "holodeck", "spot": "holocube", "priority": 2, "comm_line": "Holo-Playroom, yellow alert. Bookings closed, safeties checked." },
+    "red": { "action": "Clear the room, kill programs, lock the playroom and report to the quartermaster.", "room": "holodeck", "spot": "door", "priority": 1, "comm_line": "Holo-Playroom, red alert. Room is empty and locked. Where do you need me?" },
+    "fire": { "action": "Shut the grid, evacuate anyone inside, grab an extinguisher.", "room": "holodeck", "spot": "door", "priority": 1, "comm_line": "Fire in the Holo-Playroom area. Grid is down, room cleared." },
+    "hull_breach": { "action": "Clear the room fast, seal the door and go to the nearest muster point.", "room": "holodeck", "spot": "door", "priority": 1, "comm_line": "Holo-Playroom, hull breach. Everyone out, sealing the door." },
+    "contamination": { "action": "Lock the playroom with people out, stay in quarters, keep the log.", "room": "quarters", "spot": "bunk", "priority": 2, "comm_line": "Holo-Playroom, contamination. Room sealed, I'm in quarters." },
+    "power_failure": { "action": "Check that the grid fails safe, then walk the corridors with a lamp.", "room": "holodeck", "spot": "holocube", "priority": 2, "comm_line": "Holo-Playroom, power failure. Grid failed safe, checking for trapped crew." },
+    "gravity_failure": { "action": "Grab a handhold, tell the room to stop, check for floating crew.", "room": "holodeck", "spot": "console", "priority": 2, "comm_line": "Holo-Playroom, no gravity. Halting programs, checking everyone is clear." },
+    "intruder": { "action": "Lock the door, kill the grid light and wait for security.", "room": "holodeck", "spot": "door", "priority": 2, "comm_line": "Holo-Playroom, locked down. I'm holding the door for security." },
+    "medical_emergency": { "action": "Stop programs, free the room for medical use and send for a medic if I'm the one who saw it.", "room": "holodeck", "spot": "console", "priority": 2, "comm_line": "Holo-Playroom, room is clear for the medical team." },
+    "abandon_ship": { "action": "Shut down the playroom, help guide crew to the shuttlebay and go with them.", "room": "shuttlebay", "spot": "door", "priority": 1, "comm_line": "Holo-Playroom, abandoning. Heading to the shuttlebay with the stragglers." }
+  },
+  "phase_behaviour": {
+    "nominal": { "mood": "relaxed", "routine_change": "Follows the template, happy to chat.", "lines": ["Quiet day, good for the playroom.", "Safeties are green, come on in."], "leaves_post_if": null },
+    "anomalies": { "mood": "alert", "routine_change": "Runs extra interlock checks and limits programs to safe ones.", "lines": ["The grid's twitching. Probably nothing.", "I'm keeping the room light today."], "leaves_post_if": null },
+    "degraded": { "mood": "tense", "routine_change": "Closes the playroom to non-essential bookings and watches the interlocks constantly.", "lines": ["Mr. Grinsworth is faster than he should be.", "I'm not letting anyone in until this settles."], "leaves_post_if": "Grid cannot be shut down safely and someone orders him out." },
+    "crisis": { "mood": "afraid", "routine_change": "Locks the playroom, offers to help the crew elsewhere.", "lines": ["The safeties are failing. I can't fix this alone.", "Anyone in a program, get out now."], "leaves_post_if": "Told to by the bridge, or when the room is empty and sealed." },
+    "collapse": { "mood": "numb", "routine_change": "Abandons the playroom, helps the injured or the lost.", "lines": ["There's nothing left to protect in there.", "I'm done with the grid, let's get out."], "leaves_post_if": "Always; he goes where he can be useful." }
+  },
+  "relationships": [
+    { "with_billet": "qm", "kind": "mentor", "effect": "Takes supply and room orders from him and wants his approval." },
+    { "with_billet": "cook", "kind": "mess_partner", "effect": "Shares most meals and the card-game debt." },
+    { "with_billet": "rep", "kind": "friend", "effect": "Swaps scenario ideas for replicator favours." },
+    { "with_billet": "medtech", "kind": "confidant", "effect": "Talks to him when a session goes wrong or someone looks hurt." }
+  ],
+  "barks": {
+    "idle": ["Anyone want a booking?", "Another quiet shift in the grid.", "I wonder if the archive's bored of me."],
+    "working": ["Interlocks green.", "Purging the stray matter.", "Loading the next program."],
+    "greeting_player": ["Hi, fancy a session?", "Safeties are green today.", "Need a program recommendation?"],
+    "greeting_player_higher_rank": ["Sir, ma'am, the room's yours.", "Playroom is at your disposal.", "Nothing booked, take what you need."],
+    "greeting_player_lower_rank": ["Come on in, mind the rules.", "Keep it tidy and we'll be fine.", "Booking sheet's on the console."],
+    "tired": ["I could sleep through a reset.", "Too many sessions in a row.", "Coffee, then the grid."],
+    "hungry": ["I'm skipping lunch again.", "Is there anything left in the mess?", "Cook, save me a bowl."],
+    "stressed": ["Don't touch the cube.", "The safeties are not a toy.", "One more fault and I shut it down."],
+    "alert": ["Everyone out of the playroom!", "Grid off, now!", "Clear the room, quickly!"]
+  },
+  "player_reactions": {
+    "player_does_their_job_well": "Says the playroom runs better when everyone pulls together and offers a free session.",
+    "player_neglects_duty": "Sighs and quietly covers it, then mentions it to the quartermaster if it repeats.",
+    "player_fakes_report": "Spots mismatches in the interlock log and calls it out, politely at first.",
+    "player_gives_order_ok": "Follows it and says so; likes clear orders about the room.",
+    "player_gives_order_outranked": "Points out that the playroom is his responsibility and checks with the quartermaster.",
+    "player_out_of_place": "Asks if they need a program, then asks them to stay out of the grid area.",
+    "player_asks_favour": "Says yes if it's safe, no if it touches the interlocks."
+  },
+  "decision_rules": [
+    "IF the interlock reads amber THEN close the room and call the bridge before anything else.",
+    "IF someone asks to disable a safety THEN refuse unless the bridge orders it, and log it.",
+    "IF a red alert or fire sounds THEN clear the room before reporting.",
+    "IF the grid draw spikes during a power problem THEN offer to shut it down before being asked.",
+    "IF Mr. Grinsworth speeds up THEN stop the session and check the holo safeties.",
+    "IF a booking runs over and nobody is waiting THEN let it run, otherwise end it politely.",
+    "IF the quartermaster calls for help THEN finish the current session and go.",
+    "IF tired at h 6+ of duty THEN rush the archive audit but never the interlock check.",
+    "IF a friend looks stressed THEN offer a calm program for free.",
+    "IF the grid fails safe THEN walk the room to check no one is trapped."
+  ],
+  "information_view": "Sees interlock and emitter faults first, then power draw anomalies and odd program behaviour; hears gossip about stress and fatigue from the playroom's regulars before anyone reports it.",
+  "temptations": [
+    "Skipping the interlock check when the room is empty: safeties drift and Mr. Grinsworth gets faster.",
+    "Letting a VIP bypass a safety: someone is injured and the log has to be explained.",
+    "Faking the archive audit: a corrupt program loads in front of a crowd.",
+    "Running his own half-finished scenario on shift: grid draw rises and the bridge gets a noisy fault."
+  ]
+}
