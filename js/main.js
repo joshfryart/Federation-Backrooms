@@ -342,7 +342,7 @@ function nomTick(dt) {
   G.sim.tick(dt); simBodies(dt);
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
-  D.tick(dt); G.hud2?.update(dt);
+  D.tick(dt); G.hud2?.update(dt); ambientBarks(dt);
   if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }
   if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(D.busy ? `Working: ${D.busy.loop.label}…` : due ? `[J] ${due.label || due.task}` : ''); }
 }
@@ -386,6 +386,42 @@ function switchPlayer(p) {
   const nd = new Duty({ player: p, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say: G.duty.say, seed: G.runSeed, mission: G.mission }).inherit(G.duty);
   G.duty = nd; G.phases.duty = nd; G.hud2.attach(nd); G.hp = G.maxHp; G.stamina = 100; G.hud2.hideEnd(); hideScreens(); fade(0);
   loadDeck(Math.min(G.ship.decks, Math.max(1, at?.deckNo ?? 1))); G.phase = 'play'; requestLock(); G.say(`You are now ${p.full || p.short}, ${p.title}.`, 'good');
+}
+
+
+// ---- conversation menu, terminals, carry/give (Systems Nominal)
+function talkMenu(e) {
+  const pr = e.person, D = G.duty, H = G.hud2, me = G.player, bk = commsData().billets?.[pr.billet]?.bark || {}, rank = me.rank - pr.rank;
+  const say = (text) => { G.say(`${pr.short}: ${text}`, 'npc'); try { speak(pr, text); } catch (er) { } };
+  const pool = (rank > 0 ? bk.greetHi : rank < 0 ? bk.greetLo : bk.greet) || bk.greet || [], pickOf = (a, f) => a?.length ? a[Math.floor(Math.random() * a.length)] : f;
+  const w = G.sim?.where(pr), act = (w?.activity || 'my work').replace(/_/g, ' '), t = D.trust(pr), mood = t > 0.7 ? 'warm' : t < 0.3 ? 'cold' : 'neutral';
+  const opts = [
+    { label: 'Greet them', run: () => say(pickOf(pool, voiceBark(pr, 'idle'))) },
+    { label: 'Ask what they are doing', run: () => say(`${act.charAt(0).toUpperCase() + act.slice(1)}${w?.room ? ` — ${w.room}` : ''}. ${mood === 'cold' ? 'Anything else, sir?' : mood === 'warm' ? 'Good to see you.' : ''}`.trim()) },
+    { label: 'Ask about their duty', run: () => { const l = DUTIES.billets?.[pr.billet]?.loops?.[0]; say(l ? `Mostly ${l.label.toLowerCase()}, every so often. ${DUTIES.billets[pr.billet].rules?.[0] ? '' : ''}` : 'Keeping the ship running.'); } },
+    { label: 'Ask how they feel about you', run: () => say(mood === 'warm' ? 'You pull your weight. That counts for a lot here.' : mood === 'cold' ? 'I hear things. Make sure they are not true.' : 'Fine, I suppose. Ask me again later.') },
+  ];
+  if (D.subs().includes(pr)) opts.push({ label: 'Order them to do their duty', run: () => { const r = D.order(pr, null); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
+  else opts.push({ label: 'Ask for a hand with your duty', run: () => { const r = D.askHelp(pr); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
+  if (G.carry) opts.push({ label: `Give them: ${G.carry.name}`, run: () => { D._bump(pr, 0.06); say(pickOf(['Oh — thanks. I was looking for that.', 'Appreciated.', 'Where did you find this? Thank you.'], 'Thanks.')); G.say(`You give ${G.carry.name} to ${pr.short}.`, 'good'); G.carry = null; } });
+  H.openMenu(`${pr.short} — ${pr.title}`, opts, `trust ${Math.round(t * 100)}% · digit to choose · Esc to leave`);
+}
+function terminalMenu() {
+  const H = G.hud2, D = G.duty, S = G.shipState; if (S.status('computer') === 'offline') { G.say('The terminal is dead. Computer Core offline.', 'warn'); return; }
+  const rows = (title, list, hint) => H.openMenu(title, list.length ? list.map(l => ({ label: l, off: true })) : [{ label: 'Nothing to show.', off: true }], hint);
+  H.openMenu('Ship terminal', [
+    { label: 'Ship status', keepOpen: true, run: () => rows('Ship status', SYSTEMS.filter(s => S.status(s.id) !== 'nominal').map(s => `${s.name}: ${S.status(s.id)}`).concat(S.faulted().length ? [] : ['All systems nominal.']), `phase: ${G.phases?.phase || 'nominal'} · Backspace back`) },
+    { label: 'Mission progress', keepOpen: true, run: () => { const mp = D.missionProgress(G.phases?.index || 0); rows(`Mission: ${G.mission.replace(/_/g, ' ')}`, [`Crew tasks on track: ${mp.pct}% (${mp.done}/${mp.due} due)`, ...D.tasks.map(t => `${t.state === 'done' ? '✓' : t.state === 'missed' ? '✗' : '·'} ${t.task} (${t.room})`)]); } },
+    { label: 'Locate crew', keepOpen: true, run: () => { const who = [...D.subs().slice(0, 4), ...G.roster.people.filter(p => ['co', 'xo', 'ce', 'cmo', 'cso', 'cos'].includes(p.billet) && !p.isPlayer)].slice(0, 9); H.openMenu('Locate whom?', who.map(p => ({ label: `${p.short} — ${p.title}`, keepOpen: true, run: () => { const w = G.sim?.where(p); rows(p.short, [w ? (w.transit ? `In transit${w.deckNo ? ' on deck ' + w.deckNo : ' (tubelift)'}` : `Deck ${w.deckNo}, ${w.room}`) + ` — ${(w.activity || '').replace(/_/g, ' ')}` : 'Not on the roster board.']); } }))); } },
+    { label: 'Alert log', keepOpen: true, run: () => rows('Active alerts', (G.comms?.alerts?.active() || []).map(a => `${a.def.label}: ${a.def.meaning.slice(0, 70)}`).concat(G.comms?.alerts?.active().length ? [] : ['Condition green.'])) },
+  ], 'digit to choose · Esc to leave');
+}
+// nearby crew greet you now and then, with their own profile barks
+function ambientBarks(dt) {
+  G.barkT = (G.barkT || 0) - dt; if (G.barkT > 0 || G.phase !== 'play') return; G.barkT = 6 + Math.random() * 10;
+  const e = ents.find(e => e.simmed && Math.hypot(e.x - P.x, e.z - P.z) < 4.2 && world.los(P.x, P.z, e.x, e.z) && (!e.barked || G.time - e.barked > 60)); if (!e || Math.random() < 0.35) return;
+  e.barked = G.time; const pr = e.person, bk = commsData().billets?.[pr.billet]?.bark || {}, rank = G.player.rank - pr.rank, pool = (rank > 0 ? bk.greetHi : rank < 0 ? bk.greetLo : bk.greet) || bk.greet;
+  const text = pool?.length ? pool[Math.floor(Math.random() * pool.length)] : voiceBark(pr, 'idle'); G.say(`${pr.short}: ${text}`, 'npc'); try { speak(pr, text); } catch (er) { }
 }
 
 // ---------------- run control ----------------
@@ -506,6 +542,7 @@ addEventListener('keydown', (e) => {
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
   if (G.phase === 'play') {
     if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
+    if (e.code === 'KeyG' && NOM() && G.carry) { G.say(`You put ${G.carry.name} down.`); G.carry = null; }
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
     if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat) fireGrapple();
@@ -563,6 +600,11 @@ function fire() {
 function interact() {
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
+  if (near && NOM() && near.kind === 'crew' && near.person && !near.fake && G.hud2) { talkMenu(near); return; }
+  if (!near && NOM() && G.hud2) {
+    const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) { terminalMenu(); return; }
+    const c = !G.carry && nearestClutter(); if (c && world.takeClutter(c)) { G.carry = { name: c.name, real: c.real }; sound.pickup(); G.say(`You take: ${c.name}. [G] put it down`, 'good'); return; }
+  }
   if (near) {
     near.used = true; sound.pickup();
     if (near.kind === 'crew' && near.fake) {
@@ -623,6 +665,10 @@ function lookedProp() {
   if (!h || h.kind !== 'prop') return null;
   const p = world.d.props.find(p => p.tx === h.tx && p.ty === h.ty); if (!p) return null;
   const e = examineProp(world.d.room[p.ty][p.tx] || 'corridor', p.kind, p.tx, p.ty); return e ? { name: e[0], real: e[1] } : null;
+}
+function lookedPropObj() {
+  if (!world) return null; const o = camera.position, dir = camera.getWorldDirection(new THREE.Vector3()), h = world.raycast(o.x, o.y, o.z, dir.x, dir.y, dir.z, 3.0);
+  return h && h.kind === 'prop' ? world.d.props.find(p => p.tx === h.tx && p.ty === h.ty) || null : null;
 }
 function giveLoot(forced) {
   const r = Math.random();
@@ -780,7 +826,8 @@ function step(dt, t) {
   else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
-  if (!prompt) { const c = nearestClutter(); if (c) prompt = same(c.name, c.real) ? c.name : `${c.name} (${c.real})`; else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
+  if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
+  if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   $('prompt').textContent = prompt;
 
   // room label + exploration
@@ -791,7 +838,7 @@ function step(dt, t) {
   mapT += dt; if (mapT > 0.12) { mapT = 0; world.reveal(P.x, P.z, 3); drawMap(); updateHUD(); }
 
   // environment flicker / lights
-  world.update(dt, t);
+  world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z })), (d) => { if (d < 9) { sound.noise?.(0.14, Math.max(0.02, 0.1 - d * 0.01), 1800, 1, 'bandpass'); } });
   lamp.position.set(P.x, 2.4, P.z);
   flickT -= dt;
   if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = (bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0)) * (0.03 + 0.97 * world.powerAmt); }
@@ -1274,6 +1321,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

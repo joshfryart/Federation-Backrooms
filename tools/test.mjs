@@ -257,6 +257,13 @@ const nom = await page2.evaluate(async () => {
     ph.enabled = true; for (let i = 0; i < 30; i++) ph.tick(30); out.phases = ph.status(); const hz = ph.hazard(G.shipDeck + 1, { zone: 'engineering' }); out.phases.hazard = !!hz || ph.modeDef?.lethal === null;
     g.nomDie('test'); out.dead = { phase: G.phase, btns: document.querySelectorAll('#bd-end button').length, shown: document.getElementById('bd-end').classList.contains('show') };
     document.querySelector('#bd-end button').click(); tick(5); out.cont = { phase: G.phase, changed: G.player !== old, newIsPlayer: G.player.isPlayer, oldDead: old.status, hp: G.hp, same: G.duty.debt === D.debt };
+    { // sliding doors, clutter pick-up, terminal and talk menus
+      const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
+      if (dr) { w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2; }
+      const c = w.clutter[0], n0 = w.clutter.length; out.clutter = { took: c ? w.takeClutter(c) : null, left: w.clutter.length === n0 - 1 };
+      G.phase = 'play'; g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
+      const ppl = g.sim.onDeck(G.shipDeck + 1)[0]; if (ppl) { g.talkMenu({ person: ppl.person }); out.talk = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu(); }
+    }
     g.shipState.repair('lifts'); ph.enabled = false;
   }
   out.tabs = { hud: ['phaser', 'perks'].map(i => getComputedStyle(document.getElementById(i)).display), gun: G.phase };
@@ -264,7 +271,7 @@ const nom = await page2.evaluate(async () => {
 });
 console.log('nominal:', JSON.stringify(nom));
 { const n = nom, D = n.start.D, ok = n.start.mode === 'nominal' && n.start.deck === 1 && n.start.shipDeck === 0 && n.start.inCar && n.start.decks === D && n.start.director === null && n.start.auto === false && n.start.objective === 'none'
-    && !n.simBad && n.billet.isPlayer && n.billet.loops > 0 && n.billet.hud && n.duty.ok && n.phases.index >= 3 && n.phases.mode && n.dead.shown && n.dead.btns >= 2 && n.cont.phase === 'play' && n.cont.changed && n.cont.newIsPlayer && n.cont.oldDead === 'dead' && n.cont.hp > 0 && n.cont.same && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
+    && !n.simBad && n.billet.isPlayer && n.billet.loops > 0 && n.billet.hud && n.duty.ok && n.phases.index >= 3 && n.phases.mode && n.dead.shown && n.dead.btns >= 2 && n.cont.phase === 'play' && n.cont.changed && n.cont.newIsPlayer && n.cont.oldDead === 'dead' && n.cont.hp > 0 && n.cont.same && n.doors2.n > 0 && n.doors2.open && n.doors2.shut && n.clutter.took && n.clutter.left && n.term.open && n.term.rows >= 4 && (!n.talk || (n.talk.open && n.talk.rows >= 4)) && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
     && n.doors.nearOpen && n.doors.farShut && n.walkIn.phase === 'select' && n.walkIn.rows.length === D && /^1Deck 1 — Command · Bridge/.test(n.walkIn.rows[0]) && n.cancel === 'play'
     && n.down.to === D - 1 && n.down.secs >= 7.5 && n.down.secs <= 9 && n.down.inCar && n.down.indicator >= D - 1 && n.down.shaken
     && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
