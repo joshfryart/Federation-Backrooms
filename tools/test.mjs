@@ -18,6 +18,8 @@ const server = createServer(async (req, res) => {
 }).listen(0);
 const port = server.address().port; const errors = []; let failed = false;
 const fail = (m) => { failed = true; console.log('FAIL', m); };
+import { unitTests as commsUnit, hudTests as commsHud } from './test-comms.mjs';   // alerts / comm bus / bridge model / HUD (tools/test-comms.mjs)
+await commsUnit(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -324,6 +326,7 @@ const vpage = await browser.newPage({ viewport: { width: 900, height: 600 } }); 
 await vpage.goto(`http://localhost:${port}/voices.html?ship=3&seed=2`); await vpage.waitForFunction(() => window.__ready, null, { timeout: 15000 });
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
 console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && vp.chips > vp.rows * 8 && /\[/.test(vp.said) && vp.eng > 0 && vp.eng < vp.total)) fail('voices.html');
+await commsHud(page2, fail);
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();
 console.log(failed ? 'FAILED' : 'OK'); process.exit(failed ? 1 : 0);

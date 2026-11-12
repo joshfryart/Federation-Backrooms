@@ -17,6 +17,7 @@ import { mulberry32 } from './data.js';
 import { liftLine, loadPersonas, bark as voiceBark, habitCue, TAG_EFFECTS } from './voice.js';
 import { speak, cue as voiceCue, attach as attachSpeech, getMode as voiceMode, setMode as setVoiceMode, MODES as VOICE_MODES } from './speech.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
+import { createShipComms, loadCommsData } from './shipcomms.js';   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
 const $ = (id) => document.getElementById(id);
 { const st = document.createElement('style'); st.textContent = STATUS_CSS; document.head.appendChild(st); }
@@ -226,7 +227,7 @@ function loadDeck(n) {
   placeRepairPoints(data);
   if (NM) G.mad = null; else startDeckMadness(data, n, rnd);
   G.director?.reset(n);
-  world.setLiftOpen(NM); world.setAlert(false); world.setPower(true); sound.setPower(true);
+  world.setLiftOpen(NM); world.setAlert(false); G.comms?.hud?.syncLighting(); world.setPower(true); sound.setPower(true);
   G.blackout = 0; G.blackT = NM ? 1e9 : 40 + Math.random() * 50; G.lurchT = 20 + Math.random() * 20; G.repairT = 0; G.distT = NM ? 1e9 : 20 + Math.random() * 20; G.hints = {};
   showCard(n, ship, data.flooded);
   $('decklbl').textContent = 'DECK ' + n;
@@ -296,6 +297,7 @@ function newRun() {
   G.liftRnd = mulberry32((G.runSeed ^ 0x11f7a3) >>> 0);
   G.shipState = new ShipState(G.ship, G.runSeed); G.shipState.auto = false; if (NOM()) for (const sy of SYSTEMS) G.shipState.repair(sy.id); /* Systems Nominal: nothing is broken when you start */ G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
   G.director = NOM() ? null : new Director();   // no pacing pressure in Systems Nominal
+  G.comms?.destroy(); G.comms = NOM() ? createShipComms({ roster: G.roster, shipState: G.shipState, seed: G.runSeed, sound: { alertTone: (p) => { if (G.fx?.alert !== false) sound.alertTone(p); } }, G, onLighting: (on) => { if (world && (!on || G.fx?.alert !== false)) world.setAlert(on); }, urlAlert: new URLSearchParams(location.search).get('alert') }) : null;   // bridge comms + alerts: Systems Nominal only
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
@@ -619,7 +621,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
+  G.comms?.tick(dt); updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -1012,7 +1014,7 @@ function carStep(dt) {
 }
 function liftStep(dt, t) {
   const L = G.lift; G.time += dt; world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); updatePanelLights(dt);
-  SHIP().tick(dt, { deckTime: G.deckTime, tension: 0, deck: G.deck }); G.fx = SHIP().effects();
+  SHIP().tick(dt, { deckTime: G.deckTime, tension: 0, deck: G.deck }); G.fx = SHIP().effects(); G.comms?.tick(dt);
   let sh = 0;
   if (G.phase === 'ride') {
     L.t += dt; const k = Math.min(1, L.t / L.dur), e = k * k * (3 - 2 * k), disp = Math.round(L.from + (L.to - L.from) * e);
@@ -1160,8 +1162,8 @@ function frame() {
 }
 
 // expose for debugging/tests
-const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

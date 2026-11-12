@@ -126,6 +126,21 @@ export class Sound {
   skitter(vol = 0.15) { for (let i = 0; i < 8; i++) this.noise(0.03, vol, 3500 + Math.random() * 1500, 4, 'highpass', i * 0.04); }
   thud(vol = 0.3) { this.tone(55, 0.25, 'sine', vol, -20); this.noise(0.12, vol * 0.5, 150, 0.7, 'lowpass'); }
   klaxon() { for (let i = 0; i < 3; i++) { this.tone(520, 0.35, 'sawtooth', 0.08, 120, i * 0.5); this.tone(380, 0.35, 'square', 0.04, 80, i * 0.5); } }
+  // per-alert klaxon / chime patterns (js/alerts.js ALERTS[id].klaxon)
+  alertTone(id) {
+    const T = (f, d, ty, v, sl, dl) => this.tone(f, d, ty, v, sl, dl);
+    if (id === 'chime') { T(880, 0.4, 'sine', 0.16); T(1175, 0.6, 'sine', 0.16, 0, 0.35); }
+    else if (id === 'red') this.klaxon();
+    else if (id === 'fire') for (let i = 0; i < 8; i++) T(1000, 0.1, 'square', 0.06, 0, i * 0.16);
+    else if (id === 'breach') { for (let i = 0; i < 5; i++) T(300, 0.14, 'sawtooth', 0.09, -80, i * 0.2); this.noise(0.9, 0.12, 1800, 1, 'highpass'); }
+    else if (id === 'contam') for (let i = 0; i < 2; i++) T(400, 0.9, 'sawtooth', 0.07, 300, i * 1.0);
+    else if (id === 'power') { T(600, 0.3, 'square', 0.08, -100); T(450, 0.3, 'square', 0.08, -100, 0.35); T(300, 0.7, 'square', 0.08, -150, 0.7); }
+    else if (id === 'gravity') for (let i = 0; i < 6; i++) T(i % 2 ? 560 : 500, 0.12, 'triangle', 0.1, 0, i * 0.14);
+    else if (id === 'intruder') for (let i = 0; i < 4; i++) T(i % 2 ? 500 : 700, 0.22, 'sawtooth', 0.07, 0, i * 0.26);
+    else if (id === 'medical') for (let i = 0; i < 3; i++) T(1046, 0.25, 'sine', 0.13, 0, i * 0.3);
+    else if (id === 'abandon') for (let i = 0; i < 3; i++) { T(300, 1.0, 'sawtooth', 0.08, 600, i * 1.1); T(450, 1.0, 'square', 0.04, 450, i * 1.1); }
+    else if (id === 'clear') { T(784, 0.25, 'sine', 0.13); T(1046, 0.5, 'sine', 0.13, 0, 0.22); }
+  }
   clang(vol = 0.25) { this.tone(160 + Math.random() * 80, 0.9, 'triangle', vol, -60); this.noise(0.3, vol * 0.6, 900, 4, 'bandpass'); }
   zap() { this.noise(0.25, 0.22, 2500, 1.5, 'bandpass'); this.tone(1200, 0.12, 'sawtooth', 0.06, -900); }
   chirp() { this.tone(1760, 0.07, 'sine', 0.1); this.tone(2349, 0.09, 'sine', 0.1, 0, 0.08); }
