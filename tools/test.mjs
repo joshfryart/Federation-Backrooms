@@ -20,6 +20,8 @@ const port = server.address().port; const errors = []; let failed = false;
 const fail = (m) => { failed = true; console.log('FAIL', m); };
 import { unitTests as commsUnit, hudTests as commsHud } from './test-comms.mjs';   // alerts / comm bus / bridge model / HUD (tools/test-comms.mjs)
 await commsUnit(fail);
+import { simTests } from './test-sim.mjs';
+await simTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -226,7 +228,8 @@ const nom = await page2.evaluate(async () => {
   const G = g.G, D = G.ship.decks;
   out.start = { mode: G.mode, deck: G.deck, shipDeck: G.shipDeck, inCar: g.inCarTile(), decks: G.shipDecks.length, D, director: g.director, auto: g.shipState.auto, objective: getComputedStyle(document.getElementById('objective')).display };
   tick(900);   // 30 s: nothing hostile, no madness, no faults
-  out.calm = { gorns: g.gorns.length, mad: G.mad, faults: g.shipState.faulted().length, hostileEnts: g.ents.filter(e => e.fake || e.kind === 'body').length };
+  out.calm = { gorns: g.gorns.length, mad: G.mad, faults: g.shipState.faulted().length, hostileEnts: g.ents.filter(e => e.fake || e.kind === 'body').length, simBodies: g.ents.filter(e => e.simmed).length, simHere: g.sim.onDeck(G.shipDeck + 1).length };
+  if (out.calm.simBodies > out.calm.simHere || (out.calm.simHere && !out.calm.simBodies)) out.simBad = out.calm;
   // walk out and back in: doors open as you approach, the panel opens when you step into the car
   const w = g.world, c = w.car; const far = (k) => { P.x = c.x + c.dx * k; P.z = c.z + c.dy * k; P.vx = P.vz = 0; };
   far(5.0); tick(5); const nearOpen = w.liftOpen; far(9); tick(5); out.doors = { nearOpen, farShut: !w.liftOpen };
@@ -250,7 +253,7 @@ const nom = await page2.evaluate(async () => {
 });
 console.log('nominal:', JSON.stringify(nom));
 { const n = nom, D = n.start.D, ok = n.start.mode === 'nominal' && n.start.deck === 1 && n.start.shipDeck === 0 && n.start.inCar && n.start.decks === D && n.start.director === null && n.start.auto === false && n.start.objective === 'none'
-    && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
+    && !n.simBad && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
     && n.doors.nearOpen && n.doors.farShut && n.walkIn.phase === 'select' && n.walkIn.rows.length === D && /^1Deck 1 — Command · Bridge/.test(n.walkIn.rows[0]) && n.cancel === 'play'
     && n.down.to === D - 1 && n.down.secs >= 7.5 && n.down.secs <= 9 && n.down.inCar && n.down.indicator >= D - 1 && n.down.shaken
     && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
