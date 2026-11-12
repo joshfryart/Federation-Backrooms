@@ -153,6 +153,22 @@ export { generate } from './gen.js';
 // Prop meshes
 // ------------------------------------------------------------------
 const M = {};
+// wall label display: dark glass, a tinted coloured bar, glyph-like text rows, a status chip and scanlines (tinted per instance; white = lit)
+let _label;
+function labelTex() {
+  if (_label) return _label;
+  return _label = canvasTex(256, (g, s) => {
+    const r = (a) => { a = (a * 9301 + 49297) % 233280; return a / 233280; }; let q = 7;
+    g.fillStyle = '#1a1c22'; g.fillRect(0, 0, s, s);
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, s * 0.3, s);                    // tinted block
+    g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(s * 0.3, 0, s * 0.7, s * 0.07);
+    for (let row = 0; row < 5; row++) { let x = s * 0.34; const y = s * (0.14 + row * 0.095);
+      while (x < s * 0.94) { q = Math.floor(r(q + row) * 1e5); const w = 6 + (q % 26); g.fillStyle = `rgba(255,255,255,${0.55 + (q % 4) * 0.1})`; g.fillRect(x, y, Math.min(w, s * 0.94 - x), 7); x += w + 5; } }
+    g.fillStyle = '#ffffff'; g.fillRect(s * 0.06, s * 0.1, s * 0.18, s * 0.06); g.fillRect(s * 0.06, s * 0.2, s * 0.18, s * 0.025);
+    g.fillStyle = 'rgba(0,0,0,0.28)'; for (let y = 0; y < s; y += 3) g.fillRect(0, y, s, 1);   // scanlines
+    g.strokeStyle = '#555b66'; g.lineWidth = 6; g.strokeRect(3, 3, s - 6, s);
+  });
+}
 function screenTex(kind) {
   return canvasTex(256, (g, s) => {
     g.fillStyle = '#04070c'; g.fillRect(0, 0, s, s);
@@ -182,7 +198,7 @@ function mats() {
   M.crate2 = std({ color: 0x8a6a3a, roughness: 0.75, metalness: 0.2, normalMap: w.normal });
   M.leaf = std({ color: 0x2f7a38, roughness: 0.8 });
   M.trunk = std({ color: 0x5a3f2a, roughness: 0.9 });
-  M.glass = std({ color: 0x9fd0ff, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.25 });
+  M.glass = std({ color: 0x9fd0ff, roughness: 1, metalness: 0, transparent: true, opacity: 0.25, ...(T.d.glass ? { normalMap: T.d.glass.normal, roughnessMap: T.d.glass.rough } : { roughness: 0.05 }) });
   M.rubber = std({ color: 0x0c0c0e, roughness: 0.9 });
   M.hazard = std({ color: 0xd8a818, roughness: 0.6, metalness: 0.2 });
   M.screenB = new THREE.MeshBasicMaterial({ map: screenTex('ops'), color: new THREE.Color(1.5, 1.5, 1.5) });
@@ -613,12 +629,20 @@ export class World {
       im.receiveShadow = true; g.add(im);
     }
     dummy.rotation.set(0, 0, 0);
-    // ceiling
+    // ceiling: per-room variants (acoustic tile, riveted metal, slatted baffle); corridors follow the hull class
     {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
-      const im = new THREE.InstancedMesh(geo, T.d.ceil ? new THREE.MeshStandardMaterial({ map: T.ceil, normalMap: T.d.ceil.normal, roughnessMap: T.d.ceil.rough, roughness: 1, metalness: 0 }) : new THREE.MeshLambertMaterial({ map: T.ceil }), open.length);
-      open.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(0.8)); });
-      g.add(im);
+      const ck = (k) => T.d[k] ? k : 'ceil';
+      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm') };
+      const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
+      const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
+      for (const [kind, list] of Object.entries(byC)) {
+        const dm = T.d[kind]; if (!dm) continue;
+        const cm = new THREE.MeshStandardMaterial(dm.orm ? { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, aoMap: dm.rough, metalnessMap: dm.rough, roughness: 1, metalness: 1 } : { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, roughness: 1, metalness: 0 });
+        const im = new THREE.InstancedMesh(geo, cm, list.length);
+        list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(kind === 'ceilt' ? 1.0 : 0.85)); });
+        g.add(im);
+      }
     }
     // Jiffy tubes: the tube's own side walls, header/base blocks, ribs, conduit, amber guide strips, ladders and hatch frames
     if (d.tubes?.length) {
@@ -688,7 +712,7 @@ export class World {
       }
       const mkPanels = (list, name) => {
         if (!list.length) return null;
-        const mat = new THREE.MeshBasicMaterial({ color: lightCol.clone() });
+        const mat = new THREE.MeshBasicMaterial({ color: lightCol.clone(), map: T.lens || null });
         const im = new THREE.InstancedMesh(geo, mat, list.length);
         list.forEach(([x, y], i) => {
           const ch = this.ceilAt(x, y); dummy.position.set((x + 0.5) * TS, ch - 0.02, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
@@ -745,7 +769,7 @@ export class World {
       const pal = [ship.accent, 0xcc99cc, 0x9999ff, 0xff9966, 0xffcc99].map(c => new THREE.Color(c).multiplyScalar(0.8));
       const items = []; lcars.forEach(l => { for (let k = 0; k < l.n; k++) items.push({ ...l, k }); });
       const lg = new THREE.PlaneGeometry(0.42, 0.26);
-      const lm = new THREE.InstancedMesh(lg, new THREE.MeshBasicMaterial({ color: 0xffffff }), items.length || 1);
+      const lm = new THREE.InstancedMesh(lg, new THREE.MeshBasicMaterial({ color: 0xffffff, map: labelTex() }), items.length || 1);
       items.forEach((l, i) => {
         const off = (l.k - (l.n - 1) / 2) * 0.55;
         const cx = Math.cos(l.ry), sx = Math.sin(l.ry);
@@ -757,6 +781,11 @@ export class World {
       const wm = new THREE.InstancedMesh(wg, new THREE.MeshBasicMaterial({ map: T.stars }), windows.length || 1);
       windows.forEach((w, i) => { dummy.position.set(w.px, 1.7, w.pz); dummy.rotation.set(0, w.ry, 0); dummy.updateMatrix(); wm.setMatrixAt(i, dummy.matrix); });
       wm.count = windows.length; g.add(wm);
+      if (windows.length && T.d.glass) {   // smudged, scratched pane in front of the view
+        const gm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.7, 1.0), new THREE.MeshStandardMaterial({ color: 0xbfe4ff, transparent: true, opacity: 0.16, depthWrite: false, roughness: 1, metalness: 0, normalMap: T.d.glass.normal, roughnessMap: T.d.glass.rough, envMapIntensity: 1.5 }), windows.length);
+        windows.forEach((w, i) => { dummy.position.set(w.px - Math.sin(w.ry) * 0.012, 1.7, w.pz - Math.cos(w.ry) * 0.012); dummy.rotation.set(0, w.ry, 0); dummy.updateMatrix(); gm.setMatrixAt(i, dummy.matrix); });
+        gm.renderOrder = 2; g.add(gm);
+      }
       dummy.rotation.set(0, 0, 0);
     }
     // props
@@ -832,7 +861,7 @@ export class World {
     }
     this.doorFrames = frames;
     if (frames.length) {
-      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff }), frames.length * 3);
+      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), T.d.trim ? new THREE.MeshStandardMaterial({ map: T.trim, normalMap: T.d.trim.normal, roughnessMap: T.d.trim.rough, metalnessMap: T.d.trim.rough, aoMap: T.d.trim.rough, roughness: 1, metalness: 1, color: 0xffffff }) : new THREE.MeshLambertMaterial({ color: 0xffffff }), frames.length * 3);
       let i = 0; const c = accent.clone().multiplyScalar(0.55), c2 = new THREE.Color(0x30343c);
       for (const f of frames) {
         const lat = TS / 2 - 0.12;

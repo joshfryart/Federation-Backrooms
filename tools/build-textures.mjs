@@ -239,6 +239,80 @@ const SETS = {
       H[i] = (0.3 + 0.32 * st + (n[i] - 0.5) * 0.12 * st + (n2[i] - 0.5) * 0.04) * (0.6 + 0.4 * jt); A[i] = (mix(0.34, 0.66 + (vo.cid[i] - 0.5) * 0.18 + (n[i] - 0.5) * 0.14, st) - sstep(0.6, 0.8, n[i]) * 0.1) * (0.55 + 0.45 * jt); R[i] = mix(0.98, 0.78 + (n2[i] - 0.5) * 0.2, st); M[i] = 0;
     }
   } },
+  // -------------------------------------------------------------------------------------------------------
+  // CEILINGS — one image is one ceiling tile (tile-sized, never rotated). Panel joints sit on the border.
+  // -------------------------------------------------------------------------------------------------------
+  // acoustic drop tile in a T-bar grid: fissured, pinpricked, water-stained corners
+  ceilt: { N: 512, mean: 0.82, contrast: 0.9, nStrength: 1.6, aoK: 6, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 6, 5, 61), f = fbm(N, 40, 3, 63), st = fbm(N, 3, 3, 67), rr = rng(65), pins = [];
+    for (let k = 0; k < 900; k++) pins.push([rr() * N | 0, rr() * N | 0]);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v), gx = Math.min(Math.abs(u - 0.5), 0.5 - Math.abs(u - 0.5)), gy = Math.min(Math.abs(v - 0.5), 0.5 - Math.abs(v - 0.5));
+      let h = 0.5 + (n[i] - 0.5) * 0.18 + (f[i] - 0.5) * 0.12, a = 0.84 + (n[i] - 0.5) * 0.06 - sstep(0.62, 0.8, st[i]) * 0.14, r = 0.95, m = 0;
+      const half = Math.min(Math.abs(u - 0.5), Math.abs(v - 0.5)); void gx; void gy;
+      if (e < 0.02) { h = 0.78; a = 0.9; r = 0.35; m = 0.6; }   // T-bar
+      else if (half < 0.006) { h = 0.2; a = 0.55; }               // score line across the tile, as if two half-tiles
+      H[i] = h; A[i] = a; R[i] = r; M[i] = m;
+    }
+    for (const [x, y] of pins) { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const i = ((y + dy + N) % N) * N + ((x + dx + N) % N); if (dx === 0 && dy === 0) { H[i] = 0.32; A[i] *= 0.78; } } }
+  } },
+  // riveted metal panels: four plates, countersunk screws, grease streaks
+  ceilm: { N: 512, mean: 0.66, contrast: 1.0, nStrength: 3.2, aoK: 7, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 8, 4, 71), sc = vnoise(N, 4, 73, 120);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v), seam = Math.min(Math.abs(u - 0.5), Math.abs(v - 0.5));
+      const cu = fract(u * 2) , cv = fract(v * 2), ei = Math.min(cu, 1 - cu, cv, 1 - cv);
+      let h = 0.55 + (n[i] - 0.5) * 0.04, a = 0.62 + (n[i] - 0.5) * 0.14 - sstep(0.7, 0.9, sc[i]) * 0.12, r = 0.5 + (n[i] - 0.5) * 0.3, m = 0.85;
+      if (e < 0.012 || seam < 0.006) { h = 0.3; a = 0.3; r = 0.8; }
+      else if (ei < 0.05) { h = 0.62; }
+      const rv = Math.hypot(fract(cu * 6 + 0.5) - 0.5, fract(cv * 6 + 0.5) - 0.5) * 0.5 / 3; void rv;
+      if (ei > 0.05 && ei < 0.085) { const t = fract(Math.max(cu, cv) * 5); if (Math.abs(t - 0.5) < 0.08 && Math.min(cu, 1 - cu, cv, 1 - cv) > 0.05) { h = 0.8; a = 0.74; } }
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
+  // slatted baffle / vent ceiling: long louvres over a dark plenum
+  ceilg: { N: 512, mean: 0.6, contrast: 1.0, nStrength: 3.6, aoK: 7, aoBake: 0.85, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 10, 4, 81);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v), s = fract(v * 16), cross = Math.abs(fract(u * 2) - 0.5);
+      let h = 0.5, a = 0.58 + (n[i] - 0.5) * 0.12, r = 0.45, m = 0.9;
+      if (e < 0.02) { h = 0.7; a = 0.5; r = 0.5; }
+      else if (s < 0.5) { h = 0.3 + 0.6 * s; a = 0.6 + 0.2 * s; }
+      else { h = 0.05; a = 0.06; r = 0.9; m = 0; }
+      if (cross < 0.012) { h = 0.75; a = 0.5; m = 0.9; }
+      H[i] = h; A[i] = a; R[i] = r; M[i] = m;
+    }
+  } },
+  // door frames / lift surround: brushed steel, kick scuffs, bolt row
+  trim: { N: 256, mean: 0.6, contrast: 1.0, nStrength: 2.4, aoK: 4, outR: 128, draw({ N, H, A, R, M }) {
+    const br = vnoise(N, 2, 91, 200), n = fbm(N, 6, 3, 93);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, bolt = Math.hypot(fract(u * 4 + 0.5) - 0.5, fract(v * 4 + 0.5) - 0.5);
+      let h = 0.5 + (br[i] - 0.5) * 0.06, a = 0.58 + (br[i] - 0.5) * 0.14 + (n[i] - 0.5) * 0.1, r = 0.38 + (br[i] - 0.5) * 0.2 + sstep(0.6, 0.9, n[i]) * 0.25, m = 0.92;
+      if (bolt < 0.07) { h = 0.8; a = 0.7; r = 0.3; }
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
+  // light diffuser: prismatic lens grid; albedo doubles as the emissive map (bright, with dark frame and dead cells)
+  lens: { N: 256, mean: 0.9, contrast: 0.5, nStrength: 3.0, aoK: 3, aoBake: 0.2, outR: 128, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 10, 3, 101);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, cu = fract(u * 12), cv = fract(v * 5), e = Math.min(cu, 1 - cu, cv, 1 - cv), border = Math.min(u, 1 - u, v, 1 - v);
+      const pr = Math.pow(Math.sin(Math.PI * cu) * Math.sin(Math.PI * cv), 0.5);
+      let h = 0.35 + 0.4 * pr, a = 0.93 - sstep(0.5, 0.8, n[i]) * 0.1 - (e < 0.03 ? 0.12 : 0), r = 0.35, m = 0;
+      if (border < 0.035) { h = 0.8; a = 0.62; r = 0.5; m = 0.4; }
+      H[i] = h; A[i] = a; R[i] = r; M[i] = m;
+    }
+  } },
+  // window / screen glass: smudges and fine scratches live in roughness (G); albedo is a neutral grey
+  glass: { N: 512, mean: 0.7, contrast: 0.2, nStrength: 0.8, aoK: 2, aoBake: 0, outR: 256, draw({ N, H, A, R, M }) {
+    const sm = fbm(N, 5, 5, 111), fine = vnoise(N, 4, 113, 320), fine2 = vnoise(N, 300, 115, 3);
+    for (let i = 0; i < N * N; i++) {
+      const sc = Math.max(sstep(0.82, 0.95, fine[i]), sstep(0.85, 0.96, fine2[i]));
+      H[i] = 0.5 + sc * 0.1 - sm[i] * 0.03; A[i] = 0.7 - sc * 0.2; R[i] = clamp(0.05 + sstep(0.45, 0.85, sm[i]) * 0.5 + sc * 0.35); M[i] = 0;
+    }
+  } },
+
 };
 
 async function procedural(OUT = 'assets/textures', only = []) {
