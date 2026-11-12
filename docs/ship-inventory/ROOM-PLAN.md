@@ -153,4 +153,30 @@ Spaces the first twelve agents found missing. M1–M4 are the work batches. More
 | 87 | Family / Couple's Quarters | all | M | quarters (variant) | M1 |
 | 88 | Crew Baggage & Linen Store | Services | S | NEW | M4 |
 
-Count: 66 spaces in 12 groups (A–L) plus 22 added spaces in Group M (88 in all). Existing game rooms covered: bridge, engineering, sickbay, mess, transporter, shuttlebay, cargo, holodeck, quarters, arboretum, jefferies.
+## Group N — Gap rooms from the Opus groups' second reports
+Suggested by groups A, F, H, I, J and K and merged (duplicates folded together; rooms already in Group M are not repeated).
+| # | Space | Dept | Size | Game | Batch |
+|---|---|---|---|---|---|
+| 89 | Secure Communications / Crypto Room | Operations / Command | S | NEW | N1 |
+| 90 | Command-Deck Emergency Equipment Room (battle dressing station) | Medical / Security | S | NEW | N1 |
+| 91 | Department Chiefs' Offices (engineering, operations, science, security, medical, flight) | all | M | NEW | N1 |
+| 92 | Science Stores & Lab Consumables | Sciences | S | NEW | N1 |
+| 93 | Specimen Holding & Animal Care | Sciences | S | NEW | N1 |
+| 94 | Hydroponics Produce Cooler | Sciences / Services | S | NEW | N1 |
+| 95 | Sensor Array Maintenance Crawlspaces | Sciences / Engineering | S | NEW | N2 |
+| 96 | Probe Preparation & Launch Bay | Sciences / Flight | M | NEW | N2 |
+| 97 | Subspace Array Amplifier Room | Operations | S | NEW | N2 |
+| 98 | Holo-Suite (second, small holo room) | Services | M | holodeck (variant) | N2 |
+| 99 | Emergency Transporter Alcove (evacuation pads) | Operations | S | transporter (variant) | N2 |
+| 100 | Antimatter & Fuel Storage Bay | Engineering | M | NEW | N3 |
+| 101 | Inertial Damper Generator Room | Engineering | S | NEW | N3 |
+| 102 | Emergency Power & Battery Room | Engineering | S | NEW | N3 |
+| 103 | Main Deflector Control Room | Flight / Engineering | S | NEW | N3 |
+| 104 | Radiator / Heat Rejection Access | Engineering | S | NEW | N3 |
+| 105 | Air-Handling Fan Room (one per deck) | Engineering | S | NEW | N3 |
+| 106 | Pilots' Ready Room & Briefing Room | Flight | S | NEW | N4 |
+| 107 | Small Craft Fuel & Propellant Store | Flight | S | NEW | N4 |
+| 108 | Docking Port & Boarding Tube (second airlock) | Flight | S | NEW | N4 |
+| 109 | Cargo Handlers' Office / Shipping & Receiving | Services | S | NEW | N4 |
+
+Count: 66 spaces in 12 groups (A–L), 22 added spaces in Group M and 21 gap rooms in Group N (109 in all). Existing game rooms covered: bridge, engineering, sickbay, mess, transporter, shuttlebay, cargo, holodeck, quarters, arboretum, jefferies.
