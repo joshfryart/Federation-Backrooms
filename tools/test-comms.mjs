@@ -106,7 +106,7 @@ export async function hudTests(page, fail) {
     g.alerts.raise('yellow', { source: 'bridge' }); tick(5); g.alerts.raise('red', { source: 'bridge', byPerson: g.roster.people[0] }); tick(60);
     const cards = [...document.querySelectorAll('.ac-card')];
     out.red = { n: cards.length, first: cards[0]?.querySelector('.n').textContent, second: cards[1]?.querySelector('.n').textContent, meaning: cards[0]?.querySelector('.m').textContent, scope: cards[0]?.querySelector('.sc').textContent, who: cards[0]?.querySelector('.w').textContent, el: cards[0]?.querySelector('.el').textContent, badge: getComputedStyle($('#ac-badge')).display, anim: getComputedStyle(cards[0]).animationName, pulse: cards[0]?.style.getPropertyValue('--p'), lights: g.world.alertTarget, pa: $('#ac-pa').textContent, stack: document.querySelectorAll('#cm-stack .cm-line').length, paStyled: !!$('#cm-stack .cm-line.pa') };
-    g.alerts.raise('fire', { deck: 2, source: 'bridge', reason: 'Smoke detected' }); tick(3); out.fireScope = document.querySelector('.ac-card .sc').textContent; out.order = [...document.querySelectorAll('.ac-card .n')].map(e => e.textContent).join('|');
+    g.alerts.raise('fire', { deck: 2, source: 'bridge', reason: 'Smoke detected' }); tick(3); out.fireScope = document.querySelector('.ac-card[data-id=fire] .sc').textContent; out.order = [...document.querySelectorAll('.ac-card .n')].map(e => e.textContent).join('|');
     key('KeyK'); out.details = { open: getComputedStyle($('#ac-details')).display !== 'none', legend: document.querySelectorAll('#ac-details .lg > div').length, hasDo: /What you should do/.test($('#ac-details').textContent), meanings: document.querySelectorAll('#ac-details .ad').length }; key('KeyK');
     key('KeyL'); out.log = { open: getComputedStyle($('#cm-log')).display !== 'none', rows: document.querySelectorAll('#cm-log .lr').length, pa: document.querySelectorAll('#cm-log .lr.pa').length, plain: document.querySelectorAll('#cm-log .lr:not(.pa)').length }; key('KeyL');
     out.stackCap = document.querySelectorAll('#cm-stack .cm-line').length;
@@ -121,11 +121,11 @@ export async function hudTests(page, fail) {
   });
   console.log('comms hud:', JSON.stringify({ ...r, details: r.details, log: r.log }));
   const ok = r.api && /Condition green/i.test(r.green.badge) && r.green.shown && r.green.cards === 0 && r.green.active === 0 && r.green.auto === 0
-    && r.traffic.log >= 4 && r.traffic.lines >= 1 && r.traffic.pa >= 1
+    && r.traffic.log >= 4 && r.traffic.lines >= 1 && r.traffic.paOn
     && r.red.n === 2 && r.red.first === 'Red Alert' && r.red.second === 'Yellow Alert' && r.red.meaning.length > 30 && r.red.scope === 'Ship-wide' && /Ordered by/.test(r.red.who) && /^\d+:\d\d$/.test(r.red.el) && r.red.badge === 'none' && r.red.lights === 1 && /Red alert/i.test(r.red.pa) && r.red.stack >= 3 && r.red.paStyled
     && r.fireScope === 'Deck 3' && r.order.startsWith('Red Alert|Fire') && r.details.open && r.details.legend === 11 && r.details.hasDo && r.details.meanings === 3
     && r.log.open && r.log.rows >= 8 && r.log.pa >= 1 && r.log.plain >= 1 && r.stackCap <= 6
-    && r.radio.open && r.radio.opts === 6 && r.dept >= 5 && r.hail.closed && r.hail.msgs.length >= 1 && r.hail.msgs[0].startsWith('Ens.')
+    && r.radio.open && r.radio.opts === 6 && r.dept >= 5 && r.hail.closed && r.hail.msgs.length >= 1 && r.hail.msgs[0].startsWith('Ensign')
     && r.cleared.badge && r.cleared.cards === 0 && r.cleared.lights === 0 && r.f4.d1 === 'yellow' && r.f4.d2 === 'red' && r.f4.after === 0;
   if (!ok) fail('comms hud');
   await page.emulateMedia({ reducedMotion: 'reduce' });
