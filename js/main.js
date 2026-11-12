@@ -344,7 +344,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const clampY = () => { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading || 0) * 0.6, e.z + Math.cos(e.heading || 0) * 0.6), gy = (e.v || 0) > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0, dy = gy - y0; e.y = y0 + Math.max(-2.4 * dt, Math.min(3.2 * dt, dy * Math.min(1, dt * 9))); e.mesh.position.y = e.y; };
   const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
   if (e.heading === undefined) e.heading = e.mesh.rotation.y;
-  const turnTo = (gx, gz, k = 1) => { const want = Math.atan2(gx - e.x, gz - e.z); const err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading)); const mt = Math.min(5.2, e.v > 0.3 ? gt.turn : gt.turn * 1.3) * dt * k; e.heading += Math.max(-mt, Math.min(mt, err)); e.mesh.rotation.y = e.heading; return err; };
+  const turnTo = (gx, gz, k = 1) => { const want = Math.atan2(gx - e.x, gz - e.z); const err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading)); const mt = (e.v > 0.3 ? Math.min(5.2, gt.turn) : Math.min(3.4, gt.turn * 1.3)) * dt * k; e.heading += Math.max(-mt, Math.min(mt, err)); e.mesh.rotation.y = e.heading; return err; };
   const animate = (clip, scale) => { if (!H) return; if (!e.walking || e.clip !== clip) { try { H.play(clip, { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = clip; } };
   const [mx0, my0] = world.tile(e.x, e.z);
   // short sidestep / settle to a point (dodging): straight toward it, no path field
@@ -392,12 +392,16 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (toEnd < 0.35 && !w.vanish) { const k = Math.min(1, dt * 7); e.x += (fx - e.x) * k; e.z += (fz - e.z) * k; }   // ease onto the exact spot
   e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
   if (H) {
-    const clip = e.climbing ? 'push' : e.crawl || vault ? 'crouch_fwd' : gt.clip; animate(clip);
+    // clip by what the body is really doing: idle while (nearly) standing, the gait clip otherwise, jog above ~2 m/s (hysteresis so it does not flicker)
+    let clip = e.climbing ? 'push' : e.crawl || vault ? 'crouch_fwd' : gt.clip;
+    if (!e.climbing && !e.crawl && !vault) { if (e.v < (e.clip === 'idle' ? 0.32 : 0.16)) clip = 'idle'; else if (gt.clip === 'jog_fwd') clip = e.v > (e.clip === 'jog_fwd' ? 1.9 : 2.2) ? 'jog_fwd' : 'walk'; else if (e.v > 2.4) clip = 'jog_fwd'; }
+    if (H && !H.has(clip)) clip = H.has('walk') ? 'walk' : 'idle'; animate(clip);
     if (d > 22) return true;
     if (!e.run && !e.crawl && !e.climbing && !vault) fidgetStep(e, dt, d); else { H.add = null; }
     const ph = e.gaitBase.phase; e.gt = (e.gt || 0) + dt; let look = Math.sin(e.gt * 0.7 + ph) * gt.sway * (gt.look ? 3 : 1); const pd = Math.hypot(P.x - e.x, P.z - e.z);
     if (pd < 3.8 && Math.abs(Math.atan2(P.x - e.x, P.z - e.z) - e.heading) < 1.2 && hash01('glance', e.person.id, Math.floor(e.gt / 3)) < gt.glance) look = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(Math.atan2(P.x - e.x, P.z - e.z) - e.heading), Math.cos(Math.atan2(P.x - e.x, P.z - e.z) - e.heading))));
-    H.lookYaw += (look - H.lookYaw) * Math.min(1, dt * 3.5); H.update(dt * (e.climbing ? 1.4 : e.crawl || vault ? Math.max(0.8, e.v / 0.6) : Math.max(0.3, Math.min(2.2, e.v / gt.stride))));
+    const stride = e.climbing ? 0.23 : e.crawl || vault ? 0.62 : clip === 'jog_fwd' ? 4.7 : clip === 'sprint' ? 8 : 0.95 * (e.strideK || (e.strideK = Math.max(0.85, Math.min(1.3, Math.pow((H.height || 1.7) / 1.7, 1.2))))), ts = clip === 'idle' ? 1 : Math.max(e.climbing ? 0.8 : 0.4, Math.min(clip === 'sprint' ? 1.6 : 2.2, e.v / stride));
+    H.lookYaw += (look - H.lookYaw) * Math.min(1, dt * 3.5); H.play(clip, { fade: 0.22, speed: ts }); H.update(dt);   // speed is the action's own time scale, so crossfades keep their length
   }
   return true;
 }

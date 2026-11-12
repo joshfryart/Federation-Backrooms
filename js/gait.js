@@ -47,8 +47,8 @@ export function gaitNow(g, ctx = {}) {
   if (ctx.tired) v *= 1 - 0.14 * ctx.tired;
   if (ctx.late) v *= 1.15;
   if ((ctx.alert || 0) >= 2) { v *= 1.18; turn *= 1.2; accel *= 1.3; }
-  if (ctx.run) { clip = 'sprint'; stride = 5.2; v = Math.max(3.4, Math.min(4.8, v * 2.7)); turn *= 1.5; accel *= 2.2; }
-  else if ((ctx.alert || 0) >= 3) { clip = 'jog'; stride = 3.0; v = Math.max(v * 1.6, 2.6); turn *= 1.3; accel *= 1.5; }
-  return { v, clip, stride, timeScale: Math.max(0.5, Math.min(2.0, v / stride)), turn, accel, sway: car.sway * (ctx.alert >= 2 ? 1.4 : 1), glance: car.glance, pause: g.habit === 'stops-to-think' ? Math.max(car.pause, 0.3) : car.pause, space: car.space, look: g.habit === 'looks-around', cut: g.habit === 'cuts-corners' };
+  if (ctx.run) { clip = 'jog_fwd'; stride = 4.7; v = Math.max(3.4, Math.min(4.8, v * 2.7)); turn *= 1.5; accel *= 2.2; }     // clip keys come from the GLB names (Jog_Fwd_Loop -> jog_fwd); measured ground speed of a jog stride is ~4.7 m/s, sprint ~8
+  else if ((ctx.alert || 0) >= 3) { clip = 'jog_fwd'; stride = 4.7; v = Math.max(v * 1.6, 2.6); turn *= 1.3; accel *= 1.5; }
+  return { v, clip, stride, timeScale: Math.max(0.5, Math.min(clip === 'sprint' ? 1.6 : 2.0, v / stride)), turn, accel, sway: car.sway * (ctx.alert >= 2 ? 1.4 : 1), glance: car.glance, pause: g.habit === 'stops-to-think' ? Math.max(car.pause, 0.3) : car.pause, space: car.space, look: g.habit === 'looks-around', cut: g.habit === 'cuts-corners' };
 }
 export const describeGait = (g) => `${g.pace} ${g.style} ${g.carriage}${g.habit !== 'none' ? ', ' + g.habit : ''} (${g.v.toFixed(2)} m/s)`;

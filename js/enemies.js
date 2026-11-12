@@ -39,7 +39,7 @@ function humanModel(opts, cfg, fallback) {
           else if (f.vault && H.has('crouch_fwd')) H.play('crouch_fwd', { speed: 1.6, fade: 0.08 });
           else if (f.crawl && speed > 0.2 && H.has('crouch_fwd')) H.play('crouch_fwd', { speed: Math.max(0.8, speed / 1.2), fade: 0.2 });
           else if (speed > (cfg.runAt ?? 3.4)) H.play(cfg.run || 'sprint', { speed: Math.max(0.7, speed / (cfg.runRef ?? 5.2)), fade: 0.2 });
-          else if (speed > (cfg.jogAt ?? 2.4)) H.play(cfg.jog || 'jog', { speed: Math.max(0.7, speed / (cfg.jogRef ?? 3.0)), fade: 0.25 });
+          else if (speed > (cfg.jogAt ?? 2.4)) H.play(cfg.jog || 'jog_fwd', { speed: Math.max(0.7, speed / (cfg.jogRef ?? 4.7)), fade: 0.25 });
           else if (speed > 0.25) H.play(cfg.walk || 'walk', { speed: Math.max(0.6, speed / (cfg.walkRef ?? 1.5)), fade: 0.25 });
           else H.play(cfg.idle || 'idle', { fade: 0.3 });
         }
