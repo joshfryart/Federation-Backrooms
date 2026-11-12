@@ -14,6 +14,7 @@ import { makeJunction, setLamp, makeBeacon } from './sysview.js';
 import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
+import { hash01 } from './clock.js';
 import { liftLine, loadPersonas, bark as voiceBark, habitCue, TAG_EFFECTS } from './voice.js';
 import { speak, cue as voiceCue, attach as attachSpeech, getMode as voiceMode, setMode as setVoiceMode, MODES as VOICE_MODES } from './speech.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
@@ -22,6 +23,7 @@ import { CrewSim } from './sim.js';
 import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALITIES } from './duty.js';
 import { DutyHUD } from './hud-duty.js';
 import { Phases, PHASES, FAILURE_MODES } from './phases.js';
+import { makeGait, gaitNow, describeGait } from './gait.js';
 import { MISSIONS, party as commParty } from './bridge.js';
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -298,35 +300,46 @@ function placeGore(data, rnd, n) {
 const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'interact', desk: 'interact', workbench: 'interact', labbench: 'interact', junction: 'interact', warpcore: 'interact', replicator: 'interact', bar: 'sitting_idle', table: 'sitting_idle', sofa: 'sitting_idle', bunk: 'sitting_idle', biobed: 'idle_talking', treadmill: 'jog', weightbench: 'idle_torch' };
 function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
 function pathField(tx, ty) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty; let f = c.get(k); if (!f) { f = world.field(tx, ty, true); c.set(k, f); if (c.size > 40) c.delete(c.keys().next().value); } return f; }
+
+function gaitFor(e) {   // this walker's gait right now: their own mix of parts, modulated by alert level, fatigue and time of day
+  if (!e.gaitBase) e.gaitBase = makeGait(e.person, G.runSeed);
+  if (!e.gaitCtx || G.time - e.gaitT > 1) { const h = G.comms ? G.comms.clock.localHour(e.person) : 2; e.gaitT = G.time; e.gaitCtx = gaitNow(e.gaitBase, { alert: G.comms?.alerts?.top()?.def.severity ?? 0, tired: Math.max(0, Math.min(1, (h - 5) / 3)), relaxed: h > 8 && h < 20 }); }
+  return e.gaitCtx;
+}
 function startWalk(e, tx, ty, vanish) { e.walk = { tx, ty, vanish, stuck: 0 }; }
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, yielding to others.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty), W = world.W, [tx, ty] = world.tile(e.x, e.z), cur = f[tx + ty * W];
   const finish = () => { e.walk = null; e.v = 0; if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
   if (cur < 0) return finish();
   const [fx, fz] = world.center(w.tx, w.ty), toEnd = Math.hypot(fx - e.x, fz - e.z);
+  const gt = gaitFor(e);
   // look-ahead: follow the field downhill up to 4 tiles and aim at the furthest one that is in clear sight
   let gx, gz, ax = tx, ay = ty, av = cur; const chain = [];
-  for (let k = 0; k < 4 && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
+  for (let k = 0; k < (gt.cut ? 6 : 4) && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
   if (!chain.length) { gx = fx; gz = fz; } else { let pick = chain[0]; for (const c of chain) { const [cx, cz] = world.center(c[0], c[1]); if (world.los(e.x, e.z, cx, cz) && (c === chain[0] || world.los(e.x + 0.28, e.z, cx + 0.28, cz) && world.los(e.x - 0.28, e.z, cx - 0.28, cz) && world.los(e.x, e.z + 0.28, cx, cz + 0.28) && world.los(e.x, e.z - 0.28, cx, cz - 0.28))) pick = c; else break; } [gx, gz] = world.center(pick[0], pick[1]); }
   if (av === 0 && chain.length && chain[chain.length - 1][0] === w.tx && chain[chain.length - 1][1] === w.ty && world.los(e.x, e.z, fx, fz)) { gx = fx; gz = fz; }
   if (cur === 0) { gx = fx; gz = fz; }
   // yield to / sidestep other walkers and the player
   let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg;
-  for (const o of ents) { if (o === e || (o.kind !== 'crew' && o !== null) || !o.mesh) continue; const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 1.3 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.35) continue; const side = (ox * -uz + oz * ux) > 0 ? -1 : 1; gx += -uz * side * 0.5; gz += ux * side * 0.5; if (od < 0.75 && (o.walk ? o.person.id < e.person.id : true)) slow = Math.min(slow, 0.15 + od * 0.4); }
+  for (const o of ents) { if (o === e || (o.kind !== 'crew' && o !== null) || !o.mesh) continue; const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 1.3 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.35) continue; const side = (ox * -uz + oz * ux) > 0 ? -1 : 1; gx += -uz * side * (gt.space * 0.6); gz += ux * side * (gt.space * 0.6); if (od < gt.space && (o.walk ? o.person.id < e.person.id : true)) slow = Math.min(slow, 0.15 + od * 0.4); }
   const pd = Math.hypot(P.x - e.x, P.z - e.z); if (pd < 1.5 && ((P.x - e.x) * ux + (P.z - e.z) * uz) / (pd || 1) > 0.4) slow = Math.min(slow, pd < 0.9 ? 0 : 0.3);
   // heading steers toward the goal at a capped rate; speed eases with turn error, nearness to the end and obstacles
   if (e.heading === undefined) e.heading = e.mesh.rotation.y;
   const want = Math.atan2(gx - e.x, gz - e.z); let err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading));
-  const maxTurn = (e.v > 0.3 ? 4.2 : 5.5) * dt; e.heading += Math.max(-maxTurn, Math.min(maxTurn, err)); e.mesh.rotation.y = e.heading;
-  const turnK = Math.max(0.25, Math.cos(Math.min(1.3, Math.abs(err)))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = 1.45 * slow * turnK * (w.vanish ? 1 : arrive) * (e.person ? 0.9 + ((e.person.id * 37) % 21) / 100 : 1);
-  e.v = (e.v || 0); e.v += Math.max(-4.5 * dt, Math.min(3 * dt, target - e.v));
+  const maxTurn = (e.v > 0.3 ? gt.turn : gt.turn * 1.3) * dt; e.heading += Math.max(-maxTurn, Math.min(maxTurn, err)); e.mesh.rotation.y = e.heading;
+  e.pauseCool = (e.pauseCool || 0) - dt; if ((e.pauseT || 0) > 0) { e.pauseT -= dt; slow = Math.min(slow, 0.05); } else if (Math.abs(err) > 0.8 && e.v > 0.7 && e.pauseCool <= 0 && gt.pause > 0 && Math.random() < gt.pause * dt * 8) { e.pauseT = 0.5 + Math.random() * 0.8; e.pauseCool = 5; }
+  const turnK = Math.max(0.25, Math.cos(Math.min(1.3, Math.abs(err)))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = gt.v * slow * turnK * (w.vanish ? 1 : arrive);
+  e.v = (e.v || 0); e.v += Math.max(-1.5 * gt.accel * dt, Math.min(gt.accel * dt, target - e.v));
   if (toEnd < 0.05 && !w.vanish) return finish();
   if (w.vanish && cur === 0 && toEnd < 0.2) return finish();
   if (e.v < 0.02 && slow < 0.2) { if ((w.stuck += dt) > 7) return finish(); } else w.stuck = 0;
   const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; e.mesh.position.x = e.x; e.mesh.position.z = e.z;
   if (H) {
-    if (!e.walking) { try { H.play('walk', { fade: 0.25 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; }
-    if (d > 22) return true; H.lookYaw += (0 - H.lookYaw) * Math.min(1, dt * 4); H.update(dt * Math.max(0.35, Math.min(1.2, e.v / 1.3)));
+    if (!e.walking || e.clip !== gt.clip) { try { H.play(gt.clip, { fade: 0.25 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = gt.clip; }
+    if (d > 22) return true;
+    const ph = e.gaitBase.phase; e.gt = (e.gt || 0) + dt; let look = Math.sin(e.gt * 0.7 + ph) * gt.sway * (gt.look ? 3 : 1);
+    if (pd < 3.8 && Math.abs(Math.atan2(P.x - e.x, P.z - e.z) - e.heading) < 1.2 && hash01('glance', e.person.id, Math.floor(e.gt / 3)) < gt.glance) look = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(Math.atan2(P.x - e.x, P.z - e.z) - e.heading), Math.cos(Math.atan2(P.x - e.x, P.z - e.z) - e.heading))));
+    H.lookYaw += (look - H.lookYaw) * Math.min(1, dt * 3.5); H.update(dt * Math.max(0.3, Math.min(1.8, e.v / gt.stride)));
   }
   return true;
 }
@@ -1365,6 +1378,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

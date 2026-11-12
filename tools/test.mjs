@@ -24,6 +24,8 @@ import { simTests } from './test-sim.mjs';
 await simTests(fail);
 import { dutyTests } from './test-duty.mjs';
 await dutyTests(fail);
+import { gaitTests } from './test-gait.mjs';
+await gaitTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -261,7 +263,7 @@ const nom = await page2.evaluate(async () => {
       G.phase = 'play'; const w = g.world, e = g.ents.find(x => x.simmed); out.walk = { have: !!e };
       if (e) { const tiles = w.d.openTiles.filter(([x, y]) => w.d.grid[y][x] === 0 && !w.isTube(x, y)), here = w.tile(e.x, e.z), f0 = w.field(here[0], here[1], true);
         const far = tiles.filter(([x, y]) => f0[x + y * w.W] > 8 && f0[x + y * w.W] < 30)[0]; out.walk.far = !!far;
-        if (far) { const f = g.pathField(far[0], far[1]), d0 = f[here[0] + here[1] * w.W]; P.x = e.x + 3; P.z = e.z; g.startWalk(e, far[0], far[1], false); tick(240); const now = w.tile(e.x, e.z), d1 = f[now[0] + now[1] * w.W]; out.walk.d0 = d0; out.walk.d1 = d1; out.walk.closer = d1 < d0 || !e.walk; out.walk.inside = w.d.grid[now[1]][now[0]] === 0; tick(900); const fin = w.tile(e.x, e.z); out.walk.arrived = !e.walk && fin[0] === far[0] && fin[1] === far[1]; } }
+        if (far) { const f = g.pathField(far[0], far[1]), d0 = f[here[0] + here[1] * w.W]; P.x = e.x + 3; P.z = e.z; g.startWalk(e, far[0], far[1], false); tick(240); const now = w.tile(e.x, e.z), d1 = f[now[0] + now[1] * w.W]; out.walk.d0 = d0; out.walk.d1 = d1; out.walk.closer = d1 < d0 || !e.walk; out.walk.inside = w.d.grid[now[1]][now[0]] === 0; tick(900); const fin = w.tile(e.x, e.z); out.walk.gait = g.describeGait(g.gaitFor(e) && e.gaitBase); out.walk.arrived = !e.walk && fin[0] === far[0] && fin[1] === far[1]; } }
     }
     { // sliding doors, clutter pick-up, terminal and talk menus
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
