@@ -24,6 +24,7 @@ import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALI
 import { DutyHUD } from './hud-duty.js';
 import { Phases, PHASES, FAILURE_MODES } from './phases.js';
 import { makeGait, gaitNow, describeGait } from './gait.js';
+import { Fidgeter } from './movement.js';
 import { MISSIONS, party as commParty } from './bridge.js';
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -301,6 +302,18 @@ const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'inte
 function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
 function pathField(tx, ty) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty; let f = c.get(k); if (!f) { f = world.field(tx, ty, true); c.set(k, f); if (c.size > 40) c.delete(c.keys().next().value); } return f; }
 
+
+// ---- fidgets and gestures (js/movement.js): an additive bone layer + face morphs on top of whatever clip is playing
+const SIT_SPOTS = new Set(['bar', 'table', 'sofa', 'bunk']), WORK_SPOTS = new Set(['console', 'desk', 'workbench', 'labbench', 'junction', 'warpcore', 'replicator']), CUE_OF = { yawn: 'sigh', groan: 'sigh', cough: 'clear', knuckles: 'crack', sigh: 'sigh', hum: 'hum', whistle: 'whistle' };
+function fidgetStep(e, dt, d) {
+  const H = e.mesh.userData.human; if (!H || !e.person || e.fake) return;
+  const fid = e.fid || (e.fid = new Fidgeter(e.person, G.runSeed)), gtx = e.gaitCtx, h = G.comms ? G.comms.clock.localHour(e.person) : 2;
+  const state = e.walk ? 'walking' : SIT_SPOTS.has(e.spot) ? 'sitting' : WORK_SPOTS.has(e.spot) ? 'working' : (d < 3.2 && G.phase === 'play' ? 'talking' : 'standing');
+  const o = fid.update(dt, { state, stress: Math.max(0, Math.min(1, (G.comms?.alerts?.top()?.def.severity ?? 0) / 4)), tired: Math.max(0, Math.min(1, (h - 5) / 3)), late: !!gtx && h > 7 && h < 8, bored: state === 'sitting', playerNear: d < 4 });
+  H.add = o.bones; const f = {}; for (const k of e.fidFace || []) f[k] = 0; Object.assign(f, o.face); H.face(f); e.fidFace = Object.keys(o.face);
+  if (o.cue && d < 9) voiceCue(e.person, CUE_OF[o.cue] || o.cue);
+}
+
 function gaitFor(e) {   // this walker's gait right now: their own mix of parts, modulated by alert level, fatigue and time of day
   if (!e.gaitBase) e.gaitBase = makeGait(e.person, G.runSeed);
   if (!e.gaitCtx || G.time - e.gaitT > 1) { const h = G.comms ? G.comms.clock.localHour(e.person) : 2; e.gaitT = G.time; e.gaitCtx = gaitNow(e.gaitBase, { alert: G.comms?.alerts?.top()?.def.severity ?? 0, tired: Math.max(0, Math.min(1, (h - 5) / 3)), relaxed: h > 8 && h < 20 }); }
@@ -309,7 +322,7 @@ function gaitFor(e) {   // this walker's gait right now: their own mix of parts,
 function startWalk(e, tx, ty, vanish) { e.walk = { tx, ty, vanish, stuck: 0 }; }
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, yielding to others.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty), W = world.W, [tx, ty] = world.tile(e.x, e.z), cur = f[tx + ty * W];
-  const finish = () => { e.walk = null; e.v = 0; if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
+  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; if (w.vanish) { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); } else { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; poseFor(e); } return false; };
   if (cur < 0) return finish();
   const [fx, fz] = world.center(w.tx, w.ty), toEnd = Math.hypot(fx - e.x, fz - e.z);
   const gt = gaitFor(e);
@@ -328,7 +341,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const want = Math.atan2(gx - e.x, gz - e.z); let err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading));
   const maxTurn = (e.v > 0.3 ? gt.turn : gt.turn * 1.3) * dt; e.heading += Math.max(-maxTurn, Math.min(maxTurn, err)); e.mesh.rotation.y = e.heading;
   e.pauseCool = (e.pauseCool || 0) - dt; if ((e.pauseT || 0) > 0) { e.pauseT -= dt; slow = Math.min(slow, 0.05); } else if (Math.abs(err) > 0.8 && e.v > 0.7 && e.pauseCool <= 0 && gt.pause > 0 && Math.random() < gt.pause * dt * 8) { e.pauseT = 0.5 + Math.random() * 0.8; e.pauseCool = 5; }
-  const turnK = Math.max(0.25, Math.cos(Math.min(1.3, Math.abs(err)))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = gt.v * slow * turnK * (w.vanish ? 1 : arrive);
+  const turnK = Math.abs(err) > 1.2 ? 0 : Math.max(0.25, Math.cos(Math.abs(err))), arrive = Math.min(1, 0.12 + toEnd / 0.9), target = gt.v * slow * turnK * (w.vanish ? 1 : arrive);
   e.v = (e.v || 0); e.v += Math.max(-1.5 * gt.accel * dt, Math.min(gt.accel * dt, target - e.v));
   if (toEnd < 0.05 && !w.vanish) return finish();
   if (w.vanish && cur === 0 && toEnd < 0.2) return finish();
@@ -337,6 +350,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (H) {
     if (!e.walking || e.clip !== gt.clip) { try { H.play(gt.clip, { fade: 0.25 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = gt.clip; }
     if (d > 22) return true;
+    fidgetStep(e, dt, d);
     const ph = e.gaitBase.phase; e.gt = (e.gt || 0) + dt; let look = Math.sin(e.gt * 0.7 + ph) * gt.sway * (gt.look ? 3 : 1);
     if (pd < 3.8 && Math.abs(Math.atan2(P.x - e.x, P.z - e.z) - e.heading) < 1.2 && hash01('glance', e.person.id, Math.floor(e.gt / 3)) < gt.glance) look = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(Math.atan2(P.x - e.x, P.z - e.z) - e.heading), Math.cos(Math.atan2(P.x - e.x, P.z - e.z) - e.heading))));
     H.lookYaw += (look - H.lookYaw) * Math.min(1, dt * 3.5); H.update(dt * Math.max(0.3, Math.min(1.8, e.v / gt.stride)));
@@ -345,9 +359,12 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
 }
 
 // ---- NPC sim bodies: people the sim puts on this deck get a body; others are abstract. Bodies appear/vanish out of sight.
-function simTileFor(person, e) {   // a free-ish tile inside the person's room, spread by id
-  const d = world.d, tiles = []; for (let y = 0; y < d.room.length; y++) for (let x = 0; x < d.room[y].length; x++) if (d.room[y][x] === e.room && d.grid[y][x] === 0 && !world.isTube(x, y)) tiles.push([x, y]);
-  if (!tiles.length) return null; let h = (person.id * 2654435761 + 7) >>> 0; return tiles[h % tiles.length];
+function simTileFor(person, e) {   // a tile in the person's room: beside the furniture of their spot (facing it) when there is some, else spread by id
+  const d = world.d, h = (person.id * 2654435761 + 7) >>> 0, ok = (x, y) => d.grid[y]?.[x] === 0 && !world.isTube(x, y) && d.room[y][x] === e.room;
+  const props = d.props.filter(p => p.kind === e.spot && d.room[p.ty]?.[p.tx] === e.room);
+  if (props.length) for (let k = 0; k < props.length; k++) { const p = props[(h + k) % props.length]; for (const [dx, dy] of WALK_DIRS) { const x = p.tx + dx, y = p.ty + dy; if (ok(x, y) && !ents.some(o => o.simmed && o.person !== person && Math.hypot(o.x - world.center(x, y)[0], o.z - world.center(x, y)[1]) < 0.7)) { const t = [x, y]; t.face = world.center(p.tx, p.ty); return t; } } }
+  const tiles = []; for (let y = 0; y < d.room.length; y++) for (let x = 0; x < d.room[y].length; x++) if (ok(x, y)) tiles.push([x, y]);
+  return tiles.length ? tiles[h % tiles.length] : null;
 }
 function simBodies(dt, force = false) {
   G.simT = (G.simT || 0) - dt; if (!force && G.simT > 0) return; G.simT = 1.5; if (!world || !G.sim || G.phase === 'ride' || G.phase === 'select') { if (!force) return; }
@@ -358,7 +375,7 @@ function simBodies(dt, force = false) {
     if (!o || o.room !== e.room) {
       if (force || unseen(e.x, e.z)) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
       else if (!o && world.car) startWalk(e, world.car.tx, world.car.ty, true);                       // left the deck: walk to the lift and go
-      else if (o) { const t = simTileFor(e.person, o); if (t) { e.room = o.room; e.spot = o.spot; startWalk(e, t[0], t[1], false); } }   // new room on this deck: walk there
+      else if (o) { const t = simTileFor(e.person, o); if (t) { e.room = o.room; e.spot = o.spot; e.faceAt = t.face || null; startWalk(e, t[0], t[1], false); } }   // new room on this deck: walk there
     }
   }
   for (const o of here.values()) {   // arrive
@@ -367,7 +384,7 @@ function simBodies(dt, force = false) {
     if (!force && !unseen(cx, cz)) { if (!world.car) continue; const [lx, lz] = world.center(world.car.tx, world.car.ty); if (!unseen(lx, lz)) continue; cx = lx; cz = lz; walkTo = t; }   // seen from here: come out of the lift instead
     o.person.status = o.person.status === 'seen' ? 'seen' : 'seen';
     const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); m.position.set(cx, 0, cz); m.rotation.y = (o.person.id * 0.9) % 6.28; m.userData.rank = o.person.short; scene.add(m);
-    const ne = { kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, room: o.room, spot: o.spot }; ents.push(ne); if (walkTo) startWalk(ne, walkTo[0], walkTo[1], false); else poseFor(ne);
+    const ne = { kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, room: o.room, spot: o.spot, faceAt: t.face || null }; ents.push(ne); if (walkTo) startWalk(ne, walkTo[0], walkTo[1], false); else poseFor(ne);
   }
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
@@ -863,11 +880,12 @@ function step(dt, t) {
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
       if (e.repairing) repairerStep(e, dt, d);
       if (H && e.kind === 'crew' && !e.fake) { const mad = gorns.find(g => g.mad && !g.dead && g.state !== S.DORMANT && Math.hypot(g.x - e.x, g.z - e.z) < 10 && world.los(g.x, g.z, e.x, e.z)); if (mad && !e.cower) { if (e.repairing) { e.repairing = null; G.say(`${e.person.short} drops their tools and hides.`, 'warn'); } e.cower = true; H.standing = false; H.play('crouch_idle', { fade: 0.2 }); H.face({ JawDrop: 0.7, LeftInnerBrowUp: 1, RightInnerBrowUp: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 }); if (d < 30) { sound.shriek(Math.max(0.05, 0.25 - d * 0.007)); if (d < 18) G.say(`${e.person ? e.person.short : 'A crewman'} screams: "${pick(['It\'s ' + (mad.person ? mad.person.given : 'him') + '! Something\'s wrong with ' + (mad.person ? mad.person.given : 'him') + '!', 'Stay back! STAY BACK!', 'No no no no—'])}"`, 'warn'); } } }
+      if (e.faceAt && !e.walk && H && !H.standing) { let fa = Math.atan2(e.faceAt[0] - e.x, e.faceAt[1] - e.z) - e.mesh.rotation.y; fa = Math.atan2(Math.sin(fa), Math.cos(fa)); e.mesh.rotation.y += fa * Math.min(1, dt * 3); }
       if (H) {
         if (d > 22) continue;                       // far away: skip skinning updates
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
         H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
-        if (!e.fake) liveFace(H, e.t, e.mesh.id);   // impostors never blink
+        if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) fidgetStep(e, dt, d); }   // impostors never blink
         H.update(dt * (e.fake ? 0.82 : 1));
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
@@ -1378,6 +1396,6 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

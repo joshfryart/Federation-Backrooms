@@ -301,7 +301,7 @@ export function makeHuman(opts = {}) {
   if (kind !== 'suit' && !opts.height) { const b = 0.96 + rnd() * 0.09; inner.scale.x *= b; inner.scale.z *= b * (0.98 + rnd() * 0.04); }   // slight build variation
   if (opts.shadow !== false) { const bs = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false })); bs.rotation.x = -Math.PI / 2; bs.position.y = 0.02; g.add(bs); g.userData.blob = bs; }
   const mixer = new THREE.AnimationMixer(inner); const acts = {}; let cur = null, curKey = '';
-  const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
+  const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'upperarm_l', 'clavicle_l', 'clavicle_r', 'thigh_l', 'thigh_r', 'foot_l', 'foot_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
   const H = {
     kind, inner, mixer, bones, mats, height, faceW: {}, lookYaw: 0, lookPitch: 0,
     has: (k) => !!inf.clips[k],
@@ -317,6 +317,7 @@ export function makeHuman(opts = {}) {
     face(w) { Object.assign(H.faceW, w); for (const m of faces) for (const k in H.faceW) { const i = m.morphTargetDictionary[k]; if (i !== undefined) m.morphTargetInfluences[i] = H.faceW[k]; } },
     update(dt) {
       mixer.update(dt); holoTime.value = performance.now() / 1000;
+      if (H.add) for (const n in H.add) { const b = bones[n]; if (b) { const r = H.add[n]; if (r[0]) b.rotateX(r[0]); if (r[1]) b.rotateY(r[1]); if (r[2]) b.rotateZ(r[2]); } }   // additive gesture layer from js/movement.js
       if (H.lookYaw || H.lookPitch) { const b = bones.Head; if (b) { b.rotateY(H.lookYaw * 0.6); b.rotateX(H.lookPitch); } const n = bones.neck_01; if (n) n.rotateY(H.lookYaw * 0.4); }
     },
   };

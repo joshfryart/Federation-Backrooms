@@ -4,11 +4,11 @@
 import { hash, hash01 } from './clock.js';
 
 // ---- parts (each a row you can swap) ----
-export const PACES = { dawdle: 0.95, easy: 1.2, normal: 1.4, brisk: 1.65, hurried: 1.9 };          // m/s top walking speed
+export const PACES = { dawdle: 0.85, easy: 1.05, normal: 1.25, brisk: 1.5, hurried: 1.75 };          // m/s top walking speed
 const PACE_ORDER = ['dawdle', 'easy', 'normal', 'brisk', 'hurried'];
 export const STYLES = {            // which animation clip, and the ground speed that clip's stride is authored for (m/s)
-  casual: { clip: 'walk', stride: 1.35 },
-  formal: { clip: 'walk_formal', stride: 1.25 },
+  casual: { clip: 'walk', stride: 0.95 },      // stride = ground speed the clip's planted foot moves at (measured: ~0.95 m/s for both), so animation speed = v / stride
+  formal: { clip: 'walk_formal', stride: 0.95 },
 };
 export const CARRIAGES = {         // how the body moves: turn rate (rad/s), acceleration (m/s^2), head sway amplitude (rad), glance chance at the player, pause chance at a corner, personal space (m)
   upright: { turn: 4.6, accel: 3.2, sway: 0.05, glance: 0.15, pause: 0.0, space: 0.95 },
@@ -47,7 +47,7 @@ export function gaitNow(g, ctx = {}) {
   if (ctx.tired) v *= 1 - 0.14 * ctx.tired;
   if (ctx.late) v *= 1.15;
   if ((ctx.alert || 0) >= 2) { v *= 1.18; turn *= 1.2; accel *= 1.3; }
-  if ((ctx.alert || 0) >= 3) { clip = 'jog'; stride = 2.9; v = Math.max(v * 1.6, 2.6); turn *= 1.3; accel *= 1.5; }
-  return { v, clip, stride, timeScale: Math.max(0.5, Math.min(1.7, v / stride)), turn, accel, sway: car.sway * (ctx.alert >= 2 ? 1.4 : 1), glance: car.glance, pause: g.habit === 'stops-to-think' ? Math.max(car.pause, 0.3) : car.pause, space: car.space, look: g.habit === 'looks-around', cut: g.habit === 'cuts-corners' };
+  if ((ctx.alert || 0) >= 3) { clip = 'jog'; stride = 2.3; v = Math.max(v * 1.6, 2.6); turn *= 1.3; accel *= 1.5; }
+  return { v, clip, stride, timeScale: Math.max(0.5, Math.min(2.0, v / stride)), turn, accel, sway: car.sway * (ctx.alert >= 2 ? 1.4 : 1), glance: car.glance, pause: g.habit === 'stops-to-think' ? Math.max(car.pause, 0.3) : car.pause, space: car.space, look: g.habit === 'looks-around', cut: g.habit === 'cuts-corners' };
 }
 export const describeGait = (g) => `${g.pace} ${g.style} ${g.carriage}${g.habit !== 'none' ? ', ' + g.habit : ''} (${g.v.toFixed(2)} m/s)`;
