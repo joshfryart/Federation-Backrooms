@@ -22,6 +22,8 @@ import { unitTests as commsUnit, hudTests as commsHud } from './test-comms.mjs';
 await commsUnit(fail);
 import { simTests } from './test-sim.mjs';
 await simTests(fail);
+import { dutyTests } from './test-duty.mjs';
+await dutyTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));

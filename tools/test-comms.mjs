@@ -112,7 +112,7 @@ export async function hudTests(page, fail) {
     out.stackCap = document.querySelectorAll('#cm-stack .cm-line').length;
     key('KeyH'); out.radio = { open: getComputedStyle($('#cm-radio')).display !== 'none', opts: document.querySelectorAll('#cm-radio .opt').length };
     key('Digit2'); out.dept = document.querySelectorAll('#cm-radio .opt').length; key('Backspace'); const before = g.comms.log.length; key('Digit1'); tick(30 * 8);
-    out.hail = { closed: getComputedStyle($('#cm-radio')).display === 'none', msgs: g.comms.log.slice(before).map(m => m.from.short + ':' + m.text.slice(0, 40)) };
+    out.hail = { closed: getComputedStyle($('#cm-radio')).display === 'none', msgs: g.comms.log.slice(before).map(m => m.from.short + ':' + m.text.slice(0, 40)), me: g.G.player.short };
     key('KeyH'); key('Digit5'); tick(30 * 8); key('KeyH'); key('Digit5'); tick(30 * 8);
     g.alerts.clearAll(); tick(10); out.cleared = { badge: getComputedStyle($('#ac-badge')).display !== 'none', cards: document.querySelectorAll('.ac-card').length, lights: g.world.alertTarget };
     key('F4'); tick(2); const d1 = g.alerts.active().map(a => a.id).join(); key('F4'); tick(2); const d2 = g.alerts.active().map(a => a.id).join(); key('F4', { shiftKey: true }); out.f4 = { d1, d2, after: g.alerts.active().length };
@@ -125,7 +125,7 @@ export async function hudTests(page, fail) {
     && r.red.n === 2 && r.red.first === 'Red Alert' && r.red.second === 'Yellow Alert' && r.red.meaning.length > 30 && r.red.scope === 'Ship-wide' && /Ordered by/.test(r.red.who) && /^\d+:\d\d$/.test(r.red.el) && r.red.badge === 'none' && r.red.lights === 1 && /Red alert/i.test(r.red.pa) && r.red.stack >= 3 && r.red.paStyled
     && r.fireScope === 'Deck 3' && r.order.startsWith('Red Alert|Fire') && r.details.open && r.details.legend === 11 && r.details.hasDo && r.details.meanings === 3
     && r.log.open && r.log.rows >= 8 && r.log.pa >= 1 && r.log.plain >= 1 && r.stackCap <= 6
-    && r.radio.open && r.radio.opts === 6 && r.dept >= 5 && r.hail.closed && r.hail.msgs.length >= 1 && r.hail.msgs[0].startsWith('Ensign')
+    && r.radio.open && r.radio.opts === 6 && r.dept >= 5 && r.hail.closed && r.hail.msgs.length >= 1 && r.hail.msgs[0].startsWith(r.hail.me)
     && r.cleared.badge && r.cleared.cards === 0 && r.cleared.lights === 0 && r.f4.d1 === 'yellow' && r.f4.d2 === 'red' && r.f4.after === 0;
   if (!ok) fail('comms hud');
   await page.emulateMedia({ reducedMotion: 'reduce' });

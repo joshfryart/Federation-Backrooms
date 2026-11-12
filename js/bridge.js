@@ -29,7 +29,7 @@ const deptName = (p) => (p && DEPT[p.dept]?.name) || 'crew';
 export function whoIsOnBridge(roster, clock, data, seed = 1) {
   const occupants = [], bySt = {}, readyRoom = [];
   for (const p of roster.people) {
-    if (DEAD.has(p.status) || p.billet === 'player') continue;
+    if (DEAD.has(p.status) || p.billet === 'player' || p.isPlayer) continue;
     const day = data?.billets?.[p.billet]?.day; if (!day) continue;
     const h = clock.localHour(p), b = day.find(x => h >= x[0] && h < x[1]); if (!b) continue;
     let room = b[2];
@@ -40,7 +40,7 @@ export function whoIsOnBridge(roster, clock, data, seed = 1) {
     const st = STATION_OF[p.billet] || 'extra'; occupants.push({ person: p, station: st }); if (!bySt[st]) bySt[st] = p;
   }
   const watch = clock.dutyWatch;
-  const onDuty = roster.people.filter(p => p.watch === watch && !DEAD.has(p.status) && p.billet !== 'player' && !occupants.some(o => o.person === p));
+  const onDuty = roster.people.filter(p => p.watch === watch && !DEAD.has(p.status) && p.billet !== 'player' && !p.isPlayer && !occupants.some(o => o.person === p));
   const duty = onDuty.sort((a, b) => b.rank - a.rank || a.id - b.id)[0] || null;   // the senior officer on watch, wherever they are
   const senior = occupants.map(o => o.person).sort((a, b) => b.rank - a.rank || a.id - b.id)[0] || null;
   return { occupants, bySt, manned: occupants.length > 0, readyRoom, duty, senior, hour: clock.hour };
