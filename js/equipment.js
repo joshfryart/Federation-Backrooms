@@ -1,6 +1,6 @@
 // Equipment motions: how a crew member *uses* each piece of furniture / hardware, what they hold while doing it, and the things people carry.
 // Pure data + logic (no three.js, no DOM): node-testable. The game glue lives in js/haul.js (operators on NPC bodies, carts, player carry).
-//   EQUIPMENT       key (prop kind or schedule spot) -> { name, props, stance, clip, spots|box+gap, hold, steps, rest, idle }
+//   EQUIPMENT       key (prop kind or schedule spot) -> { name, props, stance, seat (seat top m), clip, spots|box+gap, y, hold, steps, rest, idle }
 //   equipFor(spot)  the entry for a schedule spot or a prop kind (aliases, then the generic 'post' fallback)
 //   propsFor(spot)  which prop kinds a person with that spot stands at (js/main.js simTileFor)
 //   standPoint(def, prop, from)  where the body goes beside a prop {cx, cz, rot} when it arrives from `from` {x, z}: { x, z, yaw, y }
@@ -18,16 +18,17 @@ export const STANCE_CLIP = { stand: 'idle', sit: 'sitting_idle', kneel: 'fixing_
 const st = (g, dur, x = {}) => ({ g, dur, ...x });
 const wait = (dur, x = {}) => ({ g: null, dur, ...x });
 
-// ---- the table. Spots are [localX, localZ, localYaw] in the prop's frame (props face local +z); the nearest one to where the person
+// ---- the table. Spots are [localX, localZ, localYaw] of the body ROOT in the prop's frame (props face local +z; in sitting_idle the pelvis is
+//      0.41 m behind the root, so a seat at s puts the root 0.41 m ahead of it, feet under the table); the nearest one to where the person
 //      walked in from is used, else a point just outside `box` [x0, x1, z0, z1] (+ gap) on the side they came from, facing the prop.
 export const EQUIPMENT = {
   console: { name: 'ops console', props: ['console'], stance: 'stand', box: [-0.85, 0.85, -0.38, 0.38], gap: 0.32, spots: [[0, 0.72, PI], [-0.5, 0.72, PI], [0.5, 0.72, PI]],
     steps: [st('tap_console', [2, 3.4], { cue: 'beep' }), st('lean_in', [2.5, 4], { pose: 'lean_on' }), st('type_keys', [2.4, 4]), st('look_up_screen', [1.8, 3], { p: 0.6 }), st('press_panel', [1.1, 1.6], { fx: 'screen' }), st('rub_eyes', [1.8, 2.4], { p: 0.18 })],
     rest: [1.5, 4], idle: ['nod', 'head_tilt', 'look_around'] },
-  desk: { name: 'desk', props: ['desk'], stance: 'sit', box: [-0.9, 0.9, -0.43, 0.43], gap: 0.25, spots: [[0, 0.72, PI]],
+  desk: { name: 'desk', props: ['desk'], stance: 'sit', seat: 0.48, box: [-0.9, 0.9, -0.43, 0.43], gap: 0.25, spots: [[0, 0.36, PI]],
     steps: [st('type_keys', [3, 5], { cue: 'keys' }), st('check_tablet', [2.4, 3.6], { holdL: 'padd', pose: 'hold_padd' }), wait([1, 2], { holdL: null }), st('lean_in', [2.5, 4]), st('rub_eyes', [1.8, 2.4], { p: 0.25 }), st('stretch', [2.6, 3.4], { p: 0.15 })],
     rest: [2, 5], idle: ['head_tilt', 'nod', 'slow_blink'] },
-  chair: { name: 'command chair', props: ['chair'], stance: 'sit', spots: [[0, 0.05, 0]], steps: [st('look_up_screen', [2.4, 4]), st('check_tablet', [2.4, 3.6], { holdL: 'padd' }), wait([1, 2], { holdL: null }), st('nod', [0.7, 1]), st('tap_console', [2, 3], { p: 0.5 })], rest: [3, 6], idle: ['look_around', 'head_tilt'] },
+  chair: { name: 'command chair', props: ['chair'], stance: 'sit', seat: 0.5, spots: [[0, -0.38, PI]], steps: [st('look_up_screen', [2.4, 4]), st('check_tablet', [2.4, 3.6], { holdL: 'padd' }), wait([1, 2], { holdL: null }), st('nod', [0.7, 1]), st('tap_console', [2, 3], { p: 0.5 })], rest: [3, 6], idle: ['look_around', 'head_tilt'] },
   viewscreen: { name: 'main viewscreen', props: ['viewscreen'], stance: 'stand', box: [-1.3, 1.3, -0.3, 0.3], gap: 0.9, steps: [st('look_up_screen', [3, 5]), st('hands_behind_back', [5, 8]), st('nod', [0.7, 1])], rest: [3, 6], idle: ['head_tilt'] },
   warpcore: { name: 'warp core', props: ['warpcore'], stance: 'stand', box: [-0.9, 0.9, -0.9, 0.9], gap: 0.3,
     steps: [st('look_up_screen', [2.4, 3.4]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', cue: 'beep' }), st('press_panel', [1.1, 1.6], { holdL: null, fx: 'core' }), st('tool_work', [2.2, 3.2], { hold: 'tool', p: 0.45 }), wait([0.6, 1], { hold: null })],
@@ -49,18 +50,18 @@ export const EQUIPMENT = {
     rest: [2, 4], idle: ['head_tilt', 'rub_neck'] },
   treadmill: { name: 'treadmill', props: ['treadmill'], stance: 'stand', clip: 'jog_fwd', speed: 0.9, y: 0.22, spots: [[0, 0.15, PI]],
     steps: [wait([8, 14], { clip: 'jog_fwd', cue: 'thud' }), wait([5, 9], { clip: 'walk', speed: 0.8 }), st('glance_back', [1, 1.5], { clip: 'walk' }), wait([4, 8], { clip: 'jog_fwd' })], rest: [0.5, 1.5], restClip: 'walk', idle: [] },
-  weightbench: { name: 'weight bench', props: ['weightbench'], stance: 'sit', spots: [[0, 0.32, 0]],
+  weightbench: { name: 'weight bench', props: ['weightbench'], stance: 'sit', seat: 0.5, spots: [[0, 0.7, 0]],
     steps: [st('curl_weights', [2.4, 3.4], { hold: 'dumbbell', holdL: 'dumbbell', cue: 'groan' }), st('curl_weights', [2.4, 3.4]), wait([1.5, 3]), st('curl_weights', [2.4, 3.4], { p: 0.7 }), wait([1, 2], { hold: null, holdL: null }), st('stretch', [2.6, 3.4], { p: 0.4 })],
     rest: [2, 4], idle: ['neck_roll', 'sigh'] },
-  bar: { name: 'bar', props: ['table', 'replicator', 'sofa'], stance: 'sit', hold: 'glass', box: [-0.76, 0.76, -0.5, 0.5], gap: 0.25, spots: [[0, 0.95, PI], [0, -0.95, 0]],
+  bar: { name: 'bar', props: ['table', 'replicator', 'sofa'], stance: 'sit', seat: 0.48, hold: 'glass', box: [-0.76, 0.76, -0.5, 0.5], gap: 0.25, spots: [[0, 0.56, PI], [0, -0.56, 0], [0.45, 0.56, PI], [-0.45, -0.56, 0]],
     steps: [st('sip', [1.6, 2.4], { pose: 'hold_cup' }), wait([3, 6], { pose: 'hold_cup' }), st('nod', [0.7, 1]), st('small_smile', [1.4, 2.4]), st('sip', [1.6, 2.4], { pose: 'hold_cup', p: 0.7 })], rest: [2, 5], idle: ['look_around', 'swing_legs', 'head_tilt'] },
-  table: { name: 'mess table', props: ['table'], stance: 'sit', box: [-0.76, 0.76, -0.5, 0.5], gap: 0.25, spots: [[0, 0.95, PI], [0, -0.95, 0]],
+  table: { name: 'mess table', props: ['table'], stance: 'sit', seat: 0.48, box: [-0.76, 0.76, -0.5, 0.5], gap: 0.25, spots: [[0, 0.56, PI], [0, -0.56, 0], [0.45, 0.56, PI], [-0.45, -0.56, 0]],
     steps: [st('take_item', [1, 1.4], { hold: 'cup' }), st('sip', [1.6, 2.4], { pose: 'hold_cup' }), wait([2, 4], { pose: 'hold_cup' }), wait([0.5, 1], { hold: null }), st('lean_in', [2.5, 4]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', p: 0.4 }), wait([0.5, 1], { holdL: null })],
     rest: [2, 5], idle: ['nod', 'small_smile', 'look_around'] },
-  sofa: { name: 'sofa', props: ['sofa', 'lonechair'], stance: 'sit', spots: [[-0.45, 0.12, 0], [0.45, 0.12, 0]],
+  sofa: { name: 'sofa', props: ['sofa', 'lonechair'], stance: 'sit', seat: 0.46, spots: [[-0.45, 0.46, 0], [0.45, 0.46, 0], [0, 0.46, 0]],
     steps: [wait([4, 8]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', p: 0.5 }), wait([0.5, 1], { holdL: null }), st('stretch', [2.6, 3.4], { p: 0.3 }), st('swing_legs', [2.5, 4])], rest: [3, 6], idle: ['look_around', 'small_smile', 'slow_blink'] },
-  lonechair: { name: 'armchair', props: ['lonechair'], stance: 'sit', spots: [[0, -0.05, PI]], steps: [wait([5, 9]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', p: 0.4 }), wait([0.5, 1], { holdL: null })], rest: [3, 6], idle: ['look_around', 'slow_blink'] },
-  bunk: { name: 'bunk', props: ['bunk'], stance: 'sit', spots: [[0.2, 0.32, 0], [-0.3, 0.32, 0]],
+  lonechair: { name: 'armchair', props: ['lonechair'], stance: 'sit', seat: 0.45, spots: [[0, -0.4, PI]], steps: [wait([5, 9]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', p: 0.4 }), wait([0.5, 1], { holdL: null })], rest: [3, 6], idle: ['look_around', 'slow_blink'] },
+  bunk: { name: 'bunk', props: ['bunk'], stance: 'sit', seat: 0.52, spots: [[0.25, 0.66, 0], [-0.45, 0.66, 0]],
     steps: [st('check_tablet', [3, 5], { holdL: 'padd', pose: 'hold_padd' }), wait([4, 8], { pose: 'hold_padd' }), wait([0.5, 1], { holdL: null }), st('yawn', [2.4, 3.2], { p: 0.4 }), st('stretch', [2.6, 3.4], { p: 0.3 })], rest: [3, 6], idle: ['slow_blink', 'rub_eyes'] },
   washer: { name: 'washer-dryer', props: ['washer'], stance: 'stand', box: [-0.85, 0.85, -0.4, 0.4], gap: 0.3, spots: [[-0.45, 0.72, PI], [0.45, 0.72, PI]],
     steps: [st('reach_low', [1.8, 2.6], { cue: 'clunk' }), st('take_item', [1, 1.4], { hold: 'linen', pose: 'carry_front' }), st('fold_cloth', [2.4, 3.4]), wait([0.5, 1], { hold: null }), st('press_panel', [1.1, 1.5], { fx: 'washer', cue: 'beep' })], rest: [2, 4], idle: ['sigh', 'look_around'] },
@@ -103,17 +104,18 @@ export function equipFor(spot) { return EQUIPMENT[equipKey(spot)]; }
 export function propsFor(spot) { const k = equipKey(spot); return k === GENERIC && spot !== GENERIC ? [spot] : EQUIPMENT[k].props.length ? EQUIPMENT[k].props : [spot]; }
 
 // ---- where the body goes: prop = { cx, cz, rot } (world centre + y rotation), from = { x, z } where the person arrived ----
-export function standPoint(def, prop, from) {
+export function standPoint(def, prop, from, taken = []) {   // taken: [[x, z], ...] use points other people already hold
   const c = Math.cos(prop.rot || 0), s = Math.sin(prop.rot || 0), toW = (lx, lz) => [prop.cx + lx * c + lz * s, prop.cz - lx * s + lz * c];   // three.js rotation.y
   let dx = from.x - prop.cx, dz = from.z - prop.cz; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
   const y = def.y || 0;
   if (def.spots?.length) {   // the authored spot nearest to where they came in, unless it is round the far side
-    let best = null, bd = 1e9; for (const sp of def.spots) { const [wx, wz] = toW(sp[0], sp[1]), d = Math.hypot(wx - from.x, wz - from.z); if (d < bd) { bd = d; best = [wx, wz, sp[2] + (prop.rot || 0)]; } }
-    if (bd < Math.max(2.2, dl + 0.2) || !def.box) return { x: best[0], z: best[1], yaw: best[2], y };
+    let best = null, bd = 1e9; for (const sp of def.spots) { const [wx, wz] = toW(sp[0], sp[1]), d = Math.hypot(wx - from.x, wz - from.z) + (taken.some(t => Math.hypot(t[0] - wx, t[1] - wz) < 0.45) ? 50 : 0); if (d < bd) { bd = d; best = [wx, wz, sp[2] + (prop.rot || 0)]; } }
+    if ((bd < Math.max(2.2, dl + 0.2) || !def.box) && bd < 50) return { x: best[0], z: best[1], yaw: best[2], y, spot: true };
   }
   const [x0, x1, z0, z1] = def.box || [-0.6, 0.6, -0.6, 0.6], lx = dx * c - dz * s, lz = dx * s + dz * c;   // approach direction in the prop's frame
   const tx = lx > 1e-6 ? x1 / lx : lx < -1e-6 ? x0 / lx : 1e9, tz = lz > 1e-6 ? z1 / lz : lz < -1e-6 ? z0 / lz : 1e9, t = Math.min(tx, tz, 1.15) + (def.gap ?? 0.3);
-  return { x: prop.cx + dx * t, z: prop.cz + dz * t, yaw: Math.atan2(-dx, -dz), y };
+  let x = prop.cx + dx * t, z = prop.cz + dz * t; for (let k = 1; k < 4 && taken.some(q => Math.hypot(q[0] - x, q[1] - z) < 0.5); k++) { x += -dz * 0.6 * (k % 2 ? k : -k); z += dx * 0.6 * (k % 2 ? k : -k); }   // shoulder to shoulder
+  return { x, z, yaw: Math.atan2(prop.cx - x, prop.cz - z), y };
 }
 
 // ---- use scripts: one cycle of steps with natural variation (optional steps, durations, an occasional idle gesture), deterministic ----
@@ -165,7 +167,7 @@ export class Operator {
     for (const id in this.poseW) { this.poseW[id] += ((id === want ? 1 : 0) - this.poseW[id]) * k; if (id !== want && this.poseW[id] < 0.01) { delete this.poseW[id]; continue; } const P = HOLDS[id]; for (const c in P) out.ch[c] = (out.ch[c] || 0) + P[c] * this.poseW[id]; }
     if (s && s.g && GESTURES[s.g]) {   // keyframed gesture with soft in/out
       const g = GESTURES[s.g], u = Math.max(0, Math.min(1, this.t / this.dur)), env = Math.min(1, u / 0.12, (1 - u) / 0.15), w = env * env * (3 - 2 * env), smp = sample(g, u);
-      for (const c in smp.ch) out.ch[c] = (out.ch[c] || 0) + smp.ch[c] * w; for (const f in smp.face) out.face[f] = smp.face[f] * w; out.gesture = s.g;
+      for (const c in smp.ch) out.ch[c] = (out.ch[c] || 0) * (1 - w) + smp.ch[c] * w; for (const f in smp.face) out.face[f] = smp.face[f] * w; out.gesture = s.g;   // the gesture takes over channels a held pose also drives (no double bends)
     }
     out.hold = this.hold; out.holdL = this.holdL; return out;
   }

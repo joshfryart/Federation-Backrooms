@@ -30,6 +30,8 @@ import { gaitTests } from './test-gait.mjs';
 await gaitTests(fail);
 import { movementTests } from './test-movement.mjs';
 await movementTests(fail);
+import { equipmentTests } from './test-equipment.mjs';   // equipment motions / carry items (tools/test-equipment.mjs)
+await equipmentTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -280,6 +282,31 @@ const nom = await page2.evaluate(async () => {
       const ph = g.phases; ph.enabled = false; ph.index = 4; g.G.evacT = 0; g.evacuationStep(2); r.evac = g.sim.over.size; for (const p of g.roster.people) g.sim.release(p); ph.index = 0;
       out.move2 = r;
     }
+    { // equipment motions, held items, carts, player carry (js/equipment.js, js/carry.js, js/haul.js)
+      G.phase = 'play'; g.simBodies(0, true); const w = g.world, HL = g.haul, q = { haul: !!HL }, hum = (x) => x?.mesh?.userData.human;
+      const nb = (p) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [p.tx + a, p.ty + b]).find(([x, y]) => w.d.grid[y]?.[x] === 0 && !w.isTube(x, y));
+      let e = g.ents.find(x => x.simmed && hum(x) && !x.walk); const cp = w.d.props.find(p => p.kind === 'console' && nb(p));
+      if (e) { e.walk = null; e.haul = null; if (cp) { const [x, z] = w.center(...nb(cp)); e.x = x; e.z = z; e.mesh.position.set(x, 0, z); e.faceAt = w.center(cp.tx, cp.ty); } e.spot = 'console'; g.opEnd(e); g.opStart(e); }
+      if (e?.op) { const st = new Set(), ge = new Set(), cl = new Set(); for (let i = 0; i < 30 * 30; i++) { P.x = e.x + 2.2; P.z = e.z; P.vx = P.vz = 0; tick(1); if (!e.op) break; st.add(e.opStep); cl.add(hum(e).current); if (Object.keys(hum(e).add || {}).length > 3) ge.add(e.opStep); }
+        q.op = { key: e.op?.key, steps: st.size, gest: ge.size, clips: [...cl], faced: !!e.faceAt, still: !e.walk };
+        e.spot = 'bar'; g.opEnd(e); g.opStart(e); tick(2); const H = hum(e), h = H.held?.hand_r, bp = new (h?.position.constructor || Object)(); q.held = { id: h?.userData.id || null, bone: h?.parent?.name || null };
+        if (h) { const a = h.children[0].getWorldPosition(bp.clone()), b = H.bones.hand_r.getWorldPosition(bp.clone()); q.held.dist = +a.distanceTo(b).toFixed(3); for (let i = 0; i < 20; i++) tick(1); q.held.follows = h.children[0].getWorldPosition(bp.clone()).distanceTo(H.bones.hand_r.getWorldPosition(bp.clone())) < 0.3; }
+        g.opEnd(e); q.held.dropped = !H.held?.hand_r; }
+      // NPC haul: walk to a cart, grab it, push it along a path, release it
+      if (HL) { HL.t = 1e9; let job = null; for (const c of g.ents.filter(x => x.simmed && hum(x) && !x.walk)) { if (c.op) g.opEnd(c); job = HL.startJob(c, true); if (job) { if (job.kind !== 'cart') { HL.endJob(job); job = null; continue; } break; } }
+        if (job) { const c = job.cart, e2 = job.e, c0 = [c.x, c.z], w0 = c.mesh.userData.wheels[0].rotation.x, ph = new Set(); let gap = 0, n = 0; P.x = e2.x + 30; P.z = e2.z;
+          for (; n < 30 * 120 && HL.jobs.includes(job); n++) { tick(1); ph.add(job.phase); if (job.phase === 'push') gap = Math.max(gap, Math.hypot(c.x - e2.x, c.z - e2.z)); }
+          q.cart = { phases: [...ph], moved: +Math.hypot(c.x - c0[0], c.z - c0[1]).toFixed(2), gap: +gap.toFixed(2), wheels: +Math.abs(c.mesh.userData.wheels[0].rotation.x - w0).toFixed(1), released: c.pusher === null && !e2.haul && !e2.pushing, secs: +(n / 30).toFixed(1) }; } }
+      // player: grab a cart, push it, load/unload, carry weight, drop and pick up, let go
+      if (HL) { const t = w.d.openTiles.find(([x, y]) => [1, 2, 3].every(k => w.d.grid[y]?.[x + k] === 0 && !w.isTube(x + k, y)) && w.d.grid[y][x] === 0); if (t) { const [x0, z0] = w.center(t[0], t[1]); for (const e3 of g.ents) if (e3.simmed && Math.hypot(e3.x - x0 - 3, e3.z - z0) < 5) { e3.x += 40; e3.mesh.position.x = e3.x; }
+        const c = HL.addCart('cargo', x0 + 1.6, z0, Math.PI / 2, false); P.x = x0 + 0.1; P.z = z0; P.y = 0; P.vx = P.vz = 0; P.yaw = -Math.PI / 2; P.mode = 'walk'; G.carry = null; const pr0 = HL.prompt();
+        const grab = HL.interact(), d0 = c.x; dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })); dispatchEvent(new KeyboardEvent('keydown', { code: 'ShiftLeft' })); let vmax = 0; for (let i = 0; i < 45; i++) { tick(1); vmax = Math.max(vmax, Math.hypot(P.vx, P.vz)); } dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })); dispatchEvent(new KeyboardEvent('keyup', { code: 'ShiftLeft' })); tick(3);
+        q.push = { prompt: /Push/.test(pr0), grab, pushing: !!P.pushing, moved: +(c.x - d0).toFixed(2), ahead: +(c.x - P.x).toFixed(2), vmax: +vmax.toFixed(2), mul: P.carryMul };
+        G.carry = { name: 'Field toolbox', real: '', item: 'toolbox' }; tick(1); q.carry = { vm: !!HL.vm, bonus: g.haul && G.carry.item === 'toolbox' }; const n0 = c.mesh.userData.load.length; HL.putDown(); q.carry.loaded = c.mesh.userData.load.length === n0 + 1 && !G.carry; HL.takeFromCart(); q.carry.unloaded = G.carry?.item === 'toolbox';
+        HL.interact(); q.push.released = !P.cart && !P.pushing && c.pusher === null; tick(1); q.push.mulAfter = P.carryMul;
+        G.carry = { name: 'Supply crate', real: '', item: 'crate' }; tick(1); q.carry.slow = P.carryMul; P.yaw = Math.PI / 2; HL.putDown(); q.carry.dropped = HL.dropped.length === 1 && !G.carry; HL.interact(); q.carry.picked = G.carry?.item === 'crate' && !HL.dropped.length; G.carry = null; tick(1); } }
+      out.equip = q;
+    }
     { // sliding doors, clutter pick-up, terminal and talk menus
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
       if (dr) { w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2; }
@@ -300,6 +327,12 @@ console.log('nominal:', JSON.stringify(nom));
     && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
     && n.locked.fx && n.locked.panel === 'play' && n.unlocked === 'select';
   if (!ok) fail('nominal ship / turbolift'); }
+{ const q = nom.equip || {}; console.log('equipment:', JSON.stringify(q));   // equipment motions / carts / carry (js/haul.js)
+  if (!q.haul || !q.op || q.op.steps < 3 || q.op.gest < 1 || !q.op.still || !q.held || !q.held.id || q.held.bone !== 'hand_r' || !(q.held.dist < 0.3) || !q.held.follows || !q.held.dropped) fail('equipment operator / held item ' + JSON.stringify(q.op) + JSON.stringify(q.held));
+  if (q.cart && !(q.cart.phases.includes('push') && q.cart.moved > 2 && q.cart.gap < 2.2 && q.cart.wheels > 3 && q.cart.released)) fail('equipment: NPC cart haul ' + JSON.stringify(q.cart));
+  if (!q.cart) fail('equipment: no NPC cart haul could start');
+  if (!q.push || !(q.push.prompt && q.push.grab && q.push.pushing && q.push.moved > 0.5 && q.push.ahead > 0.6 && q.push.vmax < 2.4 && q.push.mul === 0.6 && q.push.released && q.push.mulAfter === 1)) fail('equipment: player cart ' + JSON.stringify(q.push));
+  if (!q.carry || !(q.carry.vm && q.carry.loaded && q.carry.unloaded && q.carry.slow < 0.9 && q.carry.dropped && q.carry.picked)) fail('equipment: player carry ' + JSON.stringify(q.carry)); }
 // ---- crew voices, tags, lift speech, NPC riders ----
 const vox = await page2.evaluate(async () => {
   const V = await import('./js/voice.js'), SP = await import('./js/speech.js'), { SHIPS } = await import('./js/ships.js'), { makeComplement } = await import('./js/crew.js');

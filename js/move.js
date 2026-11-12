@@ -51,6 +51,7 @@ function wallBeside(P, world, side) {   // side: +1 right, -1 left (relative to 
  */
 export function movePlayer(dt, P, world, input, api) {
   const M = MOVE; const ev = (n, d) => api.onEvent(n, d);
+  if (P.pushing) input = { ...input, sprint: false, jump: false, crouchPressed: false };   // pushing a cart (js/haul.js): no sprint, jump or slide
   const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
   let wl = Math.hypot(input.fx, input.fz); const wfx = wl ? input.fx / wl : 0, wfz = wl ? input.fz / wl : 0;
   const wx = wfx * cy + wfz * sy, wz = -wfx * sy + wfz * cy;                       // wish direction (world)
@@ -139,7 +140,7 @@ export function movePlayer(dt, P, world, input, api) {
   P.sprint = input.sprint && wl > 0 && !P.crouch && api.stamina() > 3;
   P.flow = clamp(P.flow + (P.sprint && hs0 > 5 ? dt * 0.22 : -dt * 0.5), 0, 1);
   if (P.grounded) {
-    const spd = (P.sprint ? M.sprint + P.flow * M.flowBonus : P.crouch ? M.crouch : M.walk) * (P.slow || 1);
+    const spd = (P.sprint ? M.sprint + P.flow * M.flowBonus : P.crouch ? M.crouch : M.walk) * (P.slow || 1) * (P.carryMul || 1);   // carryMul: heavy load / cart (js/haul.js)
     const k = Math.min(1, dt * M.groundK); P.vx += (wx * spd - P.vx) * k; P.vz += (wz * spd - P.vz) * k;
     P.coyote = 0.12;
     if (input.crouchPressed && P.sprintWas && hs0 > M.slideMin && P.slideCd <= 0) {

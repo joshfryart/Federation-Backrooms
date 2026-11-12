@@ -88,21 +88,21 @@ export function tickHeld(H) {
 
 // ---- carts. Local frame: +z is the front (direction of travel), the handle is at the back (-z). ud.handle = distance centre -> grip
 export function makeCart(kind = 'cargo', loaded = false) {
-  const m = mats(), C = CARTS[kind] || CARTS.cargo, g = new THREE.Group(), w = C.w, l = C.l, wheels = [], wr = kind === 'cargo' ? 0.075 : 0.055;
+  const m = mats(), C = CARTS[kind] || CARTS.cargo, g = new THREE.Group(), w = C.w, l = C.l, wheels = [], wr = kind === 'cargo' ? 0.075 : 0.055, HY = 1.16;   // handle bar at the height of the 'push' clip's hands
   g.name = 'cart:' + kind; const deckY = kind === 'cargo' ? 0.22 : 0.18;
   const wheel = (x, z) => { const p = new THREE.Group(); p.position.set(x, wr, z); const t = cyl(wr, wr, 0.045, m.rubber, 0, 0, 0, 14); t.rotation.z = Math.PI / 2; p.add(t); const hub = cyl(wr * 0.45, wr * 0.45, 0.05, m.metal, 0, 0, 0, 8); hub.rotation.z = Math.PI / 2; p.add(hub); const sp = box(0.05, wr * 1.6, 0.012, m.hazard); p.add(sp); g.add(p); wheels.push(p); g.add(box(0.02, deckY - wr, 0.03, m.dark, x, wr + (deckY - wr) / 2, z)); };
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) wheel(sx * (w / 2 - 0.08), sz * (l / 2 - 0.12));
   if (kind === 'cargo') {
     g.add(box(w, 0.05, l, m.olive, 0, deckY + 0.025, 0)); g.add(box(w + 0.02, 0.02, 0.04, m.hazard, 0, deckY + 0.04, l / 2)); for (const sx of [-1, 1]) g.add(box(0.03, 0.06, l, m.dark, sx * w / 2, deckY + 0.05, 0));
-    for (const sx of [-1, 1]) g.add(box(0.035, 0.8, 0.035, m.metal, sx * (w / 2 - 0.05), deckY + 0.4, -l / 2 + 0.03)); g.add(box(w - 0.06, 0.04, 0.04, m.dark, 0, deckY + 0.8, -l / 2 + 0.03)); g.add(box(w - 0.1, 0.03, 0.03, m.metal, 0, deckY + 0.45, -l / 2 + 0.03));
+    for (const sx of [-1, 1]) g.add(box(0.035, HY - deckY, 0.035, m.metal, sx * (w / 2 - 0.05), (HY + deckY) / 2, -l / 2 + 0.03)); g.add(box(w - 0.06, 0.04, 0.04, m.dark, 0, HY, -l / 2 + 0.03)); g.add(box(w - 0.1, 0.03, 0.03, m.metal, 0, deckY + 0.45, -l / 2 + 0.03));
   } else if (kind === 'med') {
     for (const y of [deckY, deckY + 0.42, 0.86]) g.add(box(w, 0.035, l, m.white, 0, y, 0)); for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.025, 0.86 - deckY, 0.025, m.metal, sx * (w / 2 - 0.02), (0.86 + deckY) / 2, sz * (l / 2 - 0.02)));
     g.add(box(w - 0.1, 0.12, 0.02, m.white, 0, 0.75, l / 2 - 0.01)); g.add(box(0.12, 0.02, 0.02, m.dark, 0, 0.76, l / 2 + 0.005)); g.add(box(0.1, 0.03, 0.003, m.red, 0.18, 0.79, l / 2)); g.add(box(0.03, 0.1, 0.003, m.red, 0.18, 0.79, l / 2));
     g.add(cyl(0.012, 0.012, 1.0, m.metal, w / 2 - 0.05, 0.86 + 0.5, l / 2 - 0.05, 8)); g.add(box(0.12, 0.16, 0.04, m.glass, w / 2 - 0.05, 1.7, l / 2 - 0.05));
-    g.add(box(w - 0.04, 0.03, 0.03, m.metal, 0, 0.94, -l / 2 - 0.03));
+    for (const sx of [-1, 1]) g.add(box(0.02, HY - 0.86, 0.02, m.metal, sx * (w / 2 - 0.03), (HY + 0.86) / 2, -l / 2 - 0.03)); g.add(box(w - 0.04, 0.03, 0.03, m.metal, 0, HY, -l / 2 - 0.03));
   } else {   // tool cart: a drawer chest on castors
     g.add(box(w, 0.62, l * 0.92, m.red, 0, deckY + 0.31, 0)); for (let i = 0; i < 4; i++) { g.add(box(w + 0.005, 0.012, l * 0.92 - 0.04, m.dark, 0, deckY + 0.12 + i * 0.14, 0)); g.add(box(0.008, 0.02, l * 0.4, m.metal, w / 2 + 0.006, deckY + 0.07 + i * 0.14, 0)); }
-    g.add(box(w + 0.02, 0.03, l, m.dark, 0, deckY + 0.635, 0)); for (const sx of [-1, 1]) g.add(box(0.025, 0.2, 0.025, m.metal, sx * (w / 2 - 0.04), deckY + 0.74, -l / 2 - 0.02)); g.add(box(w - 0.05, 0.03, 0.03, m.metal, 0, deckY + 0.84, -l / 2 - 0.02));
+    g.add(box(w + 0.02, 0.03, l, m.dark, 0, deckY + 0.635, 0)); for (const sx of [-1, 1]) g.add(box(0.025, HY - deckY - 0.64, 0.025, m.metal, sx * (w / 2 - 0.04), (HY + deckY + 0.64) / 2, -l / 2 - 0.02)); g.add(box(w - 0.05, 0.03, 0.03, m.metal, 0, HY, -l / 2 - 0.02));
   }
   const topY = kind === 'cargo' ? deckY + 0.05 : kind === 'med' ? 0.875 : deckY + 0.65;
   g.userData = { kind, cart: true, wheels, wr, handle: l / 2 + 0.12, half: [w / 2, l / 2], topY, load: [], loadMeshes: [], name: C.name };

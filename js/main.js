@@ -26,6 +26,8 @@ import { DutyHUD } from './hud-duty.js';
 import { Phases, PHASES, FAILURE_MODES } from './phases.js';
 import { makeGait, gaitNow, describeGait } from './gait.js';
 import { Fidgeter } from './movement.js';
+import { Haul, initHaul, opStart, opHook, opEnd, pushHook, toolBonus } from './haul.js';   // equipment motions, carrying, carts (js/equipment.js, js/carry.js)
+import { propsFor, classifyItem } from './equipment.js';
 import { MISSIONS, party as commParty } from './bridge.js';
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -213,6 +215,7 @@ function loadDeck(n) {
   for (let i = 0; i < nt; i++) { const t = data.pickTile(() => true); if (t) add('tribble', t, makeTribble(), { ox: (rnd() - 0.5) * 1.2, oz: (rnd() - 0.5) * 1.2 }); }
   // survivors + bodies
   if (NM && G.sim) simBodies(0, true);
+  G.haul?.dispose(); G.haul = NM ? new Haul() : null;   // parked carts, NPC hauling, player carry/push (js/haul.js)
   for (let i = 0; i < (NM ? 0 : 3 + (n > 2 ? 1 : 0)); i++) {
     const t = data.pickTile(() => true); if (!t) continue;
     const person = pickCrewFor(G.roster, zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label, rnd); if (person) person.status = 'seen';
@@ -299,8 +302,9 @@ function placeGore(data, rnd, n) {
 
 
 // ---- NPC walking on the player's deck: descend the path field toward a tile at walking pace, then take the pose of the spot
-const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'interact', desk: 'interact', workbench: 'interact', labbench: 'interact', junction: 'interact', warpcore: 'interact', replicator: 'interact', bar: 'sitting_idle', table: 'sitting_idle', sofa: 'sitting_idle', bunk: 'sitting_idle', biobed: 'idle_talking', treadmill: 'jog', weightbench: 'idle_torch' };
-function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
+const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'interact', desk: 'interact', workbench: 'interact', labbench: 'interact', junction: 'interact', warpcore: 'interact', replicator: 'interact', bar: 'sitting_idle', table: 'sitting_idle', sofa: 'sitting_idle', bunk: 'sitting_idle', biobed: 'idle_talking', treadmill: 'jog_fwd', weightbench: 'idle_torch' };
+function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; if (opStart(e)) return;   // simmed crew run the equipment's use script (js/haul.js, js/equipment.js); POSE_OF is the fallback
+  const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
 function pathField(tx, ty, tubes = false) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty + (tubes ? 't' : ''); let f = c.get(k); if (!f) { f = tubes ? world.field(tx, ty, false, true) : world.field(tx, ty, true); c.set(k, f); if (c.size > 60) c.delete(c.keys().next().value); } return f; }
 
 
@@ -308,6 +312,7 @@ function pathField(tx, ty, tubes = false) { const c = G.fieldCache || (G.fieldCa
 const SIT_SPOTS = new Set(['bar', 'table', 'sofa', 'bunk']), WORK_SPOTS = new Set(['console', 'desk', 'workbench', 'labbench', 'junction', 'warpcore', 'replicator']), CUE_OF = { yawn: 'sigh', groan: 'sigh', cough: 'clear', knuckles: 'crack', sigh: 'sigh', hum: 'hum', whistle: 'whistle' };
 function fidgetStep(e, dt, d) {
   const H = e.mesh.userData.human; if (!H || !e.person || e.fake) return;
+  if (opHook(e, dt, d)) return;   // an equipment Operator / cart / carried load drives the additive layer instead of the fidgeter
   const fid = e.fid || (e.fid = new Fidgeter(e.person, G.runSeed)), gtx = e.gaitCtx, h = G.comms ? G.comms.clock.localHour(e.person) : 2;
   const state = e.walk ? 'walking' : SIT_SPOTS.has(e.spot) ? 'sitting' : WORK_SPOTS.has(e.spot) ? 'working' : (d < 3.2 && G.phase === 'play' ? 'talking' : 'standing');
   const o = fid.update(dt, { state, stress: Math.max(0, Math.min(1, (G.comms?.alerts?.top()?.def.severity ?? 0) / 4)), tired: Math.max(0, Math.min(1, (h - 5) / 3)), late: !!gtx && h > 7 && h < 8, bored: state === 'sitting', playerNear: d < 4 });
@@ -391,6 +396,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (!e.climbing) { const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.26); e.x = q.x; e.z = q.z; }   // never clip walls
   if (toEnd < 0.35 && !w.vanish) { const k = Math.min(1, dt * 7); e.x += (fx - e.x) * k; e.z += (fz - e.z) * k; }   // ease onto the exact spot
   e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
+  if (w.opts.push) pushHook(e, w, dt);   // pushing a cart (js/haul.js): ~0.7x speed, the cart rolls ahead; sets e.climbing so the 'push' clip / 0.23 m/s stride / no-fidget path below is used
   if (H) {
     // clip by what the body is really doing: idle while (nearly) standing, the gait clip otherwise, jog above ~2 m/s (hysteresis so it does not flicker)
     let clip = e.climbing ? 'push' : e.crawl || vault ? 'crouch_fwd' : gt.clip;
@@ -409,7 +415,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
 // ---- NPC sim bodies: people the sim puts on this deck get a body; others are abstract. Bodies appear/vanish out of sight.
 function simTileFor(person, e) {   // a tile in the person's room: beside the furniture of their spot (facing it) when there is some, else spread by id
   const d = world.d, h = (person.id * 2654435761 + 7) >>> 0, ok = (x, y) => d.grid[y]?.[x] === 0 && !world.isTube(x, y) && d.room[y][x] === e.room;
-  const props = d.props.filter(p => p.kind === e.spot && d.room[p.ty]?.[p.tx] === e.room);
+  const kinds = propsFor(e.spot), props = d.props.filter(p => kinds.includes(p.kind) && d.room[p.ty]?.[p.tx] === e.room);   // spot -> prop kinds (js/equipment.js: bar -> table, locker -> shelving …)
   if (props.length) for (let k = 0; k < props.length; k++) { const p = props[(h + k) % props.length]; for (const [dx, dy] of WALK_DIRS) { const x = p.tx + dx, y = p.ty + dy; if (ok(x, y) && !ents.some(o => o.simmed && o.person !== person && Math.hypot(o.x - world.center(x, y)[0], o.z - world.center(x, y)[1]) < 0.7)) { const t = [x, y]; t.face = world.center(p.tx, p.ty); return t; } } }
   const tiles = []; for (let y = 0; y < d.room.length; y++) for (let x = 0; x < d.room[y].length; x++) if (ok(x, y)) tiles.push([x, y]);
   return tiles.length ? tiles[h % tiles.length] : null;
@@ -436,6 +442,7 @@ function simBodies(dt, force = false) {
   }
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
+initHaul({ get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
 
 
 // ---- the player's billet: duty loops, orders, delegation, reports, mission task board (js/duty.js, js/hud-duty.js)
@@ -460,7 +467,7 @@ function setupDuty() {
 }
 function nomTick(dt) {
   if (!NOM() || !G.sim) return;
-  G.sim.tick(dt); evacuationStep(dt); simBodies(dt);
+  G.sim.tick(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt);
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt);
@@ -525,7 +532,8 @@ function talkMenu(e) {
   ];
   if (D.subs().includes(pr)) opts.push({ label: 'Order them to do their duty', run: () => { const r = D.order(pr, null); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
   else opts.push({ label: 'Ask for a hand with your duty', run: () => { const r = D.askHelp(pr); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
-  if (G.carry) opts.push({ label: `Give them: ${G.carry.name}`, run: () => { D._bump(pr, 0.06); say(pickOf(['Oh — thanks. I was looking for that.', 'Appreciated.', 'Where did you find this? Thank you.'], 'Thanks.')); G.say(`You give ${G.carry.name} to ${pr.short}.`, 'good'); G.carry = null; } });
+  if (G.carry && G.haul) opts.push(...G.haul.talkOpts(e, say, D));   // give / offer food / treat with a medkit (js/haul.js)
+  else if (G.carry) opts.push({ label: `Give them: ${G.carry.name}`, run: () => { D._bump(pr, 0.06); say(pickOf(['Oh — thanks. I was looking for that.', 'Appreciated.', 'Where did you find this? Thank you.'], 'Thanks.')); G.say(`You give ${G.carry.name} to ${pr.short}.`, 'good'); G.carry = null; } });
   H.openMenu(`${pr.short} — ${pr.title}`, opts, `trust ${Math.round(t * 100)}% · digit to choose · Esc to leave`);
 }
 function terminalMenu() {
@@ -665,7 +673,8 @@ addEventListener('keydown', (e) => {
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
   if (G.phase === 'play') {
     if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
-    if (e.code === 'KeyG' && NOM() && G.carry) { G.say(`You put ${G.carry.name} down.`); G.carry = null; }
+    if (e.code === 'KeyG' && NOM() && G.carry && !G.haul?.putDown()) { G.say(`You put ${G.carry.name} down.`); G.carry = null; }   // onto a cart / surface in js/haul.js
+    if (e.code === 'KeyR' && NOM()) G.haul?.takeFromCart();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
     if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat) fireGrapple();
@@ -722,11 +731,12 @@ function fire() {
 
 function interact() {
   if (nearestRepair()) return;   // E is held to repair; handled in step()
+  if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
   if (near && NOM() && near.kind === 'crew' && near.person && !near.fake && G.hud2) { talkMenu(near); return; }
   if (!near && NOM() && G.hud2) {
     const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) { terminalMenu(); return; }
-    const c = !G.carry && nearestClutter(); if (c && world.takeClutter(c)) { G.carry = { name: c.name, real: c.real }; sound.pickup(); G.say(`You take: ${c.name}. [G] put it down`, 'good'); return; }
+    const c = !G.carry && nearestClutter(); if (c && world.takeClutter(c)) { G.carry = { name: c.name, real: c.real, item: classifyItem(c.name, c.real) }; sound.pickup(); G.say(`You take: ${c.name}. [G] put it down`, 'good'); return; }
   }
   if (near) {
     near.used = true; sound.pickup();
@@ -927,6 +937,7 @@ function step(dt, t) {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       const H = e.mesh.userData.human;
       if (e.simmed && !e.walk) dodgeCheck(e, dt, d);
+      if (e.op && e.walk) opEnd(e);   // leaving the equipment: put things away
       if (e.walk && walkStep(e, dt, d)) continue;
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
       if (e.repairing) repairerStep(e, dt, d);
@@ -952,6 +963,7 @@ function step(dt, t) {
   else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
+  if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
   if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   $('prompt').textContent = prompt;
@@ -1051,7 +1063,7 @@ const rope = new THREE.Line(ropeGeo, new THREE.LineBasicMaterial({ color: 0xd8e2
 const hook = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 6), new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 1, roughness: 0.3, emissive: 0x40c8ff, emissiveIntensity: 0.6 })); hook.visible = false; scene.add(hook);
 const _h = new THREE.Vector3();
 function fireGrapple() {
-  if (G.phase !== 'play' || P.clung > 0) return;
+  if (G.phase !== 'play' || P.clung > 0 || P.pushing) return;   // no grapple while pushing a cart
   if (P.mode === 'grapple') { pressed.grappleCancel = true; return; }
   if (P.grapCd > 0 || P.mode === 'mantle') { sound.empty(); return; }
   camera.getWorldDirection(_f); const eye = camera.position;
@@ -1092,7 +1104,7 @@ let repairPts = [], statusOpen = false, statusT = 0;
 const SHIP = () => G.shipState;
 const BEAM = new THREE.Color(0x8fd8ff);
 const garble = (t) => G.fx.comms ? t.replace(/[a-z]/gi, c => Math.random() < 0.35 ? '▒' : c) : t;
-const repairTime = (r) => SYS[r.sys].repair * (r.main ? 1 : 1.5) * (1 + perk('boots') * 0);
+const repairTime = (r) => SYS[r.sys].repair * (r.main ? 1 : 1.5) * (1 + perk('boots') * 0) / toolBonus(G.carry);   // a carried toolbox repairs 25% faster
 function nearestRepair(any = false) {
   let best = null, bd = 1e9;
   for (const r of repairPts) { const d = Math.hypot(r.x - P.x, r.z - P.z); if (d < r.reach && d < bd && (any || SHIP().status(r.sys) !== 'nominal')) { bd = d; best = r; } }
@@ -1448,5 +1460,6 @@ function frame() {
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();
