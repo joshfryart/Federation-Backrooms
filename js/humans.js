@@ -523,6 +523,12 @@ export function markImpostor(g) {
   const b = new THREE.Mesh(new THREE.SphereGeometry(0.016 * s, 8, 6), tellMat); b.scale.set(1, 1.7, 0.6); b.position.copy(p).applyMatrix4(gw); b.position.z -= 0.062 * s; b.position.y += 0.005 * s; b.castShadow = false;
   g.add(b); neck.attach(b);
 }
+// the faint wet-sheen tell: skin gloss and eye glint swell very slowly (~7 s period, tiny amplitude) — easy to miss, hard to unsee
+export function impostorSheen(H, t, seed = 0) {
+  const k = 0.5 + 0.5 * Math.sin(t * 0.9 + seed * 1.7);
+  if (H.mats.body) H.mats.body.roughness = 0.46 - 0.1 * k;
+  if (H.mats.eyes) H.mats.eyes.emissiveIntensity = 0.16 + 0.1 * k;
+}
 export function makeMedHolo() {
   const g = makeHuman({ kind: 'crew_f2', height: 1.7, material: holoMaterial(0x6ad8ff, 0.8), shadow: false }); if (!g) return null;
   g.userData.human.play('idle_talking', { fade: 0 }); g.userData.human.standing = true; return g;

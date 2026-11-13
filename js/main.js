@@ -5,7 +5,7 @@ import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
-import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, impostorSheen, makeHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
@@ -1086,6 +1086,7 @@ function step(dt, t) {
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
         H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
         if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) fidgetStep(e, dt, d); }   // impostors never blink
+        if (e.fake && d < 12) impostorSheen(H, e.t, e.mesh.id);
         H.update(dt * (e.fake ? 0.82 : 1));
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
