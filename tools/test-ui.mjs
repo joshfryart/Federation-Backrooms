@@ -34,6 +34,7 @@ export async function uiTests(fail) {
     UI.holdWheel({}); ck(UI.escape() === 'wheel' && !UI.frozen, 'Esc (if the page hears it) cancels a held wheel'); }
   { const { s, UI } = mk(); UI.open('a', { close() { } }); UI.open('b'); UI.scriptPause(); ck(!UI.frozen && UI.expectUnlock === false && s.exits >= 1, 'P / Start closes layers; its unlock is expected');
     s.locked = true; UI.scriptPause(); ck(UI.expectUnlock && UI.onLockChange(false, 'paused') === 'ignore', 'script pause unlock does not double-pause'); }
+  { const { s, UI } = mk(); s.locked = false; UI.open('m'); s.locked = true; ck(UI.onLockChange(true, 'play') === 'locked' && !s.locked && UI.expectUnlock, 'a late re-lock under an open menu gives the cursor back'); UI.closeAll(); }
   { const { UI } = mk(); UI.open('a'); UI.open('b'); UI.open('a'); ck(UI.top().kind === 'a' && UI.stack.length === 2, 're-opening a layer brings it to the front'); UI.closeAll(); ck(!UI.frozen, 'closeAll'); }
 
   // ---- wheel geometry
@@ -82,7 +83,8 @@ export async function uiTests(fail) {
 // ---- browser: driven through the same code paths the game uses (window keydown/keyup in capture phase, the UI stack; headless has no pointer lock)
 export async function uiBrowser(page, fail) {
   const r = await page.evaluate(async () => {
-    const g = __game, G = g.G, out = {}; G.forceShip = 0; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.phase = 'play'; G.hp = G.maxHp = 1e6;
+    const g = __game, G = g.G, out = {}; const rpl = HTMLCanvasElement.prototype.requestPointerLock; HTMLCanvasElement.prototype.requestPointerLock = function () { return Promise.resolve(); };   // headless: a lock request that never lands (no stray lock/unlock events mid-test)
+    G.forceShip = 0; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.phase = 'play'; G.hp = G.maxHp = 1e6;
     let t = 0; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); g.menus.frame(1 / 30); } };
     const kd = (code, o = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code, bubbles: true, ...o })), ku = (code) => window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code, bubbles: true }));
     const key = (code) => { kd(code); ku(code); }, wait = (ms) => new Promise(r => setTimeout(r, ms)), UI = g.ui;
@@ -116,7 +118,7 @@ export async function uiBrowser(page, fail) {
     const e = g.ents.find(x => x.simmed && x.mesh); if (e) { G.phase = 'play'; g.P.x = e.x; g.P.z = e.z + 2.2; g.P.yaw = 0; g.P.pitch = 0; g.camera.position.set(g.P.x, 1.6, g.P.z); g.camera.rotation.set(0, 0, 0); g.camera.updateMatrixWorld(); g.menus.tags.t = 0; g.menus.frame(0.016); out.tags = { shown: g.menus.tags.shown, text: document.querySelector('.ntag')?.textContent || '' }; }
     // toasts
     G.say('Duty: Engineering rounds (engineering). [J]', 'comp'); out.toast = { icon: !!document.querySelector('#toast .tst svg'), text: document.querySelector('#toast .tst span')?.textContent };
-    return out;
+    HTMLCanvasElement.prototype.requestPointerLock = rpl; return out;
   });
   console.log('ui browser:', JSON.stringify(r));
   const ck = (c, m) => { if (!c) fail('ui browser: ' + m); };

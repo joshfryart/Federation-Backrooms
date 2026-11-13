@@ -76,7 +76,7 @@ export function createUIMode(fx = {}) {
     },
     // ---- pointer lock events (main.js 'pointerlockchange')
     onLockChange(locked, phase = 'play') {
-      if (locked) { this.expectUnlock = false; this.needClick = false; f.onChange(this); return 'locked'; }
+      if (locked) { this.expectUnlock = false; this.needClick = false; if (this.stack.length) this.release(); f.onChange(this); return 'locked'; }   // a re-lock that lands after a menu opened: give the cursor back
       if (phase !== 'play') { this.expectUnlock = false; return 'ignore'; }
       if (this.expectUnlock || this.stack.length) { this.expectUnlock = false; return 'ignore'; }
       if (this.wheel?.held) { this.wheel = null; this.needClick = true; this.note('native unlock under held wheel'); f.onChange(this); return 'cancel-wheel'; }
