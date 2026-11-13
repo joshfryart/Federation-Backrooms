@@ -335,9 +335,9 @@ function fidgetStep(e, dt, d) {
 const DODGE_LINES = ['Whoa!', 'Watch it!', 'Hey, careful!', 'Coming through, huh?'];
 function dodgeCheck(e, dt, d) {
   if (e.retT > 0) { e.retT -= dt; if (e.retT <= 0 && !e.walk && e.returnTo) { const r = e.returnTo; e.returnTo = null; startWalk(e, 0, 0, false, { point: r, run: false }); } }
-  e.dodgeCool = (e.dodgeCool || 0) - dt; if (e.walk || e.dodgeCool > 0 || d > 3.4 || G.phase !== 'play') return;
-  const sp = Math.hypot(P.vx || 0, P.vz || 0); if (sp < 2.6) return;
-  const vx = P.vx / sp, vz = P.vz / sp, rx = e.x - P.x, rz = e.z - P.z, ahead = rx * vx + rz * vz, lat = rx * -vz + rz * vx; if (ahead < 0.1 || ahead > 3.3 || Math.abs(lat) > 1.0) return;
+  e.dodgeCool = (e.dodgeCool || 0) - dt; if (e.walk || e.dodgeCool > 0 || d > 2.6 || G.phase !== 'play') return;
+  const sp = Math.hypot(P.vx || 0, P.vz || 0); if (!P.sprint || sp < 4.6 || G.menuPause) return;   // only a real sprint at someone makes them hop aside; walking up to people never scatters them
+  const vx = P.vx / sp, vz = P.vz / sp, rx = e.x - P.x, rz = e.z - P.z, ahead = rx * vx + rz * vz, lat = rx * -vz + rz * vx; if (ahead < 0.1 || ahead > 2.3 || Math.abs(lat) > 0.7) return;
   const s = lat >= 0 ? 1 : -1, home = e.returnTo || [e.x, e.z];
   for (const k of [s, -s]) { const px = e.x + -vz * k * 0.95, pz = e.z + vx * k * 0.95; if (world.los(e.x, e.z, px, pz) && world.los(e.x + -vz * k * 0.3, e.z + vx * k * 0.3, px + -vz * k * 0.3, pz + vx * k * 0.3)) { e.dodgeCool = 5; startWalk(e, 0, 0, false, { point: [px, pz], run: true, returnTo: home }); if (e.person && Math.random() < 0.5) { const t = DODGE_LINES[Math.floor(Math.random() * DODGE_LINES.length)]; G.say(`${e.person.short}: ${t}`, 'npc'); try { speak(e.person, t); } catch (er) { } } return; } }
 }
@@ -569,7 +569,7 @@ function nomTick(dt) {
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt);
   if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }
-  if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(D.busy ? `Working: ${D.busy.loop.label}…` : (G.intro && (!due || due.task === G.intro.task)) ? introHint(dt) : due ? `[J] ${due.label || due.task}` : ''); }
+  if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(D.busy ? `Working: ${D.busy.loop.label}…` : (G.intro && (!due || due.task === G.intro.task)) ? introHint(dt) : (dutyHere() ? `[E] ${(dutyHere().label || dutyHere().task)}   ·   [J] rush / skip…` : '')); }
 }
 // the whole world pauses while any menu / wheel / panel / map / terminal / conversation is open (G.menuPause is set by the menus agent)
 function worldPaused() { return !!(G.menuPause || G.paused); }
@@ -852,6 +852,13 @@ function fire() {
   }
 }
 
+
+// the duty round or mission task you can do right here (right room and, when it names a station, standing at it): E does it properly, J/the wheel offer rushed/fake/skip
+function dutyHere() {
+  const D = G.duty; if (!NOM() || !D || !world) return null; const room = D.place.room;
+  const near = (spot) => !spot || ['door', 'corridor', 'lift', 'any', 'post'].includes(spot) || world.d.props.some(p => p.kind === spot && Math.hypot(world.center(p.tx, p.ty)[0] - P.x, world.center(p.tx, p.ty)[1] - P.z) < 3.6) || !world.d.props.some(p => p.kind === spot && world.d.room[p.ty]?.[p.tx] === room);
+  return D.loops.find(l => l.state === 'due' && l.room === room && near(l.spot)) || D.tasks.find(t => t.state === 'active' && t.room === room && near(t.spot)) || null;
+}
 function interact() {
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
@@ -882,6 +889,7 @@ function interact() {
     else if (near.kind === 'emh') { G.say('Hologram: "Please describe your medical emergency. Or don\'t. I\'m a projection, not a mind-reader." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
     updateHUD(); return;
   }
+  { const du = dutyHere(); if (du) { const r = du.task ? G.duty.doTask(du.id, 'proper') : G.duty.perform(du.id, 'proper'); if (!r.ok) G.say(r.why, 'warn'); return; } }   // a duty due at this station wins over searching a locker
   const site = nearestSite();
   if (site) {
     site.used = true; sound.pickup();
@@ -890,6 +898,7 @@ function interact() {
     else G.say(`${fixtureName(site.kind)}: nothing useful.`, 'npc');
     updateHUD(); return;
   }
+  { const du = dutyHere(); if (du && !(world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8)) { const r = du.task ? G.duty.doTask(du.id, 'proper') : G.duty.perform(du.id, 'proper'); if (!r.ok) G.say(r.why, 'warn'); return; } }
   // lift
   if (world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) {
     if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — repair it at the lift controls (hold E)', 'warn'); }

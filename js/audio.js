@@ -22,7 +22,7 @@ export class Sound {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
 
     // ship hum
-    this.hum = ctx.createGain(); this.hum.gain.value = 0.10; this.hum.connect(this.master);
+    this.hum = ctx.createGain(); this.hum.gain.value = 0.035; this.hum.connect(this.master);
     for (const f of [48, 72.3, 96.5]) {
       const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 220;
@@ -31,7 +31,7 @@ export class Sound {
     }
     const nz = ctx.createBufferSource(); nz.buffer = this.noiseBuf; nz.loop = true;
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 420; bp.Q.value = 0.6;
-    this.nzGain = ctx.createGain(); this.nzGain.gain.value = 0.03;
+    this.nzGain = ctx.createGain(); this.nzGain.gain.value = 0.008;
     nz.connect(bp); bp.connect(this.nzGain); this.nzGain.connect(this.master); nz.start();
 
     // fluorescent buzz (louder under lit panels)
@@ -50,8 +50,8 @@ export class Sound {
     }
   }
 
-  setBuzz(v) { if (this.ctx) this.buzz.gain.setTargetAtTime(v * 0.04, this.ctx.currentTime, 0.15); }
-  setPower(on) { if (!this.ctx) return; const t = this.ctx.currentTime; this.hum.gain.setTargetAtTime(on ? 0.10 : 0.0, t, on ? 0.05 : 0.4); this.nzGain.gain.setTargetAtTime(on ? 0.03 : 0.004, t, 0.3); if (!on) this.buzz.gain.setTargetAtTime(0, t, 0.1); }
+  setBuzz(v) { if (this.ctx) this.buzz.gain.setTargetAtTime(v * 0.012, this.ctx.currentTime, 0.15); }
+  setPower(on) { if (!this.ctx) return; const t = this.ctx.currentTime; this.hum.gain.setTargetAtTime(on ? 0.035 : 0.0, t, on ? 0.05 : 0.4); this.nzGain.gain.setTargetAtTime(on ? 0.008 : 0.002, t, 0.3); if (!on) this.buzz.gain.setTargetAtTime(0, t, 0.1); }
   powerDown() { this.tone(90, 1.4, 'sawtooth', 0.2, -70); this.noise(0.6, 0.2, 200, 0.5, 'lowpass'); }
   powerUp() { this.thud(0.5); this.tone(60, 0.8, 'square', 0.1, 180); this.noise(0.4, 0.2, 2500, 2, 'highpass', 0.1); this.flick(); }
   splash(vol = 0.12) { this.noise(0.18, vol, 1800, 1.2, 'bandpass'); this.noise(0.3, vol * 0.7, 500, 0.8, 'lowpass', 0.03); }
