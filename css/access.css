@@ -1,0 +1,15 @@
+/* Accessibility palettes + cue captions (js/access.js). Colour-blind modes swap the red/green status colours for blue/orange
+   and add a non-colour cue (underline / bold) to warnings. */
+body.cb-deut, body.cb-prot { --m-ok: #4aa8ff; --m-alert: #ffb000; --m-warn: #ffe066; --red: #ffb000; }
+body.cb-trit { --m-ok: #3fd6c8; --m-alert: #ff4f7a; --m-warn: #ffd0e0; --red: #ff4f7a; }
+body.cb-deut #hpbar, body.cb-prot #hpbar { background: linear-gradient(90deg, #ffb000, #ffe9a0); }
+body.cb-trit #hpbar { background: linear-gradient(90deg, #ff4f7a, #ffd0e0); }
+body.cb-deut #toast.good, body.cb-prot #toast.good { color: #9fd2ff; } body.cb-trit #toast.good { color: #8ff0e6; }
+body.cb-deut #toast.warn, body.cb-prot #toast.warn { color: #ffc940; text-decoration: underline; } body.cb-trit #toast.warn { color: #ff7a9a; text-decoration: underline; }
+body.cb-deut #danger, body.cb-prot #danger { filter: hue-rotate(40deg) saturate(1.2); } body.cb-trit #danger { filter: hue-rotate(-30deg); }
+body.reduce-flash #flash { transition-duration: .5s !important; }
+body.reduce-motion #clung, body.reduce-motion #cling-pip { transform: none !important; }
+#cues { position: fixed; left: 50%; bottom: 17%; transform: translateX(-50%); z-index: 7; display: grid; gap: 3px; justify-items: center; pointer-events: none; font: 600 15px var(--f-m, monospace); }
+#cues span { background: rgba(0, 0, 0, .66); color: #f3eee6; padding: 2px 10px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, .25); transition: opacity .5s; }
+.access-box { display: grid; gap: 8px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line, rgba(150, 180, 210, .26)); }
+.access-box legend { opacity: .7; font-size: 11px; }

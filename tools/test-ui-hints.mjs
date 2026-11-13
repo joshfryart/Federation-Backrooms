@@ -21,3 +21,11 @@ import { Tutor, RULES } from '../js/hints.js';
   assert(!T.tick(1, c)); const r2 = T.tick(20, c); assert(r2 && r2.id !== r.id);
   const T2 = new Tutor(st, () => {}); assert(T2.seen.has(r.id) && T2.seen.has(r2.id), 'persisted');
   assert(!T2.tick(99, { ...c, deck: 1 }), 'none on deck 1'); console.log('hints ok'); }
+import { ACC, apply, load, save, Captions, CUES } from '../js/access.js';
+{ const mem = {}; const st = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; } };
+  apply({ shake: true, grain: true, cb: 'deut', cues: true }); assert(ACC.shake < 1 && ACC.grain === 0 && ACC.flash === 1); save(st);
+  apply({}); assert(ACC.shake === 1); load(st); assert(ACC.shake < 1 && ACC.cb === 'deut' && ACC.cues);
+  apply({ cb: 'bogus' }); assert(ACC.cb === 'off'); apply({ cues: true });
+  let t = 0; const C = new Captions(null, () => t); const s = { roar: () => 'r', thud: () => 't', distant: () => 'd' }; C.attach(s);
+  s.roar(0.3); s.roar(0.3); assert(C.log.length === 1); t = 3000; s.roar(0.3); s.thud(0.01); s.distant('door'); assert(C.log.length === 3 && C.log[2] === 'A distant door', C.log.join());
+  assert(s.roar() === 'r'); console.log('access ok'); }

@@ -9,10 +9,10 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 // Post-processing: bloom + film grain + chromatic aberration + vignette
 // ---------------------------------------------------------------
 const FinalShader = {
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, danger: { value: 0 }, hurt: { value: 0 }, res: { value: new THREE.Vector2(1, 1) } },
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, danger: { value: 0 }, hurt: { value: 0 }, grain: { value: 1 }, res: { value: new THREE.Vector2(1, 1) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float time, danger, hurt; uniform vec2 res; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float time, danger, hurt, grain; uniform vec2 res; varying vec2 vUv;
     float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
     void main(){
       vec2 d = vUv - 0.5; float r2 = dot(d,d);
@@ -21,7 +21,7 @@ const FinalShader = {
       vec2 uv = vUv + vec2(wob, 0.0);
       vec3 c = vec3(texture2D(tDiffuse, uv + ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - ca).b);
       float g = rnd(vUv * res + fract(time) * 100.0) - 0.5;
-      c += g * 0.013;
+      c += g * 0.013 * grain;
       float l = dot(c, vec3(0.299,0.587,0.114));
       c = mix(c, vec3(l), hurt * 0.5 + danger * 0.15);
       float lg = dot(c, vec3(0.299,0.587,0.114));
