@@ -79,7 +79,7 @@ export async function navBrowser(page, fail) {
     const other = (G.shipDeck + 2) % G.ship.decks, od = G.shipDecks[other].data, rm = od.rooms.find(r => r.type !== 'jefferies');
     N.pinRoom(other, rm); tick(2); out.crossLegs = N.plan?.legs.map(l => l.kind).join();
     // a duty comes due -> auto-pinned; G cycles
-    N.setPin(null, false); const L = G.duty.loops; for (const l of L) { l.state = 'idle'; l.next = 1e9; } tick(2); L[0].next = 0; if (L[1]) L[1].next = 0; tick(3);
+    N.setPin(null, false); const L = G.duty.loops; for (const l of L) { l.state = 'idle'; l.next = 1e9; } tick(10); L[0].next = 0; if (L[1]) L[1].next = 0; tick(10);
     out.auto = N.pin ? N.pin.kind + ':' + N.pin.id : null; out.expectAuto = 'duty:' + (G.duty.loops.find(l => l.state === 'due') ? N.pin?.id : '?');
     const seq = []; for (let i = 0; i < 5; i++) { key('KeyG'); tick(1); seq.push(N.pin ? N.pin.kind : '-'); } out.seq = seq.join(',');
     // minimap pixels
