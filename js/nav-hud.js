@@ -144,7 +144,7 @@ export class NavHUD {
   }
   renderCard() {
     const pin = this.pin, p = this.plan; let h, dim = false;
-    if (!pin) { dim = true; const n = this.items.filter(i => i.due).length; h = `<div class="row">${ico('guide', 20)}<span class="nv-k">G</span><span style="font:600 10px var(--f-m,monospace)">${n ? `${n} ${ico('clock', 11)}` : ''}</span></div>`; }
+    if (!pin) { dim = true; const n = this.items.filter(i => i.due).length; h = `<div class="row">${ico('guide', 20)}<span class="nv-k">G</span><span class="ttl">No guide<small>pin your next duty</small></span><span class="due" style="font:600 10px var(--f-m,monospace)">${n ? `${n} ${ico('clock', 11)}` : ''}</span></div>`; }
     else if (!p) h = `<div class="row">${ico('warn', 20, LATE)}<span>${esc(short(pin.label || label(pin.room), 3))}</span></div>`;
     else {
       const leg = p.legs[0], r = leg.kind === 'walk' ? leg.route : null, nm = r?.man[0], toLift = leg.kind === 'walk' && leg.to.type === 'lift' && p.legs.length > 1;
@@ -152,7 +152,7 @@ export class NavHUD {
       const it = this.items.find(i => i.kind === pin.kind && i.id === pin.id), left = it?.due && it.kind === 'duty' ? it.left : null, late = left != null && p.eta > left;
       const then = toLift ? `${ico('lift', 11)}${ico('chev', 9)}D${p.dest.deck + 1}` : r?.man[1] ? `${ico('chev', 9)}${ico(r.man[1].kind, 11)}` : nm ? `${ico('chev', 9)}${ico('pin', 11)}` : '';
       const chips = p.legs.map((l, i) => l.kind === 'ride' ? `<span class="nv-c">${ico('lift', 11)}D${l.from + 1}${ico('chev', 8)}D${l.to + 1}</span>` : `<span class="nv-c ${i === 0 ? 'cur' : ''}">${l.to.type === 'lift' ? ico('lift', 11) : bdg(l.to.type, 13)}${Math.round(l.route.len * this.TS)}m</span>`).join(ico('chev', 8, '#567'));
-      h = `<div class="row"><span style="color:${ROUTE}">${ico(turn, 28, ROUTE)}</span><div style="flex:1"><div class="big">${nd}<small>m</small></div><div class="sub">${then}</div></div>`
+      h = `<div class="ttl pinned">${ico(pin.icon || 'pin', 13)}<span>${esc(short(pin.label || label(pin.room || p.dest.type), 4))}</span><span class="nv-k">G</span></div><div class="row"><span style="color:${ROUTE}">${ico(turn, 28, ROUTE)}</span><div style="flex:1"><div class="big">${nd}<small>m</small></div><div class="sub">${then}</div></div>`
         + `<div class="eta">${ring(left != null ? Math.min(1, p.eta / Math.max(1, left)) : 1, late ? LATE : ROUTE, 34, 'clock', left != null ? Math.min(1, p.eta / Math.max(1, it.total || left)) : null)}<div>${fmt(p.eta)}</div></div></div>`
         + `<div class="stp">${chips}${ico('chev', 8, '#567')}<span class="nv-c" style="border-color:${late ? LATE : ROUTE};color:${late ? LATE : ROUTE}">${ico(pin.icon || 'pin', 11)}${esc(short(pin.label || label(pin.room || p.dest.type), 2))}</span></div>`;
     }

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HUD style guide</title>
+<!-- Loads the real skin so the page can never drift from the game: ../../css/hud-skin.css (tokens + .k-* classes). -->
+<link rel="stylesheet" href="../../css/hud-skin.css">
+<style>
+  :root { --f-d: "Avenir Next Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif; --f-m: ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #000; color: var(--k-ink); font: 15px/1.5 'Helvetica Neue', Arial, sans-serif; padding: 28px clamp(16px, 4vw, 56px) 80px; }
+  html { font-size: 16px; }
+  h1 { font: 800 2rem/1.1 var(--f-d); letter-spacing: .14em; text-transform: uppercase; margin: 0 0 .3rem; }
+  h1 b { color: var(--k-orange); }
+  h2 { font: 800 1rem var(--f-d); letter-spacing: .2em; text-transform: uppercase; color: #120a05; background: var(--k-orange); display: inline-block; border-radius: 99px; padding: .15rem 1.1rem; margin: 2.6rem 0 1rem; }
+  h3 { font: 800 .75rem var(--f-d); letter-spacing: .2em; text-transform: uppercase; color: var(--k-lav); margin: 1.4rem 0 .5rem; }
+  p, li { max-width: 62ch; color: #d9d4e4; } code { font: 12px var(--f-m); background: rgba(255,255,255,.1); padding: 1px 6px; border-radius: 6px; color: var(--k-gold); }
+  .lead { color: var(--k-dim); max-width: 70ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+  .sw { width: 128px; } .sw i { display: block; height: 54px; border-radius: 0 18px 0 0; background: var(--c); } .sw b { display: block; font: 800 .75rem var(--f-d); letter-spacing: .12em; text-transform: uppercase; margin-top: .3rem; } .sw span { font: 11px var(--f-m); color: var(--k-dim); }
+  .stage { background: #0b0d18; border-radius: 14px; padding: 18px; position: relative; } .stage.scene { background: linear-gradient(120deg, #5a5348, #2c2a33 55%, #8a8478); }
+  .demo { position: relative; } .demo > * { position: relative !important; inset: auto !important; transform: none !important; }
+  .cell { width: 150px; height: 110px; padding: .6rem .8rem; font: 800 .75rem var(--f-d); letter-spacing: .14em; text-transform: uppercase; }
+  .cap { font: 11px var(--f-m); color: var(--k-dim); margin-top: .4rem; max-width: 40ch; }
+  table { border-collapse: collapse; font-size: 13px; } td, th { padding: 6px 14px 6px 0; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(255,255,255,.08); } th { font: 800 .7rem var(--f-d); letter-spacing: .16em; text-transform: uppercase; color: var(--k-gold); }
+  .t1 { font: 800 var(--t-hero)/1 var(--f-d); letter-spacing: .12em; text-transform: uppercase; } .t2 { font: 800 var(--t-title)/1.1 var(--f-d); letter-spacing: .14em; text-transform: uppercase; } .t3 { font: 800 var(--t-large) var(--f-d); letter-spacing: .12em; text-transform: uppercase; } .t4 { font: 800 var(--t-base) var(--f-d); letter-spacing: .12em; text-transform: uppercase; } .t5 { font: 700 var(--t-small) var(--f-d); letter-spacing: .16em; text-transform: uppercase; } .t6 { font: 700 var(--t-micro) var(--f-d); letter-spacing: .2em; text-transform: uppercase; } .t7 { font: 700 var(--t-base) var(--f-m); }
+  .toast { display: inline-flex; align-items: center; gap: .55rem; background: var(--k-plate-hi); border-radius: 99px; padding: .3rem 1.1rem .3rem .55rem; box-shadow: inset 0 0 0 .12rem currentColor; font: 800 var(--t-base) var(--f-d); letter-spacing: .12em; text-transform: uppercase; }
+  .toast span { color: var(--k-ink); } .toast i { width: 1rem; height: 1rem; border-radius: 50%; background: currentColor; }
+  .cm { display: block; background: var(--k-plate-hi); border-left: var(--bar-w) solid var(--c); border-radius: .7rem 0 0 .7rem; padding: .2rem .65rem .25rem .6rem; font: 500 var(--t-base)/1.3 'Helvetica Neue', Arial, sans-serif; margin-bottom: .25rem; max-width: 24rem; } .cm .w { display: block; font: 800 var(--t-micro) var(--f-d); letter-spacing: .12em; color: var(--c); text-transform: uppercase; }
+  .ntg { display: inline-flex; align-items: center; gap: .3rem; padding: 0 .65rem 0 0; border-radius: 99px; overflow: hidden; background: var(--k-plate-hi); font: 800 .8rem/1.5 var(--f-d); letter-spacing: .08em; text-transform: uppercase; } .ntg b { align-self: stretch; display: grid; place-items: center; padding: 0 .5rem 0 .6rem; background: var(--c); color: #0a0a10; font-size: .625rem; }
+  .ring { width: 3rem; height: 3rem; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--v) * 1%), #1a2234 0); display: grid; place-items: center; } .ring::after { content: attr(data-t); width: 2.1rem; height: 2.1rem; border-radius: 50%; background: #0b0d18; display: grid; place-items: center; font: 800 .75rem var(--f-m); color: var(--c); }
+  .alert { --c: var(--m-alert); border-left: var(--bar-w) solid var(--c); border-radius: 1rem 0 0 1rem; background: var(--k-plate-hi); padding: .45rem .9rem .5rem; max-width: 30rem; box-shadow: 0 0 1.2rem color-mix(in srgb, var(--c) 40%, transparent); } .alert b { font: 800 var(--t-large) var(--f-d); letter-spacing: .16em; color: var(--c); text-transform: uppercase; }
+  .belt { display: flex; gap: .3rem; } .belt span { width: 2.25rem; height: 2.25rem; border-radius: .6rem; background: var(--k-plate-hi); box-shadow: inset 0 0 0 .1rem rgba(185, 155, 230, .45); display: grid; place-items: center; font: 800 .75rem var(--f-m); } .belt span.in { background: var(--k-orange); color: #120a05; box-shadow: none; }
+  svg.wh { width: 220px; height: 220px; } svg.wh path { fill: rgba(10,12,24,.92); stroke-width: 2; } svg.wh path.hov { fill: var(--k-orange); }
+</style>
+</head>
+<body>
+<h1>HUD <b>style guide</b></h1>
+<p class="lead">The on-screen language of Systems Nominal: elbow caps, pills, flat colour blocks on black, bold condensed all-caps labels, segmented bars. An original homage to the control-panel graphics of old sci-fi television; no logos, insignia, names or text are copied. Source of truth: <code>css/hud-skin.css</code> (this page links it). Write-up: <code>docs/hud-review.md</code>.</p>
+
+<h2>1 · Colour</h2>
+<p>Two families that must never be mixed up. <b>Frame colours</b> are decoration: they make shapes pretty and never carry meaning. <b>Meaning colours</b> are the only ones that tell you something, and the same hue always means the same thing in every panel.</p>
+<h3>Frame (decoration)</h3>
+<div class="row">
+  <div class="sw" style="--c:var(--k-orange)"><i></i><b>Orange</b><span>--k-orange #f0933a</span></div>
+  <div class="sw" style="--c:var(--k-gold)"><i></i><b>Gold</b><span>--k-gold #f4c25b</span></div>
+  <div class="sw" style="--c:var(--k-peach)"><i></i><b>Peach</b><span>--k-peach #f7c9a2</span></div>
+  <div class="sw" style="--c:var(--k-lav)"><i></i><b>Lavender</b><span>--k-lav #b99be6</span></div>
+  <div class="sw" style="--c:var(--k-peri)"><i></i><b>Periwinkle</b><span>--k-peri #7d97e8</span></div>
+  <div class="sw" style="--c:var(--k-rose)"><i></i><b>Rose</b><span>--k-rose #e4829a</span></div>
+  <div class="sw" style="--c:var(--k-sky)"><i></i><b>Sky</b><span>--k-sky #8fd8ff</span></div>
+</div>
+<h3>Meaning: department (same hexes as the name tags and radio cards)</h3>
+<div class="row">
+  <div class="sw" style="--c:var(--m-cmd)"><i></i><b>Command</b><span>--m-cmd #6ea8ff</span></div>
+  <div class="sw" style="--c:var(--m-flt)"><i></i><b>Flight</b><span>--m-flt #8fb7ff</span></div>
+  <div class="sw" style="--c:var(--m-ops)"><i></i><b>Operations</b><span>--m-ops #d6c85a</span></div>
+  <div class="sw" style="--c:var(--m-eng)"><i></i><b>Engineering</b><span>--m-eng #e8892b</span></div>
+  <div class="sw" style="--c:var(--m-sec)"><i></i><b>Security</b><span>--m-sec #ff7a6b</span></div>
+  <div class="sw" style="--c:var(--m-sci)"><i></i><b>Sciences</b><span>--m-sci #c58be0</span></div>
+  <div class="sw" style="--c:var(--m-med)"><i></i><b>Medical</b><span>--m-med #3fd6a0</span></div>
+  <div class="sw" style="--c:var(--m-svc)"><i></i><b>Services</b><span>--m-svc #c6d25e</span></div>
+</div>
+<h3>Meaning: state</h3>
+<div class="row">
+  <div class="sw" style="--c:var(--m-alert)"><i></i><b>Alert / overdue / hurt</b><span>--m-alert #ff5a4a</span></div>
+  <div class="sw" style="--c:var(--m-warn)"><i></i><b>Due / caution</b><span>--m-warn #ffb347</span></div>
+  <div class="sw" style="--c:var(--m-ok)"><i></i><b>Good / done / health</b><span>--m-ok #4fd18b</span></div>
+  <div class="sw" style="--c:var(--m-info)"><i></i><b>Info / working / stamina</b><span>--m-info #8fd8ff</span></div>
+  <div class="sw" style="--c:var(--m-route)"><i></i><b>Route / guide</b><span>--m-route #8ef3ff</span></div>
+  <div class="sw" style="--c:var(--m-neutral)"><i></i><b>Neutral / later</b><span>--m-neutral #8fa0b6</span></div>
+</div>
+
+<h2>2 · Type</h2>
+<p>Bold condensed all-caps (the stack falls back to Arial Narrow / Roboto Condensed; no webfont is shipped) with wide tracking for labels; mono only for numbers; plain sans for sentences people read (subtitles, comm lines, briefing prose). All sizes are rem, scaled by one variable <code>--z</code> (1 at 1280x720, 1.5 at 1080p).</p>
+<table>
+  <tr><th>Token</th><th>Size</th><th>Use</th><th>Sample</th></tr>
+  <tr><td><code>--t-hero</code></td><td>2.6rem</td><td>title screens</td><td class="t1">Hero</td></tr>
+  <tr><td><code>--t-title</code></td><td>1.75rem</td><td>panel headings, briefing name</td><td class="t2">Title</td></tr>
+  <tr><td><code>--t-large</code></td><td>1.125rem</td><td>the thing to act on now: prompt, route card title, alert name</td><td class="t3">Large</td></tr>
+  <tr><td><code>--t-base</code></td><td>.875rem</td><td>body labels, comm lines, toasts</td><td class="t4">Base label</td></tr>
+  <tr><td><code>--t-small</code></td><td>.75rem</td><td>secondary labels, readouts</td><td class="t5">Small label</td></tr>
+  <tr><td><code>--t-micro</code></td><td>.625rem</td><td>never for anything you must read: key hints, tick labels</td><td class="t6">Micro label</td></tr>
+  <tr><td>numbers</td><td>--f-m</td><td>distances, times, scores</td><td class="t7">11 m · 08:55 · 100</td></tr>
+</table>
+
+<h2>3 · Frame shapes</h2>
+<p>One set. Elbows anchor the four screen corners; caps (a coloured spine with rounded outer corners) wrap secondary plates; pills are for every label, key and button; segmented bars for every meter.</p>
+<h3>Elbows (<code>.k-elbow-tl / tr / bl / br</code>)</h3>
+<div class="row">
+  <div class="cell k-elbow-tl">TL · identity</div>
+  <div class="cell k-elbow-tr" style="--kc:var(--k-peri)">TR · map</div>
+  <div class="cell k-elbow-bl" style="--kc:var(--k-lav)">BL · vitals</div>
+  <div class="cell k-elbow-br" style="--kc:var(--k-gold)">BR · handheld</div>
+</div>
+<h3>Caps (<code>.k-cap-l / r</code>) and pills (<code>.k-pill</code>, <code>.k-pill.line</code>, <code>.k-key</code>, <code>.k-block</code>)</h3>
+<div class="row" style="align-items:center">
+  <div class="cell k-cap-l" style="--kc:var(--k-gold);height:70px">cap left</div>
+  <div class="cell k-cap-r" style="--kc:var(--m-route);height:70px">cap right</div>
+  <span class="k-pill">Deck 3</span><span class="k-pill line" style="--kc:var(--k-lav)">Cairn-class</span><span class="k-pill" style="--kc:var(--m-alert)">Overdue</span><span class="k-pill" style="--kc:var(--m-ok)">Done</span>
+  <span class="k-key">E</span><span class="k-key">G</span><span class="k-block"></span><span class="k-block" style="--kc:var(--k-lav)"></span><span class="k-block" style="--kc:var(--k-peri)"></span>
+</div>
+<h3>Segmented bars (<code>.k-seg-bar</code>, meaning colour in <code>--kc</code>, fill in <code>--v</code>)</h3>
+<div class="stage" style="max-width:340px">
+  <div class="t5" style="display:flex;justify-content:space-between;color:var(--m-ok)"><span>Health</span><b class="t7">92</b></div><div class="k-seg-bar" style="--v:92"></div><br>
+  <div class="t5" style="display:flex;justify-content:space-between;color:var(--m-info)"><span>Stamina</span><b class="t7">58</b></div><div class="k-seg-bar" style="--kc:var(--m-info);--v:58"></div><br>
+  <div class="t5" style="display:flex;justify-content:space-between;color:var(--m-alert)"><span>Health</span><b class="t7">22</b></div><div class="k-seg-bar" style="--kc:var(--m-alert);--v:22"></div>
+</div>
+<h3>Layout (screen map)</h3>
+<div class="stage" style="aspect-ratio:16/9;max-width:760px;display:grid;grid-template:1fr 1fr 1fr / 1fr 1fr 1fr;gap:8px;font:800 .7rem var(--f-d);letter-spacing:.14em;text-transform:uppercase">
+  <div class="k-elbow-tl" style="padding:.8rem">Identity · ship · deck · room · ship time<br>Duty rings (what is due)</div><div class="k-cap-l" style="--kc:var(--m-info);padding:.5rem;text-align:center;border-radius:99px;border:0;background:#13162a">Compass · condition pill / alert card</div><div class="k-elbow-tr" style="--kc:var(--k-peri);padding:.8rem;text-align:right">Minimap<br>Route card (the pinned task)<br>Legend (first 2.5 min) · faults</div>
+  <div></div><div style="text-align:center;align-self:center">Reticle · [E] prompt · toast</div><div></div>
+  <div class="k-elbow-bl" style="--kc:var(--k-lav);padding:.8rem;align-self:end">Comm lines<br>Vitals (fade when fine)</div><div style="text-align:center;align-self:end;color:var(--k-dim)">Subtitles · announcement · duty hint · belt</div><div class="k-elbow-br" style="--kc:var(--k-gold);padding:.8rem;text-align:right;align-self:end">Handheld · combat chips</div>
+</div>
+
+<h2>4 · Components</h2>
+<div class="stage scene"><div class="row" style="gap:28px">
+  <div><h3 style="margin-top:0">Toasts (colour = meaning)</h3><div style="display:grid;gap:8px;justify-items:start">
+    <span class="toast" style="color:var(--m-info)"><i></i><span>Guide: mess hall</span></span><span class="toast" style="color:var(--m-ok)"><i></i><span>Welcome aboard</span></span><span class="toast" style="color:var(--m-alert)"><i></i><span>Hull breach on deck 3</span></span><span class="toast" style="color:var(--k-peach)"><i></i><span style="text-transform:none;letter-spacing:.02em;font-weight:600">Sandhu: At ease.</span></span></div></div>
+  <div><h3 style="margin-top:0">Comm lines</h3><span class="cm" style="--c:var(--m-info)"><span class="w">Bridge · Lt. Horvat</span>Mess hall is out of tea.</span><span class="cm" style="--c:var(--m-warn)"><span class="w">Engineering · urgent</span>Coolant pressure is drifting.</span><span class="cm" style="--c:var(--m-alert)"><span class="w">Security · emergency</span>Intruder on deck 4.</span></div>
+  <div><h3 style="margin-top:0">Name tags (department colour + letter)</h3><div style="display:grid;gap:8px;justify-items:start"><span class="ntg" style="--c:var(--m-cmd)"><b>C</b>Cmdr. Lindqvist</span><span class="ntg" style="--c:var(--m-eng)"><b>E</b>Lt. Ahmed</span><span class="ntg" style="--c:var(--m-med)"><b>M</b>Ens. Fraser</span><span class="ntg" style="--c:var(--m-sec)"><b>X</b>Crewman Petrov</span></div></div>
+</div></div>
+<div class="stage" style="margin-top:14px"><div class="row" style="gap:28px;align-items:center">
+  <div><h3 style="margin-top:0">Duty rings (state colours)</h3><div class="row" style="gap:10px"><div class="ring" style="--c:var(--m-neutral);--v:70" data-t="2m"></div><div class="ring" style="--c:var(--m-warn);--v:55" data-t="43s"></div><div class="ring" style="--c:var(--m-alert);--v:100" data-t="!"></div><div class="ring" style="--c:var(--m-info);--v:40" data-t="…"></div><div class="ring" style="--c:var(--m-ok);--v:100" data-t="ok"></div></div></div>
+  <div><h3 style="margin-top:0">Alert card</h3><div class="alert"><b>Condition amber</b><br><span style="color:#cfd">Ship-wide · 00:42</span><br>Coolant fault on deck 7. Engineering is responding.</div></div>
+  <div><h3 style="margin-top:0">Belt</h3><div class="belt"><span>1</span><span class="in">2</span><span>3</span><span>4</span></div></div>
+  <div><h3 style="margin-top:0">Quick wheel sectors</h3><div class="row" style="gap:6px"><span class="k-pill line" style="--kc:var(--k-peach)">This</span><span class="k-pill line" style="--kc:var(--k-gold)">Duty</span><span class="k-pill line" style="--kc:var(--k-lav)">Order</span><span class="k-pill line" style="--kc:var(--k-peri)">Radio</span><span class="k-pill line" style="--kc:var(--k-sky)">Inspect</span><span class="k-pill line" style="--kc:var(--k-orange)">Tools</span><span class="k-pill line" style="--kc:var(--k-rose)">Carry</span><span class="k-pill" style="--kc:var(--k-orange)">Hover</span></div><div class="cap">Each wheel sector wears its own frame colour; the hovered one fills orange.</div></div>
+</div></div>
+
+<h2>5 · How to extend</h2>
+<ul>
+  <li>New panel: give it <code>class="k-elbow-tl"</code> (or <code>k-cap-l</code>) and set <code>--kc</code> to a frame colour; title in a <code>.k-pill</code>.</li>
+  <li>New state: pick an existing meaning token; add a new one only to <code>:root</code> in <code>css/hud-skin.css</code> and to this page.</li>
+  <li>New meter: <code>.k-seg-bar</code> with <code>--kc</code> and <code>--v</code>. Use rem for sizes so the scale variable works.</li>
+  <li>Never use a frame colour for state, never use a meaning colour for decoration, never put text under 0.75rem on anything the player must read.</li>
+  <li>Motion: pulses and blinks are off under <code>prefers-reduced-motion</code> and <code>body.reduce-motion</code>.</li>
+</ul>
+</body>
+</html>

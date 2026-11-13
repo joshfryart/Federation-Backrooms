@@ -122,7 +122,7 @@ export class Menus {
   openWheel(kind = 'main', held = true) {
     if (!this.active() && !this.UI.stack.length) return null;
     const S = this.sectors(); let sectors = S, title = 'Quick wheel', direct = false;
-    if (kind !== 'main') { const s = S.find(x => x.id === kind); sectors = (s?.kids || []).slice(0, 8); title = s?.label || kind; direct = true; if (!sectors.length) sectors = [{ id: 'none', icon: 'x', label: 'Nothing', off: true }]; }
+    if (kind !== 'main') { const s = S.find(x => x.id === kind) || (kind === 'hands' ? { label: 'Hands', kids: this.G.combat?.wheelKids?.() || [] } : null);   /* 'hands': grab / restrain / subdue / stance (js/grapple.js) */ sectors = (s?.kids || []).slice(0, 8); title = s?.label || kind; direct = true; if (!sectors.length) sectors = [{ id: 'none', icon: 'x', label: 'Nothing', off: true }]; }
     const W = newWheel(sectors, { held, direct, title, kind, t0: performance.now() });
     if (held && !this.UI.stack.length) this.UI.holdWheel(W); else { this.UI.wheel = W; this.UI.pinWheel(W); }
     Object.assign(W, this.UI.wheel); this.UI.wheel = W; this.view.show(W); this.sync(); return W;
@@ -197,7 +197,7 @@ export class Menus {
       { id: 'map', icon: 'map', label: 'Inspect', sub: 'map · status · alerts', kids: [
         it('n.map', 'map', 'Deck map', 'Where am I? (M)', () => G.nav?.toggleMap ? G.nav.toggleMap(true) : this.press('KeyM'), { def: true }), it('n.ship', 'ship', 'Ship status', 'Systems schematic (hold Tab)', () => this.openStatus()),
         it('n.alerts', 'alert', 'Alerts', 'Alert card (K)', () => this.comms?.openPanel('details')), it('n.log', 'log', 'Comm log', 'Who said what (L)', () => this.comms?.openPanel('log'))] },
-      { id: 'tools', icon: 'tools', label: 'Tools', sub: 'handhelds', off: !K, kids: [...belt, it('t.none', 'empty', 'Empty hands', 'Holster / put away', () => { if (K) { K.hand = -1; this.say('Hands empty.'); } }, { def: !K || K.hand < 0 })] },
+      { id: 'tools', icon: 'tools', label: 'Tools', sub: 'handhelds', off: !K, kids: [...belt, it('t.none', 'empty', 'Empty hands', 'Holster / put away', () => { if (K) { K.hand = -1; this.say('Hands empty.'); } }, { def: !K || K.hand < 0 }), it('t.hands', 'grab', 'Hands…', 'Grab · restrain · subdue · stance', () => setTimeout(() => this.openWheel('hands', false), 0))] },
       { id: 'carry', icon: 'grab', label: 'Carry', sub: carry ? carry.name : 'hands empty', off: !carry, why: 'Hands empty', kids: carry ? [it('y.put', 'putdown', 'Put down', 'Put it down (G)', () => this.press('KeyG'), { def: true }), it('y.hand', 'give', 'Hand over', 'Give it to who you look at', () => f?.type === 'crew' ? this.runOpt(() => c.talkMenu(f.e), /^(Give|Offer|Treat)/) : this.say('No one to hand it to.', 'warn'), { off: f?.type !== 'crew', why: 'Look at someone' }), it('y.look', 'inspect', 'Inspect', 'Look at it', () => this.say(carry.name + (carry.real ? ' — ' + carry.real : ''), 'comp'))] : [] },
       { id: 'sys', icon: 'gear', label: 'System', sub: 'pause · settings', kids: [it('s.pause', 'pause', 'Pause', 'Pause (P)', () => this.scriptPause(), { def: true }), it('s.keys', 'gear', 'Settings', 'Sensitivity, volume, graphics', () => this.scriptPause()), it('s.help', 'help', 'Help', 'Keys at a glance', () => this.say('Hold Q wheel · J board · H radio · V tools · 1-9 belt', 'comp', { icon: 'keyboard', short: 'Q wheel · J duty · H radio' }))] },
     ];

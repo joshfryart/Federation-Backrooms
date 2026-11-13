@@ -42,6 +42,8 @@ import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / 
 await uiTests(fail);
 import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation close-up: state machine, framing, pause rules, intents (tools/test-talk.mjs)
 await talkTests(fail);
+import { combatTests, combatBrowser } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
+await combatTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -433,6 +435,7 @@ await navBrowser(page2, fail);
 await commsHud(page2, fail);
 await uiBrowser(page2, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
 await talkBrowser(page2, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
+await combatBrowser(page2, page, fail);   // strike / grab / drag / release, witnesses, security, player HP, madness zapper (tools/test-combat.mjs)
 // ---- pace, crew repair response, shift-end tasks (js/pace.js, js/repair.js, js/duty.js) ----
 const rep = await page2.evaluate(async () => {
   const g = __game, G = g.G, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));

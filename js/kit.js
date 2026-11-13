@@ -79,6 +79,7 @@ export class Kit {
       if (t.mad && r.dmg > 0) { t.hp = (t.hp ?? 2) - (r.dmg >= 1 ? Math.round(r.dmg) : 1); if (t.hp <= 0) C.killMad?.(t); }
       G.say(`${r.mode === 'ranged' ? 'Hit' : 'You strike'} ${t.name || 'it'}${r.stun ? ` — stunned ${r.stun.toFixed(1)} s` : ''}.`, 'good'); this.last = { target: t.name || t.kind, ...r }; return;
     }
+    if (G.combat?.onKitHit?.(t, r)) { this.last = { target: t.person?.short, ...r }; return; }   // Nominal: phaser shots / throws on crew go through the injury + consequence model (js/grapple.js)
     const H = t.mesh.userData.human, pr = t.person; if (t.op) opEnd(t); t.walk = null; t.stunT = Math.max(t.stunT || 0, r.sedate ? 20 : r.stun * 3); t.cower = true; if (H) { H.play('hit_chest', { fade: 0.1, loop: false }); H.standing = false; }
     if (r.knock) { t.x += dx / d * r.knock * 0.12; t.z += dz / d * r.knock * 0.12; t.mesh.position.x = t.x; t.mesh.position.z = t.z; }
     const sab = G.phases?.saboteur === pr; if (sab) { G.phases.saboteur = null; G.say(`${pr.short} goes down. Security: "We've got the saboteur. Good work."`, 'good'); for (const p of G.roster?.people || []) if (p.dept === 'security') G.duty?._bump(p, 0.04); }

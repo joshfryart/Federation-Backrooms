@@ -34,6 +34,7 @@ import { Fidgeter } from './movement.js';
 import { Haul, initHaul, opStart, opHook, opEnd, pushHook, toolBonus } from './haul.js';   // equipment motions, carrying, carts (js/equipment.js, js/carry.js)
 import { propsFor, classifyItem } from './equipment.js';
 import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
+import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / hold / shove / strike, security response, armory (js/combat.js rules, docs/combat.md)
 import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
@@ -458,6 +459,7 @@ const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
 initHaul({ get gorns() { return gorns; }, killMad, nearestRepair, get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
 G.nav = new NavHUD({ G, P, TS, NOM, get world() { return world; }, get repairPts() { return repairPts; } });   // js/nav-hud.js
 G.menus = new Menus({ G, P, NOM, camera, renderer, canvas, get world() { return world; }, get ents() { return ents; }, isLocked: () => locked, requestLock, resumeGame, pause: () => { G.phase = 'paused'; showScreen('pause'); }, interact, talkMenu, terminalMenu, dutyMenu, showStatus });   // js/menus.js (key router: registered before main's keydown)
+G.combat = new Melee();   // js/grapple.js (uses the initHaul context above)
 G.talk = new Talk({ G, P, THREE, NOM, camera, scene, renderer, CFG, vmScene, get post() { return post; }, get world() { return world; }, get ents() { return ents; }, speak, commsData, duties: () => DUTIES, voiceBark, canTalk: () => (G.phases?.hazard?.(G.shipDeck + 1, { zone: G.duty?.place.room === 'engineering' ? 'engineering' : '' }) ? 'Not now!' : null) });   // js/talk.js (after Menus: its key listener runs after the router)
 
 
@@ -809,7 +811,7 @@ addEventListener('mousemove', (e) => {
   P.yaw -= e.movementX * 0.0022 * CFG.sens; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022 * CFG.sens));
 });
 addEventListener('contextmenu', (e) => e.preventDefault());
-addEventListener('mousedown', (e) => { if (e.target.closest?.('.ui-layer') || (NOM() && G.phase === 'play' && G.menuPause)) return; if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); else if (G.phase === 'play' && !locked && !e.target.closest('#liftui')) requestLock(); });
+addEventListener('mousedown', (e) => { if (e.target.closest?.('.ui-layer') || (NOM() && G.phase === 'play' && G.menuPause)) return; if (G.phase === 'play' && locked && e.button === 2) { if (!(NOM() && G.combat?.secondary(true))) fireGrapple(); } else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); else if (G.phase === 'play' && !locked && !e.target.closest('#liftui')) requestLock(); });
 function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
@@ -826,6 +828,7 @@ $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offer
 // ---------------- actions ----------------
 const _v = new THREE.Vector3(), _f = new THREE.Vector3();
 function fire() {
+  if (NOM() && G.combat?.primary()) return;   // Systems Nominal: strike / swing the handheld / throw down a held person (js/grapple.js); a charged phaser falls through to the kit
   if (G.phase === 'play' && G.kit?.inst && G.kit.attack()) return;   // a handheld in hand: phaser shot or improvised swing (js/kit.js)
   if (G.phase !== 'play' || shot > 0 || NOM()) return;   // no zapper in Systems Nominal
   if (G.phaser <= 0) { sound.empty(); G.say('Zapper depleted — find a power cell', 'warn'); shot = 0.3; return; }
@@ -862,6 +865,7 @@ function dutyHere() {
 function interact() {
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
+  if (NOM() && G.combat?.interact()) return;   // the armory arms locker (draw a phaser) / someone knocked down or in a fight (js/grapple.js)
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
   if (near && NOM() && near.kind === 'crew' && near.person && !near.fake && G.hud2) { if (!G.talk?.begin(near)) talkMenu(near); return; }   // close-up conversation (js/talk.js); the list menu is the fallback
   if (!near && NOM() && G.hud2) {
@@ -1002,7 +1006,7 @@ function step(dt, t) {
   let fx = 0, fz = 0;
   if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
   const moving = fx || fz;
-  P.slow = P.clung > 0 ? 0.4 : 1;
+  P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
   movePlayer(dt, P, world, { fx, fz, sprint: !!(keys.ShiftLeft || keys.ShiftRight), crouch: !!(keys.KeyC || keys.ControlLeft), crouchPressed: pressed.crouch, jump: pressed.jump && !(P.clung > 0), grappleCancel: pressed.grappleCancel }, moveApi);
   pressed.jump = pressed.crouch = pressed.grappleCancel = false;
   updateRope(dt);
@@ -1042,7 +1046,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  if (!worldPaused()) G.comms?.tick(dt); nomTick(dt); G.kit?.tick(dt); updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
+  if (!worldPaused()) G.comms?.tick(dt); nomTick(dt); G.kit?.tick(dt); G.combat?.tick(dt); updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -1097,6 +1101,7 @@ function step(dt, t) {
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
   if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
+  if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
   if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   $('prompt').textContent = prompt;
