@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { lookedAt } from './visibility.js';
 import { TS, TUBE_UP } from './world.js';
 import { makeGorn, animateGorn, makeCrew, makeSpider, animateSpider, makeTribble } from './actors.js';
 import { makeHuman, humansReady, holoMaterial, CREW_KINDS, bindSurface, basisAt, pinToBone, MADNESS_CFG } from './humans.js';
@@ -493,12 +494,11 @@ export class Phantom extends Enemy {
     this.attackCd -= dt; this.attacking -= dt;
     const dx = p.x - this.x, dz = p.z - this.z, dist = Math.hypot(dx, dz);
     // is the player looking at it? (needs line of sight; the hologram itself ignores walls)
-    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
-    const dot = dist > 0.01 ? (dx * -fx + dz * -fz) / dist : 1;
-    this.seen = dot > 0.55 && dist < 30 && this.w.los(p.x, p.z, this.x, this.z);
+    const L = lookedAt(p, this.x, this.z, { los: this.w.los(p.x, p.z, this.x, this.z), power: this.w.powerAmt ?? 1 });   // js/visibility.js: LOS + view cone + darkness
+    this.seen = L.seen;
     let speed = 0;
     if (!this.seen) {
-      this.unseenT += dt; speed = (2.3 + Math.min(this.deck, 8) * 0.12 + (dist > 14 ? 1.4 : 0)) * (game.fx?.holoMul || 1);   // holo-playroom safeties
+      this.unseenT += dt; speed = (2.3 + Math.min(this.deck, 8) * 0.12 + (dist > 14 ? 1.4 : 0)) * (game.fx?.holoMul || 1) * (L.edge ? 0.4 : 1);   // holo-playroom safeties
       const nx = dx / (dist || 1), nz = dz / (dist || 1), step = Math.min(speed * dt, dist);
       this.x += nx * step; this.z += nz * step; this.yaw += wrapA(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 6);
       if (this.unseenT > 14 && dist > 16) { this.relocate(p, 9, 13); this.unseenT = 0; }
