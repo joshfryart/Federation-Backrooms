@@ -428,7 +428,27 @@ export function buildProp(kind) {
       g.add(rbox(0.5, 0.2, 0.03, m.dark, 0, 0.5, 0.41, 0.01)); g.add(box(0.4, 0.1, 0.01, m.screenG, 0, 0.55, 0.43)); g.add(at(grid(4, 1, 0.06, 0.05, 0.04, 0.012, 0.04, m.keys, [0x4ac0ff, 0x30ff60, 0xff3020]), 0, 0.52, 0.42, Math.PI / 2)); g.add(box(0.5, 0.03, 0.02, m.glowB, 0, 0.1, 0.41)); break; }
     default: g.add(rbox(0.8, 0.8, 0.8, m.metal));
   }
+  if (MERGE_PROPS.has(kind)) mergeStatic(g);
   return g;
+}
+// Rich props are hundreds of tiny meshes: fold plain static meshes that share a material into one geometry per material (one draw call each).
+// Left alone: anything named (animated: 'core', 'spin'), instanced grids, nested groups / scanned models; userData stays on the group.
+const MERGE_PROPS = new Set(['console', 'warpcore', 'shuttle', 'pad', 'replicator', 'biobed', 'lockers', 'labrack', 'centrifuge']);
+function mergeStatic(g) {
+  const by = new Map(), take = [];
+  for (const o of g.children) { if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || o.name || Array.isArray(o.material) || !o.geometry.attributes.position) continue; take.push(o); }
+  for (const o of take) {
+    o.updateMatrix(); const ge = o.geometry.clone(); for (const k of Object.keys(ge.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') ge.deleteAttribute(k);
+    if (!ge.attributes.normal || !ge.attributes.uv) { ge.dispose(); continue; }
+    ge.applyMatrix4(o.matrix); const key = o.material, l = by.get(key) || by.set(key, []).get(key); l.push({ ge, o });
+  }
+  for (const [mat, l] of by) {
+    if (l.length < 2) { l.forEach(e => e.ge.dispose()); continue; }
+    const idx = l.filter(e => e.ge.index).length; if (idx && idx !== l.length) for (const e of l) if (e.ge.index) e.ge = e.ge.toNonIndexed();
+    const mg = mergeGeometries(l.map(e => e.ge), false); if (!mg) continue;
+    for (const e of l) { g.remove(e.o); e.ge.dispose(); }
+    const mesh = new THREE.Mesh(mg, mat); g.add(mesh);
+  }
 }
 
 export function buildLift(accent) {
