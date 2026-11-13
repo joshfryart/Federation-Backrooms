@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { TS, TUBE_UP } from './world.js';
-import { makeGorn, animateGorn, makeCrew, makeSpider, animateSpider } from './actors.js';
+import { makeGorn, animateGorn, makeCrew, makeSpider, animateSpider, makeTribble } from './actors.js';
 import { makeHuman, humansReady, holoMaterial, CREW_KINDS, bindSurface, basisAt, pinToBone } from './humans.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -80,8 +80,34 @@ export const MODELS = {
   slimeling: (o = {}) => humanModel({ slime: true, bloody: 0.35, ...(o.human || {}) }, { face: { ...CRAZED_FACE, JawDrop: 1 }, attack: 'punch_jab', walk: 'jog', walkRef: 3, init: slimeKit, tick: slimeTick }, () => crewFallback(0x30a050)),
   drone: () => humanModel({ kind: 'suit', height: 2.02, tint: 0x4e5a56 }, { walk: 'walk_formal', walkRef: 1.25, jogAt: 99, runAt: 99, attack: 'punch_jab', attackSpeed: 0.9, stun: 'hit_head', stunHold: 'idle', init: droneKit, tick: droneTick }, () => crewFallback(0x5a6660)),
   phantom: () => humanModel({ kind: 'crew_m', height: 1.86, material: phantomMaterial(), shadow: false }, { idle: 'dance', walk: 'dance', jog: 'dance', run: 'dance', attack: 'punch_jab', init: hostKit, face: { MouthLeftPullUp: 1, RightBrowDown: 0, MouthRightPullUp: 1, JawDrop: 0.35, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 } }, () => crewFallback(0xff3fd0)),
-  clinger: () => { const mesh = makeSpider(); let t = 0; return { mesh, tick(dt, speed, f) { t += dt; animateSpider(mesh, t, speed, f.latched, f); } }; },
+  clinger: () => clingerModel(),
+  furble: () => furbleModel(),
 };
+// Clingon Crawler: spiked leg joints, hooked mandibles, ceiling-hang pose, and a face-hugging latch
+function clingerModel() {
+  const mesh = makeSpider(), u = mesh.userData; let t = 0;
+  const spike = new THREE.MeshStandardMaterial({ color: 0x1a0c10, roughness: 0.3 }), hook = new THREE.MeshStandardMaterial({ color: 0xd8d0b0, roughness: 0.25 });
+  const sp = new THREE.ConeGeometry(0.008, 0.06, 4), mand = new THREE.TorusGeometry(0.06, 0.012, 5, 10, Math.PI * 1.05);
+  for (const L of u.legs) { for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(sp, spike); m.position.set((i - 1) * 0.012, 0.02 - i * 0.07, 0.06 + i * 0.02); m.rotation.x = -0.9; m.castShadow = false; L.knee.add(m); }
+    const k = new THREE.Mesh(sp, spike); k.scale.setScalar(1.6); k.position.set(0, 0.05, 0.0); k.rotation.x = 0.4; L.knee.add(k); }
+  for (const J of u.jaws) { if (J.palp) continue; const m = new THREE.Mesh(mand, hook); m.position.set(-J.sx * 0.0, -0.1, 0.07); m.rotation.set(0, Math.PI / 2 * J.sx * 0, J.sx > 0 ? 2.2 : 0.9); m.scale.set(0.9, 1.1, 1); m.castShadow = false; J.j.add(m); }
+  const ab0 = u.abd.position.z;
+  return { mesh, tick(dt, speed, f) {
+    t += dt; animateSpider(mesh, t, speed, f.latched, f);
+    // hanging: front legs hooked up on the ceiling, body swaying; abdomen throbs
+    if (f.lurk) { u.body.position.y = 0.34 + Math.sin(t * 0.9) * 0.012; u.body.rotation.z = Math.sin(t * 0.7) * 0.03; u.legs.forEach((l, i) => { l.hip.rotation.x += 0.15 + (l.k < 2 ? 0.1 : 0); }); u.abd.scale.x = 1 + Math.sin(t * 2.4) * 0.04; }
+    // latched on a face: fangs jab, abdomen pumps, legs squeeze
+    if (f.latched) { u.abd.scale.set(1 + Math.sin(t * 9) * 0.1, 0.85 + Math.sin(t * 9 + 1) * 0.1, 1.2 + Math.sin(t * 9) * 0.08); u.body.position.z = 0.05 + Math.max(0, Math.sin(t * 7)) * 0.04; u.legs.forEach((l, i) => { l.knee.rotation.x += Math.sin(t * 5 + i) * 0.15 + 0.2; }); }
+    else { u.body.position.z = 0.05; u.abd.scale.z = 1.2; if (!f.lurk) u.abd.scale.x = 1; }
+  } };
+}
+// Furble: base mesh in actors.js; purr = fast shallow vibration under a slow breath, fur layers shimmer. near (0..1) deepens the purr.
+function furbleModel() { const mesh = makeTribble(); let t = 0; return { mesh, tick(dt, near = 0) { t += dt; purrFurble(mesh, t, near); } }; }
+export function purrFurble(g, t, near = 0) {
+  const b = g.userData.body, k = 0.012 + near * 0.02;
+  b.scale.set(1 + Math.sin(t * 38) * k * 0.5, 0.85 + Math.sin(t * 2.2) * 0.03 + Math.sin(t * 38) * k, 1.15 + Math.sin(t * 38 + 1.3) * k * 0.5);
+  b.rotation.z = Math.sin(t * 1.3) * 0.03; b.children.forEach((m, i) => { if (i) m.rotation.y = Math.sin(t * 3 + i) * 0.04 * (1 + near); });
+}
 // assimilation hardware bolted onto the suit: eye lens, cabling, tool arm
 function droneKit(mesh, H) {
   const metal = new THREE.MeshStandardMaterial({ color: 0x1c2022, metalness: 0.9, roughness: 0.35 });
@@ -492,7 +518,26 @@ export class Clinger extends Enemy {
     this.mesh.rotation.x = Math.PI; this.mesh.position.set(this.x, this.ceil, this.z); this.fall = 0; this.latchT = 0; this.fleeT = 0;
   }
   stunFor() { if (this.dead) return; this.kill(); }
-  kill() { this.dead = true; this.mesh.visible = false; this.game?.bloodAt?.(this.mode === 'lurk' ? this.x : this.x, this.mode === 'lurk' ? 1.5 : 0.4, this.z, 40); this.sound.squelch(); }
+  kill() {
+    if (this.dead) return; this.dead = true; const wasHigh = this.mode === 'lurk' || this.mode === 'drop'; this.mesh.visible = false;
+    this.game?.bloodAt?.(this.x, wasHigh ? 1.5 : 0.4, this.z, 40); this.sound.squelch(); this.splat(wasHigh);
+  }
+  // death splat: viscera spray falls to the deck and leaves a lingering stain with a few legs curled in it
+  splat(high) {
+    if (typeof document === 'undefined' || !this.scene) return; const scene = this.scene, x = this.x, z = this.z, y0 = high ? this.ceil - 0.2 : 0.4;
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); const R = Math.random;
+    for (let i = 0; i < 26; i++) { const a = R() * 6.3, d = R() * R() * 52, r = 3 + R() * 14 * (1 - d / 64); g.fillStyle = R() < 0.25 ? 'rgba(130,24,34,0.9)' : 'rgba(26,6,12,0.85)'; g.beginPath(); g.arc(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, r, 0, 7); g.fill(); }
+    g.strokeStyle = 'rgba(16,4,8,0.9)'; g.lineWidth = 3; for (let i = 0; i < 4; i++) { const a = R() * 6.3; g.beginPath(); g.moveTo(64, 64); g.quadraticCurveTo(64 + Math.cos(a) * 20, 64 + Math.sin(a) * 30, 64 + Math.cos(a + 0.7) * 44, 64 + Math.sin(a + 0.7) * 44); g.stroke(); }
+    const tex = new THREE.CanvasTexture(c), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, opacity: 0 });
+    const decal = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), mat); decal.rotation.x = -Math.PI / 2; decal.rotation.z = R() * 6.3; decal.position.set(x, 0.03, z); decal.renderOrder = 1; scene.add(decal);
+    const gm = new THREE.MeshStandardMaterial({ color: 0x3a0a14, roughness: 0.3 }), gibs = [];
+    for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.02 + R() * 0.03, 6, 5), gm); m.position.set(x, y0, z); m.userData.v = new THREE.Vector3((R() - 0.5) * 3, R() * 2, (R() - 0.5) * 3); scene.add(m); gibs.push(m); }
+    let t = 0, last = performance.now(); const step = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+      for (const m of gibs) { if (m.visible && m.position.y > 0.03) { m.userData.v.y -= 9 * dt; m.position.addScaledVector(m.userData.v, dt); } else if (m.visible && t > 3) { scene.remove(m); m.visible = false; } }
+      mat.opacity = Math.min(0.9, t * 3) * Math.max(0, 1 - Math.max(0, t - 40) / 20);
+      if (t < 60) requestAnimationFrame(step); else { scene.remove(decal); tex.dispose(); mat.dispose(); for (const m of gibs) scene.remove(m); } };
+    requestAnimationFrame(step);
+  }
   update(dt, p, noiseR, crouch, game) {
     if (this.dead) return; this.t += dt; this.game = game;
     const dx = p.x - this.x, dz = p.z - this.z, dist = Math.hypot(dx, dz);

@@ -35,14 +35,17 @@ if (set === 'crew') {
   { const [m, tk] = hum({ kind: 'crew_f', uniform: DIVISIONS[1], rank: 1, name: 'Roy' }); if (m) markImpostor(m); add('Impostor (disguised)', m, tk); }
   for (const pose of ['back', 'facedown', 'slumped']) add('Fallen: ' + pose, makeCorpse(Math.random, null, pose), null, pose === 'slumped' ? 1.4 : 2.2);
 } else if (set === 'enemies') {
-  { const g = makeGorn(); let t = 0; add('Gronk', g, (dt) => { t += dt; animateGorn(g, 1.2, t, Math.sin(t * 0.5) > 0.7); }, 2.2); }
+  { const m = MODELS.gronk(); let t = 0; add('Gronk', m.mesh, (dt) => { t += dt; m.tick(dt, 1.2, { roaring: Math.sin(t * 0.5) > 0.7 }); }, 2.2); }
+  { const m = MODELS.gronk(); let t = 0; add('Gronk (lunge)', m.mesh, (dt) => { t += dt; m.tick(dt, 0, { attacking: Math.sin(t * 1.2) > 0.2, look: Math.sin(t * 0.7) * 0.8 }); }, 2.4); }
+  { const m = MODELS.gronk(); let t = 0; add('Gronk (injured)', m.mesh, (dt) => { t += dt; m.tick(dt, t < 0.2 ? 0 : 1.2, { stunned: t < 0.2 }); }, 2.2); }
   add('Space-madness (run)', ...enemy('crazed', 4.6)); add('Space-madness (attack)', ...enemy('crazed', 0, { attacking: true }));
-  add('Compliance Drone', ...enemy('drone', 1.7)); add('Mr. Grinsworth', ...enemy('phantom', 1)); add('Grinsworth (watched)', ...enemy('phantom', 0, { frozen: true }));
-  add('Slimeling impostor', ...enemy('slimeling', 4.2)); add('Clingon Crawler', ...enemy('clinger', 0)); add('Crawler (running)', ...enemy('clinger', 4));
+  add('Compliance Drone', ...enemy('drone', 1.7)); add('Drone (adapted)', ...enemy('drone', 1.7, { adapted: true })); add('Drone (stunned)', ...enemy('drone', 0, { stunned: true })); add('Mr. Grinsworth', ...enemy('phantom', 1)); add('Grinsworth (watched)', ...enemy('phantom', 0, { frozen: true }));
+  add('Slimeling impostor', ...enemy('slimeling', 4.2)); add('Clingon Crawler', ...enemy('clinger', 0)); add('Crawler (running)', ...enemy('clinger', 4)); { const [m, tk, w] = enemy('clinger', 0, { lurk: true }); m.rotation.x = Math.PI; m.position.y = 2.2; add('Crawler (ceiling hang)', m, tk, w); } add('Crawler (latched)', ...enemy('clinger', 0, { latched: true }));
+  { const m = MODELS.furble(); m.mesh.scale.setScalar(1.8); add('Furble (purring)', m.mesh, (dt) => m.tick(dt, 1), 1.2); }
 } else if (set === 'misc') {
   for (const k of ['chip', 'battery', 'medkit']) { const m = makeItem(k); add(k, m, (dt) => { m.rotation.y += dt; }, 0.8); }
-  add('Furble', makeTribble(), null, 0.8); const f2 = makeTribble(); f2.scale.setScalar(2.5); add('Furble (close)', f2, null, 1.3);
-  const vm = makeViewmodel(); if (vm) { vm.group.position.y = 1.2; vm.group.scale.setScalar(3); add('Zapper (viewmodel ×3)', vm.group, null, 2); }
+  add('Furble', makeTribble(), null, 0.8); { const fm = MODELS.furble(); fm.mesh.scale.setScalar(2.5); add('Furble (close, purring)', fm.mesh, (dt) => fm.tick(dt, 1), 1.3); }
+  const vm = makeViewmodel(); if (vm) { vm.group.position.y = 1.2; vm.group.scale.setScalar(3); let k = 0, ch = 3, T = 0; add('Zapper (viewmodel ×3; ?vm=fire|reload animates, ?vm=still)', vm.group, (dt) => { T += dt; const mode = q.get('vm') || 'fire'; if (mode === 'still') { vm.tick(dt, 0, 3); return; } k = Math.max(0, k - dt * 6); if (mode === 'fire' && T % 1.6 < dt) k = 1; if (mode === 'reload') { ch = T % 3 < dt ? 0 : (T % 3 > 0.5 && ch === 0 ? 3 : ch); } vm.tick(dt, k, mode === 'reload' ? ch : 3); }, 2); }
 } else if (set === 'props') { for (const k of PROP_KINDS) add(k, buildProp(k), null, 2.6); }
 else if (set === 'decor') { for (const k of DECOR_KINDS) add(k, buildDecor(k), null, 2.3); }
 else if (set === 'carry') {   // carts (wheels roll), held items in a hand, and NPCs running equipment use scripts (js/carry.js, js/equipment.js)
