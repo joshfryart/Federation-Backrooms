@@ -328,6 +328,7 @@ export class Enemy {
     this.yaw += wrapA(Math.atan2(mdx, mdz) - this.yaw) * Math.min(1, dt * 7);
   }
   seesPlayer(p, range, fov = 1.25) {
+    if (p.hidden) return false;   // in a locker (js/hide.js)
     const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz);
     if (d > range || !this.w.los(this.x, this.z, p.x, p.z)) return false;
     if (d < 4) return true;
@@ -398,7 +399,7 @@ export class Hunter extends Enemy {
         const [tx, ty] = this.w.tile(p.x + (Math.random() - 0.5) * 10, p.z + (Math.random() - 0.5) * 10);
         if (this.w.grid[ty]?.[tx] === 0) this.setTarget(tx, ty); else { const [a, b] = this.w.tile(p.x, p.z); this.setTarget(a, b); }
       }
-      if (this.state !== S.CHASE && noiseR > 0) {
+      if (this.state !== S.CHASE && noiseR > 0 && !p.hidden) {
         const eff = (this.w.los(this.x, this.z, p.x, p.z) ? noiseR : noiseR * 0.65) * cfg.hear;
         if (dist < eff) { this.state = S.INVESTIGATE; this.timer = 8; const [tx, ty] = this.w.tile(p.x, p.z); this.setTarget(tx, ty); }
       }

@@ -3,6 +3,7 @@ import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.j
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
 import { ClingHud } from './cling-hud.js';
+import { Hiding } from './hide.js';
 import { hunterCount, hunterDelay, floorClingers, tubeClingerOk } from './balance.js';
 import { makeEnemy, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
@@ -197,7 +198,7 @@ function saveDeckState() {
 function loadDeck(n) {
   saveDeckState();
   clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
-  resetMover(P); rope.visible = hook.visible = false; G.cling.reset(P);
+  resetMover(P); rope.visible = hook.visible = false; G.cling.reset(P); G.hide?.resetDeck();
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = G.ship;
   G.shipDeck = shipDeckFor(ship, n, winDeck());
@@ -760,7 +761,7 @@ function logRun(won, cause) { if (_runLogged) return; _runLogged = true; try { G
 function fmtTime(s) { s |= 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 function die(by, line = null) {
-  G.cling.reset(P); G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
+  G.cling.reset(P); G.hide.leave(true); G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
   bloodBurst(P.x, 1.0, P.z, 120, 5); for (let i = 0; i < 6; i++) decals.floor('blood', P.x + (Math.random() - 0.5) * 2, P.z + (Math.random() - 0.5) * 2, 1.2 + Math.random(), 1);
   screenSplat(14, true); sound.roar(0.35); by.roar = 1.5; $('danger').style.opacity = 1; $('prompt').textContent = '';
   const deckReached = G.deck; logRun(false, by?.name);
@@ -775,7 +776,9 @@ G.onEnemyStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.
 G.onEnemySpotted = (g) => { flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
 G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
 G.cling = new ClingHud();
-G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
+G.hideEnabled = () => !NOM() && G.phase === 'play';
+G.hide = new Hiding({ get world() { return world; }, P, sound, game: G, enemies: () => gorns, S });
+G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0) && !P.hidden;
 G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
 G.glitch = (sec) => { G.glitchT = sec; };
@@ -810,6 +813,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyX' && G.kit) G.kit.useJob();
     if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
+    if (e.code === 'KeyZ' && !e.repeat) G.hide.decoy();
     if (e.code === 'KeyE') { if (P.clung > 0) { if (!e.repeat) { G.cling.mash(); P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
@@ -876,6 +880,7 @@ function dutyHere() {
   return D.loops.find(l => l.state === 'due' && l.room === room && near(l.spot)) || D.tasks.find(t => t.state === 'active' && t.room === room && near(t.spot)) || null;
 }
 function interact() {
+  if (G.hide?.toggle()) return;   // locker hiding (js/hide.js)
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
   if (NOM() && G.combat?.interact()) return;   // the armory arms locker (draw a phaser) / someone knocked down or in a fight (js/grapple.js)
@@ -1015,11 +1020,12 @@ function step(dt, t) {
   if (keys.ArrowLeft) P.yaw += 2 * dt; if (keys.ArrowRight) P.yaw -= 2 * dt;
   if (keys.ArrowUp) P.pitch = Math.min(1.4, P.pitch + 1.5 * dt); if (keys.ArrowDown) P.pitch = Math.max(-1.4, P.pitch - 1.5 * dt);
 
+  G.hide.update(dt);
   // movement
   let fx = 0, fz = 0;
   if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
   const moving = fx || fz;
-  P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
+  P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1) * (P.hidden ? 0 : 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
   movePlayer(dt, P, world, { fx, fz, sprint: !!(keys.ShiftLeft || keys.ShiftRight), crouch: !!(keys.KeyC || keys.ControlLeft), crouchPressed: pressed.crouch, jump: pressed.jump && !(P.clung > 0), grappleCancel: pressed.grappleCancel }, moveApi);
   pressed.jump = pressed.crouch = pressed.grappleCancel = false;
   updateRope(dt);
@@ -1118,6 +1124,7 @@ function step(dt, t) {
   if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
   if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
+  if (!prompt) prompt = G.hide?.prompt() || '';
   $('prompt').textContent = prompt;
 
   // room label + exploration
