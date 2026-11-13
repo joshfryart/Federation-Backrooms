@@ -551,11 +551,16 @@ function terminalMenu() {
   ], 'digit to choose · Esc to leave');
 }
 // nearby crew greet you now and then, with their own profile barks
-function ambientBarks(dt) {
-  G.barkT = (G.barkT || 0) - dt; if (G.barkT > 0 || G.phase !== 'play') return; G.barkT = 6 + Math.random() * 10;
-  const e = ents.find(e => e.simmed && Math.hypot(e.x - P.x, e.z - P.z) < 4.2 && world.los(P.x, P.z, e.x, e.z) && (!e.barked || G.time - e.barked > 60)); if (!e || Math.random() < 0.35) return;
-  e.barked = G.time; const pr = e.person, bk = commsData().billets?.[pr.billet]?.bark || {}, rank = G.player.rank - pr.rank, pool = (rank > 0 ? bk.greetHi : rank < 0 ? bk.greetLo : bk.greet) || bk.greet;
-  const text = pool?.length ? pool[Math.floor(Math.random() * pool.length)] : voiceBark(pr, 'idle'); G.say(`${pr.short}: ${text}`, 'npc'); try { speak(pr, text); } catch (er) { }
+function ambientBarks(dt) {   // crew only greet when you stop and face them for a moment, and rarely: a tight ship is not a chatty one
+  if (G.phase !== 'play') return; G.barkG = (G.barkG || 0) - dt; const sp = Math.hypot(P.vx || 0, P.vz || 0), fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+  for (const e of ents) {
+    if (!e.simmed || e.walk) { if (e) e.dwell = 0; continue; } const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz);
+    if (d < 2.4 && sp < 0.6 && (dx * fx + dz * fz) / (d || 1) > 0.75 && world.los(P.x, P.z, e.x, e.z)) e.dwell = (e.dwell || 0) + dt; else e.dwell = 0;
+    if (e.dwell > 1.6 && G.barkG <= 0 && (!e.barked || G.time - e.barked > 300) && Math.random() < 0.5) {
+      e.barked = G.time; G.barkG = 90; const pr = e.person, bk = commsData().billets?.[pr.billet]?.bark || {}, rank = G.player.rank - pr.rank, pool = (rank > 0 ? bk.greetHi : rank < 0 ? bk.greetLo : bk.greet) || bk.greet;
+      const text = pool?.length ? pool[Math.floor(Math.random() * pool.length)] : voiceBark(pr, 'idle'); G.say(`${pr.short}: ${text}`, 'npc'); try { speak(pr, text); } catch (er) { } return;
+    }
+  }
 }
 
 // ---------------- run control ----------------
