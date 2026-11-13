@@ -486,7 +486,7 @@ export function animateSpider(g, t, speed, latched, ex = {}) {
 //  FIRST-PERSON ZAPPER (hand + sidearm). Points down -Z. Returns { group, muzzle, flash, cells[] }
 // =====================================================================
 export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(), rig = new THREE.Group(), gun = new THREE.Group(), hand = new THREE.Group(); rig.add(gun, hand); g.add(rig); let cur = gun;   // rig: recoil/reload offsets; gun and hand move a little differently
   const wear = canvasTex(128, 128, (c, w) => {   // scuffed finish: fine scratches and worn edges
     c.fillStyle = '#b8b8b8'; c.fillRect(0, 0, w, w);
     for (let i = 0; i < 260; i++) { const v = Math.random() < 0.5 ? 255 : 40; c.strokeStyle = `rgba(${v},${v},${v},${0.08 + Math.random() * 0.22})`; c.lineWidth = 0.5 + Math.random(); const x = Math.random() * w, y = Math.random() * w, a = Math.random() < 0.7 ? (Math.random() - 0.5) * 0.5 : Math.random() * 3, l = 4 + Math.random() * 26; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
@@ -504,7 +504,7 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   const skinM = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6 });
   const cloth = new THREE.MeshStandardMaterial({ color: sleeve, roughness: 0.9 });
   const glow = (c) => new THREE.MeshBasicMaterial({ color: c });
-  const P = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+  const P = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); cur.add(m); return m; };
   // body: long rounded receiver
   const rec = P(new THREE.CapsuleGeometry(0.021, 0.15, 4, 12), shell, 0, 0, -0.03, Math.PI / 2); rec.scale.set(1.15, 1, 1.25);
   P(new THREE.BoxGeometry(0.034, 0.012, 0.16), dark, 0, 0.026, -0.03);                                   // top rail
@@ -523,16 +523,37 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   // grip + trigger guard
   P(new THREE.BoxGeometry(0.03, 0.095, 0.04), grip, 0, -0.06, 0.035, 0.28).geometry.translate(0, 0, 0);
   P(new THREE.TorusGeometry(0.018, 0.003, 5, 12, Math.PI), dark, 0, -0.03, -0.005, 0, Math.PI / 2, Math.PI);
-  // hand: palm, four fingers wrapped round the grip, index on the trigger, thumb along the body
-  const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 3, 8);
-  P(new THREE.BoxGeometry(0.02, 0.085, 0.075), skinM, 0.024, -0.065, 0.05, 0.28).geometry.translate(0, 0, 0);
-  for (let i = 0; i < 3; i++) { P(cap(0.0095, 0.04), skinM, -0.004, -0.05 - i * 0.021, 0.012 - i * 0.006, 0, 0, Math.PI / 2); P(cap(0.009, 0.022), skinM, -0.024, -0.05 - i * 0.021, 0.03 - i * 0.006, Math.PI / 2 - 0.2, 0, 0); }
-  P(cap(0.009, 0.038), skinM, 0.006, -0.028, -0.004, 0, 0.4, Math.PI / 2);                                 // trigger finger
-  P(cap(0.011, 0.045), skinM, 0.03, -0.012, 0.03, Math.PI / 2 - 0.1, 0, 0.1);                              // thumb
+  // hand: palm with knuckles, three jointed fingers wrapped round the grip, index on the trigger, thumb along the body
+  cur = hand;
+  const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 3, 8), nailM = new THREE.MeshStandardMaterial({ color: 0xe8cdb8, roughness: 0.35 });
+  P(new THREE.SphereGeometry(1, 12, 10), skinM, 0.024, -0.065, 0.05, 0.28).scale.set(0.0115, 0.046, 0.04);
+  P(new THREE.SphereGeometry(1, 10, 8), skinM, 0.031, -0.098, 0.074, 0.28).scale.set(0.009, 0.03, 0.03);                               // heel of the hand
+  const pivot = (x, y, z) => { const o = new THREE.Group(); o.position.set(x, y, z); hand.add(o); return o; };
+  const seg = (o, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); o.add(m); return m; };
+  const fingers = [];
+  for (let i = 0; i < 3; i++) {
+    const y = -0.05 - i * 0.021, z = 0.012 - i * 0.006, o = pivot(0.018, y, z + 0.03);                          // knuckle on the palm edge
+    seg(o, new THREE.SphereGeometry(0.0105, 8, 6), skinM, 0.004, 0, -0.002);                                    // knuckle
+    seg(o, cap(0.0095, 0.03), skinM, -0.012, 0, -0.018, 0, 0.55, Math.PI / 2);                                 // proximal phalanx, angled across the grip front
+    seg(o, cap(0.0088, 0.02), skinM, -0.035, 0, -0.026, 0, 0.1, Math.PI / 2);                                  // middle phalanx
+    seg(o, cap(0.0082, 0.012), skinM, -0.049, 0, -0.019, 0, -0.7, Math.PI / 2);                                // fingertip curling back in
+    seg(o, new THREE.BoxGeometry(0.006, 0.0025, 0.008), nailM, -0.0535, 0.006, -0.015, 0, -0.7, 0);          // nail
+    fingers.push(o);
+  }
+  const trig = pivot(0.016, -0.028, 0.022);
+  seg(trig, new THREE.SphereGeometry(0.0105, 8, 6), skinM, 0.004, 0, 0);
+  seg(trig, cap(0.0088, 0.03), skinM, -0.008, 0, -0.014, 0, 0.35, Math.PI / 2);                              // trigger finger, straight along the guard
+  seg(trig, cap(0.0082, 0.014), skinM, -0.024, 0, -0.02, 0, 0.1, Math.PI / 2);
+  seg(trig, new THREE.BoxGeometry(0.006, 0.0025, 0.008), nailM, -0.0305, 0.006, -0.02, 0, 0.1, 0);
+  const thumb = pivot(0.03, -0.012, 0.055);
+  seg(thumb, cap(0.0115, 0.03), skinM, 0, 0, -0.018, Math.PI / 2 - 0.1, 0, 0.1);
+  seg(thumb, cap(0.0098, 0.018), skinM, -0.004, 0.002, -0.045, Math.PI / 2 - 0.05, 0, 0.1);
+  seg(thumb, new THREE.BoxGeometry(0.007, 0.0025, 0.009), nailM, -0.0045, 0.0115, -0.052, 0, 0, 0);
   // wrist + forearm running off the bottom-right of the screen
   const arm = P(cap(0.032, 0.34), skinM, 0.05, -0.2, 0.2, 0.95, 0, -0.22); arm.scale.set(1, 1, 0.85);
-  const slv = P(new THREE.CylinderGeometry(0.043, 0.05, 0.3, 12), cloth, 0.063, -0.262, 0.285, 0.95, 0, -0.22);
+  P(new THREE.CylinderGeometry(0.043, 0.05, 0.3, 12), cloth, 0.063, -0.262, 0.285, 0.95, 0, -0.22);
   P(new THREE.CylinderGeometry(0.0445, 0.0445, 0.012, 12), new THREE.MeshStandardMaterial({ color: 0xd8b24a, metalness: 0.8, roughness: 0.3 }), 0.047, -0.178, 0.168, 0.95, 0, -0.22); // rank braid
+  cur = gun;
   // ---- detail: sights, heat vents, induction coil, warning label, wrist comm band ----
   P(new THREE.BoxGeometry(0.004, 0.008, 0.006), dark, 0, 0.035, -0.1);                                     // front sight post
   for (const sx of [-1, 1]) P(new THREE.BoxGeometry(0.005, 0.008, 0.006), dark, sx * 0.008, 0.035, 0.04);  // rear notch
@@ -542,19 +563,29 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   const lab = P(new THREE.PlaneGeometry(0.052, 0.013), new THREE.MeshStandardMaterial({ map: label, roughness: 0.6 }), -0.0262, -0.006, -0.012, 0, -Math.PI / 2, 0);
   P(new THREE.CylinderGeometry(0.0028, 0.0028, 0.054, 6), steel, 0, -0.03, 0.035, 0, 0, Math.PI / 2);        // grip pin
   P(new THREE.BoxGeometry(0.032, 0.006, 0.044), dark, 0, -0.108, 0.049, 0.28);                             // butt cap
-  const band = P(new THREE.CylinderGeometry(0.0375, 0.0385, 0.034, 14), dark, 0.0385, -0.132, 0.119, 0.95, 0, -0.22);   // wrist comm band
+  cur = hand; const band = P(new THREE.CylinderGeometry(0.0375, 0.0385, 0.034, 14), dark, 0.0385, -0.132, 0.119, 0.95, 0, -0.22);   // wrist comm band
   const commM = glow(0x40c8ff), comm = P(new THREE.BoxGeometry(0.026, 0.02, 0.004), commM, 0.022, -0.105, 0.135, 0.95 - Math.PI / 2, 0, -0.22); comm.rotation.order = 'XYZ';
   P(new THREE.BoxGeometry(0.004, 0.004, 0.004), glow(0xff4030), 0.006, -0.112, 0.128);
-  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -0.18); g.add(muzzle);
-  const flash = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); flash.position.copy(muzzle.position); flash.scale.set(1, 1, 2.2); g.add(flash);
+  cur = gun; const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -0.18); gun.add(muzzle);
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); flash.position.copy(muzzle.position); flash.scale.set(1, 1, 2.2); gun.add(flash);
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-  // per-frame: recoil pitch, vents glowing after a shot, coil idling with the charge, comm screen ticking over
-  let heat = 0, tt = 0; const hot = new THREE.Color(0xff5a14), cold = new THREE.Color(0x1a0c06), base = g.rotation.x;
+  // per-frame: recoil (gun snaps back and up, hand absorbs it), trigger pull, grip squeeze, vents glowing after a shot,
+  // coil idling with the charge, comm screen ticking over; reload/charge: the zapper tips up, the cells sweep and the coil spins up
+  let heat = 0, tt = 0, rl = -1, lastCharge = null; const hot = new THREE.Color(0xff5a14), cold = new THREE.Color(0x1a0c06), base = g.rotation.x;
+  const reload = () => { if (rl < 0) rl = 0; };
   const tick = (dt, kick = 0, charge = 1) => {
-    tt += dt; heat = Math.max(heat - dt * 0.55, kick); ventM.color.copy(cold).lerp(hot, Math.min(1, heat)).multiplyScalar(1 + heat);
-    const c = charge > 0 ? 0.55 + 0.25 * Math.sin(tt * 5) + kick * 2 : 0.06; coilM.color.setRGB(1.0 * c, 0.48 * c, 0.13 * c);
+    tt += dt; if (lastCharge !== null && charge > lastCharge + 0.5 && rl < 0) rl = 0; lastCharge = charge;   // a battery went in: play the reload
+    let R = 0; if (rl >= 0) { rl += dt / 1.1; if (rl >= 1) rl = -1; else R = Math.sin(Math.PI * Math.min(1, rl * 1.15)) ** 0.8; }
+    heat = Math.max(heat - dt * 0.55, kick); ventM.color.copy(cold).lerp(hot, Math.min(1, heat + R * 0.7)).multiplyScalar(1 + heat);
+    const sp = rl >= 0 ? Math.sin(rl * Math.PI * 6) * 0.5 + 0.5 : 0;
+    const c = (charge > 0 ? 0.55 + 0.25 * Math.sin(tt * 5) + kick * 2 : 0.06) + R * (0.5 + sp * 0.8); coilM.color.setRGB(1.0 * c, 0.48 * c, 0.13 * c);
     commM.color.setRGB(0.25, 0.78, 1).multiplyScalar(0.7 + 0.3 * (Math.sin(tt * 2.3) > 0.2 ? 1 : 0.4));
     g.rotation.x = (g.userData.baseRx ?? base) + kick * kick * 0.16;
+    gun.position.set(0, -R * 0.03, kick * 0.03 + R * 0.01); gun.rotation.set(-kick * 0.12 - R * 0.55, 0, -R * 0.45);          // recoil back/up; reload tips it toward the player
+    hand.position.set(0, kick * 0.008 - R * 0.012, kick * 0.018); hand.rotation.set(-kick * 0.05, 0, 0);
+    const squeeze = 0.06 + kick * 0.2 - R * 0.28; fingers.forEach((f, i) => { f.rotation.y = squeeze + i * 0.02; f.rotation.z = 0; });
+    trig.rotation.y = Math.min(1, kick * 1.6) * 0.35 - R * 0.2; thumb.rotation.set(0, 0, 0); thumb.rotation.x = -R * 0.5; thumb.rotation.z = R * 0.2;
+    cells.forEach((cl, i) => { cl.scale.y = rl >= 0 ? 0.4 + 0.6 * Math.max(0, Math.sin(rl * Math.PI * 5 - i * 1.2)) : 1; });
   };
-  return { group: g, muzzle, flash, cells, ring, lens, tick, vents };
+  return { group: g, muzzle, flash, cells, ring, lens, tick, vents, reload };
 }
