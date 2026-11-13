@@ -29,3 +29,7 @@ import { ACC, apply, load, save, Captions, CUES } from '../js/access.js';
   let t = 0; const C = new Captions(null, () => t); const s = { roar: () => 'r', thud: () => 't', distant: () => 'd' }; C.attach(s);
   s.roar(0.3); s.roar(0.3); assert(C.log.length === 1); t = 3000; s.roar(0.3); s.thud(0.01); s.distant('door'); assert(C.log.length === 3 && C.log[2] === 'A distant door', C.log.join());
   assert(s.roar() === 'r'); console.log('access ok'); }
+import { ringNav } from '../js/nav.js';
+{ const it = { kind: 'duty', id: 'a', left: 60, total: 100 }, pin = { kind: 'duty', id: 'a' };
+  assert(!ringNav(it, null, { eta: 10 }).pinned); const r = ringNav(it, pin, { eta: 20 }); assert(r.pinned && Math.abs(r.notch - 0.4) < 1e-9 && !r.late);
+  assert(ringNav(it, pin, { eta: 90 }).late && ringNav(it, pin, { eta: 90 }).notch === 0); assert(ringNav({ ...it, left: null }, pin, { eta: 5 }).notch === null); console.log('ringNav ok'); }

@@ -8,12 +8,13 @@
 // Inputs: G.duty (board), G.pin ({kind, id, room, deck}: set by the tasks agent for the guided first task), G.plan, G.shipDecks, world.
 // main.js calls frame(dt) every play frame (route recompute is internal at 0.12 s), renderStatus(el) from renderStatus().
 import { ICONS, CATS, SHAPES, drawIcon, badgeSvg, iconSvg } from './icons.js';
-import { ROOM_CAT, Pins, dutyItems, planRoute, pinKey, liftTile, WALK } from './nav.js';
+import { ROOM_CAT, Pins, dutyItems, ringNav, planRoute, pinKey, liftTile, WALK } from './nav.js';
 import { bakeDeck, deckBounds, drawLocal, drawPlan, drawBadge, ROUTE, DUE, LATE, IDLE, DOING } from './minimap.js';
 import { Compass } from './compass.js';
 import { schematicHTML, SCHEMATIC_CSS } from './schematic.js';
 import { mountBrief } from './briefmap.js';
 import { ROOMS } from './data.js';
+import { UIHUB } from './ui-mode.js';
 import { zoneOf } from './ships.js';
 
 const ZCOL = { Command: '#6ea8ff', Habitat: '#58c9b9', Services: '#c6d25e', Engineering: '#e8892b' };
@@ -82,6 +83,7 @@ export class NavHUD {
     this.map.querySelector('.find').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) this.find(b.dataset.t); };
     this.mapC.addEventListener('mousemove', (e) => { if (!this.locked()) this.hoverAt(e.offsetX, e.offsetY); });
     this.mapC.addEventListener('click', (e) => { if (!this.locked()) this.clickAt(e.offsetX, e.offsetY); });
+    UIHUB.nav = this;
     addEventListener('keydown', (e) => this.onKey(e), true);
     addEventListener('mousemove', (e) => this.onMouse(e), true);
     addEventListener('mousedown', (e) => this.onDown(e), true);
@@ -96,6 +98,10 @@ export class NavHUD {
 
   // ---- pins
   setPin(p, sayIt = true) { this.pins.set(p); this.pins.cleared = !p; this.planKey = ''; this.tick(); if (sayIt) this.G.say?.(p ? `Guide: ${short(p.label || label(p.room || p.type), 4)}` : 'Guide off', 'comp'); return p; }
+  /** pin a duty / task by id (duty board 'Guide me') */
+  pinItem(kind, id) { this.items = dutyItems(this.G.duty); const it = this.items.find(i => i.kind === kind && i.id === id); if (!it || !it.room) return null; return this.setPin({ kind: it.kind, id: it.id, room: it.room, label: it.label, icon: it.icon }); }
+  /** duty-board ring extras for a loop id: { pinned, notch, late } (js/nav.js ringNav) */
+  ringInfo(id) { const it = this.items.find(i => i.kind === 'duty' && i.id === id); return ringNav(it, this.pin, this.plan); }
   cycle() { this.items = dutyItems(this.G.duty); const p = this.pins.cycle(this.items); this.planKey = ''; this.tick(); this.G.say?.(p ? `Guide: ${short(p.label, 4)}` : 'Guide off', 'comp'); return p; }
   targetOf(p) {
     if (!p) return null;

@@ -24,6 +24,7 @@ const CSS = `
 .rg .ic{position:absolute;left:0;right:0;top:10px;display:grid;place-items:center;color:var(--c)}.rg .ic .ico{width:18px;height:18px}
 .rg small{display:block;font:700 9px var(--f-m,monospace);color:var(--c);margin-top:1px}.rg .lb{display:block;font:9px var(--f-d,Arial);letter-spacing:.04em;color:#cfe0f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px;margin:0 -6px}
 .rg.s-due{--c:#ffb347}.rg.s-overdue{--c:#ff5a4a}.rg.s-doing{--c:#8fd8ff}.rg.s-done{--c:#4fd18b}.rg.s-delegated{--c:#b79cff}.rg.s-pending{--c:#7e8ea6}.rg.s-rushed{--c:#c8d94a}.rg.s-faked{--c:#d38bff}.rg.s-skipped,.rg.s-missed{--c:#6b7586}
+.rg.pin{outline:1.5px solid var(--m-route,#8ef3ff);outline-offset:1px;border-radius:6px}.rg.pin.late{outline-color:#ff5a4a}
 .rg.s-overdue svg.r{animation:bdpulse 1s ease-in-out infinite}.rg.s-due svg.r{animation:bdpulse 1.8s ease-in-out infinite}
 @keyframes bdpulse{50%{filter:drop-shadow(0 0 5px var(--c))}}body.reduce-motion .rg svg.r{animation:none!important}@media (prefers-reduced-motion:reduce){.rg svg.r{animation:none!important}}
 .pipsrow{display:flex;gap:4px;align-items:center;margin-top:5px;font:9px var(--f-m,monospace);color:#8fa0b6}
@@ -171,7 +172,9 @@ export class DutyHUD {
   renderBoard() {
     const D = this.duty; if (!D || !this.boardEl) return;
     this.boardEl.classList.toggle('off', this.hudMode === 2); if (this.hudMode === 2) return;
-    const C = 2 * Math.PI * 16, rings = D.loops.map(l => { const r = ringFor(D, l); return `<div class="rg s-${r.st}" title="${esc(l.label)} · ${r.st}"><svg class="r" viewBox="0 0 40 40"><circle class="tr" cx="20" cy="20" r="16"/><circle class="pg" cx="20" cy="20" r="16" stroke-dasharray="${(C * r.frac).toFixed(1)} ${C.toFixed(1)}"/></svg><span class="ic">${ico(loopIcon(l))}</span><small>${esc(r.txt)}</small>${this.big ? `<span class="lb">${esc(l.label)}</span>` : ''}</div>`; }).join('');
+    const C = 2 * Math.PI * 16, rings = D.loops.map(l => { const r = ringFor(D, l), ni = UIHUB.nav?.ringInfo?.(l.id) || {}, na = ni.notch != null ? 2 * Math.PI * ni.notch : null;
+      const notch = na != null ? `<line x1="${(20 + Math.cos(na) * 12).toFixed(1)}" y1="${(20 + Math.sin(na) * 12).toFixed(1)}" x2="${(20 + Math.cos(na) * 20).toFixed(1)}" y2="${(20 + Math.sin(na) * 20).toFixed(1)}" stroke="${ni.late ? '#ff5a4a' : '#fff'}" stroke-width="2.4"/>` : '';
+      return `<div class="rg s-${r.st}${ni.pinned ? ' pin' : ''}${ni.late ? ' late' : ''}" title="${esc(l.label)} · ${r.st}${ni.pinned ? ' · guided' + (ni.late ? ' (ETA past the window)' : '') : ''}"><svg class="r" viewBox="0 0 40 40"><circle class="tr" cx="20" cy="20" r="16"/><circle class="pg" cx="20" cy="20" r="16" stroke-dasharray="${(C * r.frac).toFixed(1)} ${C.toFixed(1)}"/>${notch}</svg><span class="ic">${ico(loopIcon(l))}</span><small>${esc(r.txt)}</small>${this.big ? `<span class="lb">${esc(l.label)}</span>` : ''}</div>`; }).join('');
     const pips = D.tasks.map(t => `<i class="${t.state === 'done' ? 'd' : t.state === 'missed' ? 'm' : t.state === 'active' ? 'a' : ''}" title="${esc(t.task)}"></i>`).join('');
     const rep = this.repairs().map(r => `<span class="rp ${r.status}" title="${esc(r.label)} · ${r.status}">${ico(r.status === 'needs' ? 'box' : 'repair')}</span>`).join('');
     const alert = UIHUB.menus?.alertTop?.();
@@ -240,12 +243,12 @@ export class DutyHUD {
       if (['done', 'rushed', 'faked', 'skipped', 'missed'].includes(st) && b.ref.entry != null) body = `<div class="lbl">Report to the bridge</div><div class="row">${q('rep1', 'report', 'Honest', 'trust +')}${st !== 'done' ? q('rep0', 'fake', '"All fine"', 'risky') : ''}</div>`;
       else if (st === 'delegated') { const j = D.jobs.find(x => x.delegateOf === l.id); body = `<div class="lbl">${j ? esc(j.person.short) + ' has this' : 'Delegated'}</div><div class="row">${q('hail', 'hail', 'Check in', j ? j.person.short : '')}</div>`; }
       else if (b.ref.live || st === 'due' || st === 'overdue' || st === 'doing') {
-        body = `<div class="lbl">How will you do it?${here ? '' : ` <span style="color:#ff7a6b">· go to ${esc(l.room)}</span>`}</div><div class="row">${QUALITIES.map(qq => q('q:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake', skipped: 'skip' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake log', skipped: 'Skip' }[qq], qq === 'skipped' ? '0 s' : qq === 'faked' ? 'risk' : Math.round(secs(qq)) + ' s', !here || st === 'doing')).join('')}</div>`;
+        body = `<div class="lbl">How will you do it?${here ? '' : ` <span style="color:#ff7a6b">· go to ${esc(l.room)}</span>`}</div><div class="row">${l.room && l.room !== 'any' ? q('pin', 'pin', 'Guide me', l.room) : ''}${QUALITIES.map(qq => q('q:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake', skipped: 'skip' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake log', skipped: 'Skip' }[qq], qq === 'skipped' ? '0 s' : qq === 'faked' ? 'risk' : Math.round(secs(qq)) + ' s', !here || st === 'doing')).join('')}</div>`;
         const subs = D.subs().slice(0, 6); if (subs.length && st !== 'doing') body += `<div class="lbl">Or delegate to</div><div class="row">${subs.map(p => `<button class="act" data-do="deleg:${p.id}" data-k="${esc(k)}">${PT ? PT.img(p, 26, 'ap') : ico('person')}${esc(p.family || p.short)}<em>${Math.round(D.trust(p) * 100)}%</em></button>`).join('')}</div>`;
       } else body = `<div class="lbl">Later · in ${fmtLeft(b.a - D.t)}</div><div class="row">${q('pin', 'pin', 'Where', l.room)}</div>`;
     } else if (b.ref.task) {
       const t = D.tasks.find(x => x.id === b.ref.task); title = t.task; small = `${t.room} · ${b.st}`;
-      if (t.state === 'active') body = `<div class="lbl">Do the task${t.room === room ? '' : ` <span style="color:#ff7a6b">· go to ${esc(t.room)}</span>`}</div><div class="row">${['proper', 'rushed', 'faked'].map(qq => q('t:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake' }[qq], '', t.room !== room)).join('')}</div>`;
+      if (t.state === 'active') body = `<div class="lbl">Do the task${t.room === room ? '' : ` <span style="color:#ff7a6b">· go to ${esc(t.room)}</span>`}</div><div class="row">${t.room ? q('pin', 'pin', 'Guide me', t.room) : ''}${['proper', 'rushed', 'faked'].map(qq => q('t:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake' }[qq], '', t.room !== room)).join('')}</div>`;
       else body = `<div class="lbl">${t.state === 'pending' ? 'Opens in ' + fmtLeft(t.at_s - D.t) : t.state}</div>`;
     } else if (b.ref.person != null) { const p = D.roster.people.find(x => x.id === b.ref.person); title = b.ref.repair ? b.label : p?.short || title; body = `<div class="row">${b.ref.repair ? '' : q('order:' + b.ref.person, 'order', 'Order duty', '')}${q('hailp:' + b.ref.person, 'hail', 'Hail', p?.short || '')}</div>`; }
     const pop = document.createElement('div'); pop.className = 'dp-pop'; pop.innerHTML = `<h4>${esc(title)}</h4><small>${esc(small)} <button class="x" data-popx>close</button></small>${body}`;
@@ -271,7 +274,7 @@ export class DutyHUD {
     else if ((d === 'rep1' || d === 'rep0') && lid) D.report(lid, d === 'rep1');
     else if (d.startsWith('order:')) { const p = who(+d.slice(6)); const r = p ? D.order(p, null) : null; if (r && !r.ok && !r.refused) say(r.why); }
     else if (d.startsWith('hailp:') || d === 'hail') { const p = who(d.startsWith('hailp:') ? +d.slice(6) : D.jobs.find(x => x.delegateOf === lid)?.person.id); if (p) UIHUB.menus?.hail?.(p); }
-    else if (d === 'pin' && lid) say(`Do this in the ${D.loop(lid).room}.`, 'comp');
+    else if (d === 'pin' && (lid || tid)) { if (!UIHUB.nav?.pinItem(lid ? 'duty' : 'task', lid || tid)) say(`Do this in the ${lid ? D.loop(lid).room : D.tasks.find(t => t.id === tid)?.room}.`, 'comp'); else this.closeBoard(); }
     this.pop = null; this._tl = null; if (this.boardOpen) this.renderPanel();
   }
   showEnd(html, actions) {

@@ -198,6 +198,11 @@ export function dutyItems(duty) {
   return out;
 }
 /** smaller = more urgent: late duties, then least time left, then open tasks (board order), then the soonest upcoming */
+/** duty-board ring extras for one item: is it the guided pin, and where does the walk ETA land on its time-left ring (0..1 of the window; null = no countdown)? late = you will not make it */
+export function ringNav(it, pin, plan) {
+  const pinned = !!(it && pin && pin.kind === it.kind && pin.id === it.id); if (!pinned || !plan || it.left == null || !it.total) return { pinned, notch: null, late: false };
+  const r = (it.left - plan.eta) / it.total; return { pinned, notch: Math.max(0, Math.min(1, r)), late: r < 0 };
+}
 export const urgency = (it) => !it.due ? 1e7 + (it.eta || 0) : it.kind === 'task' ? 1e5 + (it.order || 0) : (it.late ? -1e4 : 0) + (it.left ?? 5e4);
 export const pinKey = (p) => p ? `${p.kind}:${p.id ?? p.room ?? ''}${p.kind === 'room' || p.kind === 'deck' ? ':' + p.deck + ':' + (p.tx ?? '') + ',' + (p.ty ?? '') : ''}` : '';
 const fromItem = (it, auto) => ({ kind: it.kind, id: it.id, room: it.room, label: it.label, icon: it.icon, auto });
