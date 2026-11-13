@@ -807,7 +807,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyX' && G.kit) G.kit.useJob();
     if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
-    if (e.code === 'KeyE') { if (P.clung > 0) { if (e.repeat) return; G.cling.mash(); P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
+    if (e.code === 'KeyE') { if (P.clung > 0) { if (!e.repeat) { G.cling.mash(); P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
