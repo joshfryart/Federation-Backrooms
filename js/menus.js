@@ -18,7 +18,8 @@ import { iconSvg, deptCol } from './icons.js';
 export const HOLD_MS = 220;
 const HOLD_KEYS = { KeyQ: 'main', KeyJ: 'duty', KeyH: 'radio', KeyV: 'tools' };
 const HH_ICON = (id) => /^tricorder/.test(id) ? 'tricorder' : /^phaser/.test(id) ? 'phaser' : ({ commbadge: 'badge', padd: 'padd', hypospray: 'hypo', dermal: 'hypo', scalpel: 'lab', hydrospanner: 'spanner', spanner: 'spanner', plasma_torch: 'fire', toolbag: 'tools', flashlight: 'torch', extinguisher: 'fire', mop: 'clean', cargo_hook: 'grab', crowbar: 'workshop' })[id] || 'tools';
-const BELT_CSS = `#ui-belt{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:5;display:none;gap:4px;pointer-events:none;font:700 9px var(--f-m,monospace)}
+const BELT_CSS = `body.nominal #grap{display:none}
+#ui-belt{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:5;display:none;gap:4px;pointer-events:none;font:700 9px var(--f-m,monospace)}
 #ui-belt.on{display:flex}#ui-belt span{position:relative;width:30px;height:30px;display:grid;place-items:center;background:rgba(5,8,14,.62);border:1px solid rgba(150,180,210,.28);color:#cfe0f0}
 #ui-belt span.in{border-color:var(--lc1,#f2a03d);background:rgba(242,160,61,.22);color:#fff}#ui-belt span.br{opacity:.45}#ui-belt .ico{width:18px;height:18px;fill:none}#ui-belt b{position:absolute;left:2px;top:0;color:#ffd9a0;font-size:8px}`;
 
