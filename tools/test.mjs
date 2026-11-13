@@ -40,6 +40,8 @@ import { navTests, navBrowser } from './test-nav.mjs';   // routing / cross-deck
 await navTests(fail);
 import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / pointer lock, wheel maths, toasts, icons (tools/test-ui.mjs)
 await uiTests(fail);
+import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation close-up: state machine, framing, pause rules, intents (tools/test-talk.mjs)
+await talkTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -430,6 +432,7 @@ console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && v
 await navBrowser(page2, fail);
 await commsHud(page2, fail);
 await uiBrowser(page2, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
+await talkBrowser(page2, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
 // ---- pace, crew repair response, shift-end tasks (js/pace.js, js/repair.js, js/duty.js) ----
 const rep = await page2.evaluate(async () => {
   const g = __game, G = g.G, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));

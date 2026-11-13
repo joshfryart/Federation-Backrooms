@@ -36,6 +36,7 @@ import { propsFor, classifyItem } from './equipment.js';
 import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
 import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
+import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -457,6 +458,7 @@ const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
 initHaul({ get gorns() { return gorns; }, killMad, nearestRepair, get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
 G.nav = new NavHUD({ G, P, TS, NOM, get world() { return world; }, get repairPts() { return repairPts; } });   // js/nav-hud.js
 G.menus = new Menus({ G, P, NOM, camera, renderer, canvas, get world() { return world; }, get ents() { return ents; }, isLocked: () => locked, requestLock, resumeGame, pause: () => { G.phase = 'paused'; showScreen('pause'); }, interact, talkMenu, terminalMenu, dutyMenu, showStatus });   // js/menus.js (key router: registered before main's keydown)
+G.talk = new Talk({ G, P, THREE, NOM, camera, scene, renderer, CFG, vmScene, get post() { return post; }, get world() { return world; }, get ents() { return ents; }, speak, commsData, duties: () => DUTIES, voiceBark, canTalk: () => (G.phases?.hazard?.(G.shipDeck + 1, { zone: G.duty?.place.room === 'engineering' ? 'engineering' : '' }) ? 'Not now!' : null) });   // js/talk.js (after Menus: its key listener runs after the router)
 
 
 // ---- NPC repair response glue (js/repair.js decides who goes where, in the abstract): here bodies walk (run when urgent) to the hardware
@@ -678,7 +680,7 @@ function newRun() {
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: Math.floor(Math.random() * 1e6) });
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
-  G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p);
+  G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p); G.portraits?.clear();   // portraits are cached by person id: a new crew needs new faces
   { const forced = new URLSearchParams(location.search).get('billet'); G.player = NOM() ? pickBillet(G.roster, G.runSeed, forced) : (G.roster.byBillet.comp?.[0] || G.roster.people[G.roster.people.length - 1]); if (NOM()) { G.player.isPlayer = true; G.mission = pickMission(G.runSeed); } }   // Systems Nominal: you are dealt a random billet; the old mode keeps a stable crew member whose voice speaks for you
   G.liftRnd = mulberry32((G.runSeed ^ 0x11f7a3) >>> 0);
   G.shipState = new ShipState(G.ship, G.runSeed); G.shipState.auto = false; if (NOM()) for (const sy of SYSTEMS) G.shipState.repair(sy.id); /* Systems Nominal: nothing is broken when you start */ G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
@@ -854,7 +856,7 @@ function interact() {
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
-  if (near && NOM() && near.kind === 'crew' && near.person && !near.fake && G.hud2) { talkMenu(near); return; }
+  if (near && NOM() && near.kind === 'crew' && near.person && !near.fake && G.hud2) { if (!G.talk?.begin(near)) talkMenu(near); return; }   // close-up conversation (js/talk.js); the list menu is the fallback
   if (!near && NOM() && G.hud2) {
     const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) { terminalMenu(); return; }
     const c = !G.carry && nearestClutter(); if (c && world.takeClutter(c)) { G.carry = { name: c.name, real: c.real, item: classifyItem(c.name, c.real) }; sound.pickup(); G.say(`You take: ${c.name}. [G] put it down`, 'good'); return; }
@@ -1572,8 +1574,10 @@ function frame() {
   if (G.phase === 'play' && world) step(dt, t);
   else if ((G.phase === 'ride' || G.phase === 'select') && world) liftStep(dt, t);
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
+  else if (G.phase === 'talk' && world) G.talk.step(dt, t);   // conversation close-up: only the speaker, the camera and the talk UI run (js/talk.js)
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
   G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
+  if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
   if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
   if (CFG.quality === 'high') {
@@ -1589,5 +1593,6 @@ window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
+Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact;   // conversation close-up (js/talk.js)
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

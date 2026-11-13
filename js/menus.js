@@ -250,7 +250,7 @@ export class Menus {
   // ---------------------------------------------------------------- per animation frame (runs while the world is paused)
   frame(dt) {
     const G = this.G; if (!this.c.NOM()) return; this.t += dt;
-    if (G.phase !== 'play' && this.UI.frozen && G.phase !== 'paused') { this.view.hide(); this.UI.stack.length = 0; this.UI.wheel = null; }   // lift / death / end: no layers survive
+    if (G.phase !== 'play' && this.UI.frozen && G.phase !== 'paused' && G.phase !== 'talk') { this.view.hide(); this.UI.stack.length = 0; this.UI.wheel = null; }   // lift / death / end: no layers survive
     this.sync(); this.gamepad();
     if (this.hold && !this.hold.opened && performance.now() - this.hold.t0 > HOLD_MS) this.holdTimeout();
     this.portraits.tick(this.UI.frozen ? 3 : 1);

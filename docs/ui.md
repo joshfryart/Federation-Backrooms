@@ -50,4 +50,4 @@ Reserved for later (not built): the combat direction is grapple / melee against 
 - Not played by hand yet; hold threshold (220 ms), wheel size and flick scale (1.4) need tuning on real mice / pads.
 - Key remapping UI (`fb_keys`) and the hold-vs-toggle accessibility option are not built; touch dock not built.
 - Portrait cost is ~0.3-1 s each under swiftshader (much less on a GPU); cards show a silhouette until ready.
-- Conversation close-up should use `UIHUB.portraits` and open as a UI layer.
+- Conversation close-up: built (`docs/talk.md`, `js/talk.js`): a `talk` layer in phase `talk` (Menus.frame keeps it), portrait chip from `UIHUB.portraits`, intent wheel reuses `js/wheel.js`.
