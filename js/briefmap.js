@@ -12,7 +12,7 @@ const ease = (x) => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
 export function mountBrief(card, { d, stations = [], away = [], deckNo = 1 }) {
   if (!card || !d || card.querySelector('.nv-brief')) return null;
   const cv = document.createElement('canvas'); cv.className = 'nv-brief'; cv.width = 900; cv.height = 470;
-  cv.style.cssText = 'display:block;width:100%;margin:0 0 10px;background:#050912;border:1px solid rgba(150,180,210,.26)';
+  cv.style.cssText = 'display:block;width:100%;height:auto;max-height:34vh;object-fit:contain;margin:0 0 10px;background:#050912;border:1px solid rgba(150,180,210,.26)';
   card.prepend(cv); const g = cv.getContext('2d');
   // round order: nearest neighbour from the lift, routes chained into one polyline
   const w = navWorld(d), lt = liftTile(d); let pos = { x: lt[0] + 0.5, y: lt[1] + 0.5 }; const rest = stations.slice(), order = [], poly = [[pos.x, pos.y]];
