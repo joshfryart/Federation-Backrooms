@@ -22,6 +22,15 @@ const wait = (dur, x = {}) => ({ g: null, dur, ...x });
 //      0.41 m behind the root, so a seat at s puts the root 0.41 m ahead of it, feet under the table); the nearest one to where the person
 //      walked in from is used, else a point just outside `box` [x0, x1, z0, z1] (+ gap) on the side they came from, facing the prop.
 export const EQUIPMENT = {
+  lockers: { name: 'lockers', props: ['lockers'], stance: 'stand', box: [-0.9, 0.9, -0.3, 0.3], gap: 0.3, spots: [[0, 0.6, PI], [-0.6, 0.6, PI], [0.6, 0.6, PI]],
+    steps: [st('press_panel', [1.0, 1.5], { cue: 'beep' }), st('take_item', [1.0, 1.5], { p: 0.6 }), st('look_around', [1.2, 2]), st('check_wrist', [1.0, 1.6], { p: 0.4 })],
+    rest: [2, 5], idle: ['check_wrist', 'look_around'] },
+  labrack: { name: 'lab rack', props: ['labrack'], stance: 'stand', box: [-0.7, 0.7, -0.3, 0.3], gap: 0.3, spots: [[0, 0.6, PI], [-0.4, 0.6, PI], [0.4, 0.6, PI]],
+    steps: [st('take_item', [1.0, 1.5], { p: 0.7 }), st('lean_in', [2, 3.5], { pose: 'lean_on' }), st('type_keys', [1.6, 2.6], { p: 0.5 }), st('look_up_screen', [1.2, 2], { p: 0.4 })],
+    rest: [2, 5], idle: ['nod', 'head_tilt'] },
+  centrifuge: { name: 'centrifuge', props: ['centrifuge'], stance: 'stand', box: [-0.4, 0.4, -0.4, 0.4], gap: 0.3, spots: [[0, 0.55, PI], [0.5, 0.0, -PI / 2]],
+    steps: [st('press_panel', [1.1, 1.6], { cue: 'beep' }), wait([2, 4]), st('take_item', [1.0, 1.4], { p: 0.5 }), st('look_up_screen', [1.2, 2], { p: 0.4 })],
+    rest: [2, 5], idle: ['check_wrist', 'look_around'] },
   console: { name: 'ops console', props: ['console'], stance: 'stand', box: [-0.85, 0.85, -0.38, 0.38], gap: 0.32, spots: [[0, 0.72, PI], [-0.5, 0.72, PI], [0.5, 0.72, PI]],
     steps: [st('tap_console', [2, 3.4], { cue: 'beep' }), st('lean_in', [2.5, 4], { pose: 'lean_on' }), st('type_keys', [2.4, 4]), st('look_up_screen', [1.8, 3], { p: 0.6 }), st('press_panel', [1.1, 1.6], { fx: 'screen' }), st('rub_eyes', [1.8, 2.4], { p: 0.18 })],
     rest: [1.5, 4], idle: ['nod', 'head_tilt', 'look_around'] },

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { TS, TUBE_UP } from './world.js';
 import { makeGorn, animateGorn, makeCrew, makeSpider, animateSpider, makeTribble } from './actors.js';
-import { makeHuman, humansReady, holoMaterial, CREW_KINDS, bindSurface, basisAt, pinToBone } from './humans.js';
+import { makeHuman, humansReady, holoMaterial, CREW_KINDS, bindSurface, basisAt, pinToBone, MADNESS_CFG } from './humans.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -76,7 +76,7 @@ function humanModel(opts, cfg, fallback) {
 const CRAZED_FACE = { JawDrop: 0.75, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 0.9, NoseWrinkler: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 };
 export const MODELS = {
   gronk: () => gronkModel(),
-  crazed: (o = {}) => humanModel({ bloody: 0.8, pale: 0.55, rank: Math.floor(Math.random() * 3), ...(o.human || {}) }, { face: CRAZED_FACE, attack: 'punch_cross', tick(mesh, H, t) { H.lookYaw = Math.sin(t * 7) * 0.25 + Math.sin(t * 2.3) * 0.3; H.face({ JawDrop: 0.55 + Math.abs(Math.sin(t * 5)) * 0.45 }); } }, () => crewFallback(0xb02a20)),
+  crazed: (o = {}) => humanModel({ bloody: 0.8, pale: 0.55, rank: Math.floor(Math.random() * 3), ...(o.human || {}) }, { ...MADNESS_CFG, face: CRAZED_FACE }, () => crewFallback(0xb02a20)),
   slimeling: (o = {}) => humanModel({ slime: true, bloody: 0.35, ...(o.human || {}) }, { face: { ...CRAZED_FACE, JawDrop: 1 }, attack: 'punch_jab', walk: 'jog', walkRef: 3, init: slimeKit, tick: slimeTick }, () => crewFallback(0x30a050)),
   drone: () => humanModel({ kind: 'suit', height: 2.02, tint: 0x4e5a56 }, { walk: 'walk_formal', walkRef: 1.25, jogAt: 99, runAt: 99, attack: 'punch_jab', attackSpeed: 0.9, stun: 'hit_head', stunHold: 'idle', init: droneKit, tick: droneTick }, () => crewFallback(0x5a6660)),
   phantom: () => humanModel({ kind: 'crew_m', height: 1.86, material: phantomMaterial(), shadow: false }, { idle: 'dance', walk: 'dance', jog: 'dance', run: 'dance', attack: 'punch_jab', init: hostKit, face: { MouthLeftPullUp: 1, RightBrowDown: 0, MouthRightPullUp: 1, JawDrop: 0.35, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 } }, () => crewFallback(0xff3fd0)),

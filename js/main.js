@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
-import { makeEnemy, S, THREATS } from './enemies.js';
+import { makeEnemy, S, THREATS, purrFurble } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
@@ -1068,7 +1068,7 @@ function step(dt, t) {
       e.mesh.rotation.y += dt * 1.5; e.mesh.position.y = 0.8 + Math.sin(e.t * 2) * 0.06;
       if (d < 1.0 && G.hp < G.maxHp) { const h = G.fx.medkit; G.hp = Math.min(G.maxHp, G.hp + h); remove(e); sound.heal(); G.say(`Medkit (+${h} health)${h < 35 ? ' — sickbay supplies are failing' : ''}`, 'good'); updateHUD(); }
     } else if (e.kind === 'tribble') {
-      const b = e.mesh.userData.body; b.scale.y = 0.85 + Math.sin(e.t * 4) * 0.04; e.mesh.position.y = Math.abs(Math.sin(e.t * 1.6)) * 0.03;
+      purrFurble(e.mesh, e.t, d < 3 ? 1 : 0); e.mesh.position.y = Math.abs(Math.sin(e.t * 1.6)) * 0.03;
       if (d < 0.9) { G.tribbles++; G.hp = Math.min(G.maxHp, G.hp + 3); remove(e); sound.purr(); G.say(['Coo-coo… a furble!', 'It purrs. Your stress level drops.', 'Furble acquired. Do NOT feed it.'][G.tribbles % 3], 'npc'); updateHUD(); }
     } else if (e.kind === 'crew' || e.kind === 'emh') {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
