@@ -393,3 +393,12 @@ body.cb-engaged #prompt { display: none; } body.cb-engaged #cm-stack { opacity: 
 
 /* ---------- 16. full screens own the display: hide the in-game HUD behind them ---------- */
 body:is(:has(.screen.show), :has(#bd-brief.show), :has(#bd-end.show), :has(#shipstatus:not([style*="none"])), :has(#nv-map.on)) :is(#topleft, #bd-board, #mapframe, #nv-card, #nv-legend, #nv-compass, #bars, #cm-stack, #ac-badge, #ac-banner, #ac-pa, #faults, #phaser, #grap, #ui-belt, #bd-hint, #prompt, #toast, #subs, #cb-hud) { visibility: hidden; }
+
+/* ---- service record (stats screen, js/save.js) ---- */
+#statsscreen .in{max-width:min(720px,94vw);max-height:92vh;overflow:auto}
+#statsscreen .st-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:4px 24px;text-align:left;margin:1vh 0}
+#statsscreen .st-row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(111,143,184,.25);padding:3px 0}
+#statsscreen .st-row b{font-variant-numeric:tabular-nums}
+#statsscreen h4{margin:1.4vh 0 .6vh;letter-spacing:.2em;text-transform:uppercase;font-size:12px;opacity:.8}
+#statsscreen .st-hist{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+#statsscreen .st-hist th,#statsscreen .st-hist td{text-align:left;padding:3px 8px;border-bottom:1px solid rgba(111,143,184,.15)}

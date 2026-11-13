@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
+import { ClingHud } from './cling-hud.js';
 import { hunterCount, hunterDelay, floorClingers, tubeClingerOk } from './balance.js';
 import { makeEnemy, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
@@ -40,6 +41,7 @@ import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / 
 import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
+import { createSave, mountStatsScreen } from './save.js';   // run stats + service record screen (js/save.js)
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -192,7 +194,7 @@ function saveDeckState() {
 function loadDeck(n) {
   saveDeckState();
   clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
-  resetMover(P); rope.visible = hook.visible = false;
+  resetMover(P); rope.visible = hook.visible = false; G.cling.reset(P);
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = G.ship;
   G.shipDeck = shipDeckFor(ship, n, winDeck());
@@ -603,14 +605,14 @@ function summaryHTML(title, lead) {
     <h4>Crew opinion of you</h4><div>${Math.round(sm.trust * 100)}% trust · ${sm.stats.caught} times caught · ${sm.stats.orders} orders (${sm.stats.refused} refused) · ${sm.stats.delegated} delegated</div>`;
 }
 function nomDie(cause) {
-  if (G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomdead'; document.exitPointerLock?.(); sound.death?.(); G.hp = 0; $('danger').style.opacity = 0;
+  if (G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomdead'; logRun(false, cause); document.exitPointerLock?.(); sound.death?.(); G.hp = 0; $('danger').style.opacity = 0;
   const old = G.player; old.status = 'dead'; G.duty.chain.push(`${old.short} (${old.title}) died: ${cause}`);
   const near = G.roster.people.filter(p => !p.isPlayer && !['dead', 'corpse', 'crazed', 'evacuated'].includes(p.status));
   const mine = near.filter(p => p.dept === old.dept), pool = [...mine.slice(0, 3), ...near.filter(p => !mine.includes(p)).sort((a, b) => b.rank - a.rank).slice(0, 3)].slice(0, 5);
   G.hud2.showEnd(summaryHTML(`${old.short} is dead`, `${old.full || old.short}, ${old.title} — ${cause}.`) + '<h4>Carry on</h4>', [...pool.map(p => ({ label: `Continue as ${p.short} (${p.title})`, run: () => switchPlayer(p) })), { label: 'Back to the menu', run: () => toMenu() }]);
 }
 function nomEnd() {
-  if (G.phase === 'nomend' || G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomend'; document.exitPointerLock?.();
+  if (G.phase === 'nomend' || G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomend'; logRun(true); document.exitPointerLock?.();
   const left = G.duty.shiftEnd(), pc = paceFor(G.pace?.id), ph = G.phases.status();   // shift end: unfinished mission tasks count against the score (js/duty.js)
   const tasksLine = G.duty.tasks.length ? ` Mission tasks: ${G.duty.tasks.length - left.length} of ${G.duty.tasks.length} done${left.length ? `, ${left.length} left unfinished` : ''}.` : '';
   G.hud2.showEnd(summaryHTML('Watch ended', `${pc.label} — ${pc.minutes} minutes on ${G.ship.name}. The ship is ${ph.phase === 'nominal' ? 'in good order' : ph.phase}.${tasksLine}${G.repair ? ` The crew patched ${G.repair.stats.done} fault${G.repair.stats.done === 1 ? '' : 's'}.` : ''}`), [{ label: 'New watch', run: () => newRun() }, { label: 'Back to the menu', run: () => toMenu() }]);
@@ -682,6 +684,7 @@ let DUTIES = { billets: {} };
 async function loadDuties() { try { DUTIES = await (await fetch('./assets/data/duties.json')).json(); } catch (e) { console.warn('duties not loaded', e); } return DUTIES; }
 
 function newRun() {
+  _runLogged = false;
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: Math.floor(Math.random() * 1e6) });
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
@@ -721,7 +724,7 @@ function completeDeck() {
     if (G.deck >= winDeck() && !G.endless) {
       document.exitPointerLock?.();
       $('winstats').innerHTML = `${winDeck()} decks of the ${G.ship.name} · ${G.tribbles} furbles rescued · ${G.stuns} hostiles stunned<br>Time on shift ${fmtTime(G.time)}`;
-      localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck);
+      localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck); logRun(true);
       showScreen('win'); G.phase = 'win'; return;
     }
     offerPerks();
@@ -749,13 +752,15 @@ function choosePerk(id) {
   hideScreens(); fade(0, 600);
   loadDeck(G.deck + 1); requestLock(); G.phase = 'play';
 }
+let _runLogged = false;
+function logRun(won, cause) { if (_runLogged) return; _runLogged = true; try { G.save?.recordRun({ deck: G.deck, kills: G.stuns, time: G.time, furbles: G.tribbles, won, ship: G.ship?.name, cause }); } catch (e) { } }
 function fmtTime(s) { s |= 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 function die(by, line = null) {
-  G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
+  G.cling.reset(P); G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
   bloodBurst(P.x, 1.0, P.z, 120, 5); for (let i = 0; i < 6; i++) decals.floor('blood', P.x + (Math.random() - 0.5) * 2, P.z + (Math.random() - 0.5) * 2, 1.2 + Math.random(), 1);
   screenSplat(14, true); sound.roar(0.35); by.roar = 1.5; $('danger').style.opacity = 1; $('prompt').textContent = '';
-  const deckReached = G.deck;
+  const deckReached = G.deck; logRun(false, by?.name);
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
   $('deathline').textContent = line || pick(DEATH_LINES);
   $('stats').innerHTML = [['Last known position', `Deck ${deckReached} · ${ship.name}`], ['Registry', ship.reg], ['Cause', by?.name || 'Unknown'], ['Furbles rescued', G.tribbles], ['Hostiles stunned', G.stuns], ['Time on shift', fmtTime(G.time)], ['Best run', `Deck ${G.best}`]].map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('');
@@ -766,11 +771,12 @@ function die(by, line = null) {
 G.onEnemyStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
 G.onEnemySpotted = (g) => { flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
 G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
+G.cling = new ClingHud();
 G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
 G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
 G.glitch = (sec) => { G.glitchT = sec; };
-G.clingOn = (c) => { G.director?.bump(0.3, 'face-hugged'); P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
+G.clingOn = (c) => { G.director?.bump(0.3, 'face-hugged'); P.clung = 4.5; P.clungMax = 4.5; G.cling.on(4.5); G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
 G.dragDown = (e) => { G.director?.bump(0.2, 'dragged down'); const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9 * G.fx.knockMul; P.kbz = -dz / d * 9 * G.fx.knockMul; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
 G.hitPlayer = (gorn, dmg) => {
   if (invuln > 0 || G.phase !== 'play') return;
@@ -801,7 +807,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyX' && G.kit) G.kit.useJob();
     if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
-    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
+    if (e.code === 'KeyE') { if (P.clung > 0) { if (e.repeat) return; G.cling.mash(); P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
@@ -823,6 +829,7 @@ $('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(
 $('vsel').value = voiceMode(); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
 if (CFG.quality === 'low') setQuality('low');
 $('resume').onmousedown = (e) => e.stopPropagation();
+G.save = createSave(localStorage); mountStatsScreen(document, G.save, { show: showScreen, back: () => showScreen('title') });
 $('credbtn').onclick = () => showScreen('credits'); $('companybtn').onclick = (e) => { e.stopPropagation(); showCompany(); }; $('companyback').onclick = (e) => { e.stopPropagation(); showScreen('pause'); }; $('credback').onclick = () => showScreen('title');
 $('begin').onclick = newRun; $('again').onclick = newRun; $('again2').onclick = newRun; $('resume').onclick = resumeGame;
 G.pace = readPace(location.search, localStorage, navigator.webdriver); mountPaceControl(document, G.pace, (p) => { G.pace = p; savePace(p.id, localStorage); });   // title screen: shift length (js/pace.js)
@@ -1019,7 +1026,7 @@ function step(dt, t) {
   const legs = perk('legs');
   if (P.sprint && P.grounded) G.stamina -= dt * (20 - legs * 3.5) * (1 - P.flow * 0.35); else if (P.mode === 'wallrun' || P.mode === 'grapple' || P.mode === 'mantle') { } else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2) * G.fx.staminaRegen);
   if (G.stamina < 0) G.stamina = 0;
-  if (P.clung > 0) { P.clung -= dt; G.hp -= 2.5 * dt; $('clung').style.transform = `translate(${(Math.random() - 0.5) * 6}px,${(Math.random() - 0.5) * 6}px)`; if (P.clung <= 0) { $('clung').style.opacity = 0; G.say('You tear it off and hurl it away!', 'good'); bloodBurst(P.x, 1.5, P.z, 25, 3); if (G.hp <= 0) { die(gorns.find(g => g.kind === 'clinger') || gorns[0]); return; } } updateHUD(); }
+  if (P.clung > 0) { P.clung -= dt; G.hp -= 2.5 * dt; $('clung').style.transform = `translate(${(Math.random() - 0.5) * 6}px,${(Math.random() - 0.5) * 6}px)`; G.cling.tick(P.clung, dt); if (P.clung <= 0) { G.cling.end(); G.say('You tear it off and hurl it away!', 'good'); bloodBurst(P.x, 1.5, P.z, 25, 3); if (G.hp <= 0) { die(gorns.find(g => g.kind === 'clinger') || gorns[0]); return; } } updateHUD(); }
   if (G.glitchT > 0) G.glitchT -= dt;
 
   // footsteps / noise
