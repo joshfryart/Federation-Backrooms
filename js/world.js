@@ -237,6 +237,7 @@ function model(name, height, x = 0, z = 0, ry = 0, y = 0) {
   if (!hasModel(name)) return null; const i = instance(name, { height }); i.root.position.set(x, y, z); i.root.rotation.y = ry;
   i.root.traverse(o => { if (o.isMesh) { o.frustumCulled = true; o.material.envMapIntensity = 0.6; } }); return i.root;
 }
+const _psz = new THREE.Vector3();
 export function buildProp(kind) {
   const m = mats(); const g = new THREE.Group(); const R = Math.random;
   switch (kind) {
@@ -298,7 +299,7 @@ export function buildProp(kind) {
       for (let i = 0; i < 3; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.2 + i * 0.17, 0.008, 4, 36), m.glowB); r.rotation.x = Math.PI / 2; r.position.y = 0.175; g.add(r); }
       for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; g.add(at(box(0.16, 0.02, 0.07, i % 2 ? m.hazard : m.dark), Math.cos(a) * 0.9, 0.14, Math.sin(a) * 0.9, 0, -a, 0)); g.add(at(box(0.1, 0.1, 0.1, m.dark), Math.cos(a) * 0.82, WH - 0.24, Math.sin(a) * 0.82, 0, -a, 0)); g.add(at(box(0.04, 0.04, 0.04, i % 2 ? m.glowB : m.glowO), Math.cos(a) * 0.82, WH - 0.26, Math.sin(a) * 0.82)); }
       for (const a of [0.8, 2.4, 4.0, 5.5]) g.add(cyl(0.025, 0.025, WH - 0.3, m.pipe, Math.cos(a) * 0.95, 0.14, Math.sin(a) * 0.95, 8));   // guide posts to the overhead emitter
-      const beam = cyl(0.55, 0.55, WH - 0.4, m.pad, 0, 0.2, 0, 24); beam.material = beam.material.clone(); beam.material.opacity = 0.08; beam.material.depthWrite = false; g.add(beam); break; }
+      const beam = cyl(0.55, 0.55, WH - 0.4, m.pad, 0, 0.2, 0, 24); beam.material = beam.material.clone(); beam.material.opacity = 0.08; beam.material.depthWrite = false; beam.userData.ownMat = true; g.add(beam); break; }
     case 'bunk': { g.userData.top = 0.52;
       g.add(rbox(1.9, 0.34, 0.95, m.dark, 0, 0, 0, 0.05)); g.add(rbox(1.84, 0.16, 0.88, m.sheet, 0, 0.34, 0, 0.07)); g.add(rbox(0.42, 0.12, 0.6, m.white, -0.66, 0.48, 0, 0.06));
       const blanket = rbox(1.1, 0.06, 0.92, m.fabric, 0.36, 0.47, 0, 0.03); g.add(blanket);
@@ -918,7 +919,7 @@ export class World {
       m.position.set(cx, 0, cz); m.rotation.y = p.kind === 'viewscreen' ? 0 : p.rot;
       if (p.kind === 'viewscreen') { m.position.z -= TS * 0.35; }
       g.add(m); if (m.userData.top) this.tops[p.tx + p.ty * this.W] = m.userData.top;
-      m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
+      m.traverse(o => { if (o.isMesh) { const gb = o.geometry; if (!gb.boundingBox) gb.computeBoundingBox(); const bs = gb.boundingBox.getSize(_psz); o.castShadow = Math.max(bs.x * o.scale.x, bs.y * o.scale.y, bs.z * o.scale.z) >= 0.03; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
     }
     // loose clutter from the ship inventory: small things on the floor near walls and on tables (look at one for its name; see nearestClutter in js/main.js)
     this.clutter = [];
@@ -1365,7 +1366,7 @@ export class World {
   }
 
   dispose() {
-    this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.userData.ownMat) o.material.dispose(); });
     for (const t of this.own) t.dispose();   // per-deck canvas textures (signs, posters, stencils); shared ones simply re-upload on next use
   }
 }

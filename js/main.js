@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
-import { makeEnemy, S, THREATS, purrFurble } from './enemies.js';
+import { makeEnemy, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
@@ -172,8 +172,9 @@ function updateHUD() {
 // ---------------- level loading ----------------
 function clearLevel() {
   if (world) { scene.remove(world.group); world.dispose(); }
-  for (const g of gorns) scene.remove(g.mesh);
-  for (const e of ents) scene.remove(e.mesh);
+  for (const g of gorns) { scene.remove(g.mesh); g.dispose?.(); }
+  for (const e of ents) { scene.remove(e.mesh); e.dispose?.(); }
+  clearEnemySplats();
   for (const r of repairPts) if (r.obj) scene.remove(r.obj);
   gorns = []; ents = []; repairPts = [];
 }
@@ -1122,7 +1123,7 @@ function step(dt, t) {
   lamp.intensity = 9 * (0.15 + 0.85 * world.powerAmt);
 
   // particles & ambient events
-  blood.update(dt); sparks.update(dt); steam.update(dt); water.update(dt); dust.update(dt, P.x, P.z, camera, P.torch);
+  updateSplats(dt); blood.update(dt); sparks.update(dt); steam.update(dt); water.update(dt); dust.update(dt, P.x, P.z, camera, P.torch);
   updatePanelLights(dt);
   // rolling blackouts: the hum stops, the lights die, something is still walking
   if (G.blackout > 0) { G.blackout -= dt; if (G.blackout <= 0) { world.setPower(true); sound.setPower(true); sound.powerUp(); } }

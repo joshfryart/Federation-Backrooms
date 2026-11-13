@@ -13,10 +13,20 @@ const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // ------------------------------------------------------------------
 // Gronk: base rig lives in actors.js; this wrapper adds the roar heave, lunge, limp after being zapped, and clawed footprints
 let printTex = null, printM = null, printGeo = null;
+// Clinger death splats: driven by the game loop (pause-safe) and cleared with the level
+let gibGeo = null, gibMat = null; const splats = [];
+function endSplat(sp) { sp.scene.remove(sp.decal); sp.decal.geometry.dispose(); sp.tex.dispose(); sp.mat.dispose(); for (const m of sp.gibs) sp.scene.remove(m); }
+export function updateSplats(dt) {
+  for (let i = splats.length - 1; i >= 0; i--) { const sp = splats[i]; sp.t += Math.min(dt, 0.05);
+    for (const m of sp.gibs) { if (m.visible && m.position.y > 0.03) { m.userData.v.y -= 9 * dt; m.position.addScaledVector(m.userData.v, dt); } else if (m.visible && sp.t > 3) { sp.scene.remove(m); m.visible = false; } }
+    sp.mat.opacity = Math.min(0.9, sp.t * 3) * Math.max(0, 1 - Math.max(0, sp.t - 40) / 20);
+    if (sp.t >= 60) { endSplat(sp); splats.splice(i, 1); } }
+}
+export function clearEnemySplats() { for (const sp of splats) endSplat(sp); splats.length = 0; }
 function gronkModel() {
   const mesh = makeGorn(); let t = 0, atk = 0, roar = 0, hits = 0, wasStun = false, hurt = 0, stride = 0, side = 1, pi = 0; const u = mesh.userData, prints = [];
   const wound = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0x3a0c10, roughness: 0.2, emissive: 0x300000, emissiveIntensity: 0.4 })); wound.scale.set(1.3, 0.8, 0.4); wound.position.set(-0.28, 0.4, 0.33); wound.visible = false; u.torso.add(wound);
-  return { mesh, tick(dt, speed, f) {
+  return { mesh, dispose() { for (const pr of prints) { pr.m.parent?.remove(pr.m); pr.m.material.dispose(); } prints.length = 0; }, tick(dt, speed, f) {
     t += dt; if (f.stunned && !wasStun) hits++; wasStun = !!f.stunned; hurt += ((Math.min(1, hits * 0.45)) - hurt) * Math.min(1, dt * 2); wound.visible = hurt > 0.2;
     const lim = hurt * (f.stunned ? 0 : 1), sp = f.stunned ? 0 : speed * (1 - hurt * 0.2);
     atk += ((f.attacking ? 1 : 0) - atk) * Math.min(1, dt * (f.attacking ? 16 : 5)); roar += ((f.roaring ? 1 : 0) - roar) * Math.min(1, dt * 8);
@@ -53,23 +63,24 @@ function humanModel(opts, cfg, fallback) {
     tick(dt, speed, f) {
       t += dt;
       if (f.frozen) { H.mixer.timeScale = 0; H.update(dt); cfg.tick?.(mesh, H, t, f, dt); return; }
+      cfg.tick?.(mesh, H, t, f, dt);   // before H.update so per-frame timeScale tweaks (madness lurch) survive
       H.mixer.timeScale = 1;
       if (f.stunned) { stunT += dt; if (stunT < 0.7) H.play(cfg.stun || 'hit_chest', { loop: false, fade: 0.08 }); else H.play(cfg.stunHold || 'crouch_idle', { fade: 0.35 }); }
       else {
         stunT = 0;
         if (f.attacking) { if (!atk) H.play(cfg.attack || 'punch_cross', { loop: false, fade: 0.06, restart: true, speed: cfg.attackSpeed || 1.3 }); atk = true; }
         else {
-          atk = false;
+          const re = atk; atk = false;
           if (f.climb && speed > 0.1 && H.has('push')) H.play('push', { speed: 1.4, fade: 0.15 });
           else if (f.vault && H.has('crouch_fwd')) H.play('crouch_fwd', { speed: 1.6, fade: 0.08 });
           else if (f.crawl && speed > 0.2 && H.has('crouch_fwd')) H.play('crouch_fwd', { speed: Math.max(0.8, speed / 1.2), fade: 0.2 });
           else if (speed > (cfg.runAt ?? 3.4)) H.play(cfg.run || 'sprint', { speed: Math.max(0.7, speed / (cfg.runRef ?? 5.2)), fade: 0.2 });
           else if (speed > (cfg.jogAt ?? 2.4)) H.play(cfg.jog || 'jog_fwd', { speed: Math.max(0.7, speed / (cfg.jogRef ?? 4.7)), fade: 0.25 });
           else if (speed > 0.25) H.play(cfg.walk || 'walk', { speed: Math.max(0.6, speed / (cfg.walkRef ?? 1.5)), fade: 0.25 });
-          else H.play(cfg.idle || 'idle', { fade: 0.3 });
+          else H.play(cfg.idle || 'idle', { fade: 0.3, restart: re && (cfg.attack || 'punch_cross') === (cfg.idle || 'idle') });   // attack clip == idle clip: restart it so it loops again
         }
       }
-      H.update(dt); cfg.tick?.(mesh, H, t, f, dt);
+      H.update(dt);
     },
   };
 }
@@ -275,6 +286,7 @@ export class Enemy {
     const key = tx + ',' + ty; this.target = [tx, ty];
     if (key !== this.fieldKey) { this.field = this.w.field(tx, ty, !!this.noCrawl, !!this.climber); this.fieldKey = key; }
   }
+  dispose() { this.model?.dispose?.(); }
   stunFor(sec) { this.state = S.STUNNED; this.stun = sec; this.sound.stunned(); }
   place() { this.mesh.position.set(this.x, (this.mesh.userData.floatY || 0) + (this.y || 0), this.z); this.mesh.rotation.y = this.yaw; }
   // climbers: feet follow prop tops, ladders and upper tube runs; start the hop a little before the edge
@@ -469,7 +481,9 @@ export class Phantom extends Enemy {
     if (this.tpT > 0) { this.tpT -= dt; const k = Math.max(0, this.tpT / 0.6); this.tpM.opacity = k * 0.55; for (const m of [this.tpOut, this.tpIn]) { m.visible = k > 0; m.scale.set(1 + (1 - k) * 0.6, 0.4 + k * 0.6 + Math.random() * 0.2, 1 + (1 - k) * 0.6); m.rotation.y += dt * 9; } }
     else if (this.tpOut.visible) this.tpOut.visible = this.tpIn.visible = false;
   }
+  dispose() { super.dispose(); this.scene.remove(this.tpOut, this.tpIn); this.tpOut.geometry.dispose(); this.tpM.dispose(); }
   stunFor(sec) { // banished back into the projector for a while
+    this.tpT = 0; this.tpOut.visible = this.tpIn.visible = false;
     this.sound.zap(); this.state = S.DORMANT; this.delay = 12 + sec; this.mesh.visible = false; this.glow.intensity = 0; this.unseenT = 0;
     const open = this.w.d.openTiles.filter(([x, y]) => this.w.grid[y][x] === 0); const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]); this.x = c[0]; this.z = c[1];
   }
@@ -530,13 +544,9 @@ export class Clinger extends Enemy {
     g.strokeStyle = 'rgba(16,4,8,0.9)'; g.lineWidth = 3; for (let i = 0; i < 4; i++) { const a = R() * 6.3; g.beginPath(); g.moveTo(64, 64); g.quadraticCurveTo(64 + Math.cos(a) * 20, 64 + Math.sin(a) * 30, 64 + Math.cos(a + 0.7) * 44, 64 + Math.sin(a + 0.7) * 44); g.stroke(); }
     const tex = new THREE.CanvasTexture(c), mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, opacity: 0 });
     const decal = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), mat); decal.rotation.x = -Math.PI / 2; decal.rotation.z = R() * 6.3; decal.position.set(x, 0.03, z); decal.renderOrder = 1; scene.add(decal);
-    const gm = new THREE.MeshStandardMaterial({ color: 0x3a0a14, roughness: 0.3 }), gibs = [];
-    for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.02 + R() * 0.03, 6, 5), gm); m.position.set(x, y0, z); m.userData.v = new THREE.Vector3((R() - 0.5) * 3, R() * 2, (R() - 0.5) * 3); scene.add(m); gibs.push(m); }
-    let t = 0, last = performance.now(); const step = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
-      for (const m of gibs) { if (m.visible && m.position.y > 0.03) { m.userData.v.y -= 9 * dt; m.position.addScaledVector(m.userData.v, dt); } else if (m.visible && t > 3) { scene.remove(m); m.visible = false; } }
-      mat.opacity = Math.min(0.9, t * 3) * Math.max(0, 1 - Math.max(0, t - 40) / 20);
-      if (t < 60) requestAnimationFrame(step); else { scene.remove(decal); tex.dispose(); mat.dispose(); for (const m of gibs) scene.remove(m); } };
-    requestAnimationFrame(step);
+    gibMat = gibMat || new THREE.MeshStandardMaterial({ color: 0x3a0a14, roughness: 0.3 }); gibGeo = gibGeo || new THREE.SphereGeometry(1, 6, 5); const gibs = [];
+    for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(gibGeo, gibMat); m.scale.setScalar(0.02 + R() * 0.03); m.position.set(x, y0, z); m.userData.v = new THREE.Vector3((R() - 0.5) * 3, R() * 2, (R() - 0.5) * 3); scene.add(m); gibs.push(m); }
+    splats.push({ t: 0, decal, mat, tex, gibs, scene });
   }
   update(dt, p, noiseR, crouch, game) {
     if (this.dead) return; this.t += dt; this.game = game;
