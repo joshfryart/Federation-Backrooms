@@ -4,6 +4,7 @@ import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
 import { ClingHud } from './cling-hud.js';
 import { Hiding } from './hide.js';
+import { Tutor } from './hints.js';
 import { hunterCount, hunterDelay, floorClingers, tubeClingerOk } from './balance.js';
 import { makeEnemy, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
@@ -776,6 +777,7 @@ G.onEnemyStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.
 G.onEnemySpotted = (g) => { flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
 G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
 G.cling = new ClingHud();
+G.tutor = new Tutor((() => { try { return localStorage; } catch (e) { return null; } })(), (m, c) => G.say(m, c));
 G.hideEnabled = () => !NOM() && G.phase === 'play';
 G.hide = new Hiding({ get world() { return world; }, P, sound, game: G, enemies: () => gorns, S });
 G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0) && !P.hidden;
@@ -1157,6 +1159,7 @@ function step(dt, t) {
     if (dt2 > 16 && !h.b) { h.b = 1; G.say('Check the scan-o-matic map (top right). Hold C to creep silently.', 'comp'); }
     if (dt2 > 30 && !h.c) { h.c = 1; G.say('Click or Space fires the zapper. It only stuns. Then run.', 'comp'); }
   }
+  if (G.phase === 'play' && G.deck > 1 && !NOM()) G.tutor.tick(dt, { deck: G.deck, deckTime: G.deckTime, threats: G.threats || [], nearLocker: !!G.hide.nearSpot(), hostiles: gorns.filter(g => !g.dead && g.active).length, hp: G.hp / G.maxHp });
   for (const sp of world.sparkers) {
     sp.t -= dt;
     if (sp.t <= 0) {

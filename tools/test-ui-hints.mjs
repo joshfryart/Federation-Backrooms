@@ -14,3 +14,10 @@ import { Hiding, HIDE } from '../js/hide.js';
   H.update(3); g.state = S.CHASE; g.x = 5; assert(H.toggle() && !P.hidden, 'refused while watched');
   g.state = S.PATROL; g.x = 20; P.yaw = -Math.PI / 2; assert(H.decoy() && g.state === S.INVESTIGATE && g.tgt, 'decoy');
   H.dcd = 0; H.decoy(); H.dcd = 0; assert(!H.decoy() && H.decoys === 0, 'limit'); console.log('hide ok'); }
+import { Tutor, RULES } from '../js/hints.js';
+{ const mem = {}; const st = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; } }; const said = []; const T = new Tutor(st, m => said.push(m));
+  const c = { deck: 3, deckTime: 30, threats: ['gronk', 'clinger'], nearLocker: false, hostiles: 1, hp: 1 };
+  assert(!T.tick(1, c), 'cooldown'); const r = T.tick(10, c); assert(r && said.length === 1);
+  assert(!T.tick(1, c)); const r2 = T.tick(20, c); assert(r2 && r2.id !== r.id);
+  const T2 = new Tutor(st, () => {}); assert(T2.seen.has(r.id) && T2.seen.has(r2.id), 'persisted');
+  assert(!T2.tick(99, { ...c, deck: 1 }), 'none on deck 1'); console.log('hints ok'); }
