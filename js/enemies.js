@@ -94,7 +94,7 @@ export const MODELS = {
   clinger: () => clingerModel(),
   furble: () => furbleModel(),
 };
-// Clingon Crawler: spiked leg joints, hooked mandibles, ceiling-hang pose, and a face-hugging latch
+// Ceiling Crawler: spiked leg joints, hooked mandibles, ceiling-hang pose, and a face-hugging latch
 function clingerModel() {
   const mesh = makeSpider(), u = mesh.userData; let t = 0;
   const spike = new THREE.MeshStandardMaterial({ color: 0x1a0c10, roughness: 0.3 }), hook = new THREE.MeshStandardMaterial({ color: 0xd8d0b0, roughness: 0.25 });
@@ -521,12 +521,12 @@ export class Phantom extends Enemy {
 }
 
 // ------------------------------------------------------------------
-// Clingon Crawler: waits on the ceiling, drops onto your head, latches on until you shake it off.
+// Ceiling Crawler: waits on the ceiling, drops onto your head, latches on until you shake it off.
 // ------------------------------------------------------------------
 export class Clinger extends Enemy {
   constructor(world, tile, deck, scene, sound) {
     super(world, tile, deck, 0, scene, sound, MODELS.clinger());
-    this.kind = 'clinger'; this.name = 'Clingon Crawler'; this.hitY = 2.4; this.hitR = 0.55; this.quiet = true;
+    this.kind = 'clinger'; this.name = 'Ceiling Crawler'; this.hitY = 2.4; this.hitR = 0.55; this.quiet = true;
     this.state = S.PATROL; this.mesh.visible = true; this.mode = 'lurk';
     const [tx, ty] = world.tile(this.x, this.z); this.ceil = world.ceilAt(tx, ty);
     this.mesh.rotation.x = Math.PI; this.mesh.position.set(this.x, this.ceil, this.z); this.fall = 0; this.latchT = 0; this.fleeT = 0;
@@ -588,6 +588,6 @@ export const THREATS = {
   drone: 'Compliance Drone — slow, relentless, learns from your zapper.',
   phantom: 'Mr. Grinsworth — rogue hologram. Moves when you look away.',
   crazed: 'Space madness — one crew member at a time loses it, lowest rank first. It hunts the others before you. Two zaps put them down.',
-  clinger: 'Clingon Crawlers — they wait on the ceiling.',
+  clinger: 'Ceiling Crawlers — they wait on the ceiling.',
   slimeling: 'Slimeling — not who they said they were.',
 };

@@ -4,7 +4,7 @@ A liminal-space horror roguelike built with three.js (a parody/homage — see [C
 You are alone aboard the United Starfarers' Fleet provincial squadron — ten ships named for the Canadian provinces, in five hull classes (see `ships.html` for the schematics) — hunted by something. Find the logic chips, power the tubelift, descend, pick a requisition, repeat. Permadeath.
 
 ## Threats
-A **Gronk** (reptilian ambusher), a **Compliance Drone** (slow, relentless, adapts to your zapper), **Mr. Grinsworth** (a rogue hologram that only moves when you look away — and walks through walls), **Space madness** (one crew member at a time loses it, lowest rank first; they hunt the other crew before you, and when you put one down, the next one turns), **Clingon Crawlers** (they wait on the ceiling), and **Slimeling** impostors posing as survivors. Each deck rolls a different mix.
+A **Gronk** (reptilian ambusher), a **Compliance Drone** (slow, relentless, adapts to your zapper), **Mr. Grinsworth** (a rogue hologram that only moves when you look away — and walks through walls), **Space madness** (one crew member at a time loses it, lowest rank first; they hunt the other crew before you, and when you put one down, the next one turns), **Ceiling Crawlers** (they wait on the ceiling), and **Slimeling** impostors posing as survivors. Each deck rolls a different mix.
 
 ## Play
 Serve the folder statically (ES modules need http):
