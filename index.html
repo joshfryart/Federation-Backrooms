@@ -129,6 +129,14 @@
   #card .thr { margin-top:1.4vh; background:rgba(5,9,17,.7); padding:5px 10px; border-left:3px solid var(--red); font-size:clamp(10px,2vh,12px); letter-spacing:.06em; color:#ffb9ab; line-height:1.55; opacity:.95; text-transform:none; font-family:'Helvetica Neue',Arial,sans-serif; text-align:left; max-width:min(640px,86vw); } #card .thr i { font-style:normal; color:var(--red); margin-right:6px; }
   @keyframes cardin { 0% { opacity:0 } 15% { opacity:1 } 70% { opacity:1 } 100% { opacity:0 } }
   #fade { background:#000; opacity:0; transition:opacity .7s; z-index:5; }
+  /* title: shift length (js/pace.js) — segmented control + one-line summary */
+  .pace { display:inline-flex; align-items:stretch; margin-top:1.4vh; border:1px solid var(--line); background:rgba(7,11,19,.6); font-family:var(--f-m); font-size:clamp(10px,1.9vh,12px); letter-spacing:.14em; text-transform:uppercase; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); }
+  .pace span { padding:5px 10px; color:var(--dim); border-right:1px solid var(--line); }
+  .pace button { background:none; border:0; color:var(--ink); font:inherit; letter-spacing:inherit; text-transform:inherit; padding:5px 12px; cursor:pointer; opacity:.7; transition:background .12s, opacity .12s; }
+  .pace button:hover { opacity:1; background:rgba(111,143,184,.18); } .pace button.on { opacity:1; background:var(--lc2); color:#05070c; font-weight:700; }
+  .pace button:focus-visible { outline:2px solid var(--lc4); outline-offset:-2px; }
+  .pacesum { font-family:var(--f-m); font-size:clamp(9px,1.7vh,11px); color:var(--dim); letter-spacing:.06em; margin-top:.6vh; min-height:1.2em; }
+  #bd-hint.glow { animation:hintglow 1.4s ease-in-out infinite; box-shadow:0 0 0 1px rgba(255,217,160,.5), 0 0 18px rgba(255,200,120,.45); } @keyframes hintglow { 50% { box-shadow:0 0 0 1px rgba(255,217,160,.9), 0 0 28px rgba(255,200,120,.8); } }
   @media (max-height:420px) { #title .keys { display:none; } #title .crest { display:none; } }
   @media (max-height:470px), (max-width:700px) { .card { width:186px; padding:10px 12px; } .card .pi { width:24px; height:24px; margin-bottom:4px; } .cards { gap:10px; margin-top:6px; } }
   @media (max-height:470px), (max-width:700px) { #minimap { width:112px; height:112px; } #faults { top:186px; font-size:9.5px; } #faults div:nth-child(n+4) { display:none; } #bars { width:200px; } #topleft { min-width:0; } #perks { display:none; } }
@@ -225,6 +233,8 @@
       <span><b>Q / Right click</b> grapple line</span><span><b>Click</b> fire zapper (stuns)</span>
       <span><b>E</b> interact · <b>hold E</b> repair</span><span><b>Tab</b> ship status · <b>F</b> light · <b>M</b> map</span>
     </div>
+    <div class="pace" id="pacesel" role="group" aria-label="Shift length"><span>Shift</span><button type="button" data-pace="first">First watch</button><button type="button" data-pace="standard">Standard</button><button type="button" data-pace="crunch">Crunch</button></div>
+    <div id="pacesum" class="pacesum"></div>
     <div><button class="btn" id="begin">Begin shift</button> <button class="btn alt" id="credbtn">Credits</button></div>
     <div id="best"></div>
   </div>

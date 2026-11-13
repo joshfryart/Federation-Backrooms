@@ -75,7 +75,7 @@ export class DutyHUD {
   }
   renderBoard() {
     if (!this.duty) return; const rows = this.duty.board().filter(r => this.big || (r.status !== 'done' && r.status !== 'missed' && (r.kind === 'duty' || r.status === 'active' || r.eta < 100)));
-    const lab = { due: 'due', overdue: 'OVERDUE', doing: 'working', idle: '', active: 'now', pending: '', done: 'done', missed: 'missed', delegated: 'delegated' };
+    const lab = { due: 'due', overdue: 'OVERDUE', doing: 'working', idle: '', active: 'by shift end', pending: '', done: 'done', missed: 'missed', delegated: 'delegated', enroute: 'en route', needs: 'needs part' };   // enroute / needs: crew repairs (js/repair.js rows)
     this.boardEl.innerHTML = `<div class="t">Duty board</div>` + rows.slice(0, this.big ? 30 : 7).map(r => `<div class="bd-row ${r.status}"><span></span><span>${esc(r.label.length > 38 ? r.label.slice(0, 36) + '…' : r.label)}${r.status === 'idle' || r.status === 'pending' ? ` <small style="opacity:.55">${r.kind === 'duty' ? 'in ' + r.eta + 's' : 'at ' + Math.floor(r.eta / 60) + 'm'}</small>` : ''}<small style="opacity:.55"> · ${esc(r.room)}</small></span><i>${lab[r.status]}</i>${r.total ? `<div class="bar"><b style="width:${(1 - r.left / r.total) * 100}%"></b></div>` : ''}</div>`).join('');
   }
   setHint(t) { if (!this.hintEl) return; this.hintEl.textContent = t || ''; this.hintEl.style.display = t ? 'block' : 'none'; }

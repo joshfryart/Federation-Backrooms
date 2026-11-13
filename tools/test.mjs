@@ -32,6 +32,8 @@ import { movementTests } from './test-movement.mjs';
 await movementTests(fail);
 import { equipmentTests } from './test-equipment.mjs';   // equipment motions / carry items (tools/test-equipment.mjs)
 await equipmentTests(fail);
+import { repairTests } from './test-repair.mjs';   // NPC repair response, sim priorities, pace, speech etiquette (tools/test-repair.mjs)
+await repairTests(fail);
 import { handheldTests } from './test-handhelds.mjs';   // handheld job equipment / improvised weapons (tools/test-handhelds.mjs)
 await handheldTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

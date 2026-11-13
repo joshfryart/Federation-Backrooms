@@ -29,6 +29,18 @@ export async function dutyTests(fail) {
     if (mode === 2) ck(sm.debt > 5, `skipper has debt (${sm.debt}, ${player.billet})`);
     ck(duty.board().length >= duty.loops.length, 'board rows');
   }
+  // tasks are due by END OF SHIFT: no window expiry; shiftEnd() tallies the unfinished ones into the score and the causal chain
+  { const ship = SHIPS[2], roster = C.makeComplement(ship, 7), clock = new K.ShipClock({ seed: 7 }); clock.assign(roster); const ss = new C.ShipState(ship, 7); for (const s of C.SYSTEMS) ss.repair(s.id);
+    const player = roster.people.find(p => (duties.billets[p.billet]?.tasks?.survey || []).length >= 2) || D.pickBillet(roster, 7);
+    const duty = new D.Duty({ player, roster, clock, duties, shipState: ss, seed: 7, mission: 'survey' }); const missed = []; duty.on(e => { if (e.type === 'missed') missed.push(e); });
+    for (let t = 0; t < 1190; t += 1) duty.tick(1);
+    ck(duty.tasks.length && duty.tasks.every(t => t.state === 'active'), 'tasks stay open until the shift ends: ' + duty.tasks.map(t => t.state)); ck(!missed.length, 'no task expires before the shift ends');
+    ck(duty.tasks.every(t => t.at_s >= 96), 'no task opens in the first 96 s at Standard pace');
+    const ms0 = duty.maxScore, left = duty.shiftEnd(); ck(left.length === duty.tasks.length && duty.maxScore === ms0 + left.length && duty.chain.some(c => /Unfinished at end of shift/.test(c)), 'shiftEnd tallies unfinished tasks');
+    ck(duty.shiftEnd().length === left.length && duty.maxScore === ms0 + left.length, 'shiftEnd is idempotent'); ck(duty.summary().tasks.unfinished === left.length, 'summary counts unfinished tasks');
+    // a duty round nobody got to: a gentle skip (no score, half debt), not a fail
+    const d2 = new D.Duty({ player, roster, clock, duties, shipState: ss, seed: 7, mission: 'survey' }); const l = d2.loops[0]; for (let t = 0; t < l.next + l.period; t += 1) d2.tick(1);
+    ck(d2.stats.missed >= 1 && d2.stats.skipped === 0 && d2.maxScore === 0, 'a missed round is a gentle skip (no score penalty)'); }
   ck(seen.size >= 6, 'varied billets ' + seen.size); ck(consequences > 0, 'neglect damages systems'); ck(caught > 0, 'faking and skipping get noticed'); ck(taskDone > 0, 'tasks completed');
   return { billets: seen.size, consequences, caught, taskDone, orders };
 }

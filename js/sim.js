@@ -8,6 +8,8 @@
 //   sim.where(person)       { deckNo, room, spot, activity, transit }  (deckNo null while riding the lift)
 //   sim.onDeck(deckNo)      [{ person, room, spot, activity, tx, ty }] people standing on that deck right now
 //   sim.setPlayer(p)        the player is not simulated
+//   sim.redirect(p, room, spot, secs, activity, { prio, site })  priority overrides (evac 3 / orders 2 / repair 1); overrideOf(p), release(p[, prio])
+//   Pace (js/pace.js): schedule blocks follow ShipClock.localHour, so the clock's pace rate stretches the schedule; transits stay real seconds.
 //   sim.setSocial(graph)    js/social.js: free-time blocks follow friends and groups (same room instance, same spot, group gatherings),
 //                           spouses share quarters. Deterministic; without a graph the sim behaves exactly as before.
 import { hash, hash01 } from './clock.js';
@@ -29,7 +31,7 @@ export class CrewSim {
 
   // The scheduled block for a person right now: { room, spot, activity } or null
   block(p) {
-    const ov = this.over.get(p.id); if (ov && (ov.until === undefined || ov.until > this.t)) return { room: ov.room, spot: ov.spot || 'door', activity: ov.activity || 'evacuating' };
+    const ov = this.overrideOf(p); if (ov) return { room: ov.room, spot: ov.spot || 'door', activity: ov.activity || 'evacuating', site: ov.site || null, prio: ov.prio };
     const b = this._day(p); if (!b) return null;
     const out = { room: b[2], spot: b[3], activity: b[4] }, S = this.social;
     if (!S || !freeBlock(b) || !S.isFree(p, this.clock.hour)) return out;
@@ -47,8 +49,9 @@ export class CrewSim {
   // Which instance of a room type this person uses. Quarters are personal; others prefer the person's own deck, then the nearest.
   // b = the block (from block()): a group gathering names its own room instance; other free time follows the person's social anchor
   site(p, room, fromDeck = null, b = null) {
-    const list = this.plan[room]; if (!list?.length) { const any = this.plan.stores || this.plan.cargo; return any?.[0] || { deckNo: 1, tx: 0, ty: 0 }; }
-    if (b?.site && b.room === room) return list.find(s => s.deckNo === b.site.deckNo && s.tx === b.site.tx && s.ty === b.site.ty) || b.site;
+    const list = this.plan[room];
+    if (b?.site && b.room === room) return list?.find(s => s.deckNo === b.site.deckNo && s.tx === b.site.tx && s.ty === b.site.ty) || b.site;   // a named instance / exact tile (gatherings, repair sites: corridors too)
+    if (!list?.length) { const any = this.plan.stores || this.plan.cargo; return any?.[0] || { deckNo: 1, tx: 0, ty: 0 }; }
     const S = this.social;
     if (room === 'quarters') return list[hash('quarters', this.seed, S ? S.quartersOf(p) : p.id) % list.length];   // spouses share quarters
     if (room === 'bridge' || room === 'readyroom') return list[0];
@@ -73,10 +76,22 @@ export class CrewSim {
   // the person is removed from the abstract sim (died, or became the player)
   drop(p) { this.st.delete(p.id); }
 
-  // send a person somewhere else for a while (evacuation, orders...): room type + optional seconds; clear with sim.release(p)
-  redirect(p, room, spot = 'door', seconds = undefined, activity = 'evacuating') { this.over.set(p.id, { room, spot, activity, until: seconds === undefined ? undefined : this.t + seconds }); }
-  release(p) { this.over.delete(p.id); }
-  overridden(p) { const o = this.over.get(p.id); return !!o && (o.until === undefined || o.until > this.t); }
+  // Send a person somewhere else for a while: room type + optional seconds (+ optional exact site {deckNo, tx, ty}). Priority ladder
+  // (docs/mockups/pacing-npc.md §2.5): evacuation / alert stations 3 > player orders 2 > repair dispatch 1 > schedule. A lower override
+  // is suspended under a higher one, never cancelled: each person has a small stack, one entry per priority. Returns false (and
+  // stores nothing) when a higher priority already holds the person. release(p) clears everything; release(p, prio) one level.
+  redirect(p, room, spot = 'door', seconds = undefined, activity = 'evacuating', { prio = activity === 'evacuating' ? 3 : 1, site = null } = {}) {
+    const live = this._stack(p), top = live[live.length - 1], held = !!top && top.prio > prio;
+    this._setStack(p, [...live.filter(o => o.prio !== prio), { room, spot, activity, prio, site, until: seconds === undefined ? undefined : this.t + seconds }].sort((a, b) => a.prio - b.prio));
+    return !held;   // stored either way (it resumes when the higher level is released); false = suspended right now
+  }
+  release(p, prio = null) { if (prio == null) { this.over.delete(p.id); return; } this._setStack(p, this._stack(p).filter(o => o.prio !== prio)); }
+  _stack(p) { const s = this.over.get(p.id); return (s?.stack || (s ? [s] : [])).filter(o => o.until === undefined || o.until > this.t); }
+  _setStack(p, st) { if (!st.length) this.over.delete(p.id); else { const top = st[st.length - 1]; this.over.set(p.id, { ...top, stack: st }); } }
+  // the override in force (highest priority, not expired) or null; overrideAt(p, prio) = that level's entry even while suspended
+  overrideOf(p) { const st = this._stack(p); return st.length ? st[st.length - 1] : null; }
+  overrideAt(p, prio) { return this._stack(p).find(o => o.prio === prio) || null; }
+  overridden(p) { return !!this.overrideOf(p); }
   tick(dt) {
     this.t += dt;
     // finish trips
@@ -90,7 +105,7 @@ export class CrewSim {
       const p = s.person; if (s.transit || DEAD.has(p.status)) { if (DEAD.has(p.status)) this.st.delete(p.id); continue; }
       const b = this.block(p); if (!b) continue;
       const dest = this.site(p, b.room, s.deckNo, b);
-      if (b.room === s.room && b.spot === s.spot && (!this.social || (dest.deckNo === s.deckNo && dest.tx === s.tx && dest.ty === s.ty))) { s.activity = b.activity; continue; }
+      if (b.room === s.room && b.spot === s.spot && ((!this.social && !b.site) || (dest.deckNo === s.deckNo && dest.tx === s.tx && dest.ty === s.ty))) { s.activity = b.activity; continue; }
       const lift = dest.deckNo !== s.deckNo;
       const eta = lift ? LIFT_BASE + LIFT_PER_DECK * Math.abs(dest.deckNo - s.deckNo) + hash01('eta', this.seed, p.id, b.room) * 2 : WALK_TIME * (0.6 + hash01('walk', this.seed, p.id, b.room));
       s.transit = { lift, eta, from: { deckNo: s.deckNo, room: s.room }, to: dest, room: b.room, spot: b.spot, activity: b.activity };

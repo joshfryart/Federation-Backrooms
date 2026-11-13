@@ -24,12 +24,18 @@ import { generateSocial } from './social.js';
 import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALITIES } from './duty.js';
 import { DutyHUD } from './hud-duty.js';
 import { Phases, PHASES, FAILURE_MODES } from './phases.js';
+import { readPace, savePace, mountPaceControl, paceFor } from './pace.js';   // shift length / pace presets (title screen, ?pace=)
+import { RepairCrew } from './repair.js';   // NPC repair response (Systems Nominal)
+import { barkGate, gestureFor } from './etiquette.js';   // NPC speech etiquette (when crew may speak / nod)
+import { holdItem, dropItem } from './carry.js';
+import { HANDHELDS } from './handhelds.js';
 import { makeGait, gaitNow, describeGait } from './gait.js';
 import { Fidgeter } from './movement.js';
 import { Haul, initHaul, opStart, opHook, opEnd, pushHook, toolBonus } from './haul.js';   // equipment motions, carrying, carts (js/equipment.js, js/carry.js)
 import { propsFor, classifyItem } from './equipment.js';
 import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
 import { MISSIONS, party as commParty } from './bridge.js';
+import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
 const $ = (id) => document.getElementById(id);
@@ -418,6 +424,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
 
 // ---- NPC sim bodies: people the sim puts on this deck get a body; others are abstract. Bodies appear/vanish out of sight.
 function simTileFor(person, e) {   // a tile in the person's room: beside the furniture of their spot (facing it) when there is some, else spread by id
+  if (e.activity === 'repairing') { const t = repairStand(person); if (t) return t; }   // crew repair (js/repair.js): the tile beside the hardware / junction
   const d = world.d, h = (person.id * 2654435761 + 7) >>> 0, ok = (x, y) => d.grid[y]?.[x] === 0 && !world.isTube(x, y) && d.room[y][x] === e.room;
   const kinds = propsFor(e.spot), props = d.props.filter(p => kinds.includes(p.kind) && d.room[p.ty]?.[p.tx] === e.room);   // spot -> prop kinds (js/equipment.js: bar -> table, locker -> shelving …)
   if (props.length) for (let k = 0; k < props.length; k++) { const p = props[(h + k) % props.length]; for (const [dx, dy] of WALK_DIRS) { const x = p.tx + dx, y = p.ty + dy; if (ok(x, y) && !ents.some(o => o.simmed && o.person !== person && Math.hypot(o.x - world.center(x, y)[0], o.z - world.center(x, y)[1]) < 0.7)) { const t = [x, y]; t.face = world.center(p.tx, p.ty); return t; } } }
@@ -432,8 +439,8 @@ function simBodies(dt, force = false) {
     if (e.walk) continue;   // still on its way somewhere
     if (!o || o.room !== e.room) {
       if (force || unseen(e.x, e.z)) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
-      else if (!o && world.car) startWalk(e, world.car.tx, world.car.ty, true, G.sim.overridden(e.person) ? { run: true, tubes: true } : {});                       // left the deck: walk to the lift and go
-      else if (o) { const t = simTileFor(e.person, o); if (t) { e.room = o.room; e.spot = o.spot; e.faceAt = t.face || null; startWalk(e, t[0], t[1], false, G.sim.overridden(e.person) ? { run: true } : {}); } }   // new room on this deck: walk there
+      else if (!o && world.car) startWalk(e, world.car.tx, world.car.ty, true, runFor(e.person) ? { run: true, tubes: true } : {});                       // left the deck: walk to the lift and go
+      else if (o) { const t = simTileFor(e.person, o); if (t) { e.room = o.room; e.spot = o.spot; e.faceAt = t.face || null; startWalk(e, t[0], t[1], false, runFor(e.person) ? { run: true } : {}); } }   // new room on this deck: walk there
     }
   }
   for (const o of here.values()) {   // arrive
@@ -447,37 +454,122 @@ function simBodies(dt, force = false) {
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
 initHaul({ get gorns() { return gorns; }, killMad, nearestRepair, get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
+G.nav = new NavHUD({ G, P, TS, NOM, get world() { return world; }, get repairPts() { return repairPts; } });   // js/nav-hud.js
 
+
+// ---- NPC repair response glue (js/repair.js decides who goes where, in the abstract): here bodies walk (run when urgent) to the hardware
+// on the player's deck, kneel / work the console with their handheld in hand, sparks fly, a small floating marker shows en route / working
+// (progress ring) / needs a part, and the comm bus carries their lines. The player can hold E alongside (assist), take over, or order.
+const runFor = (p) => { const ov = G.sim?.overrideOf?.(p); return !!ov && (ov.prio >= 2 || (ov.activity === 'repairing' ? !!G.repair?.jobOf(p)?.urgent : true)); };
+function setupRepair() {
+  G.repair = null; if (!NOM() || !G.sim || !G.shipDecks) return;
+  const say = (p, text, o = {}) => {
+    const e = ents.find(x => x.simmed && x.person === p), d = e ? Math.hypot(e.x - P.x, e.z - P.z) : 1e9;
+    if (!o.local) G.comms?.sim?.say?.({ from: commParty(p), to: o.to || BRIDGE_PARTY, text, priority: o.priority || 'routine', channel: 'comm', kind: 'repair' });
+    else if (d < 8) G.say(`${p.short}: ${text}`, 'npc');
+    if (d < 6) { try { speak(p, text, { gain: Math.max(0.25, Math.min(1, 1.2 - 0.15 * d)) }); } catch (er) { } }
+  };
+  G.repair = new RepairCrew({ roster: G.roster, sim: G.sim, shipState: G.shipState, clock: G.comms.clock, duties: DUTIES, decks: G.shipDecks.map(s => s.data), ship: G.ship, seed: G.runSeed, pace: G.pace, phases: G.phases, duty: G.duty, social: G.social, say, bodyState: repairBodyState, player: G.player });
+  G.duty.repairRows = () => G.repair ? G.repair.rows() : [];
+}
+// the tile a repairer works from on this deck (helpers one tile over), facing the hardware / junction; null when the job is elsewhere
+function repairStand(p) {
+  const j = G.repair?.jobOf(p); if (!j || !world || j.site.deckNo !== G.shipDeck + 1) return null; const s = j.site, d = world.d;
+  let t = [s.stand[0], s.stand[1]];
+  if (j.role === 'helper') { const nb = WALK_DIRS.map(([a, b]) => [t[0] + a, t[1] + b]).find(([x, y]) => d.grid[y]?.[x] === 0 && !world.isTube(x, y)); if (nb) t = nb; }
+  const r = repairPts.find(q => q.sys === j.sys); t.face = !s.main && r && r.px !== undefined ? [r.px, r.pz] : world.center(s.face[0], s.face[1]); return t;
+}
+function repairBodyState(p) {
+  if (!world || G.sim.where(p)?.deckNo !== G.shipDeck + 1) return null;
+  const e = ents.find(x => x.simmed && x.person === p); if (!e) return null; if (e.walk) return 'walking';
+  const t = repairStand(p); if (!t) return 'arrived'; const [cx, cz] = world.center(t[0], t[1]); return Math.hypot(e.x - cx, e.z - cz) < 1.0 ? 'arrived' : 'walking';
+}
+function repairBodies(dt) {
+  if (!G.repair || !world) return; G.repBodyT = (G.repBodyT || 0) - dt; const tick = G.repBodyT <= 0; if (tick) G.repBodyT = 0.25;
+  for (const e of ents) {
+    if (!e.simmed || e.kind !== 'crew' || !e.person) continue;
+    const j = G.repair.jobOf(e.person), here = j && j.site.deckNo === G.shipDeck + 1 && !j.suspended;
+    if (here && !e.walk && ['setup', 'working', 'part'].includes(j.state)) { if (!e.repairing?.npc) beginRepairPose(e, j); else e.repairing.job = j; }
+    else if (e.repairing?.npc) endRepairPose(e);
+    if (tick && here && j.state === 'travel' && !e.walk && G.sim.where(e.person)?.room === j.site.room) {   // already in the right room: walk the last metres
+      const t = repairStand(e.person); if (t) { const [cx, cz] = world.center(t[0], t[1]); if (Math.hypot(e.x - cx, e.z - cz) > 1.0) { if (e.op) opEnd(e); e.room = j.site.room; e.faceAt = t.face; startWalk(e, t[0], t[1], false, { run: j.urgent }); } }
+    }
+    if (tick) repairMarker(e, j);
+  }
+}
+function beginRepairPose(e, j) {
+  if (e.op) opEnd(e); const H = e.mesh.userData.human; e.repairing = { npc: true, sys: j.sys, job: j }; const t = repairStand(e.person); if (t?.face) e.faceAt = t.face;
+  if (!H) return; H.standing = false; const clip = j.main ? 'interact' : 'fixing_kneeling'; try { H.play(H.has?.(clip) ? clip : 'interact', { fade: 0.3 }); } catch (er) { H.play('idle', { fade: 0.3 }); }
+  const model = HANDHELDS[j.tool]?.model; if (model && !H.held?.hand_r) { holdItem(H, model, 'hand_r'); e.repTool = true; }
+}
+function endRepairPose(e) {
+  const H = e.mesh.userData.human; e.repairing = null; if (H && e.repTool) dropItem(H, 'hand_r'); e.repTool = false; if (H) H.standing = true; e.faceAt = null; poseFor(e);
+}
+function repairBodyStep(e, dt, d) {   // sparks and clanks at the hardware while the job is in WORKING (RepairCrew owns the progress)
+  const j = e.repairing.job; if (!j || j.state !== 'working' || d > 24) return;
+  if (Math.random() < dt * 2.2) { const a = e.mesh.rotation.y; for (let i = 0; i < 5; i++) sparks.add(e.x + Math.sin(a) * 0.55, 0.5 + Math.random() * 0.7, e.z + Math.cos(a) * 0.55, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, SPARK, 0.4); if (d < 9 && Math.random() < 0.35) voiceCue(e.person, 'crack'); }
+}
+// the floating marker above a repairer: amber hex = en route, cyan + progress ring = working, red ! = needs a part (nav/menus agents restyle it)
+function repairMarker(e, j) {
+  if (!j) { if (e.repMark) { e.mesh.remove(e.repMark); e.repMark.material.map.dispose(); e.repMark.material.dispose(); e.repMark = null; } return; }
+  let m = e.repMark; if (!m) { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const tex = new THREE.CanvasTexture(cv); m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true })); m.renderOrder = 20; m.userData.cv = cv; m.scale.set(0.34, 0.34, 1); m.position.y = 2.2 / (e.mesh.scale.y || 1); e.mesh.add(m); e.repMark = m; }
+  const st = j.state === 'part' ? 'part' : j.state === 'working' || j.state === 'setup' ? 'work' : 'go', k = Math.round(j.progress * 20) / 20, key = st + k; if (m.userData.key === key) return; m.userData.key = key;
+  const x = m.userData.cv.getContext('2d'), col = st === 'work' ? '#58c9b9' : st === 'part' ? '#ff5a4a' : '#f2a03d'; x.clearRect(0, 0, 64, 64);
+  x.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; x.lineTo(32 + Math.cos(a) * 24, 32 + Math.sin(a) * 24); } x.closePath(); x.fillStyle = 'rgba(5,9,17,.78)'; x.fill(); x.lineWidth = 3; x.strokeStyle = col; x.stroke();
+  if (st === 'work') { x.beginPath(); x.arc(32, 32, 29, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); x.lineWidth = 4; x.stroke(); }
+  x.strokeStyle = x.fillStyle = col; x.lineCap = 'round';
+  if (st === 'part') { x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('!', 32, 34); }
+  else { x.lineWidth = 6; x.beginPath(); x.moveTo(23, 41); x.lineTo(36, 28); x.stroke(); x.lineWidth = 4; x.beginPath(); x.arc(39, 25, 6, 0.9, 5.4); x.stroke(); }
+  m.material.map.needsUpdate = true;
+}
+// first mission task of a new run: route pinned (G.pin, read by the nav agent's guide-me pin in js/nav.js) + a one-time glowing hint line
+function startIntro(ev) {
+  if (G.intro || G.introDone) return; const here = G.shipDeck + 1, list = (G.plan?.[ev.room] || []).slice().sort((a, b) => Math.abs(a.deckNo - here) - Math.abs(b.deckNo - here)), s = list[0];
+  G.pin = { kind: 'task', id: ev.id, room: ev.room, deck: s?.deckNo ?? here, tx: s?.tx, ty: s?.ty, label: ev.task };
+  G.intro = { task: ev.task, id: ev.id, room: ev.room, t: 0 }; G.hud2?.hintEl?.classList.add('glow');
+}
+function endIntro() { G.intro = null; G.introDone = true; G.pin = null; G.hud2?.hintEl?.classList.remove('glow'); }
+function introHint(dt) {
+  const I = G.intro; if (!I) return ''; I.t += dt; if (I.t > 12) G.hud2?.hintEl?.classList.remove('glow');
+  return G.duty.place.room === I.room ? `[J] Mission task: ${I.task} — due by end of shift` : `✦ Mission task: ${I.task} → ${ROOMS[I.room]?.label || I.room}, deck ${G.pin?.deck ?? '?'} · route pinned`;
+}
 
 // ---- the player's billet: duty loops, orders, delegation, reports, mission task board (js/duty.js, js/hud-duty.js)
 function setupDuty() {
   G.hud2?.destroy(); G.hud2 = null; G.duty = null; if (!NOM()) return;
   const say = (m) => { if (m.kind === 'report') G.comms?.sim?.say?.({ from: commParty(m.from), to: BRIDGE_PARTY, text: m.text, priority: 'routine', channel: 'comm', kind: 'report' }); };
-  G.duty = new Duty({ player: G.player, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say, seed: G.runSeed, mission: G.mission });
+  // pace (js/pace.js): one scalar T, applied once each: clock rate, ShipState cascades, Duty constructor, Phases constructor (docs/pacing.md)
+  G.pace = G.pace || readPace(location.search, localStorage, navigator.webdriver); G.comms.clock.setPace(G.pace.T); G.shipState.paceT = G.pace.T;
+  G.duty = new Duty({ player: G.player, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say, seed: G.runSeed, mission: G.mission, pace: G.pace });
   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
-  G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1' });
+  G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1', pace: G.pace });
+  setupRepair(); G.pin = null; G.intro = null; G.introDone = false; G.attn = {}; G.barkAt = G.nodAt = undefined;
   G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel.`, 'warn'); });
   G.duty.on((ev) => {
     const g = G.say;
     if (ev.type === 'due') g(`Duty: ${ev.label} (${ev.room}). [J]`, 'comp');
-    else if (ev.type === 'task') g(`Task now: ${ev.task} (${ev.room})`, 'comp');
-    else if (ev.type === 'done') g(ev.auto ? `You never got to: ${ev.label}.` : ev.quality === 'proper' ? `${ev.label}: done properly.` : `${ev.label}: ${ev.quality}.`, ev.quality === 'proper' ? 'good' : 'warn');
+    else if (ev.type === 'task') { g(`Task open: ${ev.task} (${ev.room}) — due by end of shift`, 'comp'); if (ev.first) startIntro(ev); }
+    else if (ev.type === 'taskdone' && G.intro && G.intro.task === ev.task) endIntro();
+    else if (ev.type === 'done') g(ev.auto ? `Round skipped: ${ev.label}. It comes round again.` : ev.quality === 'proper' ? `${ev.label}: done properly.` : `${ev.label}: ${ev.quality}.`, ev.quality === 'proper' ? 'good' : ev.auto ? 'comp' : 'warn');
     else if (ev.type === 'witness' || ev.type === 'audit' || ev.type === 'refused') g(`${ev.who}: ${ev.text}`, 'warn');
     else if (ev.type === 'consequence') g(`${ev.name} is ${ev.status} — neglected maintenance.`, 'warn');
-    else if (ev.type === 'missed') g(`Missed: ${ev.task}. ${ev.neglect}`, 'warn');
+    else if (ev.type === 'missed' && !ev.shiftEnd) g(`Missed: ${ev.task}. ${ev.neglect}`, 'warn');
     else if (ev.type === 'jobdone') g(`${ev.who} finished ${ev.label} (${ev.quality}).`, 'good');
     else if (ev.type === 'ordered') g(`${ev.who} takes the job: ${ev.label}.`, 'comp');
   });
 }
 function nomTick(dt) {
-  if (!NOM() || !G.sim) return;
-  G.sim.tick(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt);
+  if (!NOM() || !G.sim || worldPaused()) return;   // a menu / wheel / map / terminal / conversation is open: the ship holds still
+  G.sim.tick(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt); G.repair?.tick(dt); repairBodies(dt);
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt);
   if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }
-  if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(D.busy ? `Working: ${D.busy.loop.label}…` : due ? `[J] ${due.label || due.task}` : ''); }
+  if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(D.busy ? `Working: ${D.busy.loop.label}…` : (G.intro && (!due || due.task === G.intro.task)) ? introHint(dt) : due ? `[J] ${due.label || due.task}` : ''); }
 }
+// the whole world pauses while any menu / wheel / panel / map / terminal / conversation is open (G.menuPause is set by the menus agent)
+function worldPaused() { return !!(G.menuPause || G.paused); }
+G.worldPaused = worldPaused;
 function dutyMenu() {
   const D = G.duty, H = G.hud2; if (!D || !H) return; const room = D.place.room, say = G.say;
   const doIt = (it) => H.openMenu(it.label || it.task, QUALITIES.map(q => ({ label: Q_LABEL[q], note: q === 'proper' ? `${Math.round((it.dur || 2) * 3.3 * 1.2)}s` : '', run: () => { const r = it.task ? D.doTask(it.id, q === 'skipped' ? 'skipped' : q) : D.perform(it.id, q); if (!r.ok) say(r.why, 'warn'); else if (it.task) say(`Task ${q}: ${it.task}`, 'good'); } })), 'How will you do it?');
@@ -497,7 +589,7 @@ function dutyMenu() {
 function summaryHTML(title, lead) {
   const D = G.duty, sm = D.summary(), ph = G.phases?.status(), mp = D.missionProgress(ph?.index || 0), md = MISSIONS[G.mission] || G.mission;
   const chain = [...D.chain]; if (ph?.label) chain.unshift(`${ph.label} reached ${ph.phase} (${Math.round(ph.severity * 100)}% severity)`);
-  return `<h2>${title}</h2><div>${lead}</div><h4>Mission</h4><div>${md} — crew tasks ${mp.pct}% on track, your duties ${sm.score}% (${sm.stats.proper} proper, ${sm.stats.rushed} rushed, ${sm.stats.faked} faked, ${sm.stats.skipped} skipped)</div>
+  return `<h2>${title}</h2><div>${lead}</div><h4>Mission</h4><div>${md} — crew tasks ${mp.pct}% on track, your duties ${sm.score}% (${sm.stats.proper} proper, ${sm.stats.rushed} rushed, ${sm.stats.faked} faked, ${sm.stats.skipped} skipped${sm.stats.missed ? `, ${sm.stats.missed} rounds missed` : ''})${sm.tasks?.total ? `, mission tasks ${sm.tasks.done}/${sm.tasks.total}` : ''}</div>
     <h4>What happened</h4>${chain.length ? chain.map(c => `<div class="c">${c.replace(/[&<>]/g, '')}</div>`).join('') : '<div class="c">Nothing went wrong that you could be blamed for.</div>'}
     <h4>Crew opinion of you</h4><div>${Math.round(sm.trust * 100)}% trust · ${sm.stats.caught} times caught · ${sm.stats.orders} orders (${sm.stats.refused} refused) · ${sm.stats.delegated} delegated</div>`;
 }
@@ -510,12 +602,14 @@ function nomDie(cause) {
 }
 function nomEnd() {
   if (G.phase === 'nomend' || G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomend'; document.exitPointerLock?.();
-  const ph = G.phases.status(); G.hud2.showEnd(summaryHTML('Watch ended', `Twenty minutes on ${G.ship.name}. The ship is ${ph.phase === 'nominal' ? 'in good order' : ph.phase}.`), [{ label: 'New watch', run: () => newRun() }, { label: 'Back to the menu', run: () => toMenu() }]);
+  const left = G.duty.shiftEnd(), pc = paceFor(G.pace?.id), ph = G.phases.status();   // shift end: unfinished mission tasks count against the score (js/duty.js)
+  const tasksLine = G.duty.tasks.length ? ` Mission tasks: ${G.duty.tasks.length - left.length} of ${G.duty.tasks.length} done${left.length ? `, ${left.length} left unfinished` : ''}.` : '';
+  G.hud2.showEnd(summaryHTML('Watch ended', `${pc.label} — ${pc.minutes} minutes on ${G.ship.name}. The ship is ${ph.phase === 'nominal' ? 'in good order' : ph.phase}.${tasksLine}${G.repair ? ` The crew patched ${G.repair.stats.done} fault${G.repair.stats.done === 1 ? '' : 's'}.` : ''}`), [{ label: 'New watch', run: () => newRun() }, { label: 'Back to the menu', run: () => toMenu() }]);
 }
 function toMenu() { G.hud2?.hideEnd(); G.hud2?.destroy(); G.hud2 = null; G.phase = 'title'; showScreen('title'); }
 function switchPlayer(p) {
   const at = G.sim.where(p), old = G.player; old.isPlayer = false; p.isPlayer = true; G.player = p; G.sim.setPlayer(p); G.comms?.sim.setPlayer(p);
-  const nd = new Duty({ player: p, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say: G.duty.say, seed: G.runSeed, mission: G.mission }).inherit(G.duty);
+  const nd = new Duty({ player: p, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say: G.duty.say, seed: G.runSeed, mission: G.mission, pace: G.pace }).inherit(G.duty); if (G.repair) { G.repair.duty = nd; G.repair.player = p; }
   G.duty = nd; G.phases.duty = nd; G.hud2.attach(nd); G.hp = G.maxHp; G.stamina = 100; G.hud2.hideEnd(); hideScreens(); fade(0);
   loadDeck(Math.min(G.ship.decks, Math.max(1, at?.deckNo ?? 1))); G.phase = 'play'; requestLock(); G.say(`You are now ${p.full || p.short}, ${p.title}.`, 'good');
 }
@@ -551,17 +645,26 @@ function terminalMenu() {
   ], 'digit to choose · Esc to leave');
 }
 // nearby crew greet you now and then, with their own profile barks
-function ambientBarks(dt) {   // crew only greet when you stop and face them for a moment, and rarely: a tight ship is not a chatty one
-  if (G.phase !== 'play') return; G.barkG = (G.barkG || 0) - dt; const sp = Math.hypot(P.vx || 0, P.vz || 0), fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+function ambientBarks(dt) {   // speech etiquette (js/etiquette.js): a tight ship is not a chatty one. T0 nods / smiles, rare spoken T1/T2, never in corridors
+  if (G.phase !== 'play' || !world) return; G.attnT = (G.attnT || 0) - dt; if (G.attnT > 0) return; const step = 0.2 - G.attnT; G.attnT = 0.2;
+  const cfg = G.pace?.bark, sp = Math.hypot(P.vx || 0, P.vz || 0), fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), A = G.attn || (G.attn = {}), D = G.duty;
+  const busy = !!(G.hud2?.menuOpen || worldPaused() || P.cart || P.pushing || D?.busy || P.sprint), pRoom = D?.place.room || 'corridor';
   for (const e of ents) {
-    if (!e.simmed || e.walk) { if (e) e.dwell = 0; continue; } const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz);
-    if (d < 2.4 && sp < 0.6 && (dx * fx + dz * fz) / (d || 1) > 0.75 && world.los(P.x, P.z, e.x, e.z)) e.dwell = (e.dwell || 0) + dt; else e.dwell = 0;
-    if (e.dwell > 1.6 && G.barkG <= 0 && (!e.barked || G.time - e.barked > 300) && Math.random() < 0.5) {
-      e.barked = G.time; G.barkG = 90; const pr = e.person, bk = commsData().billets?.[pr.billet]?.bark || {}, rank = G.player.rank - pr.rank, pool = (rank > 0 ? bk.greetHi : rank < 0 ? bk.greetLo : bk.greet) || bk.greet;
-      const text = pool?.length ? pool[Math.floor(Math.random() * pool.length)] : voiceBark(pr, 'idle'); G.say(`${pr.short}: ${text}`, 'npc'); try { speak(pr, text); } catch (er) { } return;
-    }
+    if (!e.simmed || !e.person || e.kind !== 'crew') continue; const a = A[e.person.id] || (A[e.person.id] = { dwell: 0 });
+    const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz); if (d > 4) { a.dwell = 0; continue; }
+    const los = world.los(P.x, P.z, e.x, e.z), facing = (dx * fx + dz * fz) / (d || 1) > 0.82, [tx, ty] = world.tile(e.x, e.z), eRoom = world.d.room[ty]?.[tx];
+    const st = { t: G.time, d, speed: sp, facing, los, npcWalking: !!e.walk || !!e.climbing, npcBusy: !!(e.pushing || e.carrying || e.haul || e.cower), corridor: pRoom === 'corridor' || !eRoom || world.isTube(tx, ty), playerBusy: busy, spokeAt: a.spokeAt, globalAt: G.barkAt, nodAt: a.nodAt, nodGlobalAt: G.nodAt, nodded: !!a.nodded };
+    a.dwell = d < (cfg?.range ?? 2.4) && sp < 0.6 && facing && los ? a.dwell + step : 0; st.dwell = a.dwell;
+    const tier = barkGate(st, cfg);
+    if (tier === 'nod') { const t = D ? D.trust(e.person) : 0.5, rival = G.social?.relation?.(e.person, G.player)?.valence < -0.3; if (e.fid?.force(gestureFor({ rank: G.player.rank - e.person.rank, trust: t, rival }))) { a.nodAt = G.time; G.nodAt = G.time; a.nodded = true; } continue; }
+    if (tier !== 'speak') continue;
+    a.spokeAt = G.time; G.barkAt = G.time; a.dwell = 0; const pr = e.person, bk = commsData().billets?.[pr.billet]?.bark || {}, rank = G.player.rank - pr.rank, pool = (rank > 0 ? bk.greetHi : rank < 0 ? bk.greetLo : bk.greet) || bk.greet;
+    const due = D?.loops.find(l => (l.state === 'due' || l.state === 'overdue') && l.room === pRoom), sir = rank > 0 ? (G.player.rank >= 4 ? 'sir' : 'Lieutenant') : '';
+    const text = e.repairing ? `Mind the panel${sir ? ', ' + sir : ''}. I am on it.` : due && T2ok(pr) ? `${due.label}: that one is due${sir ? ', ' + sir : ''}.` : pool?.length ? pool[Math.floor(Math.random() * pool.length)] : voiceBark(pr, 'idle');   // T2: something about your situation, else a T1 greeting
+    if (d <= 2.5) G.say(`${pr.short}: ${text}`, 'npc'); try { speak(pr, text, { gain: Math.max(0.25, Math.min(1, 1.2 - 0.35 * d)) }); } catch (er) { } return;
   }
 }
+const T2ok = (p) => !(p.tags || []).includes('habit:avoids-eye-contact');
 
 // ---------------- run control ----------------
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
@@ -711,6 +814,7 @@ if (CFG.quality === 'low') setQuality('low');
 $('resume').onmousedown = (e) => e.stopPropagation();
 $('credbtn').onclick = () => showScreen('credits'); $('companybtn').onclick = (e) => { e.stopPropagation(); showCompany(); }; $('companyback').onclick = (e) => { e.stopPropagation(); showScreen('pause'); }; $('credback').onclick = () => showScreen('title');
 $('begin').onclick = newRun; $('again').onclick = newRun; $('again2').onclick = newRun; $('resume').onclick = resumeGame;
+G.pace = readPace(location.search, localStorage, navigator.webdriver); mountPaceControl(document, G.pace, (p) => { G.pace = p; savePace(p.id, localStorage); });   // title screen: shift length (js/pace.js)
 $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offerPerks(); };
 
 // ---------------- actions ----------------
@@ -830,7 +934,7 @@ function nearest(r, pred) {
 // ---------------- minimap ----------------
 const mm = $('minimap'), mctx = mm.getContext('2d');
 function drawMap() {
-  if (!mapOn || !world) return;
+  if (!mapOn || !world || (NOM() && G.nav)) return;   // Systems Nominal: js/nav-hud.js draws the minimap
   const W = world.W, H = world.H, s = mm.width / Math.max(W, H);
   mctx.clearRect(0, 0, mm.width, mm.height);
   const ex = world.explored;
@@ -922,7 +1026,7 @@ function step(dt, t) {
   tension = Math.min(1, tension);
   const chased = gorns.some(g => g.active && g.state === S.CHASE && g.kind !== 'drone' && g.kind !== 'phantom' && g.kind !== 'clinger');
   if (chased !== wasChased) { if (G.fx.alert) { world.setAlert(chased); if (chased) sound.klaxon(); } else world.setAlert(false); wasChased = chased; }
-  G.comms?.tick(dt); nomTick(dt); G.kit?.tick(dt); updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
+  if (!worldPaused()) G.comms?.tick(dt); nomTick(dt); G.kit?.tick(dt); updateShipSystems(dt, tension); updateMadness(dt); updateDirector(dt, tension); if (NOM()) { carStep(dt); riderStep(dt); }
   for (const g of gorns) if (g.bloodTrail > 0 && g.speed > 0.5) { g.trailD = (g.trailD || 0) + g.speed * dt; if (g.trailD > 1.1) { g.trailD = 0; g.bloodTrail--; decals.floor('blood1', g.x, g.z, 0.45, 1); } }
   sound.setTension(tension);
   $('danger').style.opacity = Math.max(0, tension - 0.3) * 1.1 + (G.hp < 35 ? 0.25 : 0);
@@ -953,7 +1057,7 @@ function step(dt, t) {
       if (e.op && e.walk) opEnd(e);   // leaving the equipment: put things away
       if (e.walk && walkStep(e, dt, d)) continue;
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
-      if (e.repairing) repairerStep(e, dt, d);
+      if (e.repairing) (e.repairing.npc ? repairBodyStep : repairerStep)(e, dt, d);   // npc: Systems Nominal crew repair (js/repair.js); else the madness-mode repairer
       if (H && e.kind === 'crew' && !e.fake) { const mad = gorns.find(g => g.mad && !g.dead && g.state !== S.DORMANT && Math.hypot(g.x - e.x, g.z - e.z) < 10 && world.los(g.x, g.z, e.x, e.z)); if (mad && !e.cower) { if (e.repairing) { e.repairing = null; G.say(`${e.person.short} drops their tools and hides.`, 'warn'); } e.cower = true; H.standing = false; H.play('crouch_idle', { fade: 0.2 }); H.face({ JawDrop: 0.7, LeftInnerBrowUp: 1, RightInnerBrowUp: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 }); if (d < 30) { sound.shriek(Math.max(0.05, 0.25 - d * 0.007)); if (d < 18) G.say(`${e.person ? e.person.short : 'A crewman'} screams: "${pick(['It\'s ' + (mad.person ? mad.person.given : 'him') + '! Something\'s wrong with ' + (mad.person ? mad.person.given : 'him') + '!', 'Stay back! STAY BACK!', 'No no no no—'])}"`, 'warn'); } } }
       if (e.faceAt && !e.walk && H && !H.standing) { let fa = Math.atan2(e.faceAt[0] - e.x, e.faceAt[1] - e.z) - e.mesh.rotation.y; fa = Math.atan2(Math.sin(fa), Math.cos(fa)); e.mesh.rotation.y += fa * Math.min(1, dt * 3); }
       if (H) {
@@ -987,6 +1091,7 @@ function step(dt, t) {
   $('roomname').textContent = rt ? ROOMS[rt].label : 'Corridor';
   if (rt === 'jefferies' && !G.hints.tube) { G.hints.tube = 1; G.say('You squeeze into a Jiffy tube. The big ones cannot follow — the small ones can.', 'npc'); }
   mapT += dt; if (mapT > 0.12) { mapT = 0; world.reveal(P.x, P.z, 3); drawMap(); updateHUD(); }
+  if (NOM()) G.nav?.frame(dt);   // route tick 0.12 s inside; minimap / compass 30 Hz; floor chevrons + beacon
 
   // environment flicker / lights
   world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z })), (d) => { if (d < 9) { sound.noise?.(0.14, Math.max(0.02, 0.1 - d * 0.01), 1800, 1, 'bandpass'); } });
@@ -1145,6 +1250,7 @@ function placeRepairPoints(data) {
       j.group.position.set(f.px + f.dx * 0.01, 0.85, f.pz + f.dy * 0.01); j.group.rotation.y = f.ry; scene.add(j.group);
       j.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
       pt = { x: f.px + f.dx * 0.55, z: f.pz + f.dy * 0.55, main: false, reach: 1.6, obj: j.group, lamp: j.lamp, y: 1.25, px: f.px, pz: f.pz, where: `junction ${deckCode}-${String(jn).padStart(2, '0')}` };
+      { const ox = f.tx + f.dx, oy = f.ty + f.dy; G.repair?.bindJunction(s.id, G.shipDeck + 1, [ox, oy], [f.tx, f.ty], data.room[oy]?.[ox] || 'corridor'); }   // crew sent to this system go to this very junction
     }
     if (!pt.obj) { pt.obj = makeBeacon(); pt.obj.position.set(pt.x, pt.y + 0.3, pt.z); scene.add(pt.obj); }
     pt.sys = s.id; repairPts.push(pt);
@@ -1153,13 +1259,13 @@ function placeRepairPoints(data) {
   G.vents = []; for (let i = 0; i < 5; i++) { const t = data.openTiles[Math.floor(rnd() * data.openTiles.length)]; if (data.grid[t[1]][t[0]] === 0 && !world.isTube(t[0], t[1])) { const [x, z] = world.center(t[0], t[1]); G.vents.push({ x: x + (rnd() - 0.5), z: z + (rnd() - 0.5), t: rnd() }); } }
 }
 function onShipEvent(ev) {
-  if (ev.type === 'repair') G.phases?.onRepair(ev.id);
+  if (ev.type === 'repair' && !ev.npc) G.phases?.onRepair(ev.id);   // crew patches (js/repair.js) call onRepair(sys, { npc: true }) themselves
   if (ev.quiet || !world || G.phase !== 'play') return;
   G.fx = SHIP().effects();
   const r = repairPts.find(r => r.sys === ev.id);
   if (ev.type === 'fault') {
     G.director?.bump(ev.cascade ? 0.12 : 0.08, 'fault ' + ev.id);
-    if (!ev.cascade && G.director?.phase !== 'peak' && Math.random() < 0.55) spawnRepairer(ev.id);
+    if (!NOM() && !ev.cascade && G.director?.phase !== 'peak' && Math.random() < 0.55) spawnRepairer(ev.id);   // madness mode only; Systems Nominal: G.repair (js/repair.js)
     const dist = r ? Math.round(Math.hypot(r.x - P.x, r.z - P.z)) : null;
     if (G.fx.comms < 2 || ev.id === 'comms') G.say(garble(`Computer: ${ev.name} ${ev.status === 'offline' ? 'OFFLINE' : 'failing'} — ${ev.part}.`) + (r ? ` Repair at ${r.where}${dist != null ? ` (${dist} m)` : ''}.` : ''), 'warn');
     sound.zap(); sound.chirp(); P.shake = Math.max(P.shake, 0.15);
@@ -1167,18 +1273,18 @@ function onShipEvent(ev) {
     if (ev.id === 'eps' || ev.id === 'reactor') { G.blackT = Math.min(G.blackT, 0.5); sound.powerDown(); }
     if (ev.id === 'emh' && ev.status === 'offline') for (const e of ents) if (e.kind === 'emh') e.mesh.visible = false;
   } else if (ev.type === 'repair') {
-    G.say(`${ev.name} restored.`, 'good'); if (ev.id === 'reactor' || ev.id === 'eps') sound.powerUp(); else sound.ding();
+    G.say(ev.npc ? `${ev.name} patched by the crew (${Math.round(ev.hp * 100)}%).` : `${ev.name} restored.`, 'good'); if (ev.id === 'reactor' || ev.id === 'eps') sound.powerUp(); else sound.ding();
     if (ev.id === 'emh') for (const e of ents) if (e.kind === 'emh') e.mesh.visible = true;
   }
   updateFaultHud();
 }
 function updateShipSystems(dt, tension) {
-  const S = SHIP(); S.tick(dt, { deckTime: G.deckTime, tension, deck: G.deck }); G.fx = S.effects();
+  const S = SHIP(); if (!worldPaused()) S.tick(dt, { deckTime: G.deckTime, tension, deck: G.deck }); G.fx = S.effects();
   const t = performance.now() / 1000;
   // repair: hold E at a faulted point. Noisy — whatever is hunting you will hear it.
   const rp = nearestRepair();
   if (rp && keys.KeyE && !(P.clung > 0) && P.grounded) {
-    G.repairT += dt; noiseNow = Math.max(noiseNow, 9);
+    G.repairT += dt; noiseNow = Math.max(noiseNow, 9); G.repair?.assist(rp.sys, dt);   // a crew member already working it: your hands add speed to theirs
     G.repSparkT = (G.repSparkT || 0) - dt; if (G.repSparkT <= 0) { G.repSparkT = 0.35; for (let i = 0; i < 6; i++) sparks.add(rp.x, rp.y, rp.z, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, SPARK, 0.4); sound.zap(); }
     if (G.repairT >= repairTime(rp)) { G.repairT = 0; S.repair(rp.sys); }
   } else G.repairT = rp ? Math.max(0, G.repairT - dt * 0.3) : 0;
@@ -1186,7 +1292,7 @@ function updateShipSystems(dt, tension) {
   // faulted hardware sparks, steams and blinks
   for (const r of repairPts) {
     const st = S.status(r.sys); if (r.lamp) setLamp(r.lamp, st, t);
-    if (!r.lamp) { r.obj.visible = st !== 'nominal'; r.obj.rotation.y = t * 2; r.obj.material.color.set(st === 'offline' ? 0xff3020 : 0xffa020); }
+    if (!r.lamp) { r.obj.visible = st !== 'nominal'; r.obj.rotation.y = t * 2; r.obj.material.color.set(G.repair?.workingOn(r.sys) && Math.sin(t * 6) > 0 ? 0x40e0ff : st === 'offline' ? 0xff3020 : 0xffa020); }   // cyan blink: being worked
     if (st === 'nominal') continue;
     r.fxT = (r.fxT || Math.random() * 2) - dt;
     if (r.fxT <= 0) { r.fxT = (st === 'offline' ? 1.2 : 2.8) + Math.random() * 2; const d = Math.hypot(r.x - P.x, r.z - P.z); if (d < 24) { const ox = r.px !== undefined ? r.px : r.x, oz = r.pz !== undefined ? r.pz : r.z; for (let i = 0; i < 10; i++) sparks.add(ox, r.y, oz, (Math.random() - 0.5) * 2.5, 0.5 + Math.random() * 2, (Math.random() - 0.5) * 2.5, SPARK, 0.5); if (d < 12) sound.zap(); } }
@@ -1208,11 +1314,12 @@ function updateShipSystems(dt, tension) {
 }
 function updateFaultHud() {
   if (!G.shipState || !world) return;
-  const rows = G.shipState.faulted().map(s => { const st = G.shipState.status(s.id), r = repairPts.find(r => r.sys === s.id), d = r ? Math.round(Math.hypot(r.x - P.x, r.z - P.z)) : null; return `<div class="${st}">⚠ ${s.name.toUpperCase()} ${st === 'offline' ? 'OFFLINE' : 'DEGRADED'}${d != null ? ` · ${d} m` : ''}</div>`; });
+  const rows = G.shipState.faulted().map(s => { const st = G.shipState.status(s.id), r = repairPts.find(r => r.sys === s.id), d = r ? Math.round(Math.hypot(r.x - P.x, r.z - P.z)) : null; return `<div class="${st}">⚠ ${s.name.toUpperCase()} ${st === 'offline' ? 'OFFLINE' : 'DEGRADED'}${d != null ? ` · ${d} m` : ''}${G.repair?.hudNote(s.id) ? ` · ${G.repair.hudNote(s.id)}` : ''}</div>`; });
   $('faults').innerHTML = rows.join('');
 }
 function showStatus(on) { statusOpen = on; $('shipstatus').style.display = on ? 'block' : 'none'; if (on) renderStatus(); }
 function renderStatus() {
+  if (NOM() && G.nav?.renderStatus($('shipstatus'))) return;   // systems schematic (js/schematic.js)
   const S = G.shipState, R = G.roster, here = {};
   for (const r of repairPts) here[r.sys] = `On this deck: ${r.where} · ${Math.round(Math.hypot(r.x - P.x, r.z - P.z))} m`;
   const zone = zoneOf(G.shipDeck / Math.max(1, G.ship.decks - 1)).label;
@@ -1322,7 +1429,7 @@ function carStep(dt) {
 }
 function liftStep(dt, t) {
   const L = G.lift; G.time += dt; world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); updatePanelLights(dt);
-  SHIP().tick(dt, { deckTime: G.deckTime, tension: 0, deck: G.deck }); G.fx = SHIP().effects(); G.comms?.tick(dt); nomTick(dt);
+  if (!worldPaused()) { SHIP().tick(dt, { deckTime: G.deckTime, tension: 0, deck: G.deck }); G.comms?.tick(dt); } G.fx = SHIP().effects(); nomTick(dt);
   let sh = 0;
   if (G.phase === 'ride') {
     L.t += dt; const k = Math.min(1, L.t / L.dur), e = k * k * (3 - 2 * k), disp = Math.round(L.from + (L.to - L.from) * e);
@@ -1474,5 +1581,6 @@ const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobb
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
+Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
 frame();

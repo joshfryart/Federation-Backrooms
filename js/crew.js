@@ -204,11 +204,13 @@ export class ShipState {
     const ev = { type: 'fault', id, name: def.name, part, status: this.status(id), was: before, quiet };
     this.emit(ev); return ev;
   }
-  repair(id) { const s = this.sys[id], was = this.status(id); s.hp = 1; s.faults = []; const ev = { type: 'repair', id, name: SYS[id].name, was }; this.emit(ev); return ev; }
+  // repair(id) restores fully (the player); repair(id, { hp: 0.85, by: 'npc' }) is a crew patch (js/repair.js): never above hp, never 100%
+  repair(id, { hp = 1, by = null } = {}) { const s = this.sys[id], was = this.status(id); s.hp = Math.max(s.hp, hp); if (s.hp >= 0.75) s.faults = []; const ev = { type: 'repair', id, name: SYS[id].name, was, hp: s.hp, by, npc: by === 'npc' }; this.emit(ev); return ev; }
   // call every frame; returns a fault event when something breaks. ctx: { deckTime, tension (0..1), deck }
   // time each system has spent in its current status; fires cascades. Returns the cascade event, if any.
   cascade(dt) {
-    let out = null;
+    let out = null; dt /= this.paceT || 1;   // pace (js/pace.js): cascade timers are ship time, stretched by T
+
     for (const s of SYSTEMS) { const st = this.status(s.id), k = this.since[s.id]; this.since[s.id] = k && k.st === st ? { st, t: k.t + dt, fired: k.fired } : { st, t: 0, fired: {} }; }
     for (const c of CASCADES) {
       const k = this.since[c.from]; if (k.st !== c.when || k.t < c.after || k.fired[c.to] || this.status(c.to) === 'offline') continue;

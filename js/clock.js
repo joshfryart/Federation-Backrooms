@@ -1,5 +1,5 @@
 // Ship clock and watches. Pure logic, no three.js, no DOM.
-//   ShipClock: ship hour 0..24; a ~20 real-minute run is ~6 ship hours (1 real second = 0.005 ship hours); time-skip.
+//   ShipClock: ship hour 0..24; a ~20 real-minute run is ~6 ship hours (1 real second = 0.005 ship hours / pace T); time-skip; setPace(T).
 //   Watches: alpha (ship hour 0-8), beta (8-16), gamma (16-24). Every crew member belongs to one; their daily_template
 //   (js/crew-sim data, `h` = ship hours since their watch began) is read at `localHour(person)`.
 import { mulberry32 } from './data.js';
@@ -16,13 +16,16 @@ export const hash01 = (...parts) => mulberry32(hash(...parts))();
 
 export class ShipClock {
   constructor({ seed = 1, startHour = null, rate = HOURS_PER_SECOND } = {}) {
-    this.seed = seed; this.rate = rate; this.real = 0; this.skipped = 0;
+    this.seed = seed; this.rate = rate; this.real = 0; this.real0 = 0; this.skipped = 0;   // real0: real seconds at the last rate change (setPace)
     // the run begins in the first part of some watch so that a watch change falls inside a ~6 hour run most of the time
     const r = mulberry32(hash('clock', seed));
     this.start = startHour ?? (Math.floor(r() * 3) * 8 + r() * 4);
   }
-  get hour() { return (this.start + this.real * this.rate + this.skipped) % 24; }
-  get elapsedHours() { return this.real * this.rate + this.skipped; }
+  // pace (js/pace.js): T = watch minutes / 20 slows the ship hours per real second (6 ship hours always fill one watch).
+  // Mid-run changes only affect what is left: the hours already elapsed are folded into `skipped` first.
+  setPace(T = 1) { this.skipped += (this.real - this.real0) * this.rate; this.real0 = this.real; this.rate = HOURS_PER_SECOND / Math.max(0.1, T); this.paceT = T; return this; }
+  get hour() { return (this.start + this.elapsedHours) % 24; }
+  get elapsedHours() { return (this.real - this.real0) * this.rate + this.skipped; }
   get runMinutes() { return this.real / 60; }
   // advance by real seconds; returns the watch-change boundary crossed (0, 8 or 16) or null
   advance(dt) {

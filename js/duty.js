@@ -1,12 +1,17 @@
 // The player's billet, duty loops, duty-debt ledger, orders / delegation / reports, witness-and-belief model, mission task board.
 // Pure logic (no three.js, no DOM). Data: assets/data/duties.json (node tools/build-duties.mjs).  Time: 1 ship minute = 10/3 real seconds
-// (ShipClock), but duty loops are stretched (period = clamp(every_min*8, 90, 400) s) so a 20 minute run holds a handful of rounds.
+// (ShipClock), but duty loops are stretched (period = clamp(every_min*8, 90, 400) s x pace T) so a watch holds a handful of rounds.
+// Pace (js/pace.js) is applied once, in the constructor: loop periods x T, first-due / gap / jitter and the earliest task time per preset,
+// perform time x performMul (action time otherwise). Mission tasks are due by END OF SHIFT: they open at `at` (never before
+// pace.firstTask) and stay open; shiftEnd() tallies what is unfinished. A duty round nobody got to is a gentle skip (half debt, no score).
 //   pickBillet(roster, seed, forceBillet)  -> a random living crew member becomes the player
-//   new Duty({ player, roster, clock, sim, duties, shipState, say, seed, mission })
-//     .tick(dt)  .perform(loopId, quality)  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)
+//   new Duty({ player, roster, clock, sim, duties, shipState, say, seed, mission, pace })
+//     .tick(dt)  .shiftEnd()  .firstTask()  .repairRows = () => rows (js/repair.js, shown on the board)
+//     .perform(loopId, quality)  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)
 //     .board()   duty + task board rows for the HUD     .ledger / .debt / .chain / .trust(person)
 import { hash, hash01 } from './clock.js';
 import { RANK_SHORT } from './crew.js';
+import { PACES } from './pace.js';
 
 export const QUALITIES = ['proper', 'rushed', 'faked', 'skipped'];
 export const Q_LABEL = { proper: 'Do it properly', rushed: 'Rush it', faked: 'Fake the log', skipped: 'Skip it' };
@@ -34,14 +39,15 @@ export function briefing(player, roster, mission, duties, MISSIONS) {
 }
 
 export class Duty {
-  constructor({ player, roster, clock, sim = null, duties, shipState = null, say = () => {}, seed = 1, mission = 'quiet_watch' }) {
-    Object.assign(this, { player, roster, clock, sim, duties, shipState, say, seed, mission });
+  constructor({ player, roster, clock, sim = null, duties, shipState = null, say = () => {}, seed = 1, mission = 'quiet_watch', pace = PACES.standard }) {
+    Object.assign(this, { player, roster, clock, sim, duties, shipState, say, seed, mission, pace }); const T = pace.T || 1;
+    this.shiftLen = 1200 * T; this.ended = false; this.repairRows = null;
     this.t = 0; this.place = { deckNo: 1, room: null }; this.busy = null; this.listeners = [];
     const d = duties.billets?.[player.billet] || { loops: [], tasks: {} };
     this.d = d;
-    this.loops = d.loops.map((l, i) => ({ ...l, period: Math.min(400, Math.max(90, l.every * 8)), next: 30 + i * 20 + hash01('duty', seed, l.id) * 30, state: 'idle', done: 0, last: null }));
-    this.tasks = (d.tasks[mission] || []).map((t, i) => ({ ...t, id: 't' + i, state: 'pending', at_s: t.at * 60, window: 240, by: null }));
-    this.ledger = {}; this.debt = 0; this.entries = []; this.chain = []; this.score = 0; this.maxScore = 0; this.trustMap = new Map(); this.audit = 100; this.stats = { proper: 0, rushed: 0, faked: 0, skipped: 0, delegated: 0, orders: 0, refused: 0, caught: 0 };
+    this.loops = d.loops.map((l, i) => ({ ...l, period: Math.min(400, Math.max(90, l.every * 8)) * T, next: (pace.firstDue ?? 30) + i * (pace.dueGap ?? 20) + hash01('duty', seed, l.id) * (pace.dueJitter ?? 30), state: 'idle', done: 0, last: null }));
+    this.tasks = (d.tasks[mission] || []).map((t, i) => ({ ...t, id: 't' + i, state: 'pending', at_s: Math.max(pace.firstTask ?? 0, t.at * 60 * T), by: null }));
+    this.ledger = {}; this.debt = 0; this.entries = []; this.chain = []; this.score = 0; this.maxScore = 0; this.trustMap = new Map(); this.audit = 100; this.stats = { proper: 0, rushed: 0, faked: 0, skipped: 0, missed: 0, delegated: 0, orders: 0, refused: 0, caught: 0, unfinished: 0 };
     this.events = []; this.jobs = [];   // pending delegated / ordered jobs
   }
   on(fn) { this.listeners.push(fn); return this; }
@@ -52,16 +58,16 @@ export class Duty {
   _bump(p, d) { const k = p.id; this.trustMap.set(k, Math.max(0, Math.min(1, this.trust(p) + d))); this.sim?.social?.onTrustEvent(p, this.player, d, 'how you did your job'); }
   get avgTrust() { const l = this.roster.people.filter(p => LIVE(p) && p !== this.player); return l.reduce((a, p) => a + this.trust(p), 0) / Math.max(1, l.length); }
   loop(id) { return this.loops.find(l => l.id === id); }
-  status(l) { return l.state === 'doing' ? 'doing' : l.state === 'due' ? (this.t - l.dueAt > 60 ? 'overdue' : 'due') : 'idle'; }
+  status(l) { return l.state === 'doing' ? 'doing' : l.state === 'due' ? (this.t - l.dueAt > 60 * (this.pace.T || 1) ? 'overdue' : 'due') : 'idle'; }
+  get shiftLeft() { return Math.max(0, this.shiftLen - this.t); }
+  // the first mission task of the run (earliest opening): the one that gets the guided intro (js/main.js G.pin)
+  firstTask() { return this.tasks.reduce((a, t) => !a || t.at_s < a.at_s ? t : a, null); }
 
   tick(dt) {
     this.t += dt;
     for (const l of this.loops) if (l.state === 'idle' && this.t >= l.next) { l.state = 'due'; l.dueAt = this.t; this.emit({ type: 'due', loop: l.id, label: l.label, room: l.room }); }
-    for (const l of this.loops) if (l.state === 'due' && this.t - l.dueAt > l.period * 0.9) this._finish(l, 'skipped', { auto: true });   // never got to it: counts as a skip
-    for (const t of this.tasks) {
-      if (t.state === 'pending' && this.t >= t.at_s) { t.state = 'active'; this.emit({ type: 'task', task: t.task, id: t.id, room: t.room }); }
-      else if (t.state === 'active' && this.t > t.at_s + t.window) { t.state = 'missed'; this.maxScore += 1; this.chain.push(`Missed task: ${t.task} — ${t.neglect}`); this.emit({ type: 'missed', task: t.task, neglect: t.neglect }); }
-    }
+    for (const l of this.loops) if (l.state === 'due' && this.t - l.dueAt > l.period * 0.9) this._miss(l);   // never got to it: a gentle skip, the round comes round again
+    for (const t of this.tasks) if (t.state === 'pending' && this.t >= t.at_s) { t.state = 'active'; this.emit({ type: 'task', task: t.task, id: t.id, room: t.room, first: t === this.firstTask() }); }   // open until the shift ends
     if (this.busy) { this.busy.left -= dt; if (this.place.room !== this.busy.loop.room && this.busy.loop.room !== 'any') { const l = this.busy.loop; this.busy = null; this._finish(l, 'skipped', { walkedOff: true }); } else if (this.busy.left <= 0) { const b = this.busy; this.busy = null; this._finish(b.loop, b.q); } }
     for (const j of this.jobs.slice()) { j.left -= dt; if (j.left <= 0) { this.jobs.splice(this.jobs.indexOf(j), 1); this._jobDone(j); } }
     this.audit -= dt; if (this.audit <= 0) { this.audit = 70 + hash01('audit', this.seed, Math.floor(this.t)) * 60; this._audit(); }
@@ -73,7 +79,7 @@ export class Duty {
     if (l.state !== 'due' && l.state !== 'idle') return { ok: false, why: 'not due' };
     if (l.room !== this.place.room) return { ok: false, why: `Do this in the ${l.room}` };
     if (quality === 'skipped') { this._finish(l, 'skipped'); return { ok: true, secs: 0 }; }
-    const secs = Math.max(2.5, l.dur * SHIP_SEC_PER_MIN * l.q[quality][0] * 1.2);
+    const secs = Math.max(2.5, l.dur * SHIP_SEC_PER_MIN * l.q[quality][0] * 1.2 * (this.pace.performMul ?? 1));
     l.state = 'doing'; this.busy = { loop: l, q: quality, left: secs, total: secs };
     this.emit({ type: 'start', loop: l.id, quality, secs }); return { ok: true, secs };
   }
@@ -84,11 +90,17 @@ export class Duty {
     if (!by) { this.stats[q]++; this.emit({ type: 'done', loop: l.id, label: l.label, quality: q, debt, auto: !!opt.auto }); this._witness(l, q); }
     return debt;
   }
-  _record(l, q, debt, by) {
+  // a due round that timed out: no score, no witnesses, half the skip debt (neglect still reaches the ship, slowly)
+  _miss(l) {
+    l.state = 'idle'; l.next = this.t + l.period; l.last = 'missed'; this.stats.missed++;
+    const debt = (l.q.skipped?.[1] ?? 1) * 0.5; this._record(l, 'missed', debt, null, { noScore: true });
+    this.emit({ type: 'done', loop: l.id, label: l.label, quality: 'missed', debt, auto: true }); return debt;
+  }
+  _record(l, q, debt, by, { noScore = false } = {}) {
     const sys = l.sys || 'misc'; this.ledger[sys] = (this.ledger[sys] || 0) + debt; this.debt += debt;
     this.entries.push({ t: this.t, loop: l.id, label: l.label, q, debt, sys, by: by?.short || null, found: false });
     if (q === 'proper' && this.ledger[sys] > 0) this.ledger[sys] = Math.max(0, this.ledger[sys] - 0.5);
-    this.maxScore += 1; this.score += { proper: 1, rushed: 0.55, faked: 0.2, skipped: 0 }[q];
+    if (!noScore) { this.maxScore += 1; this.score += { proper: 1, rushed: 0.55, faked: 0.2, skipped: 0 }[q] ?? 0; }
     // neglect catches up with the ship: every 3 points of debt on a system damages it
     if (sys !== 'misc' && this.ledger[sys] >= 3 && this.shipState?.sys[sys]) {
       this.ledger[sys] -= 3; const ev = this.shipState.damage(sys, 0.3 + (this.ledger[sys] > 2 ? 0.2 : 0));
@@ -176,10 +188,21 @@ export class Duty {
     if (quality !== 'proper') this.chain.push(`Task "${t.task}" ${quality}`);
     this.emit({ type: 'taskdone', task: t.task, quality }); return { ok: true };
   }
+  // End of shift (js/main.js nomEnd, from the Phases 'end' event): every mission task not done counts against the mission score and goes
+  // into the causal chain. Idempotent. Returns the unfinished tasks.
+  shiftEnd() {
+    if (this.ended) return this.tasks.filter(t => t.state === 'missed'); this.ended = true; const out = [];
+    for (const t of this.tasks) if (t.state === 'active' || t.state === 'pending') {
+      const opened = t.state === 'active'; t.state = 'missed'; this.maxScore += 1; this.stats.unfinished++; out.push(t);
+      this.chain.push(`Unfinished at end of shift: ${t.task}${opened ? '' : ' (never reached)'} — ${t.neglect}`); this.emit({ type: 'missed', task: t.task, neglect: t.neglect, shiftEnd: true });
+    }
+    return out;
+  }
   // the rest of the ship does its tasks off-screen: most land on time, a few slip (seeded)
   // Continue as another crew member: their loops start fresh, but the ship's debt, history and the crew's opinion of "you" stay.
   inherit(old) {
-    this.t = old.t; for (const l of this.loops) l.next += old.t; this.tasks = this.tasks.map(t => ({ ...t, state: old.tasks.find(o => o.task === t.task)?.state === 'done' || old.t > t.at_s + t.window ? (old.tasks.find(o => o.task === t.task)?.state || 'missed') : t.state }));
+    this.t = old.t; for (const l of this.loops) l.next += old.t; this.tasks = this.tasks.map(t => { const o = old.tasks.find(x => x.task === t.task); return { ...t, state: o?.state === 'done' ? 'done' : this.t >= t.at_s ? 'active' : 'pending' }; });   // tasks stay open to the shift end
+    this.repairRows = old.repairRows; this.ended = old.ended;
     Object.assign(this, { ledger: old.ledger, debt: old.debt, entries: old.entries, chain: old.chain, score: old.score, maxScore: old.maxScore, trustMap: old.trustMap, stats: old.stats, audit: old.audit });
     this.listeners = old.listeners; return this;
   }
@@ -198,8 +221,9 @@ export class Duty {
   board() {
     const rows = [];
     for (const l of this.loops) rows.push({ kind: 'duty', id: l.id, label: l.label, room: l.room, status: this.status(l), eta: l.state === 'idle' ? Math.max(0, Math.round(l.next - this.t)) : 0, last: l.last, left: this.busy?.loop === l ? Math.max(0, this.busy.left) : 0, total: this.busy?.loop === l ? this.busy.total : 0 });
-    for (const t of this.tasks) rows.push({ kind: 'task', id: t.id, label: t.task, room: t.room, status: t.state, eta: Math.max(0, Math.round(t.at_s - this.t)), by: t.by });
+    for (const t of this.tasks) rows.push({ kind: 'task', id: t.id, label: t.task, room: t.room, status: t.state, eta: Math.max(0, Math.round(t.at_s - this.t)), by: t.by, dueIn: Math.round(this.shiftLeft) });   // due by end of shift
+    if (this.repairRows) try { rows.push(...this.repairRows()); } catch (e) { /* the repair crew is optional */ }
     return rows;
   }
-  summary() { return { score: this.maxScore ? Math.round(this.score / this.maxScore * 100) : 100, debt: +this.debt.toFixed(1), stats: { ...this.stats }, trust: +this.avgTrust.toFixed(2), chain: this.chain.slice(-8) }; }
+  summary() { const tasks = { done: this.tasks.filter(t => t.state === 'done').length, unfinished: this.tasks.filter(t => t.state !== 'done').length, total: this.tasks.length }; return { score: this.maxScore ? Math.round(this.score / this.maxScore * 100) : 100, debt: +this.debt.toFixed(1), stats: { ...this.stats }, tasks, trust: +this.avgTrust.toFixed(2), chain: this.chain.slice(-8) }; }
 }

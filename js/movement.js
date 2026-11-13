@@ -164,5 +164,7 @@ export class Fidgeter {
     }
     return out;
   }
-  describe() { return this.cur ? `${this.cur.id} (${(this.cur.at / this.cur.dur * 100) | 0}%)` : `idle (next ${this.next.toFixed(1)}s)`; }
+  // play one gesture now (speech etiquette T0 nod / smile in js/etiquette.js, conversation reactions); false if unknown
+  force(id) { const g = GESTURES[id]; if (!g) return false; this.n++; this.cur = { id, g, at: 0, dur: (g.dur[0] + g.dur[1]) / 2 }; this.last = id; this.hist.push(id); if (this.hist.length > 8) this.hist.shift(); this.next = Math.max(this.next, 2); return true; }
+  describe() { return this.cur ?`${this.cur.id} (${(this.cur.at / this.cur.dur * 100) | 0}%)` : `idle (next ${this.next.toFixed(1)}s)`; }
 }

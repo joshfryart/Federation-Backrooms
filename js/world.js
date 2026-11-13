@@ -1228,6 +1228,37 @@ export class World {
     this.setLiftOpen(false);
   }
   setCarLocked(on) { if (this.carMode && this.carLocked !== on) { this.carLocked = on; if (on) this.liftStatus.material.color.set(0xff3030); } }
+  // live guide (Systems Nominal, js/nav-hud.js): <=24 small cyan chevrons flowing along the first ~22 m of the pinned route (an extension of the
+  // painted lift chevrons above, but toward the pin), and a light beam + floating badge at the destination (badge drawn through walls).
+  // route: {pts:[[x,y]] in tiles, cum, len} or null; beacon: {tx, ty, canvas, key} or null. Cost: one matrix update per instance per call.
+  setGuide(route, t = 0, beacon = null) {
+    if (!this.guide) {
+      const sh = new THREE.Shape(); sh.moveTo(0.5, 0); sh.lineTo(-0.1, 0.5); sh.lineTo(-0.4, 0.5); sh.lineTo(0.2, 0); sh.lineTo(-0.4, -0.5); sh.lineTo(-0.1, -0.5); sh.closePath();
+      const geo = new THREE.ShapeGeometry(sh); geo.rotateX(-Math.PI / 2);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), 24);
+      im.frustumCulled = false; im.renderOrder = 3; im.setColorAt(0, new THREE.Color()); this.group.add(im);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.42, 3, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x8ef3ff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      beam.position.y = 1.5; const spr = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false, opacity: 0.9 })); spr.position.y = 2.45; spr.scale.setScalar(0.85); spr.renderOrder = 4;
+      const bg = new THREE.Group(); bg.add(beam, spr); bg.visible = false; this.group.add(bg);
+      this.guide = { im, bg, spr, o: new THREE.Object3D(), c: new THREE.Color(), key: null };
+    }
+    const G = this.guide, o = G.o; let n = 0;
+    if (route && route.len > 0.3) {
+      const L = Math.min(route.len * TS, 22), gap = 1.35;
+      for (let s = 1.0 + (t * 1.6) % gap; s < L && n < 24; s += gap, n++) {
+        const st = s / TS; let k = 1; while (k < route.cum.length - 1 && route.cum[k] < st) k++;
+        const a = route.pts[k - 1], b = route.pts[k], f = (st - route.cum[k - 1]) / Math.max(1e-6, route.cum[k] - route.cum[k - 1]);
+        o.position.set((a[0] + (b[0] - a[0]) * f) * TS, 0.03, (a[1] + (b[1] - a[1]) * f) * TS); o.rotation.set(0, -Math.atan2(b[1] - a[1], b[0] - a[0]), 0); o.scale.setScalar(0.85); o.updateMatrix();
+        G.im.setMatrixAt(n, o.matrix); const fd = Math.max(0.12, (1 - s / 22) * Math.min(1, (s - 0.6) / 1.2)); G.im.setColorAt(n, G.c.setRGB(0.55 * fd, 0.95 * fd, fd));
+      }
+    }
+    G.im.count = n; G.im.instanceMatrix.needsUpdate = true; if (G.im.instanceColor) G.im.instanceColor.needsUpdate = true;
+    G.bg.visible = !!beacon;
+    if (beacon) {
+      G.bg.position.set((beacon.tx + 0.5) * TS, 0, (beacon.ty + 0.5) * TS); G.spr.position.y = 2.45 + Math.sin(t * 2) * 0.06;
+      if (beacon.key !== G.key && beacon.canvas) { G.key = beacon.key; G.spr.material.map?.dispose(); G.spr.material.map = new THREE.CanvasTexture(beacon.canvas); G.spr.material.map.colorSpace = THREE.SRGBColorSpace; G.spr.material.needsUpdate = true; }
+    }
+  }
 
   // pick a piece of clutter up: hide its instance and drop it from the look list
   takeClutter(c) { if (c.gone) return false; c.gone = true; if (c.inst) { const d = new THREE.Object3D(); d.scale.set(0, 0, 0); d.updateMatrix(); c.inst.im.setMatrixAt(c.inst.i, d.matrix); c.inst.im.instanceMatrix.needsUpdate = true; } const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
