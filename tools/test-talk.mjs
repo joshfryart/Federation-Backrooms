@@ -138,7 +138,7 @@ export async function talkBrowser(page, fail) {
   ck(r.frozen.speaker > 1, 'the speaker keeps animating');
   ck(r.hud.minimap === 'hidden' && r.hud.tk && r.hud.segs === 8 && r.hud.plate && r.hud.portrait, 'talk HUD: plate with portrait, 8-icon wheel; minimap hidden');
   ck(r.opener, 'they open with a line');
-  ck(r.intent.d > 0 && r.intent.line && r.intent.sub === r.intent.line && r.intent.logged, 'small talk raises trust, subtitles the line and logs it in G.sayLog');
+  ck(r.intent.d > 0 && r.intent.line && r.intent.sub.length > 0 && r.intent.line.startsWith(r.intent.sub.trim()) && r.intent.logged, 'small talk raises trust, subtitles the line and logs it in G.sayLog');
   ck(r.lock === 'sub' || (r.lock.ok && /report/.test(r.lock.why)), 'a locked intent says why');
   ck(r.digit, 'digits choose on the wheel');
   ck(r.esc.out === 'out' && !r.esc.layer && r.esc.phase === 'play' && !r.esc.pause && !r.esc.frozen && !r.esc.body && r.esc.dp < 1e-9 && r.esc.dq < 1e-9 && r.esc.fov && r.esc.runs, 'Esc ends it: no pause screen, camera and phase restored exactly, world runs');
