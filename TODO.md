@@ -147,3 +147,8 @@ Ranked: real CC0 PBR textures (biggest win) → AgX/grade tuning (done) → fake
 
 ## Legal
 Parody/homage: keep all names original (no franchise marks, insignia, or likenesses). Credit every third-party asset in `CREDITS.md` and the in-game Credits screen.
+
+## Art/gameplay/platform pass — status (latest)
+Done (untested by eye in real play; see docs/contact/index.html): FP hands/launcher/landing roll/move audio (js/fpbody.js; procedural arms, not crew-rig); space windows + bridge viewscreen (js/fx-env.js); mist/smoke FX; per-room ambience + panned enemy audio (js/ambience.js); tall shuttlebay/arboretum (ROOM_H); new props placed (lockers/labrack/centrifuge) + mesh merging; slimeling sheen tell; Phantom look-at fix (js/visibility.js); clinger latch HUD; hiding + noisemakers (Madness mode); hints, accessibility (fb_access), nav items, tour; balance caps (js/balance.js); touch + gamepad; run stats (js/save.js); dynamic resolution; CI + Pages workflows.
+Still open: CC0 prop scans (GitHub search blocked in sandbox); rigged crew-rig arms; doors are visual only; tuning on real hardware (movement, director, enemy numbers); vents as hiding spots; pointer-lock cursor for big map; jumpsuit/tunic bodies (need MakeHuman exports); fp contact shots show floating arms in the viewer.
+Test flakiness: tools/test.mjs fails random blocks (unseeded Math.random in the page; baseline too). Fix: seed Math.random under navigator.webdriver, or add retries.
