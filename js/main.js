@@ -35,6 +35,7 @@ import { Fidgeter } from './movement.js';
 import { Haul, initHaul, opStart, opHook, opEnd, pushHook, toolBonus } from './haul.js';   // equipment motions, carrying, carts (js/equipment.js, js/carry.js)
 import { propsFor, classifyItem } from './equipment.js';
 import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
+import { FPBody } from './fpbody.js';   // first-person hands for mantle / slide / wall-run / grapple / crawl, landing roll, move audio
 import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / hold / shove / strike, security response, armory (js/combat.js rules, docs/combat.md)
 import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
@@ -985,7 +986,7 @@ beamCone = (() => {
   m.position.set(0.12, -0.1, 0); m.frustumCulled = false; camera.add(m); return m;
 })();
 // first-person zapper: procedural sidearm + hand (js/actors.js makeViewmodel)
-let gunVM = null, gunKick = 0, muzzle = null, vm = null;
+let gunVM = null, gunKick = 0, muzzle = null, vm = null; const fp = new FPBody({ THREE, vmScene, P, sound });
 function buildViewmodel() {
   vm = makeViewmodel(); gunVM = vm.group; muzzle = vm.flash;
   gunVM.traverse(o => { if (o.isMesh) o.renderOrder = 10; });
@@ -1156,16 +1157,16 @@ function step(dt, t) {
   if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; if (!NOM()) sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
 
-  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
+  if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5; gunVM.position.y -= fp.gunDrop * 0.35; gunVM.position.z += fp.gunDrop * 0.12;
     { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play' && !NOM(); }
   // camera
   P.shake = Math.max(0, P.shake - dt * 1.5);
   const onFoot = P.grounded && P.mode !== 'slide';
   const bobY = onFoot ? Math.sin(P.bob * 2.2) * (0.04 + P.flow * 0.02) * Math.min(1, speedNow / 3) : 0;
   const dip = Math.sin(Math.min(1, P.land) * Math.PI) * 0.14 * Math.min(1, P.land * 2);
-  camera.position.set(P.x, P.y + P.eye + bobY - dip, P.z);
+  fp.update(dt, G.phase === 'play'); camera.position.set(P.x, P.y + P.eye + bobY - dip + fp.cam.y, P.z);
   camera.rotation.order = 'YXZ';
-  camera.rotation.set(P.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * 0.05, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * 0.05, P.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
+  camera.rotation.set(P.pitch + fp.cam.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * 0.05, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * 0.05, P.roll + fp.cam.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
   const fovT = 75 + Math.max(0, Math.min(1, (speedNow - 3.6) / 6)) * 15 + (P.mode === 'grapple' ? 7 : 0) + (P.mode === 'slide' ? 4 : 0);
   camera.fov += (fovT - camera.fov) * Math.min(1, dt * 5); camera.updateProjectionMatrix();
   $('grap').className = P.mode === 'grapple' ? 'on' : P.grapCd > 0 ? 'cd' : ''; $('grap').firstElementChild.style.width = (100 - Math.min(1, P.grapCd / MOVE.grapCooldown) * 100) + '%';
@@ -1177,6 +1178,7 @@ const moveApi = {
   stamina: () => G.stamina,
   spend: (n) => { G.stamina = Math.max(0, G.stamina - n); },
   onEvent(name, d) {
+    fp.onEvent(name, d);
     if (name === 'jump') { sound.step(0.16); noiseNow = Math.max(noiseNow, 6); }
     else if (name === 'land') { const hard = d.impact > 8; sound.thud(Math.min(0.45, 0.08 + d.impact * 0.03)); noiseNow = Math.max(noiseNow, hard ? 14 : 7); if (hard) P.shake = Math.max(P.shake, 0.25); }
     else if (name === 'mantle' || name === 'vault') { sound.noise(0.12, 0.09, 500, 0.8, 'lowpass'); sound.step(0.12); noiseNow = Math.max(noiseNow, 6); }
@@ -1228,7 +1230,7 @@ function fireGrapple() {
     return;
   }
   if (!hit || hit.dist < 1.6) { ropeFlash = 0.18; ropeEnd.copy(eye).addScaledVector(_f, hit ? hit.dist : MOVE.grapRange); P.grapCd = 0.5; if (!hit) G.say('Nothing in range for the grapple line.', ''); return; }
-  startGrapple(P, hit); ropeEnd.set(hit.x, hit.y, hit.z); sound.clang(0.1);
+  startGrapple(P, hit); fp.onEvent('grapple'); ropeEnd.set(hit.x, hit.y, hit.z); sound.clang(0.1);
 }
 const ropeEnd = new THREE.Vector3(); let ropeFlash = 0;
 function updateRope(dt) {
