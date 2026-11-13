@@ -99,7 +99,15 @@ function droneKit(mesh, H) {
   // adaptive shield: only shows once it has learned the zapper's frequency
   const shM = new THREE.MeshBasicMaterial({ color: 0xffa030, wireframe: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
   const shield = new THREE.Mesh(droneGeo.shell || (droneGeo.shell = new THREE.IcosahedronGeometry(1, 2)), shM); shield.scale.set(0.62, 1.12, 0.62); shield.position.y = 1.05; shield.castShadow = false; shield.visible = false; mesh.add(shield);
-  H.drone = { glow, beamM, sweep, shield, shM, flash: 0, was: false };
+  // drones are shaved under the lens plate: hide hair so no strands poke through the collar/plate
+  H.inner.traverse(o => { if (o.isMesh && (o.name === 'hair' || (o.material?.name || '') === 'hair')) o.visible = false; });
+  // arcing sparks at the cabling when stunned; amber armour studs fade in once it has adapted
+  const sparkM = new THREE.MeshBasicMaterial({ color: 0xbfffd0, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  const sparks = []; for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.008, 0.12), sparkM); m.visible = false; m.castShadow = false; m.frustumCulled = false; mesh.add(m); sparks.push(m); }
+  const plateM = new THREE.MeshStandardMaterial({ color: 0x3a3022, metalness: 0.85, roughness: 0.4, emissive: 0xff8a20, emissiveIntensity: 0 }), plates = [];
+  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.12), plateM); m.visible = false; add(sx > 0 ? 'upperarm_r' : 'upperarm_l', m, 0, 0.03, 0); m.position.x += sx * 0.03 * s; plates.push(m); }
+  { const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.03), plateM); m.visible = false; add('spine_03', m, 0, 0.1, 0.13); plates.push(m); }
+  H.drone = { glow, beamM, sweep, shield, shM, flash: 0, was: false, sparks, sparkM, plates, plateM, pack };
 }
 const droneGeo = {};
 const GREEN = new THREE.Color(0x50ff70), AMBER = new THREE.Color(1.0, 0.55, 0.12);
@@ -109,6 +117,8 @@ function droneTick(mesh, H, t, f) {
   d.sweep.visible = !(f.stunned && !ad); d.sweep.rotation.y = Math.sin(t * (ad ? 1.7 : 0.9)) * 0.6; d.sweep.rotation.x = 0.14 + Math.sin(t * 0.37) * 0.06; d.beamM.opacity = 0.085 + 0.025 * Math.sin(t * 23);
   if (ad && f.stunned && !d.was) d.flash = 1;   // a zap just splashed off the shield
   d.was = !!f.stunned; d.flash = Math.max(0, d.flash - 0.03);
+  d.plates.forEach(m => m.visible = ad); d.plateM.emissiveIntensity = ad ? 0.4 + 0.3 * Math.sin(t * 3) : 0;
+  const zz = !!f.stunned && !ad || d.flash > 0.3; d.sparks.forEach((m, i) => { m.visible = zz && Math.random() < 0.6; if (m.visible) { d.pack.getWorldPosition(m.position); mesh.worldToLocal(m.position); m.position.x += (Math.random() - 0.5) * 0.3; m.position.y += (Math.random() - 0.3) * 0.5; m.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3); } });
   d.shield.visible = ad; if (ad) { d.shM.opacity = 0.035 + 0.02 * Math.sin(t * 3) + d.flash * 0.5; d.shield.rotation.y = t * 0.4; }
 }
 
@@ -399,6 +409,14 @@ export class Phantom extends Enemy {
     this.kind = 'phantom'; this.name = 'Mr. Grinsworth (rogue hologram)'; this.hitY = 1.3; this.hitR = 0.8;
     this.seen = false; this.unseenT = 0; this.mesh.userData.floatY = 0.06; this.giggleT = 3;
     this.glow = new THREE.PointLight(0xff3fd0, 3, 8, 2); this.glow.position.set(0, 1.2, 0); this.mesh.add(this.glow);
+    // glitch-teleport: a tearing pink column of scanlines at the point it leaves and at the point it lands
+    const col = new THREE.CylinderGeometry(0.5, 0.5, 2.4, 14, 1, true); col.translate(0, 1.2, 0);
+    this.tpM = new THREE.MeshBasicMaterial({ color: 0xff3fd0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, wireframe: true });
+    this.tpOut = new THREE.Mesh(col, this.tpM); this.tpIn = new THREE.Mesh(col, this.tpM); this.tpOut.visible = this.tpIn.visible = false; this.tpOut.frustumCulled = this.tpIn.frustumCulled = false; this.tpT = 0; scene.add(this.tpOut, this.tpIn);
+  }
+  tpFx(dt) {
+    if (this.tpT > 0) { this.tpT -= dt; const k = Math.max(0, this.tpT / 0.6); this.tpM.opacity = k * 0.55; for (const m of [this.tpOut, this.tpIn]) { m.visible = k > 0; m.scale.set(1 + (1 - k) * 0.6, 0.4 + k * 0.6 + Math.random() * 0.2, 1 + (1 - k) * 0.6); m.rotation.y += dt * 9; } }
+    else if (this.tpOut.visible) this.tpOut.visible = this.tpIn.visible = false;
   }
   stunFor(sec) { // banished back into the projector for a while
     this.sound.zap(); this.state = S.DORMANT; this.delay = 12 + sec; this.mesh.visible = false; this.glow.intensity = 0; this.unseenT = 0;
@@ -427,13 +445,13 @@ export class Phantom extends Enemy {
     this.mesh.visible = this.seen ? true : (Math.random() > 0.08);
     phantomMaterial().uniforms.uOpacity.value = this.seen ? 0.95 : 0.6 + Math.sin(this.t * 30) * 0.1; this.glitchT = Math.max(0, (this.glitchT || 0) - dt); const gb = this.glitchT > 0 ? this.glitchT / 0.7 : 0;   // re-materialising: the projection tears and stretches for a moment
     phantomMaterial().uniforms.uGlitch.value = Math.max(this.seen ? 0 : 1, gb * 5); this.mesh.scale.set(1 + gb * Math.sin(this.t * 90) * 0.25, 1 + gb * 0.35 * Math.sin(this.t * 55), 1);
-    this.glow.intensity = (this.seen ? 4.5 : 2.2) + gb * 9;
+    this.glow.intensity = (this.seen ? 4.5 : 2.2) + gb * 9; this.tpFx(dt);
     this.place(); this.mesh.position.y = 0.06 + Math.sin(this.t * 1.7) * 0.04;
     this.model.tick(dt, this.seen ? 0 : 1, { attacking: this.attacking > 0, frozen: this.seen && this.attacking <= 0 });
   }
   relocate(p, rmin, rmax) {
     const open = this.w.d.openTiles.filter(([x, y]) => { if (this.w.grid[y][x] !== 0) return false; const [cx, cz] = this.w.center(x, y); const d = Math.hypot(cx - p.x, cz - p.z); return d > rmin && d < rmax && !this.w.los(cx, cz, p.x, p.z); });
-    if (!open.length) return; const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]); this.x = c[0]; this.z = c[1]; this.glitchT = 0.7;
+    if (!open.length) return; const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]); this.tpOut.position.set(this.x, 0, this.z); this.tpIn.position.set(c[0], 0, c[1]); this.tpT = 0.6; this.x = c[0]; this.z = c[1]; this.glitchT = 0.7;
   }
 }
 
