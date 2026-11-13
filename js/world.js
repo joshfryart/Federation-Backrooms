@@ -212,6 +212,7 @@ function mats() {
   M.view = new THREE.MeshBasicMaterial({ map: textures().stars });
   M.blinkR = new THREE.MeshBasicMaterial({ color: 0xff3020 });
   M.blinkG = new THREE.MeshBasicMaterial({ color: 0x30ff60 });
+  M.keys = new THREE.MeshBasicMaterial({ color: 0xffffff }); M.keyDark = std({ color: 0x15171c, roughness: 0.4, metalness: 0.3 }); M.vial = std({ color: 0xaaddcc, roughness: 0.1, transparent: true, opacity: 0.55 });
   M.pipe = std({ color: 0x70757d, metalness: 0.9, roughness: 0.35 });
   return M;
 }
@@ -224,6 +225,13 @@ function box(w, h, d, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y + h / 2, z); return m;
 }
 function cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 16) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat); m.position.set(x, y + h / 2, z); return m; }
+// instanced button/key grid (one draw call): cols x rows boxes centred on the origin; colours = per-instance tints (needs a basic, white material)
+function grid(cols, rows, dx, dz, sx, sy, sz, mat, colors) {
+  const im = new THREE.InstancedMesh(new THREE.BoxGeometry(sx, sy, sz), mat, cols * rows), mx = new THREE.Matrix4(), c = new THREE.Color(); let n = 0;
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { mx.makeTranslation((i - (cols - 1) / 2) * dx, 0, (j - (rows - 1) / 2) * dz); im.setMatrixAt(n, mx); if (colors) im.setColorAt(n, c.set(colors[Math.floor(Math.random() * colors.length)]).multiplyScalar(0.55 + Math.random() * 0.6)); n++; }
+  im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; return im;
+}
+const at = (o, x, y, z, rx = 0, ry = 0, rz = 0) => { o.position.set(x, y, z); o.rotation.set(rx, ry, rz); return o; };
 // CC0 scanned prop (Poly Haven) scaled to `height`; null if the file did not load
 function model(name, height, x = 0, z = 0, ry = 0, y = 0) {
   if (!hasModel(name)) return null; const i = instance(name, { height }); i.root.position.set(x, y, z); i.root.rotation.y = ry;
@@ -236,9 +244,17 @@ export function buildProp(kind) {
       g.add(rbox(1.7, 0.86, 0.75, m.dark, 0, 0, 0, 0.06)); g.add(rbox(1.78, 0.06, 0.82, m.metal, 0, 0.86, 0, 0.02));
       const desk = rbox(1.6, 0.04, 0.6, m.screenB, 0, 0.93, 0.06, 0.01); desk.rotation.x = 0.22; g.add(desk);
       const back = rbox(1.6, 0.62, 0.08, m.dark, 0, 0.95, -0.33, 0.03); back.rotation.x = -0.12; g.add(back);
+      g.add(rbox(1.56, 0.05, 0.1, m.metal, 0, 1.56, -0.36, 0.02)); for (const sx of [-1, 1]) { g.add(box(0.03, 0.5, 0.012, m.glowB, sx * 0.78, 1.01, -0.27)); }
       const scr = box(1.46, 0.5, 0.01, m.screenO, 0, 1.01, -0.275); scr.rotation.x = -0.12; g.add(scr);
+      const cols = [0x4ac0ff, 0x4ac0ff, 0xffa040, 0x30ff60, 0xff3020, 0xffffff];   // keypad blocks, a lit button bank and sliders on the tilted desk
+      g.add(at(grid(8, 4, 0.052, 0.05, 0.04, 0.012, 0.038, m.keyDark), -0.42, 1.0, 0.1, 0.22));
+      g.add(at(grid(6, 3, 0.07, 0.07, 0.05, 0.01, 0.05, m.keys, cols), 0.44, 1.0, 0.1, 0.22));
+      for (let i = 0; i < 4; i++) { g.add(at(box(0.012, 0.012, 0.18, m.keyDark), -0.12 + i * 0.07, 1.0, 0.2, 0.22)); g.add(at(box(0.03, 0.02, 0.03, m.blinkG), -0.12 + i * 0.07, 1.01, 0.15 + (i % 3) * 0.05, 0.22)); }
+      g.add(at(cyl(0.035, 0.035, 0.012, m.metal, 0, 0, 0, 12), 0.05, 0.99, 0.25, 0.22));   // trackball
       g.add(box(0.07, 0.03, 0.07, m.blinkR, -0.72, 0.93, 0.33)); g.add(box(0.07, 0.03, 0.07, m.blinkG, -0.6, 0.93, 0.33));
-      g.add(box(1.5, 0.03, 0.02, m.glowB, 0, 0.1, 0.38)); g.add(rbox(1.3, 0.5, 0.02, m.panel, 0, 0.22, 0.375, 0.01)); break; }
+      for (let i = 0; i < 7; i++) g.add(box(1.1, 0.012, 0.02, m.keyDark, 0, 0.08 + i * 0.045, 0.377));   // intake louvres
+      g.add(box(1.5, 0.03, 0.02, m.glowB, 0, 0.1, 0.38)); g.add(rbox(0.5, 0.4, 0.02, m.panel, -0.5, 0.3, 0.375, 0.01)); g.add(rbox(0.5, 0.4, 0.02, m.panel, 0.5, 0.3, 0.375, 0.01)); g.add(box(0.4, 0.2, 0.01, m.screenG, 0.5, 0.4, 0.388));
+      g.add(cyl(0.025, 0.025, 0.5, m.pipe, 0.82, 0.05, -0.3, 8)); break; }
     case 'chair': {   // command chair on a swivel pedestal
       g.add(cyl(0.34, 0.4, 0.06, m.metal)); g.add(cyl(0.07, 0.09, 0.36, m.dark, 0, 0.06, 0));
       g.add(rbox(0.72, 0.16, 0.7, m.fabric, 0, 0.42, 0, 0.07)); const bk = rbox(0.7, 0.95, 0.16, m.fabric, 0, 0.5, 0.33, 0.07); bk.rotation.x = 0.12; g.add(bk);
@@ -252,20 +268,37 @@ export function buildProp(kind) {
       const c = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, WH, 20), m.core); c.position.y = WH / 2; c.name = 'core'; g.add(c);
       g.add(cyl(0.75, 0.9, 0.42, m.metal, 0, 0, 0, 24)); g.add(cyl(0.9, 0.75, 0.36, m.metal, 0, WH - 0.36, 0, 24)); g.add(cyl(0.56, 0.56, 0.1, m.hazard, 0, 0.42, 0, 24));
       for (let i = 0; i < 6; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.045, 8, 28), m.metal); r.rotation.x = Math.PI / 2; r.position.y = 0.72 + i * 0.4; g.add(r); }
-      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.78; g.add(cyl(0.05, 0.05, WH, m.pipe, Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72, 8)); g.add(rbox(0.16, 0.5, 0.16, m.dark, Math.cos(a) * 0.72, 1.3, Math.sin(a) * 0.72, 0.03)); }
+      const sl = cyl(0.51, 0.51, WH - 0.9, m.glass, 0, 0.5, 0, 24); g.add(sl);   // glass reaction sleeve
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; g.add(box(0.05, WH - 1.0, 0.05, m.glowB, Math.cos(a) * 0.44, 0.55, Math.sin(a) * 0.44)); }   // plasma injector rods
+      for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; g.add(at(box(0.1, 0.04, 0.06, i % 3 ? m.blinkG : m.glowO), Math.cos(a) * 0.86, 0.34, Math.sin(a) * 0.86, 0, -a, 0)); }   // status lamps round the base
+      g.add(cyl(1.0, 1.0, 0.025, m.dark, 0, 0, 0, 28));
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.78, x = Math.cos(a) * 0.72, z = Math.sin(a) * 0.72; g.add(cyl(0.05, 0.05, WH, m.pipe, x, 0, z, 8)); g.add(rbox(0.16, 0.5, 0.16, m.dark, x, 1.3, z, 0.03));
+        g.add(box(0.03, 0.2, 0.03, m.glowO, x * 1.1, 1.45, z * 1.1)); for (const h of [0.9, 1.8, 2.5]) { const p = cyl(0.025, 0.025, 0.3, m.metal, 0, -0.15, 0, 8); p.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-Math.cos(a), 0, -Math.sin(a))); p.position.set(x * 0.66, h, z * 0.66); g.add(p); } }
       break; }
     case 'shuttle': { g.userData.top = 1.24;
       const hull = rbox(2.1, 0.95, 1.5, m.white, 0, 0.28, 0, 0.22); g.add(hull);
       const nose = rbox(0.9, 0.62, 1.3, m.white, 1.2, 0.28, 0, 0.25); g.add(nose);
       const win = rbox(0.5, 0.3, 1.1, m.glass, 1.32, 0.66, 0, 0.1); win.material = m.dark; g.add(win);
-      for (const sz of [-1, 1]) { const nac = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 1.5, 6, 12), m.metal); nac.rotation.z = Math.PI / 2; nac.position.set(-0.25, 0.3, sz * 0.92); g.add(nac); g.add(box(0.5, 0.06, 0.02, m.glowB, -0.25, 0.27, sz * 1.085)); g.add(rbox(0.5, 0.08, 0.3, m.metal, -0.2, 0.26, sz * 0.78, 0.02)); }
-      g.add(box(1.2, 0.05, 0.02, m.hazard, -0.1, 0.72, 0.755)); g.add(rbox(0.7, 0.72, 0.02, m.panel, -0.6, 0.36, 0.752, 0.01)); break; }
+      g.add(at(box(0.46, 0.03, 0.9, m.glowB), 1.36, 0.82, 0, 0, 0, -0.35));   // cockpit glass glint
+      for (const sz of [-1, 1]) { const nac = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 1.5, 6, 12), m.metal); nac.rotation.z = Math.PI / 2; nac.position.set(-0.25, 0.3, sz * 0.92); g.add(nac); g.add(box(0.5, 0.06, 0.02, m.glowB, -0.25, 0.27, sz * 1.085));
+        const ex = cyl(0.13, 0.15, 0.1, m.dark, 0, 0, 0, 14); at(ex, -1.04, 0.3, sz * 0.92, 0, 0, Math.PI / 2); g.add(ex); g.add(at(cyl(0.09, 0.09, 0.02, m.glowO, 0, 0, 0, 14), -1.1, 0.3, sz * 0.92, 0, 0, Math.PI / 2));   // engine bell + glow
+        g.add(box(0.06, 0.06, 0.06, sz < 0 ? m.blinkR : m.blinkG, 0.3, 0.3, sz * 1.1));   // port / starboard running lights
+        for (const sx of [-0.6, 0.7]) { g.add(cyl(0.025, 0.025, 0.28, m.pipe, sx, 0.05, sz * 0.8, 8)); g.add(cyl(0.09, 0.09, 0.03, m.dark, sx, 0, sz * 0.8, 10)); } }   // landing struts + pads
+      g.add(box(1.2, 0.05, 0.02, m.hazard, -0.1, 0.72, 0.755)); g.add(rbox(0.7, 0.72, 0.02, m.panel, -0.6, 0.36, 0.752, 0.01));
+      for (const sx of [-0.8, -0.35, 0.2, 0.7]) g.add(box(0.012, 0.8, 0.012, m.dark, sx, 0.34, 0.752));   // hull panel seams
+      g.add(box(0.3, 0.1, 0.02, m.dark, 0.4, 0.5, 0.756)); g.add(box(0.1, 0.06, 0.01, m.blinkG, 0.42, 0.52, 0.768));   // registry plate
+      g.add(cyl(0.012, 0.012, 0.35, m.metal, -0.5, 1.22, 0, 6)); g.add(box(0.2, 0.012, 0.012, m.metal, -0.5, 1.5, 0));   // comm antenna
+      g.add(rbox(0.5, 0.05, 1.0, m.dark, -0.6, 1.22, 0, 0.02)); break; }
     case 'holocube': {
       const c = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), m.holo); c.position.y = 1.0; c.name = 'spin'; g.add(c); g.add(cyl(0.22, 0.3, 0.3, m.dark)); g.add(cyl(0.18, 0.18, 0.02, m.glowO, 0, 0.3, 0)); break; }
     case 'pad': {
       g.add(cyl(1.0, 1.08, 0.14, m.dark, 0, 0, 0, 28)); g.add(cyl(0.98, 0.98, 0.02, m.metal, 0, 0.14, 0, 28));
       const p = cyl(0.7, 0.7, 0.03, m.pad, 0, 0.155, 0, 28); g.add(p); const top = cyl(0.7, 0.7, 0.05, m.pad, 0, WH - 0.2, 0, 28); g.add(top); g.add(cyl(0.9, 0.8, 0.14, m.dark, 0, WH - 0.14, 0, 28));
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.03, 6, 32), m.glowB); ring.rotation.x = Math.PI / 2; ring.position.y = 0.17; g.add(ring); break; }
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.03, 6, 32), m.glowB); ring.rotation.x = Math.PI / 2; ring.position.y = 0.17; g.add(ring);
+      for (let i = 0; i < 3; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.2 + i * 0.17, 0.008, 4, 36), m.glowB); r.rotation.x = Math.PI / 2; r.position.y = 0.175; g.add(r); }
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; g.add(at(box(0.16, 0.02, 0.07, i % 2 ? m.hazard : m.dark), Math.cos(a) * 0.9, 0.14, Math.sin(a) * 0.9, 0, -a, 0)); g.add(at(box(0.1, 0.1, 0.1, m.dark), Math.cos(a) * 0.82, WH - 0.24, Math.sin(a) * 0.82, 0, -a, 0)); g.add(at(box(0.04, 0.04, 0.04, i % 2 ? m.glowB : m.glowO), Math.cos(a) * 0.82, WH - 0.26, Math.sin(a) * 0.82)); }
+      for (const a of [0.8, 2.4, 4.0, 5.5]) g.add(cyl(0.025, 0.025, WH - 0.3, m.pipe, Math.cos(a) * 0.95, 0.14, Math.sin(a) * 0.95, 8));   // guide posts to the overhead emitter
+      const beam = cyl(0.55, 0.55, WH - 0.4, m.pad, 0, 0.2, 0, 24); beam.material = beam.material.clone(); beam.material.opacity = 0.08; beam.material.depthWrite = false; g.add(beam); break; }
     case 'bunk': { g.userData.top = 0.52;
       g.add(rbox(1.9, 0.34, 0.95, m.dark, 0, 0, 0, 0.05)); g.add(rbox(1.84, 0.16, 0.88, m.sheet, 0, 0.34, 0, 0.07)); g.add(rbox(0.42, 0.12, 0.6, m.white, -0.66, 0.48, 0, 0.06));
       const blanket = rbox(1.1, 0.06, 0.92, m.fabric, 0.36, 0.47, 0, 0.03); g.add(blanket);
@@ -278,8 +311,14 @@ export function buildProp(kind) {
     case 'biobed': { g.userData.top = 0.7;
       g.add(rbox(0.7, 0.5, 1.5, m.metal, 0, 0, 0, 0.1)); g.add(rbox(0.95, 0.1, 2.0, m.white, 0, 0.5, 0, 0.04)); g.add(rbox(0.85, 0.08, 1.85, m.sheet, 0, 0.6, 0.02, 0.04)); g.add(rbox(0.5, 0.08, 0.34, m.white, 0, 0.67, -0.72, 0.04));
       const arch = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.05, 8, 20, Math.PI), m.white); arch.position.set(0, 0.6, 0.1); g.add(arch);
+      g.add(rbox(0.14, 0.07, 0.62, m.dark, 0, 1.13, 0.1, 0.03)); g.add(box(0.1, 0.02, 0.5, m.glowB, 0, 1.11, 0.1)); for (const sx of [-1, 1]) g.add(box(0.02, 0.06, 0.02, m.blinkG, sx * 0.52, 0.64, 0.1));   // diagnostic sensor bar
+      for (const sx of [-1, 1]) { g.add(rbox(0.04, 0.03, 1.2, m.metal, sx * 0.5, 0.74, 0.05, 0.01)); for (const z of [-0.5, 0.5]) g.add(box(0.03, 0.14, 0.03, m.metal, sx * 0.5, 0.6, z)); }   // side rails
+      g.add(rbox(0.3, 0.06, 0.1, m.dark, 0.58, 0.45, -0.3, 0.02)); g.add(at(grid(4, 2, 0.05, 0.05, 0.035, 0.008, 0.035, m.keys, [0x4ac0ff, 0x30ff60, 0xffa040]), 0.58, 0.485, -0.3));
       g.add(rbox(0.12, 1.5, 0.1, m.dark, 0, 0, -1.02, 0.03)); const mon = rbox(0.9, 0.5, 0.06, m.dark, 0, 1.25, -1.0, 0.03); mon.rotation.x = 0.15; g.add(mon);
-      const scr = box(0.82, 0.42, 0.01, m.screenG, 0, 1.29, -0.962); scr.rotation.x = 0.15; g.add(scr); break; }
+      const scr = box(0.82, 0.42, 0.01, m.screenG, 0, 1.29, -0.962); scr.rotation.x = 0.15; g.add(scr);
+      g.add(cyl(0.02, 0.02, 1.7, m.metal, -0.75, 0, -0.55, 8)); g.add(box(0.28, 0.03, 0.03, m.metal, -0.65, 1.68, -0.55)); g.add(rbox(0.12, 0.2, 0.05, m.glass, -0.55, 1.45, -0.55, 0.02)); g.add(box(0.09, 0.1, 0.03, m.glowB, -0.55, 1.47, -0.55));   // IV stand + bag
+      g.add(cyl(0.05, 0.05, 0.02, m.dark, -0.75, 0, -0.55, 10)); g.add(rbox(0.5, 0.03, 0.34, m.metal, 0.9, 0.72, -0.55, 0.01)); g.add(cyl(0.02, 0.02, 0.72, m.pipe, 0.9, 0, -0.55, 8)); for (let i = 0; i < 4; i++) g.add(at(box(0.03, 0.01, 0.15, m.white), 0.78 + i * 0.07, 0.755, -0.55, 0, 0.1 * i, 0));   // instrument tray
+      break; }
     case 'crate': {
       const roll = R();
       if (roll < 0.55 && hasModel('ph_crate')) {   // stacked ammunition-style cargo cases
@@ -360,9 +399,32 @@ export function buildProp(kind) {
       g.userData.top = 0.86; g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.33, 0, 0.015)); g.add(rbox(0.9, 0.04, 0.55, m.metal, 0, 0.8, 0, 0.015));
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) { g.add(cyl(0.018, 0.018, 0.8, m.pipe, sx * 0.42, 0.06, sz * 0.25, 8)); g.add(cyl(0.045, 0.045, 0.03, m.rubber, sx * 0.42, 0.0, sz * 0.25, 10)).rotation.z = Math.PI / 2; }
       g.add(rbox(0.3, 0.2, 0.3, m.crate2, 0.15, 0.37, 0, 0.02)); g.add(rbox(0.22, 0.14, 0.3, m.white, -0.2, 0.84, 0, 0.03)); g.add(cyl(0.04, 0.04, 0.16, m.glowB, 0.2, 0.84, 0.1, 10)); break;
-    case 'replicator':
-      g.add(rbox(1.5, 2.1, 0.42, m.panel, 0, 0, 0.4, 0.05)); g.add(rbox(0.9, 0.62, 0.3, m.dark, 0, 0.85, 0.3, 0.06)); g.add(box(0.8, 0.5, 0.02, m.glowO, 0, 0.9, 0.42)).material = m.screenO;
-      g.add(cyl(0.3, 0.3, 0.02, m.glowO, 0, 0.86, 0.26, 20)); g.add(rbox(0.3, 0.22, 0.03, m.dark, 0.5, 1.6, 0.18, 0.02)); g.add(box(0.25, 0.17, 0.01, m.screenB, 0.5, 1.625, 0.163)); g.add(box(1.3, 0.03, 0.02, m.glowB, 0, 1.95, 0.185)); break;
+    case 'replicator':   // front faces -z
+      g.add(rbox(1.5, 2.1, 0.42, m.panel, 0, 0, 0.4, 0.05));
+      g.add(box(1.0, 0.56, 0.01, m.screenO, 0, 0.84, 0.186));   // glowing back wall of the dispense alcove
+      g.add(rbox(1.04, 0.1, 0.3, m.dark, 0, 1.4, 0.04, 0.02)); for (const sx of [-1, 1]) g.add(rbox(0.06, 0.7, 0.3, m.dark, sx * 0.5, 0.76, 0.04, 0.02)); g.add(rbox(1.04, 0.07, 0.3, m.metal, 0, 0.77, 0.04, 0.015));
+      g.add(at(grid(9, 3, 0.03, 0.03, 0.026, 0.01, 0.026, m.keyDark), 0, 0.84, 0.04));   // drip-tray grille
+      g.add(box(0.9, 0.03, 0.02, m.glowO, 0, 1.38, 0.0)); g.add(cyl(0.035, 0.03, 0.08, m.white, 0.12, 0.84, 0.05, 12)); g.add(cyl(0.028, 0.028, 0.012, m.glowO, 0.12, 0.92, 0.05, 12));   // light strip, a waiting mug
+      g.add(rbox(0.3, 0.22, 0.03, m.dark, 0.5, 1.6, 0.16, 0.02)); g.add(box(0.25, 0.17, 0.01, m.screenB, 0.5, 1.625, 0.145)); g.add(box(1.3, 0.03, 0.02, m.glowB, 0, 1.95, 0.175));
+      g.add(at(grid(4, 4, 0.06, 0.06, 0.045, 0.012, 0.045, m.keys, [0x4ac0ff, 0xffa040, 0x30ff60, 0xffffff]), -0.5, 1.6, 0.18, Math.PI / 2));   // menu buttons
+      for (let i = 0; i < 6; i++) g.add(box(0.5, 0.012, 0.02, m.keyDark, 0.35, 1.72 + i * 0.03, 0.175));   // vent slots
+      for (const sx of [-1, 1]) g.add(rbox(0.04, 2.1, 0.02, m.dark, sx * 0.72, 0, 0.18, 0.01)); g.add(box(0.06, 0.06, 0.02, m.blinkG, -0.6, 0.3, 0.175)); g.add(box(0.8, 0.05, 0.015, m.hazard, 0, 0.1, 0.18)); break;
+    // ---- new: freestanding lockers, a lab rack and a centrifuge ----
+    case 'lockers': {   // bank of three crew lockers: louvred doors, handles, number plates
+      g.add(rbox(1.62, 1.9, 0.52, m.panel, 0, 0.05, 0, 0.03)); g.add(box(1.7, 0.05, 0.6, m.dark, 0, 0, 0)); g.add(rbox(1.66, 0.05, 0.56, m.metal, 0, 1.95, 0, 0.015));
+      for (let i = 0; i < 3; i++) { const x = (i - 1) * 0.53; g.add(rbox(0.5, 1.8, 0.03, i === 1 ? m.metal : m.crate, x, 0.1, 0.27, 0.01)); for (let k = 0; k < 6; k++) g.add(at(box(0.3, 0.012, 0.012, m.dark), x, 1.45 + k * 0.05, 0.288, -0.5)); g.add(box(0.025, 0.14, 0.03, m.metal, x + 0.18, 1.0, 0.3)); g.add(box(0.1, 0.05, 0.01, m.screenG, x, 1.7, 0.288)); g.add(box(0.03, 0.03, 0.01, i === 2 ? m.blinkR : m.blinkG, x - 0.17, 1.82, 0.288)); }
+      break; }
+    case 'labrack': {   // lab shelving unit: vials in racks, a microscope, specimen jars
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.04, 1.8, 0.04, m.metal, sx * 0.78, 0, sz * 0.28));
+      for (let i = 0; i < 4; i++) { const y = 0.2 + i * 0.5; g.add(rbox(1.62, 0.04, 0.6, m.white, 0, y, 0, 0.01)); }
+      for (let i = 0; i < 24; i++) { const x = -0.7 + (i % 12) * 0.127, y = i < 12 ? 0.24 : 1.24; const v = cyl(0.025, 0.025, 0.14 + (i % 3) * 0.02, i % 4 ? m.vial : m.vial, x, y, i % 2 ? 0.1 : -0.1, 8); g.add(v); g.add(cyl(0.017, 0.017, 0.07, i % 3 === 0 ? m.glowB : i % 3 === 1 ? m.blinkG : m.glowO, x, y, i % 2 ? 0.1 : -0.1, 6)); }
+      g.add(cyl(0.1, 0.12, 0.03, m.metal, -0.4, 0.74, 0, 14)); g.add(at(cyl(0.035, 0.035, 0.26, m.dark, 0, 0, 0, 10), -0.4, 0.78, 0, -0.5)); g.add(cyl(0.03, 0.03, 0.12, m.metal, -0.4, 0.78, 0.07, 8));   // microscope
+      for (let i = 0; i < 3; i++) { g.add(cyl(0.07, 0.07, 0.16, m.glass, 0.1 + i * 0.17, 0.74, 0, 12)); g.add(cyl(0.05, 0.05, 0.05, m.leaf, 0.1 + i * 0.17, 0.74, 0, 10)); }
+      g.add(rbox(0.5, 0.16, 0.36, m.dark, 0.3, 1.74, 0, 0.02)); g.add(box(0.4, 0.07, 0.01, m.screenG, 0.3, 1.78, 0.185)); g.add(rbox(0.5, 0.25, 0.4, m.crate2, -0.4, 1.24, 0, 0.02)); break; }
+    case 'centrifuge': { g.userData.top = 0.98;
+      g.add(rbox(0.9, 0.86, 0.8, m.white, 0, 0, 0, 0.08)); g.add(cyl(0.34, 0.36, 0.12, m.dark, 0, 0.86, 0, 24)); const lid = cyl(0.36, 0.36, 0.05, m.glass, 0, 0.98, 0, 24); g.add(lid);
+      g.add(cyl(0.06, 0.06, 0.06, m.metal, 0, 0.98, 0, 10)); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; g.add(at(cyl(0.03, 0.03, 0.1, m.vial, 0, 0, 0, 8), Math.cos(a) * 0.22, 0.88, Math.sin(a) * 0.22)); }
+      g.add(rbox(0.5, 0.2, 0.03, m.dark, 0, 0.5, 0.41, 0.01)); g.add(box(0.4, 0.1, 0.01, m.screenG, 0, 0.55, 0.43)); g.add(at(grid(4, 1, 0.06, 0.05, 0.04, 0.012, 0.04, m.keys, [0x4ac0ff, 0x30ff60, 0xff3020]), 0, 0.52, 0.42, Math.PI / 2)); g.add(box(0.5, 0.03, 0.02, m.glowB, 0, 0.1, 0.41)); break; }
     default: g.add(rbox(0.8, 0.8, 0.8, m.metal));
   }
   return g;
@@ -1308,4 +1370,4 @@ export class World {
   }
 }
 function yy(y, H) { return y < 0 || y >= H; }
-export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttle', 'holocube', 'pad', 'bunk', 'table', 'biobed', 'crate', 'tree', 'lonechair', 'plant', 'cart', 'replicator', 'desk', 'cell', 'weaponrack', 'treadmill', 'weightbench', 'labbench', 'washer', 'sofa', 'lathe', 'workbench', 'tank', 'drawers', 'servers', 'shelving', 'suitrack', 'sinkunit'];
+export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttle', 'holocube', 'pad', 'bunk', 'table', 'biobed', 'crate', 'tree', 'lonechair', 'plant', 'cart', 'replicator', 'desk', 'cell', 'weaponrack', 'treadmill', 'weightbench', 'labbench', 'washer', 'sofa', 'lathe', 'workbench', 'tank', 'drawers', 'servers', 'shelving', 'suitrack', 'sinkunit', 'lockers', 'labrack', 'centrifuge'];
