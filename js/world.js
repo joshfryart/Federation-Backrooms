@@ -4,6 +4,7 @@ import { ROOMS, mulberry32 } from './data.js';
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { spaceMat, screenMat, envTick } from './fx-env.js';
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
@@ -238,6 +239,7 @@ function model(name, height, x = 0, z = 0, ry = 0, y = 0) {
   i.root.traverse(o => { if (o.isMesh) { o.frustumCulled = true; o.material.envMapIntensity = 0.6; } }); return i.root;
 }
 const _psz = new THREE.Vector3();
+let ENV_SEED = 1;   // sky seed of the deck being built (planet, sun, nebula); set by the World constructor
 export function buildProp(kind) {
   const m = mats(); const g = new THREE.Group(); const R = Math.random;
   switch (kind) {
@@ -263,7 +265,7 @@ export function buildProp(kind) {
       for (const sx of [-1, 1]) { g.add(rbox(0.12, 0.28, 0.66, m.dark, sx * 0.43, 0.46, 0.0, 0.05)); g.add(rbox(0.13, 0.03, 0.3, m.screenB, sx * 0.43, 0.745, -0.14, 0.01)); }
       break; }
     case 'viewscreen': {
-      g.add(rbox(2.5, 1.56, 0.12, m.dark, 0, 0.72, 0, 0.05)); g.add(box(2.3, 1.36, 0.02, m.view, 0, 0.82, 0.062));
+      g.add(rbox(2.5, 1.56, 0.12, m.dark, 0, 0.72, 0, 0.05)); { const sc = box(2.3, 1.36, 0.02, m.view, 0, 0.82, 0.062); sc.material = screenMat(ENV_SEED); sc.userData.ownMat = true; g.add(sc); }
       g.add(rbox(2.6, 0.72, 0.5, m.dark, 0, 0, 0, 0.06)); g.add(box(2.2, 0.03, 0.02, m.glowB, 0, 0.6, 0.26)); g.add(rbox(2.2, 0.3, 0.02, m.screenB, 0, 0.2, 0.255, 0.01)); break; }
     case 'warpcore': {
       const c = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, WH, 20), m.core); c.position.y = WH / 2; c.name = 'core'; g.add(c);
@@ -603,7 +605,7 @@ export class World {
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
     this.tops = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
-    OWN = this.own = [];
+    OWN = this.own = []; ENV_SEED = (data.deck || 0) * 7 + (ship && ship.name ? [...ship.name].reduce((a, c) => a + c.charCodeAt(0), 0) : 3);
     try { this._build(); this._details(); this._liminal(); this._dressing(); } finally { OWN = null; }
   }
 
@@ -922,7 +924,7 @@ export class World {
       });
       lm.count = items.length; g.add(lm);
       const wg = new THREE.PlaneGeometry(1.7, 1.0);
-      const wm = new THREE.InstancedMesh(wg, new THREE.MeshBasicMaterial({ map: T.stars }), windows.length || 1);
+      const wm = new THREE.InstancedMesh(wg, spaceMat(ENV_SEED), windows.length || 1); wm.userData.ownMat = true;
       windows.forEach((w, i) => { dummy.position.set(w.px, 1.7, w.pz); dummy.rotation.set(0, w.ry, 0); dummy.updateMatrix(); wm.setMatrixAt(i, dummy.matrix); });
       wm.count = windows.length; g.add(wm);
       if (windows.length && T.d.glass) {   // smudged, scratched pane in front of the view
@@ -1357,6 +1359,7 @@ export class World {
     }
   }
   update(dt, t) {
+    envTick(t, this.alertAmt);
     this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
     if (this.coneMat) this.coneMat.opacity = 0.04 * this.powerAmt * (1 - this.alertAmt * 0.5);
     if (this.coneFlickMat) this.coneFlickMat.opacity = 0.04 * this.powerAmt * this.flickerF;
