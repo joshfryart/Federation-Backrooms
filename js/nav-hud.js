@@ -299,9 +299,10 @@ export class NavHUD {
   brief(card) {
     const G = this.G, decks = this.decks(), w = this.world; if (!decks || !w || !G.duty) return null;
     const cur = G.shipDeck ?? 0, lt = liftTile(w.d), types = [...new Set([...G.duty.loops.map(l => l.room), ...G.duty.tasks.map(t => t.room)].filter(r => r && r !== 'any'))];
-    const stations = [], away = [];
-    for (const type of types) { const p = planRoute(G.plan, decks, cur, { x: lt[0] + 0.5, y: lt[1] + 0.5 }, { type }, { TS: this.TS }); if (!p) continue; if (p.dest.deck === cur) stations.push({ type, tx: p.dest.tx, ty: p.dest.ty }); else away.push({ type, deck: p.dest.deck }); }
-    return (this.briefView = mountBrief(card, { d: w.d, stations, away, deckNo: cur + 1 }));
+    const stations = [], away = [], byDeck = {};
+    for (const type of types) { const p = planRoute(G.plan, decks, cur, { x: lt[0] + 0.5, y: lt[1] + 0.5 }, { type }, { TS: this.TS }); if (!p) continue; if (p.dest.deck === cur) stations.push({ type, tx: p.dest.tx, ty: p.dest.ty }); else { away.push({ type, deck: p.dest.deck }); (byDeck[p.dest.deck] ||= []).push({ type, tx: p.dest.tx, ty: p.dest.ty }); } }
+    const others = Object.entries(byDeck).sort((a, b) => Math.abs(a[0] - cur) - Math.abs(b[0] - cur)).map(([k, st]) => ({ d: decks[k]?.d || decks[k], stations: st, deckNo: +k + 1 })).filter(o => o.d);   // per-deck sequence: the other decks' stations, nearest first
+    return (this.briefView = mountBrief(card, { d: w.d, stations, away, deckNo: cur + 1, others }));
   }
 
   // ---- Tab: systems schematic

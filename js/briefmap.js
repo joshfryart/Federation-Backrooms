@@ -9,11 +9,14 @@ import { bakeDeck, deckBounds, drawBadge, drawRoute, DUE } from './minimap.js';
 const ease = (x) => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
 
 /** card: element to prepend into; d: deck data shown; stations: [{type, tx, ty}] on this deck; away: [{type, deck}] on other decks */
-export function mountBrief(card, { d, stations = [], away = [], deckNo = 1 }) {
+export function mountBrief(card, { d, stations = [], away = [], deckNo = 1, others = [] }) {
   if (!card || !d || card.querySelector('.nv-brief')) return null;
   const cv = document.createElement('canvas'); cv.className = 'nv-brief'; cv.width = 900; cv.height = 470;
   cv.style.cssText = 'display:block;width:100%;height:auto;max-height:34vh;object-fit:contain;margin:0 0 10px;background:#050912;border:1px solid rgba(150,180,210,.26)';
   card.prepend(cv); const g = cv.getContext('2d');
+  // one scene per deck: this deck first, then (per-deck sequence) every other deck that holds a station, nearest first
+  const stripH = 50, mapH = cv.height - stripH;
+  const mkScene = (d, stations, deckNo) => {
   // round order: nearest neighbour from the lift, routes chained into one polyline
   const w = navWorld(d), lt = liftTile(d); let pos = { x: lt[0] + 0.5, y: lt[1] + 0.5 }; const rest = stations.slice(), order = [], poly = [[pos.x, pos.y]];
   while (rest.length) {
@@ -23,12 +26,17 @@ export function mountBrief(card, { d, stations = [], away = [], deckNo = 1 }) {
   const cum = [0]; for (let i = 1; i < poly.length; i++) cum.push(cum[i - 1] + Math.hypot(poly[i][0] - poly[i - 1][0], poly[i][1] - poly[i - 1][1]));
   const L = cum[cum.length - 1] || 1;
   for (const s of order) { let bi = 0, bd = 1e9; poly.forEach((p, i) => { const dd = Math.hypot(p[0] - s.tx - 0.5, p[1] - s.ty - 0.5); if (dd < bd) { bd = dd; bi = i; } }); s.at = cum[bi]; }
-  const stripH = 50, mapH = cv.height - stripH, bb = deckBounds(d), sc = Math.min(cv.width / (bb.w + 2), mapH / (bb.h + 2), 36), ox = (cv.width - bb.w * sc) / 2 - bb.x * sc, oy = (mapH - bb.h * sc) / 2 - bb.y * sc;
+  const bb = deckBounds(d), sc = Math.min(cv.width / (bb.w + 2), mapH / (bb.h + 2), 36), ox = (cv.width - bb.w * sc) / 2 - bb.x * sc, oy = (mapH - bb.h * sc) / 2 - bb.y * sc;
   const layer = bakeDeck(d, null, sc);
+    return { d, stations, deckNo, order, poly, cum, L, lt, bb, sc, ox, oy, layer };
+  };
+  const scenes = [mkScene(d, stations, deckNo), ...others.map(o => mkScene(o.d, o.stations, o.deckNo))]; let S = scenes[0], loop = 0;
   const T = 16, P1 = 0.16, P2 = 0.85; let t0 = performance.now(), last = 0, raf = 0;
   const frame = (now) => {
     if (!cv.isConnected || !cv.offsetParent) { cancelAnimationFrame(raf); return; }
     raf = requestAnimationFrame(frame); if (now - last < 33) return; last = now;
+    const lp = Math.floor((now - t0) / 1000 / T); if (lp !== loop) { loop = lp; S = scenes[lp % scenes.length]; }
+    const { d, order, poly, cum, L, lt, bb, sc, ox, oy, layer, deckNo } = S;
     const tt = ((now - t0) / 1000) % T, k = tt / T, trav = ease(Math.max(0, Math.min(1, (k - P1) / (P2 - P1)))), s = trav * L;
     g.fillStyle = '#050912'; g.fillRect(0, 0, cv.width, cv.height);
     g.strokeStyle = 'rgba(88,201,185,.06)'; g.lineWidth = 1; for (let x = 0; x < cv.width; x += 30) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, mapH); g.stroke(); } for (let y = 0; y < mapH; y += 30) { g.beginPath(); g.moveTo(0, y); g.lineTo(cv.width, y); g.stroke(); }
@@ -53,5 +61,5 @@ export function mountBrief(card, { d, stations = [], away = [], deckNo = 1 }) {
     g.fillStyle = k < P1 ? '#58c9b9' : '#ffd9a0'; g.font = '700 13px ui-monospace,monospace'; g.textAlign = 'left'; g.textBaseline = 'top'; g.fillText(k < P1 ? `SCANNING DECK ${String(deckNo).padStart(2, '0')} ...` : k < P2 ? 'YOUR ROUND' : 'YOUR WATCH', 12, 10);
   };
   raf = requestAnimationFrame(frame);
-  return { canvas: cv, order, stop: () => cancelAnimationFrame(raf), drawAt: (ms) => { cancelAnimationFrame(raf); t0 =performance.now() - ms; last = 0; frame(performance.now()); } };
+  return { canvas: cv, order: scenes[0].order, scenes, stop: () => cancelAnimationFrame(raf), drawAt: (ms) => { cancelAnimationFrame(raf); t0 =performance.now() - ms; last = 0; frame(performance.now()); } };
 }
