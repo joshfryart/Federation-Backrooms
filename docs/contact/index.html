@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Contact Sheet</title>
+<style>
+  :root { --bg:#0d0f12; --panel:#161a20; --text:#e6e9ef; --muted:#8a93a3; --accent:#6aa9ff; --fail:#ff6b6b; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#f4f5f7; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .intro { color:var(--muted); margin:0 0 20px; }
+  section { margin-bottom:28px; }
+  h2 { font-size:16px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); border-bottom:1px solid #2a303a; padding-bottom:6px; margin:0 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+  figure { margin:0; background:var(--panel); border-radius:8px; overflow:hidden; border:1px solid #242a33; }
+  figure img { display:block; width:100%; height:auto; aspect-ratio:4/3; object-fit:contain; background:#000; }
+  figcaption { padding:8px 10px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }
+  figure.failed { border-color:var(--fail); }
+  figure.failed .status { color:var(--fail); font-weight:700; }
+  .status { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+  img { max-width:100%; }
+</style>
+</head>
+<body>
+<h1>Model Contact Sheet</h1>
+<p class="intro">Headless Chromium screenshots, 640x480, one per URL. Source: models.html via local static server.</p>
+
+<section>
+  <h2>Enemies</h2>
+  <div class="grid">
+    <figure><img src="gronk.png" alt="gronk" loading="lazy"><figcaption>gronk</figcaption></figure>
+    <figure><img src="drone.png" alt="drone" loading="lazy"><figcaption>drone</figcaption></figure>
+    <figure><img src="grinsworth.png" alt="grinsworth" loading="lazy"><figcaption>grinsworth</figcaption></figure>
+    <figure><img src="slimeling.png" alt="slimeling" loading="lazy"><figcaption>slimeling</figcaption></figure>
+    <figure><img src="crawler.png" alt="crawler" loading="lazy"><figcaption>crawler</figcaption></figure>
+    <figure><img src="furble.png" alt="furble" loading="lazy"><figcaption>furble</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Humans</h2>
+  <div class="grid">
+    <figure><img src="madness.png" alt="madness" loading="lazy"><figcaption>madness</figcaption></figure>
+    <figure><img src="bite.png" alt="bite" loading="lazy"><figcaption>bite</figcaption></figure>
+    <figure><img src="corpses_a.png" alt="corpses_a" loading="lazy"><figcaption>corpses_a</figcaption></figure>
+    <figure><img src="corpses_b.png" alt="corpses_b" loading="lazy"><figcaption>corpses_b</figcaption></figure>
+    <figure><img src="hair.png" alt="hair" loading="lazy"><figcaption>hair</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Viewmodel</h2>
+  <div class="grid">
+    <figure><img src="vm_still.png" alt="vm_still" loading="lazy"><figcaption>vm_still</figcaption></figure>
+    <figure><img src="vm_fire.png" alt="vm_fire" loading="lazy"><figcaption>vm_fire</figcaption></figure>
+    <figure><img src="vm_reload.png" alt="vm_reload" loading="lazy"><figcaption>vm_reload</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Props</h2>
+  <div class="grid">
+    <figure><img src="props_a.png" alt="props_a" loading="lazy"><figcaption>props_a</figcaption></figure>
+    <figure><img src="props_b.png" alt="props_b" loading="lazy"><figcaption>props_b</figcaption></figure>
+    <figure><img src="props_c.png" alt="props_c" loading="lazy"><figcaption>props_c</figcaption></figure>
+    <figure><img src="props_d.png" alt="props_d" loading="lazy"><figcaption>props_d</figcaption></figure>
+  </div>
+</section>
+</body>
+</html>
