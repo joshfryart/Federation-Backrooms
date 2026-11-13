@@ -57,6 +57,7 @@ export function createUIMode(fx = {}) {
     escape() {
       if (this.wheel?.held) { this.wheel = null; this.note('esc: wheel cancelled'); f.onChange(this); return 'wheel'; }
       const L = this.top(); if (!L) return 'none';
+      if (L.back) { const r = this.back(); return r === 'back' ? 'back' : L.kind; }   // layers with levels (list menus, board popover) step back one
       this.close(L.kind); return L.kind;
     },
     back() {
@@ -83,7 +84,7 @@ export function createUIMode(fx = {}) {
     },
     onLockError() { if (!this.frozen) { this.needClick = true; f.onChange(this); } },
     // P / Start: a pause the script asked for. The game shows its pause screen; we only make the unlock expected.
-    scriptPause() { if (this.stack.length || this.wheel) this.closeAll(); this.expectUnlock = f.isLocked(); f.exitLock(); this.needClick = false; this.note('script pause'); f.onChange(this); },
+    scriptPause() { const all = this.stack.slice().reverse(); this.stack = []; this.wheel = null; for (const L of all) { try { L.close?.(); } catch { } } this.expectUnlock = f.isLocked(); f.exitLock(); this.needClick = false; this.note('script pause'); f.onChange(this); },
   };
   return UI;
 }

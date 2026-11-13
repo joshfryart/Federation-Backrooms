@@ -116,10 +116,16 @@ export function drawLocal(g, s) {
   g.save(); g.translate(w / 2, h / 2); g.rotate(rot); g.translate(0, -h / 2 + 14); g.rotate(-rot); g.fillStyle = '#ffd9a0'; g.font = `800 ${Math.round(sc * 0.95)}px ui-monospace,monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('F', 0, 0); g.restore();
 }
 
+/** bounding box of the deck's non-wall tiles (decks are hull-shaped inside a larger grid) */
+export function deckBounds(d) {
+  if (d._nvb) return d._nvb; let x0 = d.W, y0 = d.H, x1 = 0, y1 = 0;
+  for (let y = 0; y < d.H; y++) for (let x = 0; x < d.W; x++) if (d.grid[y][x] !== 1) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  return (d._nvb = x1 < x0 ? { x: 0, y: 0, w: d.W, h: d.H } : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 });
+}
 /** whole deck fitted: s = {d, layer?, explored?, dim?, route?, player{x,y,yaw}?, markers?, hot{type:1}?, find?, t, pad} -> {sc, ox, oy} */
 export function drawPlan(g, s) {
   const w = s.w ?? g.canvas.width, h = s.h ?? g.canvas.height, d = s.d, pad = s.pad ?? 1, t = s.t || 0;
-  const sc = Math.min(w / (d.W + pad * 2), h / (d.H + pad * 2)), ox = (w - d.W * sc) / 2, oy = (h - d.H * sc) / 2, bs = Math.max(14, Math.min(34, sc * 2.3));
+  const b = deckBounds(d), sc = Math.min(w / (b.w + pad * 2), h / (b.h + pad * 2), s.maxSc || 1e9), ox = (w - b.w * sc) / 2 - b.x * sc, oy = (h - b.h * sc) / 2 - b.y * sc, bs = Math.max(14, Math.min(34, sc * 2.3));
   g.save(); g.translate(ox, oy);
   const layer = s.layer || bakeDeck(d, s.explored, sc, { dim: s.dim }); g.drawImage(layer, 0, 0, d.W * sc, d.H * sc);
   if (s.route) drawRoute(g, s.route, sc, t, { width: Math.max(2.2, sc * 0.4), dashed: s.dashed });

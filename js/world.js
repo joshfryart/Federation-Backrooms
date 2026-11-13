@@ -1248,8 +1248,8 @@ export class World {
       for (let s = 1.0 + (t * 1.6) % gap; s < L && n < 24; s += gap, n++) {
         const st = s / TS; let k = 1; while (k < route.cum.length - 1 && route.cum[k] < st) k++;
         const a = route.pts[k - 1], b = route.pts[k], f = (st - route.cum[k - 1]) / Math.max(1e-6, route.cum[k] - route.cum[k - 1]);
-        o.position.set((a[0] + (b[0] - a[0]) * f) * TS, 0.03, (a[1] + (b[1] - a[1]) * f) * TS); o.rotation.set(0, -Math.atan2(b[1] - a[1], b[0] - a[0]), 0); o.scale.setScalar(0.85); o.updateMatrix();
-        G.im.setMatrixAt(n, o.matrix); const fd = Math.max(0.12, (1 - s / 22) * Math.min(1, (s - 0.6) / 1.2)); G.im.setColorAt(n, G.c.setRGB(0.55 * fd, 0.95 * fd, fd));
+        o.position.set((a[0] + (b[0] - a[0]) * f) * TS, 0.03, (a[1] + (b[1] - a[1]) * f) * TS); o.rotation.set(0, -Math.atan2(b[1] - a[1], b[0] - a[0]), 0); o.scale.setScalar(0.62); o.updateMatrix();
+        G.im.setMatrixAt(n, o.matrix); const fd = Math.max(0.12, (1 - s / 22) * Math.min(1, (s - 0.6) / 1.2)); G.im.setColorAt(n, G.c.setRGB(0.12 * fd, 0.75 * fd, fd));
       }
     }
     G.im.count = n; G.im.instanceMatrix.needsUpdate = true; if (G.im.instanceColor) G.im.instanceColor.needsUpdate = true;

@@ -4,7 +4,7 @@
 //   const T = new NameTags({ max: 6 });  T.update(dt, { camera, ents, P, world, show })
 import * as THREE from 'three';
 import { RANKS } from './data.js';
-import { deptCol, DEPT_LETTER } from './portraits.js';
+import { deptCol, DEPT_LETTER } from './icons.js';
 
 const CSS = `.ntag{--c:#9db2c8;position:fixed;left:0;top:0;z-index:4;pointer-events:none;display:none;align-items:center;gap:4px;padding:1px 6px 1px 0;background:rgba(5,8,14,.62);border-left:3px solid var(--c);font:700 10px/14px var(--f-d,Arial);letter-spacing:.06em;color:#eef4fb;white-space:nowrap;text-shadow:0 1px 2px #000;transform:translate(-50%,-100%);will-change:transform}
 .ntag b{font:700 9px var(--f-m,monospace);color:var(--c);padding-left:4px}.ntag i{display:inline-flex;gap:1.5px}.ntag i s{width:5px;height:5px;transform:rotate(45deg);background:#ffd25e;display:inline-block}.ntag i s.h{background:none;border:1px solid #ffd25e;width:4px;height:4px}

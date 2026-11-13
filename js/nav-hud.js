@@ -9,7 +9,7 @@
 // main.js calls frame(dt) every play frame (route recompute is internal at 0.12 s), renderStatus(el) from renderStatus().
 import { ICONS, CATS, SHAPES, drawIcon, badgeSvg, iconSvg } from './icons.js';
 import { ROOM_CAT, Pins, dutyItems, planRoute, pinKey, liftTile, WALK } from './nav.js';
-import { bakeDeck, drawLocal, drawPlan, drawBadge, ROUTE, DUE, LATE, IDLE, DOING } from './minimap.js';
+import { bakeDeck, deckBounds, drawLocal, drawPlan, drawBadge, ROUTE, DUE, LATE, IDLE, DOING } from './minimap.js';
 import { Compass } from './compass.js';
 import { schematicHTML, SCHEMATIC_CSS } from './schematic.js';
 import { mountBrief } from './briefmap.js';
@@ -49,7 +49,7 @@ body.nominal #minimap{top:12px;right:14px;width:208px;height:208px;image-renderi
 #nv-legend span,#nv-map .leg span{display:inline-flex;align-items:center;gap:3px}
 #nv-compass{position:fixed;left:50%;top:36px;transform:translateX(-50%);width:min(520px,50vw);height:auto;aspect-ratio:520/62;z-index:4;pointer-events:none}
 body.nominal #faults{top:316px}
-#nv-map{position:fixed;inset:0;z-index:12;display:none;background:rgba(3,6,12,.97);color:#e8eef6;font:12px var(--f-d,Arial)}#nv-map.on{display:flex}
+#nv-map{position:fixed;inset:0;z-index:12;display:none;background:#03060c;color:#e8eef6;font:12px var(--f-d,Arial)}#nv-map.on{display:flex}
 #nv-map .col{width:136px;border-right:1px solid rgba(150,180,210,.26);padding:8px 6px;display:flex;flex-direction:column;gap:3px;overflow:auto}
 #nv-map .h{font:700 9px var(--f-d,Arial);letter-spacing:.2em;color:#f2a03d;margin-bottom:2px}
 #nv-map .dk{display:grid;grid-template-columns:30px 1fr;align-items:center;gap:5px;padding:3px 5px;border:1px solid rgba(150,180,210,.26);border-left:4px solid var(--z);background:rgba(255,255,255,.03);cursor:pointer;font:700 12px var(--f-m,monospace);color:#cfe1f3}
@@ -184,7 +184,7 @@ export class NavHUD {
     const cv = bakeDeck(d, explored, sc, { dim, canvas: c?.cv }); this.layers.set(k, { cv, n, at: this.t }); return cv;
   }
   drawMini(mm, f, ld) {
-    const w = this.world, sc = mm.width / 30, G = this.G, car = w.car || { tx: w.d.exit[0], ty: w.d.exit[1] };
+    const w = this.world, sc = mm.width / 26, G = this.G, car = w.car || { tx: w.d.exit[0], ty: w.d.exit[1] };
     drawLocal(mm.getContext('2d'), { d: w.d, layer: this.layerFor(w.d, w.explored, sc), explored: w.explored, sc, px: f.x, py: f.y, yaw: this.P.yaw, rot: this.P.yaw, route: this.route, dest: ld, markers: this.markers, t: this.t, lift: { x: car.tx + 0.5, y: car.ty + 0.5 }, liftOk: !G.fx?.liftLocked });
   }
   beacon(icon) {
@@ -226,10 +226,10 @@ export class NavHUD {
     const decks = this.decks(); if (!decks) return; const sel = this.selDeck, d = decks[sel], cur = sel === (this.G.shipDeck ?? 0), g = this.mapG, f = this.from();
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
     const ex = cur ? this.world.explored : this.G.shipDecks[sel]?.st?.explored || null, top = 40 * dpr, h2 = H - top - 36 * dpr;
-    const pad = 1, sc = Math.min(W / (d.W + pad * 2), h2 / (d.H + pad * 2));
+    const pad = 1, bb = deckBounds(d), sc = Math.min(W / (bb.w + pad * 2), h2 / (bb.h + pad * 2), 48 * dpr);
     g.save(); g.translate(0, top);
     const leg = this.plan?.legs.find(l => l.kind === 'walk' && l.deck === sel), markers = cur ? this.markers : (this.dest?.deck === sel && this.dest.room ? [{ x: this.dest.room.x + this.dest.room.w / 2, y: this.dest.room.y + this.dest.room.h / 2, type: this.dest.type, frac: 1, color: ROUTE, pinned: true, dest: true }] : []);
-    const gp = drawPlan(g, { d, w: W, h: h2, layer: this.layerFor(d, ex, sc, !cur), explored: ex, dim: !cur, route: leg?.route, dashed: !cur, player: cur ? { x: f.x, y: f.y, yaw: this.P.yaw } : null, markers, hot: this.findType ? { [this.findType]: 1 } : null, t: this.t, pad });
+    const gp = drawPlan(g, { d, w: W, h: h2, layer: this.layerFor(d, ex, sc, !cur), explored: ex, dim: !cur, route: leg?.route, dashed: !cur, player: cur ? { x: f.x, y: f.y, yaw: this.P.yaw } : null, markers, hot: this.findType ? { [this.findType]: 1 } : null, t: this.t, pad, maxSc: 48 * dpr });
     g.restore(); this.geo = { sc: gp.sc, ox: gp.ox, oy: gp.oy + top, dpr };
     this.map.querySelector('.note').innerHTML = cur ? '' : `${ico('log', 12)} D${sel + 1}`;
   }

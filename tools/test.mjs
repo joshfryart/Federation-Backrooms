@@ -36,6 +36,10 @@ import { repairTests } from './test-repair.mjs';   // NPC repair response, sim p
 await repairTests(fail);
 import { handheldTests } from './test-handhelds.mjs';   // handheld job equipment / improvised weapons (tools/test-handhelds.mjs)
 await handheldTests(fail);
+import { navTests, navBrowser } from './test-nav.mjs';   // routing / cross-deck plans / pins + nav HUD (tools/test-nav.mjs)
+await navTests(fail);
+import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / pointer lock, wheel maths, toasts, icons (tools/test-ui.mjs)
+await uiTests(fail);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -423,7 +427,31 @@ const vpage = await browser.newPage({ viewport: { width: 900, height: 600 } }); 
 await vpage.goto(`http://localhost:${port}/voices.html?ship=3&seed=2`); await vpage.waitForFunction(() => window.__ready, null, { timeout: 15000 });
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
 console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && vp.chips > vp.rows * 8 && /\[/.test(vp.said) && vp.eng > 0 && vp.eng < vp.total)) fail('voices.html');
+await navBrowser(page2, fail);
 await commsHud(page2, fail);
+await uiBrowser(page2, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
+// ---- pace, crew repair response, shift-end tasks (js/pace.js, js/repair.js, js/duty.js) ----
+const rep = await page2.evaluate(async () => {
+  const g = __game, G = g.G, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+  const snap = () => ({ id: g.pace.id, T: g.clock.paceT, rate: +g.clock.rate.toFixed(5), firstDue: Math.round(Math.min(...g.duty.loops.map(l => l.next))), period0: g.duty.loops[0]?.period, run: g.phases.runLength, phaseAt: g.phases.phaseAt[4], firstTask: Math.round(Math.min(...g.duty.tasks.map(t => t.at_s), 1e9)), cascadeT: g.shipState.paceT });
+  G.forceShip = 0; g.pace = 'first'; g.newRun(); hide(); out.first = snap(); g.pace = 'crunch'; g.newRun(); hide(); out.crunch = snap(); g.pace = 'standard'; g.newRun(); hide(); g.setQuality('low'); out.std = snap();
+  out.title = { buttons: document.querySelectorAll('#pacesel [data-pace]').length, summary: document.getElementById('pacesum').textContent };
+  G.hp = G.maxHp = 1e6; G.phase = 'play'; let t = 0; const tick = (n, dt = 0.1) => { for (let i = 0; i < n; i++) { t += dt; G.phase = 'play'; g.step(dt, t); } };
+  // a system serviced on this deck breaks: a crew member is dispatched, walks to it (body), works (marker), patches it to ~0.85 and reports on the comm bus
+  const here = G.shipDeck + 1, sys = ['helm', 'alert', 'lifts', 'computer', 'sensors'].find(s => g.repair.site(s)?.deckNo === here) || Object.keys(g.repair.sites).find(s => g.repair.sites[s].deckNo === here);
+  const ev = []; g.repair.on(e => ev.push(e.type)); g.shipState.damage(sys, 0.5); let walked = false, posed = false, marker = false, lead = null, maxProg = 0;
+  for (let i = 0; i < 2600 && !ev.includes('done'); i++) { tick(1); const j = [...g.repair.jobs.values()][0]; if (j?.lead) lead = j.lead.person; if (lead) { const e = g.ents.find(x => x.simmed && x.person === lead); if (e?.walk) walked = true; if (e?.repairing?.npc) posed = true; if (e?.repMark) marker = true; } if (j) maxProg = Math.max(maxProg, j.need ? j.progress / j.need : 0); }
+  out.repair = { sys, events: [...new Set(ev)], lead: lead?.short || null, hp: +g.shipState.hp(sys).toFixed(2), walked, posed, marker, maxProg: +maxProg.toFixed(2), secs: +t.toFixed(0), report: g.comms.log.some(m => /patched/.test(m.text)), heading: g.comms.log.some(m => /heading to/.test(m.text)), released: lead ? !g.sim.overridden(lead) : null };
+  // world pause: nothing ticks while a menu is open
+  const st0 = g.sim.t, dt0 = g.duty.t; G.menuPause = true; tick(30); out.paused = g.sim.t === st0 && g.duty.t === dt0; G.menuPause = false;
+  // tasks stay open to the end of the shift, then count
+  const D = g.duty; for (let i = 0; i < 1300; i++) D.tick(1); out.tasks = { n: D.tasks.length, open: D.tasks.filter(x => x.state === 'active').length }; g.nomEnd(); out.tasks.after = D.tasks.filter(x => x.state === 'missed').length; out.tasks.chain = D.chain.some(c => /Unfinished at end of shift/.test(c)); out.tasks.end = /Mission tasks/.test(document.getElementById('bd-end')?.textContent || '');
+  G.hud2?.hideEnd(); return out;
+});
+console.log('pace/repair:', JSON.stringify(rep));
+{ const r = rep, R = r.repair; if (!(r.first.T === 2.5 && r.first.firstDue >= 180 && r.first.firstTask >= 240 && r.first.run === 3000 && r.first.phaseAt === 2400 && r.crunch.T === 0.7 && r.crunch.run === 840 && r.std.T === 1 && r.std.run === 1200 && r.first.rate < r.std.rate && r.std.rate < r.crunch.rate && r.title.buttons === 3 && /Standard/.test(r.title.summary))) fail('pace presets ' + JSON.stringify(r));
+  if (!(R.events.includes('assign') && R.events.includes('done') && Math.abs(R.hp - 0.85) < 0.01 && R.report && R.heading && R.posed && R.marker && R.released && (R.walked || R.events.includes('arrive')))) fail('crew repair response ' + JSON.stringify(R));
+  if (!r.paused) fail('world pause (G.menuPause)'); if (!(r.tasks.open === r.tasks.n && r.tasks.after === r.tasks.n && (r.tasks.n === 0 || (r.tasks.chain && r.tasks.end)))) fail('shift-end tasks ' + JSON.stringify(r.tasks)); }
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();
 console.log(failed ? 'FAILED' : 'OK'); process.exit(failed ? 1 : 0);

@@ -181,6 +181,12 @@ export const CATS = {
   security: { n: 'Security', c: '#ff7a6b', s: 'tri' },
 };
 
+// crew departments (js/crew.js DEPARTMENTS ids): hue + letter, used by name tags, contact cards, wheel and portraits
+export const DEPT_COL = { command: '#6ea8ff', flight: '#8fb7ff', operations: '#d6c85a', engineering: '#e8892b', security: '#ff7a6b', sciences: '#c58be0', medical: '#3fd6a0', services: '#c6d25e' };
+export const DEPT_LETTER = { command: 'C', flight: 'F', operations: 'O', engineering: 'E', security: 'X', sciences: 'S', medical: 'M', services: 'V' };
+export const deptCol = (p) => DEPT_COL[p?.dept] || '#9db2c8';
+
+
 const escA = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /** has(name): true when the set defines this icon */

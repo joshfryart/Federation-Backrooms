@@ -39,7 +39,7 @@ export async function dutyTests(fail) {
     const ms0 = duty.maxScore, left = duty.shiftEnd(); ck(left.length === duty.tasks.length && duty.maxScore === ms0 + left.length && duty.chain.some(c => /Unfinished at end of shift/.test(c)), 'shiftEnd tallies unfinished tasks');
     ck(duty.shiftEnd().length === left.length && duty.maxScore === ms0 + left.length, 'shiftEnd is idempotent'); ck(duty.summary().tasks.unfinished === left.length, 'summary counts unfinished tasks');
     // a duty round nobody got to: a gentle skip (no score, half debt), not a fail
-    const d2 = new D.Duty({ player, roster, clock, duties, shipState: ss, seed: 7, mission: 'survey' }); const l = d2.loops[0]; for (let t = 0; t < l.next + l.period; t += 1) d2.tick(1);
+    const d2 = new D.Duty({ player, roster, clock, duties, shipState: ss, seed: 7, mission: 'survey' }); const l = d2.loops[0], end = l.next + l.period; for (let t = 0; t < end; t += 1) d2.tick(1);
     ck(d2.stats.missed >= 1 && d2.stats.skipped === 0 && d2.maxScore === 0, 'a missed round is a gentle skip (no score penalty)'); }
   ck(seen.size >= 6, 'varied billets ' + seen.size); ck(consequences > 0, 'neglect damages systems'); ck(caught > 0, 'faking and skipping get noticed'); ck(taskDone > 0, 'tasks completed');
   return { billets: seen.size, consequences, caught, taskDone, orders };

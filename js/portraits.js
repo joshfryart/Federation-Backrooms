@@ -9,10 +9,8 @@
 import * as THREE from 'three';
 import { makeHuman } from './humans.js';
 
-/** department hue (and badge letter) shared by tags, cards and portraits; shape lives in js/icons.js CATS */
-export const DEPT_COL = { command: '#6ea8ff', flight: '#8fb7ff', operations: '#d6c85a', engineering: '#e8892b', security: '#ff7a6b', sciences: '#c58be0', medical: '#3fd6a0', services: '#c6d25e' };
-export const DEPT_LETTER = { command: 'C', flight: 'F', operations: 'O', engineering: 'E', security: 'X', sciences: 'S', medical: 'M', services: 'V' };
-export const deptCol = (p) => DEPT_COL[p?.dept] || '#9db2c8';
+import { DEPT_COL, DEPT_LETTER, deptCol } from './icons.js';
+export { DEPT_COL, DEPT_LETTER, deptCol };
 
 /** placeholder: uniform-coloured silhouette (procedural from the person id) as an SVG data URL */
 export function silhouette(p) {

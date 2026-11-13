@@ -35,6 +35,7 @@ import { Haul, initHaul, opStart, opHook, opEnd, pushHook, toolBonus } from './h
 import { propsFor, classifyItem } from './equipment.js';
 import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
 import { MISSIONS, party as commParty } from './bridge.js';
+import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -178,7 +179,7 @@ function clearLevel() {
 // per-deck state of the persistent ship (Systems Nominal): what was searched and explored survives leaving the deck
 const siteKey = (s) => `${Math.round(s.x * 10)},${Math.round(s.z * 10)},${s.kind}`;
 function saveDeckState() {
-  const S = NOM() && world && G.shipDecks && G.shipDecks[G.shipDeck]; if (!S) return;
+  const S = NOM() && world && G.shipDecks && G.shipDecks[G.shipDeck]; if (!S || S.data !== world.d) return;   // after newRun the old world belongs to the previous ship
   for (const s of world.searchSites || []) if (s.used) S.st.sites.add(siteKey(s));
   S.st.explored = world.explored.slice();
 }
@@ -194,7 +195,7 @@ function loadDeck(n) {
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck)); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
   G.fieldCache = null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
-  if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored) world.explored.set(SD.st.explored); G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
+  if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
@@ -455,6 +456,7 @@ function simBodies(dt, force = false) {
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
 initHaul({ get gorns() { return gorns; }, killMad, nearestRepair, get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
 G.nav = new NavHUD({ G, P, TS, NOM, get world() { return world; }, get repairPts() { return repairPts; } });   // js/nav-hud.js
+G.menus = new Menus({ G, P, NOM, camera, renderer, canvas, get world() { return world; }, get ents() { return ents; }, isLocked: () => locked, requestLock, resumeGame, pause: () => { G.phase = 'paused'; showScreen('pause'); }, interact, talkMenu, terminalMenu, dutyMenu, showStatus });   // js/menus.js (key router: registered before main's keydown)
 
 
 // ---- NPC repair response glue (js/repair.js decides who goes where, in the abstract): here bodies walk (run when urgent) to the hardware
@@ -701,7 +703,8 @@ function requestLock() {
 }
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
-  if (!locked && G.phase === 'play') { G.phase = 'paused'; showScreen('pause'); }
+  const why = NOM() && G.menus ? G.menus.UI.onLockChange(locked, G.phase) : (!locked && G.phase === 'play' ? 'pause' : 'ignore');   // js/ui-mode.js: our own unlocks (menus) never pause
+  if (why === 'pause' && !(NOM() && G.menuPause)) { G.phase = 'paused'; G.scriptPaused = false; showScreen('pause'); } else if (why === 'pause') G.menus?.UI.onLockError();
 });
 
 function completeDeck() {
@@ -792,18 +795,19 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
     if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
-    if (e.code === 'KeyQ' && !e.repeat) fireGrapple();
+    if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; if (e.code === 'Tab') showStatus(false); });
 addEventListener('mousemove', (e) => {
+  if (NOM() && G.phase === 'play' && G.menus?.mouse(e)) return;   // a held wheel takes the deltas; any open menu freezes the look
   if (!locked || (G.phase !== 'play' && G.phase !== 'ride')) return;
   P.yaw -= e.movementX * 0.0022 * CFG.sens; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022 * CFG.sens));
 });
 addEventListener('contextmenu', (e) => e.preventDefault());
-addEventListener('mousedown', (e) => { if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); else if (G.phase === 'play' && !locked && !e.target.closest('#liftui')) requestLock(); });
+addEventListener('mousedown', (e) => { if (e.target.closest?.('.ui-layer') || (NOM() && G.phase === 'play' && G.menuPause)) return; if (G.phase === 'play' && locked && e.button === 2) fireGrapple(); else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); else if (G.phase === 'play' && !locked && !e.target.closest('#liftui')) requestLock(); });
 function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
@@ -973,6 +977,7 @@ function buildViewmodel() {
 }
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
 function step(dt, t) {
+  if (NOM() && G.menuPause) return;   // a menu / wheel / panel / map is open: the whole world holds still (js/menus.js keeps the UI alive)
   if (shot > 0) shot -= dt;
   if (invuln > 0) invuln -= dt;
   if (beamT > 0) { beamT -= dt; beamMat.opacity = beamT / 0.12; if (beamT <= 0) beam.visible = false; }
@@ -1568,6 +1573,7 @@ function frame() {
   else if ((G.phase === 'ride' || G.phase === 'select') && world) liftStep(dt, t);
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
+  G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
   // auto-downgrade if the machine struggles
   if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
   if (CFG.quality === 'high') {
@@ -1580,6 +1586,7 @@ function frame() {
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
