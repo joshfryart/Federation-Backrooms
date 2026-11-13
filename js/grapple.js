@@ -324,7 +324,14 @@ export class Melee {
 
   // ---------------------------------------------------------------- NPC behaviour
   steer(e, tx, tz, speed, dt, stop) {
-    const c = e.cb, dx = tx - e.x, dz = tz - e.z, d = Math.hypot(dx, dz); c.face = Math.atan2(dx, dz);
+    const c = e.cb, W = this.C.world, d0 = Math.hypot(tx - e.x, tz - e.z);
+    // no clear straight line (a console, a wall corner, a doorway): follow the path field toward the target's tile one tile at a time
+    if (d0 > stop + 0.3 && ![[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]].every(([ox, oz]) => W.los(e.x + ox, e.z + oz, tx + ox, tz + oz))) {
+      const [gx, gy] = W.tile(tx, tz), [ex, ey] = W.tile(e.x, e.z), f = this.C.pathField?.(gx, gy); let best = null, bv = f ? f[ex + ey * W.W] : -1;
+      if (f) for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const v = f[ex + a + (ey + b) * W.W]; if (v >= 0 && (bv < 0 || v < bv)) { bv = v; best = [ex + a, ey + b]; } }
+      if (best) { const [cx, cz] = W.center(best[0], best[1]); const dx = cx - e.x, dz = cz - e.z, d = Math.hypot(dx, dz) || 1, s = Math.min(d, speed * CB.speedMul(c.inj) * dt), q = { x: e.x + dx / d * s, z: e.z + dz / d * s, y: 0 }; W.resolve(q, 0.27); e.x = q.x; e.z = q.z; c.face = Math.atan2(dx, dz); c.moving = speed * CB.speedMul(c.inj); return false; }
+    }
+    const dx = tx - e.x, dz = tz - e.z, d = Math.hypot(dx, dz); c.face = Math.atan2(dx, dz);
     if (d <= stop) { c.moving = 0; return true; } const s = Math.min(d - stop, speed * CB.speedMul(c.inj) * dt), q = { x: e.x + dx / d * s, z: e.z + dz / d * s, y: 0 }; this.C.world.resolve(q, 0.27); e.x = q.x; e.z = q.z; c.moving = speed * CB.speedMul(c.inj); return false;
   }
   npcStep(e, dt) {
