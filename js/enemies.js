@@ -27,7 +27,7 @@ function humanModel(opts, cfg, fallback) {
     mesh, H,
     tick(dt, speed, f) {
       t += dt;
-      if (f.frozen) { H.mixer.timeScale = 0; H.update(dt); cfg.tick?.(mesh, H, t, f); return; }
+      if (f.frozen) { H.mixer.timeScale = 0; H.update(dt); cfg.tick?.(mesh, H, t, f, dt); return; }
       H.mixer.timeScale = 1;
       if (f.stunned) { stunT += dt; if (stunT < 0.7) H.play(cfg.stun || 'hit_chest', { loop: false, fade: 0.08 }); else H.play(cfg.stunHold || 'crouch_idle', { fade: 0.35 }); }
       else {
@@ -44,7 +44,7 @@ function humanModel(opts, cfg, fallback) {
           else H.play(cfg.idle || 'idle', { fade: 0.3 });
         }
       }
-      H.update(dt); cfg.tick?.(mesh, H, t, f);
+      H.update(dt); cfg.tick?.(mesh, H, t, f, dt);
     },
   };
 }
@@ -124,11 +124,25 @@ function slimeKit(mesh, H) {
   const hang = (bone, dx, dy, dz, len) => { const b = H.bones[bone]; if (!b) return; const p = b.getWorldPosition(new THREE.Vector3()), g = new THREE.Group(); g.position.set(p.x + dx * u, p.y + dy * u, p.z + dz * u); const m = new THREE.Mesh(slimeGeo.drip, slimeM), bead = new THREE.Mesh(slimeGeo.bead, slimeM); m.castShadow = bead.castShadow = false; g.add(m, bead); pinToBone(H.inner, bone, g); drips.push({ g, m, bead, len: len * u, ph: R() * 6 }); };
   hang('hand_l', 0, -0.08, 0, 0.6); hang('hand_r', 0, -0.08, 0, 0.45); hang('Head', 0, 0.02, 0.1, 0.3); hang('lowerarm_l', 0, -0.03, 0, 0.35);
   H.inner.traverse(o => { if (o.isMesh && (o.material.name || '').startsWith('garment')) { o.material.roughness = 0.38; o.material.color.lerp(new THREE.Color(0x2f6a34), 0.3); } });
-  H.slime = { inv: 1 / H.inner.scale.z, blobs, drips, skin: H.mats.body ? H.mats.body.color.clone() : null, from: new THREE.Color(0xc99a78), sy: H.inner.scale.y };
+  const pg = new THREE.Group(); pg.name = 'slimeSpray'; mesh.add(pg); const parts = [];
+  for (let i = 0; i < 28; i++) { const m = new THREE.Mesh(slimeGeo.bead, slimeM); m.visible = false; m.castShadow = false; pg.add(m); parts.push({ m, life: 0, v: new THREE.Vector3() }); }
+  H.slime = { parts, spawn: 0, inv: 1 / H.inner.scale.z, blobs, drips, skin: H.mats.body ? H.mats.body.color.clone() : null, from: new THREE.Color(0xc99a78), sy: H.inner.scale.y };
 }
-const _q = new THREE.Quaternion();
-function slimeTick(mesh, H, t) {
-  const S = H.slime; H.inner.scale.x = H.inner.scale.z * (1 + Math.sin(t * 9) * 0.03); if (!S) return;
+const _q = new THREE.Quaternion(), _v = new THREE.Vector3();
+// slime spray: a burst of globs when the disguise bursts, then an occasional drop shed from the strands
+function slimeSpray(mesh, S, dt, t) {
+  mesh.updateWorldMatrix(true, false);
+  S.spawn += dt * (t < 1.3 ? 45 : 2.2);
+  while (S.spawn >= 1) {
+    S.spawn--; const p = S.parts.find(q => q.life <= 0); if (!p) break;
+    const src = t < 1.3 ? S.blobs[Math.floor(Math.random() * S.blobs.length)] : S.drips[Math.floor(Math.random() * S.drips.length)]?.bead;
+    if (!src) break; src.getWorldPosition(_v); mesh.worldToLocal(_v); p.m.position.copy(_v);
+    const burst = t < 1.3 ? 1.6 : 0.1; p.v.set((Math.random() - 0.5) * burst, Math.random() * burst * 0.8, (Math.random() - 0.5) * burst); p.life = 0.6 + Math.random() * 0.5; p.m.visible = true; p.m.scale.setScalar(0.7 + Math.random() * 1.1);
+  }
+  for (const p of S.parts) { if (p.life <= 0) continue; p.life -= dt; p.v.y -= 9 * dt; p.m.position.addScaledVector(p.v, dt); if (p.m.position.y < 0.02) { p.m.position.y = 0.02; p.v.set(0, 0, 0); p.m.scale.y = 0.3; p.life = Math.min(p.life, 0.25); } if (p.life <= 0) { p.m.visible = false; p.m.scale.y = p.m.scale.x; } }
+}
+function slimeTick(mesh, H, t, f, dt = 1 / 60) {
+  const S = H.slime; H.inner.scale.x = H.inner.scale.z * (1 + Math.sin(t * 9) * 0.03); if (!S) return; slimeSpray(mesh, S, dt, t);
   const r = Math.min(1, t / 1.1), k = r < 1 ? 1 + 2.2 * (r - 1) ** 3 + 1.2 * (r - 1) ** 2 : 1;   // the reveal: skin greens over, growths burst out with a little overshoot
   H.inner.scale.y = S.sy * (1 - Math.sin(t * 24) * 0.09 * (1 - r) + Math.sin(t * 2.1) * 0.012);
   if (S.skin && r < 1) H.mats.body.color.copy(S.from).lerp(S.skin, r); else if (S.skin && !S.done) { H.mats.body.color.copy(S.skin); S.done = true; }
