@@ -99,12 +99,12 @@ export function generate(deck, seed, opts = {}) {
       case 'shuttlebay': put(cx, cy, 'shuttle'); put(ix0, iy0, 'crate'); put(ix1, iy1, 'crate'); break;
       case 'holodeck': put(cx, cy, 'holocube'); break;
       case 'transporter': put(cx, cy, 'pad'); break;
-      case 'quarters': put(cx, cy, 'bunk'); break;
+      case 'quarters': put(cx, cy, (cx * 7 + cy * 3) % 4 === 0 ? 'lockers' : 'bunk'); break;   // some cabins are a locker alcove instead of a bunk
       case 'mess':
         if (r.big) { for (const [x, y] of interior) { if (y === iy0) { if ((x - ix0) % 2 === 0) put(x, y, 'replicator', { rot: 0 }); } else if ((x - ix0) % 2 === 0 && (y - iy0) % 2 === 0) put(x, y, 'table', { rot: 0 }); } }   // serving line along one wall, tables in rows
         else for (const [x, y] of interior) if ((x + y) % 2 === 0 || r.w < 5) put(x, y, 'table');
         break;
-      case 'sickbay': for (const [x, y] of interior) if (rnd() < 0.7 || (x === cx && y === cy)) put(x, y, 'biobed'); break;
+      case 'sickbay': for (const [x, y] of interior) { if (rnd() < 0.7 || (x === cx && y === cy)) put(x, y, 'biobed'); else if ((x + 2 * y) % 3 === 0) put(x, y, (x + y) % 2 ? 'labrack' : 'centrifuge'); } break;
       case 'cargo': for (const [x, y] of interior) if (rnd() < 0.65) put(x, y, 'crate'); break;
       case 'arboretum': for (const [x, y] of interior) if (rnd() < 0.8) put(x, y, 'tree'); break;
       // rooms from the ship inventory: laid out from the existing prop kinds (a 3×3 room gets one centrepiece, bigger ones a pattern)
@@ -112,14 +112,14 @@ export function generate(deck, seed, opts = {}) {
       case 'brig': for (const [x, y] of interior) if ((x + y) % 2 === 0 && rnd() < 0.8) put(x, y, 'cell'); break;
       case 'armory': put(cx, cy, 'weaponrack'); break;
       case 'gym': for (const [x, y] of interior) if ((x + y) % 3 === 0) put(x, y, (x * 2 + y) % 2 ? 'treadmill' : 'weightbench'); break;
-      case 'lab': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : 'labbench'); break;
+      case 'lab': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : ['labbench', 'labrack', 'centrifuge'][(x + 2 * y) % 3]); break;
       case 'laundry': put(cx, cy, 'washer'); break;
       case 'lounge': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x * 3 + y) % 4 === 0 ? 'table' : (x + 2 * y) % 3 === 0 ? 'lonechair' : 'sofa'); break;
       case 'workshop': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'lathe' : 'workbench'); break;
       case 'plant': for (const [x, y] of interior) if ((x + y) % 3 === 0) put(x, y, (x + y) % 2 ? 'console' : 'tank'); break;
       case 'morgue': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'drawers' : 'biobed'); break;
       case 'datacore': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : 'servers'); break;
-      case 'stores': for (const [x, y] of interior) if (rnd() < 0.7) put(x, y, (x + y) % 3 === 0 ? 'cart' : (x + y) % 2 ? 'shelving' : 'crate'); break;
+      case 'stores': for (const [x, y] of interior) if (rnd() < 0.7) put(x, y, (x + y) % 3 === 0 ? 'cart' : (x + y) % 5 === 1 ? 'lockers' : (x + y) % 2 ? 'shelving' : 'crate'); break;
       case 'airlock': put(cx, cy, 'suitrack'); break;
       case 'washroom': put(cx, cy, 'sinkunit'); break;
     }
