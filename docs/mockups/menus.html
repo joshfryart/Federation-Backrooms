@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Systems Nominal - menus and input redesign (mockup)</title>
+<style>
+:root{--lc1:#f2a03d;--lc2:#58c9b9;--lc3:#6f8fb8;--lc4:#ffd9a0;--bg:#05070c;--ink:#e8eef6;--dim:#8fa0b6;--line:rgba(150,180,210,.26);--pan:rgba(7,11,19,.86);--red:#ff5a4a;--green:#4fd18b;--blue:#8fd8ff;--violet:#b79cff;--ts:1;
+ --f-d:"Avenir Next Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;--f-m:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
+:root.hc{--line:rgba(220,235,255,.7);--dim:#c6d3e4;--pan:rgba(0,0,0,.94)}
+*{box-sizing:border-box}
+html{font-size:calc(16px*var(--ts))}
+body{margin:0;background:var(--bg);color:var(--ink);font:1rem/1.45 'Helvetica Neue',Arial,sans-serif;min-height:100vh}
+h1,h2,h3,h4{font-family:var(--f-d);letter-spacing:.14em;text-transform:uppercase;margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+.ico{width:1.3em;height:1.3em;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.3em;flex:none}
+header.top{position:sticky;top:0;z-index:50;background:rgba(5,7,12,.96);border-bottom:1px solid var(--line);padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+header.top h1{font-size:.95rem;color:var(--lc4)} header.top h1 small{display:block;font:.68rem var(--f-m);letter-spacing:.04em;color:var(--dim);text-transform:none}
+nav.tabs{display:flex;flex-wrap:wrap;gap:4px}
+nav.tabs button{background:none;border:1px solid var(--line);padding:5px 12px;font:700 .72rem var(--f-d);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+nav.tabs button[aria-selected=true]{background:var(--lc1);color:#08101a;border-color:var(--lc1)}
+.a11y{margin-left:auto;display:flex;gap:6px;align-items:center;font:.7rem var(--f-d);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);flex-wrap:wrap}
+.a11y button,.chipbtn{background:rgba(255,255,255,.04);border:1px solid var(--line);padding:3px 9px;font:inherit;color:var(--ink)}
+.a11y button[aria-pressed=true],.chipbtn[aria-pressed=true]{background:rgba(88,201,185,.22);border-color:var(--lc2)}
+main{max-width:1240px;margin:0 auto;padding:16px}
+section.tab{display:none}section.tab.on{display:block}
+.lead{color:var(--dim);max-width:900px;margin:0 0 12px;font-size:.9rem}
+.lead b{color:var(--ink)}
+.pnl{background:var(--pan);border:1px solid var(--line);border-left:3px solid var(--lc1);padding:10px 14px;clip-path:polygon(0 0,calc(100% - 11px) 0,100% 11px,100% 100%,0 100%)}
+kbd{font:.72rem var(--f-m);background:#16202e;border:1px solid #3a4b61;border-bottom-width:2px;border-radius:3px;padding:0 5px;color:var(--lc4);white-space:nowrap}
+.grid2.w{grid-template-columns:repeat(auto-fit,minmax(min(100%,540px),1fr))!important}.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+.cap{font:.7rem var(--f-m);color:var(--dim);margin:6px 0 0}
+h2.sec{font-size:.9rem;color:var(--lc1);margin:18px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+/* ---------- stage (faux game view) ---------- */
+.stagebar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-bottom:8px;font:.72rem var(--f-d);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.seg{display:inline-flex}.seg button{background:rgba(255,255,255,.04);border:1px solid var(--line);padding:3px 10px;font:inherit;color:var(--dim);margin-left:-1px}
+.seg button[aria-pressed=true]{background:var(--lc1);color:#08101a;border-color:var(--lc1)}
+.stage{position:relative;aspect-ratio:16/9;width:100%;max-height:78vh;margin:0 auto;background:#000;border:1px solid var(--line);overflow:hidden;user-select:none;font-family:var(--f-d)}
+.stage[data-state=play]{cursor:crosshair}
+.stage>svg.bg{position:absolute;inset:0;width:100%;height:100%}
+.hud{position:absolute;pointer-events:none}
+.badge{top:10px;left:50%;transform:translateX(-50%);font:700 .68rem/1 var(--f-d);letter-spacing:.2em;text-transform:uppercase;color:var(--green);background:rgba(6,12,10,.65);border:1px solid rgba(79,209,139,.45);padding:5px 12px;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%)}
+.lockchip{top:10px;right:10px;font:.64rem var(--f-m);padding:3px 8px;border:1px solid var(--line);background:rgba(5,8,14,.75);color:var(--dim);display:flex;gap:6px;align-items:center}
+.lockchip i{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.stage:not([data-state=play]):not([data-state=wheel]) .lockchip i{background:var(--lc1)}
+.stage[data-state=paused] .lockchip i,.stage[data-state=resume] .lockchip i{background:var(--red)}
+.bars{left:12px;bottom:12px;width:min(210px,32%);padding:6px 10px;border-left:3px solid var(--lc2);background:rgba(7,11,19,.62);font:.62rem var(--f-d);letter-spacing:.2em;color:var(--dim)}
+.bars .bar{height:7px;background:rgba(255,255,255,.1);margin:3px 0 6px;position:relative}.bars .bar i{display:block;height:100%}
+.hint{right:12px;bottom:12px;text-align:right;font:.64rem var(--f-d);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);background:rgba(5,8,14,.6);padding:5px 9px;line-height:1.8}
+.reticle{left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;display:none}
+.stage[data-state=play] .reticle,.stage[data-state=wheel] .reticle{display:block}
+.reticle svg{width:100%;height:100%;stroke:#e8eef6;fill:none;stroke-width:1.5;opacity:.8}
+.prompt{left:50%;top:56%;transform:translateX(-50%);font:700 .8rem var(--f-d);letter-spacing:.14em;text-transform:uppercase;color:#ffe9a8;background:rgba(5,8,14,.72);padding:4px 12px;white-space:nowrap;display:none}
+.prompt .ico{margin-right:4px}
+.tgt{position:absolute;pointer-events:auto;cursor:inherit}
+.tgt svg{display:block;width:100%;height:auto;overflow:visible}
+.tgt .ring{position:absolute;inset:-8px;border:1.5px dashed transparent;border-radius:50%}
+.tgt.focus .ring{border-color:#ffe9a8}
+.stage:not([data-state=play]) .tgt{pointer-events:none}
+.affs{position:absolute;display:none;gap:3px;left:50%;top:-30px;transform:translateX(-50%);pointer-events:none}
+.tgt.focus .affs{display:flex}
+.affs span{width:22px;height:22px;background:rgba(5,8,14,.85);border:1px solid var(--line);display:grid;place-items:center;color:var(--lc4)}
+.affs .ico{width:14px;height:14px}
+.toasts{left:50%;bottom:16%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:3px;width:min(70%,560px)}
+.toast{background:rgba(5,8,14,.82);border-left:3px solid var(--lc2);padding:3px 12px;font:.78rem var(--f-d);letter-spacing:.06em;color:#eaf1f8;animation:tin .2s}
+.toast.warn{border-color:var(--red)}
+@keyframes tin{from{opacity:0;transform:translateY(6px)}}
+body.rm *,body.rm *::before{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.comm{left:12px;bottom:84px;width:min(300px,44%);display:flex;flex-direction:column;gap:3px}
+.comm .ln{background:rgba(5,8,14,.7);border-left:3px solid var(--blue);padding:3px 8px;font:.7rem/1.3 'Helvetica Neue',Arial,sans-serif;color:#eaf1f8}
+.comm .ln b{display:block;font:700 .6rem var(--f-d);letter-spacing:.08em;color:var(--blue);text-transform:uppercase}
+/* wheel layer */
+.wlayer{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at center,rgba(2,4,8,.72) 0 28%,rgba(2,4,8,.4) 70%)}
+.wlayer.on{display:flex}
+.wlayer svg{height:100%;max-height:100%;width:auto;max-width:100%;touch-action:none}
+.pframe{position:absolute;display:none;flex-direction:column;background:var(--pan);border:1px solid var(--line);border-top:3px solid var(--lc1);backdrop-filter:blur(2px)}
+.pframe.on{display:flex}
+.pframe>.ph{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line)}
+.pframe>.ph h3{font-size:.85rem;color:var(--lc4)}
+.pframe>.ph .x{margin-left:auto;background:none;border:1px solid var(--line);padding:1px 8px;font:.7rem var(--f-m);color:var(--dim)}
+.pframe>.pb{overflow:auto;padding:10px 12px;flex:1}
+#pf-duty{inset:5% 4% 7% 4%}#pf-radio{top:5%;right:2.5%;bottom:7%;width:min(560px,60%)}#pf-log{top:5%;right:2.5%;bottom:7%;width:min(520px,60%)}
+.pause{position:absolute;inset:0;background:rgba(3,6,12,.86);display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center}
+.stage[data-state=paused] .pause{display:flex}
+.pause h2{font-size:1.6rem;color:var(--lc4)}
+.resumechip{position:absolute;left:50%;top:42%;transform:translateX(-50%);display:none;background:rgba(5,8,14,.92);border:1px solid var(--lc1);padding:10px 22px;font:700 .85rem var(--f-d);letter-spacing:.16em;text-transform:uppercase;color:var(--lc4);text-align:center}
+.stage[data-state=resume] .resumechip{display:block}
+.dock{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:none;gap:6px;background:rgba(5,8,14,.85);border:1px solid var(--line);padding:5px 8px}
+body.dockon .dock{display:flex}
+.dock button{display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(255,255,255,.04);border:1px solid var(--line);padding:4px 10px;font:.58rem var(--f-d);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);touch-action:none}
+.dock .ico{width:20px;height:20px}
+.dock button:hover{border-color:var(--lc1)}
+.liftp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(380px,80%);display:none}
+.stage[data-state=lift] .liftp{display:block}
+.liftp .row{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:3px 8px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer;font-size:.78rem}
+.liftp .row:hover,.liftp .row.cur{background:rgba(242,160,61,.14)}.liftp .row i{font:700 .8rem var(--f-m);color:var(--lc1);font-style:normal}
+/* ---------- wheel svg ---------- */
+.wseg{fill:rgba(9,14,24,.88);stroke:rgba(150,180,210,.35);stroke-width:1;transition:fill .08s}
+.wseg.hov{fill:rgba(242,160,61,.9);stroke:var(--lc4)}
+.wseg.off{fill:rgba(9,14,24,.5);stroke-dasharray:3 3}
+.wseg.ctx{stroke:#ffe9a8}
+.wkid{fill:rgba(12,20,34,.92);stroke:rgba(88,201,185,.55);stroke-width:1}
+.wkid.hov{fill:rgba(88,201,185,.95);stroke:#fff}
+.wkid.off{fill:rgba(9,14,24,.5);stroke-dasharray:3 3}
+.wic{color:#dfe9f5}.hov+.wic,.wic.hov{color:#08101a}
+.wnum{fill:#06090f;stroke:none}.wnumt{fill:var(--lc4);font:700 10px var(--f-m);text-anchor:middle;dominant-baseline:central}
+.wlab{fill:#cfe0f0;font:700 11px var(--f-d);letter-spacing:.06em;text-transform:uppercase}
+.wlab.hov{fill:#fff}.wlab.off{fill:#6b7b90}
+.whub{fill:rgba(5,8,14,.95);stroke:rgba(150,180,210,.4)}
+.wt1{fill:var(--lc4);font:800 13px var(--f-d);letter-spacing:.14em;text-anchor:middle;text-transform:uppercase}
+.wt2{fill:#9fb2c8;font:10px 'Helvetica Neue',Arial,sans-serif;text-anchor:middle}
+.wdz{fill:none;stroke:rgba(150,180,210,.2);stroke-dasharray:2 4}
+.wcur{fill:#ffe9a8;stroke:#000;stroke-width:1}
+/* ---------- contacts ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.chips button{background:rgba(255,255,255,.04);border:1px solid var(--line);padding:2px 10px;font:700 .66rem var(--f-d);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.chips button[aria-pressed=true]{background:var(--lc1);color:#08101a;border-color:var(--lc1)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:8px}
+.card{--c:#888;position:relative;display:grid;grid-template-columns:54px 1fr;gap:2px 9px;text-align:left;background:rgba(13,18,32,.92);border:1px solid var(--line);border-top:3px solid var(--c);padding:7px 8px 6px;clip-path:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,0 100%)}
+.card:hover,.card:focus-visible,.card.sel{outline:2px solid var(--lc1);outline-offset:-2px;background:rgba(30,38,56,.95)}
+.card .pt{position:relative;width:54px;height:54px;grid-row:1/3}.card .pt svg.p{width:54px;height:54px;display:block;border:1px solid rgba(255,255,255,.12)}
+.card .dot{position:absolute;right:-5px;bottom:-5px;background:#05070c;border-radius:50%;padding:1px;width:16px;height:16px}
+.card .nm{font:700 .82rem/1.1 var(--f-d);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .tt{font-size:.66rem;color:var(--dim);line-height:1.15;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .mt{grid-column:1/3;display:flex;align-items:center;gap:6px;margin-top:4px;font:.64rem var(--f-m);color:var(--dim)}
+.card .pips{display:inline-flex;gap:2px}.card .pips i{width:7px;height:7px;transform:rotate(45deg);background:var(--c)}.card .pips i.e{background:none;border:1px solid #435}
+.card .dist{margin-left:auto;display:flex;align-items:center;gap:4px}.card .dist b{display:block;width:24px;height:4px;background:#1a2535;position:relative}.card .dist b i{position:absolute;left:0;top:0;bottom:0;background:var(--c)}
+.card .dg{position:absolute;top:4px;right:12px;font:700 .6rem var(--f-m);color:var(--c);opacity:.9}
+.card .tag{position:absolute;top:4px;right:12px;font:700 .55rem var(--f-d);letter-spacing:.1em;background:var(--c);color:#06090f;padding:0 4px}
+.tray{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding:8px;border:1px dashed var(--line);align-items:center}
+.tray .who{font:700 .78rem var(--f-d);letter-spacing:.08em;margin-right:6px}
+.act{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px;padding:5px 8px;background:rgba(255,255,255,.05);border:1px solid var(--line);font:.6rem var(--f-d);letter-spacing:.1em;text-transform:uppercase}
+.act .ico{width:22px;height:22px}.act:hover,.act:focus-visible{border-color:var(--lc1);background:rgba(242,160,61,.14)}
+.act.off{opacity:.4;pointer-events:none}
+/* ---------- log timeline ---------- */
+.tl{position:relative;padding-left:64px;margin-top:4px}
+.tl::before{content:'';position:absolute;left:52px;top:0;bottom:0;width:2px;background:#223046}
+.tl .band{position:absolute;left:49px;width:8px;background:var(--c);opacity:.55}
+.ev{position:relative;margin:0 0 6px;--c:var(--blue)}
+.ev.p-urgent{--c:#ffb347}.ev.p-emergency{--c:#ff5a4a}
+.ev time{position:absolute;left:-64px;top:5px;width:36px;text-align:right;font:.64rem var(--f-m);color:var(--dim)}
+.ev .nd{position:absolute;left:-23px;top:2px;width:24px;height:24px;border-radius:50%;background:#05070c;border:2px solid var(--c);display:grid;place-items:center;color:var(--c)}
+.ev .nd .ico{width:13px;height:13px}
+.ev.ch-pa .nd{border-radius:4px}.ev.ch-alert .nd{border-radius:0;transform:rotate(45deg)}.ev.ch-alert .nd .ico{transform:rotate(-45deg)}
+.ev .bd{margin-left:12px;background:rgba(13,18,32,.9);border:1px solid var(--line);border-left:3px solid var(--c);padding:3px 9px;font-size:.78rem;line-height:1.3}
+.ev .bd b{font:700 .62rem var(--f-d);letter-spacing:.08em;text-transform:uppercase;color:var(--c);display:flex;gap:6px;align-items:center}
+.ev .bd b em{margin-left:auto;font:.6rem var(--f-m);font-style:normal;color:var(--dim)}
+.ev .bd.sm{font-size:.7rem}
+.tl .hr{position:relative;margin:8px 0 6px -64px;font:.6rem var(--f-m);color:var(--dim);display:flex;gap:6px;align-items:center}.tl .hr::after{content:'';flex:1;height:1px;background:#223046}
+.alertcard{--c:#ffb347;border:2px solid var(--c);border-left-width:6px;padding:8px 12px;background:rgba(6,9,16,.85);margin-bottom:8px}
+.alertcard .sev{display:flex;gap:3px;margin:3px 0}.alertcard .sev i{width:16px;height:6px;background:#2a3446}.alertcard .sev i.f{background:var(--c)}
+.alertcard h4{color:var(--c);font-size:1rem;display:flex;gap:8px;align-items:center}
+.steps{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.steps div{flex:1;min-width:110px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 6px;background:rgba(255,255,255,.05);font:.68rem var(--f-d);letter-spacing:.06em;text-transform:uppercase;text-align:center;border:1px solid var(--line)}
+.steps .ico{width:26px;height:26px;color:var(--c)}
+/* ---------- duty ---------- */
+.dhud{display:flex;gap:8px;align-items:flex-start;padding:6px 10px 8px;background:rgba(5,8,14,.62);border-left:3px solid var(--lc1);clip-path:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,0 100%)}
+.dhud .t{font:700 .58rem var(--f-d);letter-spacing:.2em;text-transform:uppercase;color:var(--lc1);margin-bottom:3px;display:flex;gap:8px}
+.dhud .t em{font:.6rem var(--f-m);font-style:normal;color:var(--dim);letter-spacing:0}
+.rings{display:flex;gap:7px}
+.rg{--c:var(--dim);position:relative;width:46px;text-align:center}
+.rg svg.r{width:44px;height:44px;display:block;margin:0 auto;transform:rotate(-90deg)}
+.rg .tr{fill:rgba(5,8,14,.7);stroke:#1f2b3d;stroke-width:4}.rg .pg{fill:none;stroke:var(--c);stroke-width:4;stroke-linecap:butt}
+.rg .ic{position:absolute;left:0;right:0;top:11px;display:grid;place-items:center;color:var(--c)}.rg .ic .ico{width:18px;height:18px}
+.rg small{display:block;font:700 .58rem var(--f-m);color:var(--c);margin-top:1px}
+.rg.s-due{--c:#ffb347}.rg.s-overdue{--c:#ff5a4a}.rg.s-doing{--c:#8fd8ff}.rg.s-done{--c:#4fd18b}.rg.s-delegated{--c:#b79cff}.rg.s-pending{--c:#7e8ea6}
+.rg.s-overdue svg.r{animation:pulse 1s ease-in-out infinite}.rg.s-due svg.r{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{50%{filter:drop-shadow(0 0 5px var(--c))}}
+.pipsrow{display:flex;gap:4px;align-items:center;margin-top:5px;font:.58rem var(--f-m);color:var(--dim)}
+.pipsrow i{width:9px;height:9px;border:1.5px solid #7e8ea6;transform:rotate(45deg);display:inline-block}.pipsrow i.d{background:var(--green);border-color:var(--green)}.pipsrow i.a{border-color:#ffb347;background:#ffb347}.pipsrow i.m{border-color:var(--red);background:var(--red)}
+.dpanel .hd{display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.dpanel .hd .pt svg{width:46px;height:46px;border:1px solid var(--line)}
+.dpanel .hd b{font:800 1rem var(--f-d);letter-spacing:.1em;text-transform:uppercase;color:var(--lc4);display:block}.dpanel .hd small{color:var(--dim);font-size:.72rem}
+.dpanel .sc{margin-left:auto;display:flex;gap:14px;align-items:center}
+.dpanel .sc div{text-align:center;font:.6rem var(--f-d);letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}.dpanel .sc b{display:block;font:800 1.2rem var(--f-m);color:var(--ink);letter-spacing:0}
+.lanes{position:relative;display:grid;grid-template-columns:128px 1fr;font-size:.72rem}
+.lanes .lh{padding:4px 6px 4px 0;display:flex;align-items:center;gap:6px;border-top:1px solid rgba(255,255,255,.07);height:34px;color:var(--ink)}
+.lanes .lh.grp{height:20px;font:700 .6rem var(--f-d);letter-spacing:.18em;text-transform:uppercase;color:var(--lc1);border-top:1px solid var(--line);margin-top:4px}
+.lanes .lh small{color:var(--dim);display:block;font-size:.6rem;line-height:1}
+.lanes .lh .pt svg{width:22px;height:22px;display:block}
+.lanes .ln{position:relative;height:34px;border-top:1px solid rgba(255,255,255,.07);background:repeating-linear-gradient(90deg,transparent 0 calc(5% - 1px),rgba(255,255,255,.05) calc(5% - 1px) 5%)}
+.lanes .ln.grp{height:20px;border-top:1px solid var(--line);margin-top:4px}
+.lanes .axis{height:18px;position:relative;font:.58rem var(--f-m);color:var(--dim)}
+.lanes .axis span{position:absolute;transform:translateX(-50%);top:2px}
+.blk{--c:#7e8ea6;position:absolute;top:4px;bottom:4px;display:flex;align-items:center;gap:4px;padding:0 5px;background:color-mix(in srgb,var(--c) 22%,#0a1019);border:1.5px solid var(--c);color:#fff;font:700 .62rem var(--f-d);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-align:left;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 6px,100% 100%,0 100%)}
+.blk .ico{width:13px;height:13px;color:var(--c)}.blk.nar span{display:none}.blk.nar{justify-content:center;padding:0}
+.blk:hover,.blk:focus-visible,.blk.sel{outline:2px solid #fff;outline-offset:1px;z-index:3}
+.blk.s-pending{border-style:dashed;--c:#7e8ea6}.blk.s-due{--c:#ffb347;background:color-mix(in srgb,#ffb347 35%,#0a1019)}.blk.s-overdue{--c:#ff5a4a;background:color-mix(in srgb,#ff5a4a 40%,#0a1019)}
+.blk.s-doing{--c:#8fd8ff;background:repeating-linear-gradient(135deg,rgba(143,216,255,.3) 0 6px,rgba(143,216,255,.1) 6px 12px)}
+.blk.s-done{--c:#4fd18b}.blk.s-rushed{--c:#c8d94a}.blk.s-faked{--c:#d38bff}.blk.s-skipped{--c:#6b7586;border-style:dotted;opacity:.8}.blk.s-delegated{--c:#b79cff}.blk.s-working{--c:#8fd8ff}
+.now{position:absolute;top:0;bottom:0;width:0;border-left:2px solid #ff6b5a;z-index:2;pointer-events:none}.now::before{content:'NOW';position:absolute;top:-1px;left:3px;font:700 .55rem var(--f-m);color:#ff6b5a}
+.alertband{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(255,179,71,.14) 0 6px,rgba(255,179,71,.05) 6px 12px);border-left:1px solid #ffb347;border-right:1px solid #ffb347;pointer-events:none;z-index:1}
+.alertband span{position:absolute;top:1px;left:4px;font:700 .56rem var(--f-d);letter-spacing:.14em;color:#ffb347;text-transform:uppercase;display:flex;gap:3px;align-items:center}
+.alertband .ico{width:11px;height:11px}
+.pop{position:absolute;z-index:6;background:#0a111c;border:1px solid var(--lc1);padding:9px 10px;width:min(330px,92%);box-shadow:0 8px 30px #000a}
+.pop h4{font-size:.74rem;color:var(--lc4);margin-bottom:2px}.pop small{color:var(--dim);display:block;margin-bottom:6px;font-size:.68rem}
+.pop .row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}.pop .lbl{font:700 .58rem var(--f-d);letter-spacing:.16em;color:var(--lc1);text-transform:uppercase;margin:4px 0 3px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font:.64rem var(--f-d);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.legend span{display:flex;align-items:center;gap:5px}.legend i{width:20px;height:10px;border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 25%,transparent)}
+/* ---------- keys ---------- */
+.kb{display:flex;flex-direction:column;gap:5px;align-items:center;margin:8px 0}
+.kr{display:flex;gap:5px}
+.k{--c:#2a3446;position:relative;width:46px;height:46px;background:color-mix(in srgb,var(--c) 28%,#0b121d);border:1px solid var(--c);border-bottom-width:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 .74rem var(--f-m);color:#cfe;cursor:default;padding:0}
+.k small{font:.5rem var(--f-d);letter-spacing:.04em;color:#fff;opacity:.85;text-transform:uppercase;line-height:1.05;margin-top:1px;text-align:center}
+.k.w2{width:68px}.k.w3{width:96px}.k.w6{width:232px}
+.k:hover,.k.hl{outline:2px solid #fff;z-index:2}
+.k.chg::after{content:'';position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;background:#fff}
+.gl{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;font:.66rem var(--f-d);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.gl span{display:flex;gap:5px;align-items:center}.gl i{width:12px;height:12px;background:var(--c)}
+table.t{width:100%;border-collapse:collapse;font-size:.78rem}
+table.t th{font:700 .62rem var(--f-d);letter-spacing:.16em;text-transform:uppercase;color:var(--lc1);text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)}
+table.t td{padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}
+table.t tr.ch td:nth-child(3){color:var(--lc4)}
+.bind{min-width:74px;background:#16202e;border:1px solid #3a4b61;border-bottom-width:2px;padding:1px 8px;font:.74rem var(--f-m);color:var(--lc4)}
+.bind.cap{border-color:var(--lc1);background:rgba(242,160,61,.2);color:#fff}.bind.bad{border-color:var(--red);color:var(--red)}
+/* ---------- state ---------- */
+svg.sm .nd rect{fill:#0b121d;stroke:#3a4b61;stroke-width:1.5}
+svg.sm .nd text{fill:#cfe0f0;font:700 13px var(--f-d);letter-spacing:.12em;text-anchor:middle}
+svg.sm .nd text.s{fill:#8fa0b6;font:10.5px 'Helvetica Neue',Arial,sans-serif;letter-spacing:0}
+svg.sm .nd.cur rect{fill:#2a1d08;stroke:var(--lc1);stroke-width:3}
+svg.sm .nd.cur text{fill:#fff}
+svg.sm path.e{fill:none;stroke:#59708c;stroke-width:1.6;marker-end:url(#ah)}
+svg.sm path.e.bad{stroke:var(--red);stroke-dasharray:5 3}
+svg.sm text.el{fill:#9fb2c8;font:10.5px var(--f-m);text-anchor:middle}
+svg.sm text.el.bad{fill:#ff8a7a}
+pre.code{background:#080d16;border:1px solid var(--line);padding:10px 12px;font:.72rem/1.5 var(--f-m);color:#cfe0f0;overflow:auto;margin:0}
+pre.code .c{color:#6b7f98}pre.code .n{color:var(--lc4)}pre.code .r{color:#ff8a7a}
+.ulog{height:180px;overflow:auto;background:#080d16;border:1px solid var(--line);padding:6px 10px;font:.7rem/1.5 var(--f-m);color:#cfe0f0}
+.ulog div b{color:var(--lc4)}.ulog div.bad{color:#ff8a7a}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.btnrow button{background:rgba(255,255,255,.05);border:1px solid var(--line);padding:5px 11px;font:.72rem var(--f-m)}
+.btnrow button:hover{border-color:var(--lc1)}
+.pill{display:inline-block;padding:0 7px;font:700 .6rem var(--f-d);letter-spacing:.12em;text-transform:uppercase;background:var(--lc2);color:#06090f}
+.pill.r{background:var(--lc1)}.pill.g{background:#4a5870;color:#fff}
+.alt{--c:var(--lc3)}.alt.rec{--c:var(--green)}
+.alt h3{font-size:.85rem;color:var(--c);margin-bottom:4px}
+.alt ul{margin:6px 0 0;padding-left:18px;font-size:.8rem}
+.alt svg{width:100%;height:auto;display:block;border:1px solid var(--line);background:#02040a}
+@media (max-width:760px){main{padding:10px}.lanes{grid-template-columns:86px 1fr}.k{width:30px;height:38px;font-size:.6rem}.kr{gap:3px}.kb{gap:3px}.k.w2{width:44px}.k.w3{width:60px}.k.w6{width:140px}.k small{display:none}}
+</style>
+</head>
+<body>
+<!-- icon sprite: 24x24, stroke style matches the game's .ico -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-duty" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="1.5"/><path d="M9 4V3h6v1M9 12l2 2 4-4M9 17h6"/></symbol>
+<symbol id="i-do" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8 7.2 20l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.4 2.4-2.3-.6-.6-2.3z"/></symbol>
+<symbol id="i-delegate" viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><path d="M3 19c0-3 2.5-5 5-5s5 2 5 5M15 7h6m-2.5-2.5L21 7l-2.5 2.5"/></symbol>
+<symbol id="i-report" viewBox="0 0 24 24"><path d="M6 21V4M6 5h11l-2 4 2 4H6"/></symbol>
+<symbol id="i-order" viewBox="0 0 24 24"><path d="M6 11l6-6 6 6M6 18l6-6 6 6"/></symbol>
+<symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.8"/><path d="M8.6 8.6a5 5 0 0 0 0 6.8M15.4 8.6a5 5 0 0 1 0 6.8M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></symbol>
+<symbol id="i-bridge" viewBox="0 0 24 24"><path d="M12 3l6.5 17-6.5-4-6.5 4z"/></symbol>
+<symbol id="i-heads" viewBox="0 0 24 24"><circle cx="12" cy="7" r="2.6"/><circle cx="5.5" cy="10" r="2"/><circle cx="18.5" cy="10" r="2"/><path d="M7.5 20c0-3.3 2-5 4.5-5s4.500 1.700 4.500 5M2 18c0-2.300 1.500-3.500 3.500-3.500M22 18c0-2.300-1.500-3.500-3.500-3.500"/></symbol>
+<symbol id="i-inspect" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l5.500 5.500"/></symbol>
+<symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/></symbol>
+<symbol id="i-tools" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="9" r="2.500"/><path d="M9 15h6M9 18h4"/></symbol>
+<symbol id="i-ship" viewBox="0 0 24 24"><ellipse cx="9" cy="12" rx="6" ry="3.500"/><path d="M15 12h6M18 9v6M9 8.500V5M9 15.500V19"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"/></symbol>
+<symbol id="i-log" viewBox="0 0 24 24"><path d="M5 5h14M5 10h14M5 15h9M5 20h12"/></symbol>
+<symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.500 3.600-7 8-7s8 2.500 8 7"/></symbol>
+<symbol id="i-console" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.500"/><path d="M8 20h8M12 16v4M7 9l2 2-2 2M12 13h4"/></symbol>
+<symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 5h3l2 11h10l2-8H7"/><circle cx="9.500" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8"/></symbol>
+<symbol id="i-greet" viewBox="0 0 24 24"><path d="M4 5h16v11H11l-4 4v-4H4z"/></symbol>
+<symbol id="i-ask" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.500 9.500a2.500 2.500 0 1 1 3.500 2.300c-.7.400-1 1-1 1.700M12 17v.5"/></symbol>
+<symbol id="i-give" viewBox="0 0 24 24"><path d="M3 14h5l3 2h5l3-3M3 11v9M14 4h7M18 1.500L21 4l-3 2.500"/></symbol>
+<symbol id="i-grab" viewBox="0 0 24 24"><path d="M8 12V6.500a1.500 1.500 0 0 1 3 0V11m0-1V5a1.500 1.500 0 0 1 3 0v6m0-3a1.500 1.500 0 0 1 3 0v6a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2.500-4.500 1.700-1.100L8 15"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.500"/><path d="M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M18.700 5.300l-2.100 2.100M7.400 16.600l-2.100 2.100"/></symbol>
+<symbol id="i-hypo" viewBox="0 0 24 24"><path d="M4 20l5-5M9 15l8-8 3 3-8 8zM14 6l4 4M17 3l4 4"/></symbol>
+<symbol id="i-phaser" viewBox="0 0 24 24"><path d="M3 11h12l2-2h4v4h-5l-2 3H8l-1 5H4z"/></symbol>
+<symbol id="i-padd" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1.500"/><path d="M8 7h8M8 11h8M8 15h5"/></symbol>
+<symbol id="i-badge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6l3.500 10-3.500-2-3.500 2z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-proper" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.500 8-8 9-4.500-1-8-4-8-9V6zM8.500 12l2.500 2.500 4.500-5"/></symbol>
+<symbol id="i-rush" viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></symbol>
+<symbol id="i-fake" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19zM14 7l3 3"/></symbol>
+<symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM18 5v14"/></symbol>
+<symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.500 6.500a8 8 0 0 1 0 11"/></symbol>
+<symbol id="i-intercom" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="9" r="3"/><path d="M9 16h6"/></symbol>
+<symbol id="i-lift" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18"/><path d="M9 10l3-3 3 3M9 14l3 3 3-3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.500l4.500 4.500L19 7"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.500"/></symbol>
+<symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 12V5.500a1.500 1.500 0 0 1 3 0V11m0-1.500a1.500 1.500 0 0 1 3 0V13m0-2.500a1.500 1.500 0 0 1 3 0V16a5 5 0 0 1-5 5h-1.500A5 5 0 0 1 7 18l-3.500-5.500L5 11.500 9 15"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9.500 9.500a2.500 2.500 0 1 1 3.500 2.300c-.7.400-1 1-1 1.700M12 17v.5"/></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h3l2-6 3 12 3-9 2 3h5"/></symbol>
+</defs></svg>
+
+<header class="top">
+ <h1>Systems Nominal<small>menus + input redesign · mockup v1 · not wired to the game</small></h1>
+ <nav class="tabs" role="tablist" id="tabs"></nav>
+ <div class="a11y" id="a11y">
+  <span>Text</span><button id="ts-" title="smaller">A-</button><button id="ts+" title="larger">A+</button>
+  <button id="rm" aria-pressed="false">Reduce motion</button>
+  <button id="hc" aria-pressed="false">High contrast</button>
+  <button id="dk" aria-pressed="false">Mouse-only dock</button>
+ </div>
+</header>
+
+<main>
+<!-- =============================== SANDBOX =============================== -->
+<section class="tab" id="t-play" data-title="Sandbox">
+ <p class="lead"><b>Playable mock of the in-game view.</b> Hover a thing to "look at" it (the reticle is faked by hover). Hold <kbd>Q</kbd> for the wheel (move the mouse from where it is when you press, release to choose); a quick tap <kbd>Q</kbd> pins it so you can click. <kbd>E</kbd> uses the thing you look at. Tap <kbd>J</kbd> duty panel · <kbd>H</kbd> contacts · <kbd>L</kbd> comm log · <kbd>Esc</kbd> backs out one layer. Digits pick wheel sectors. Gamepad: hold LB, aim with the right stick.</p>
+ <div class="stagebar">
+  <span>Esc behaviour</span><span class="seg" id="escmode"><button data-v="new" aria-pressed="true">Proposed</button><button data-v="legacy" aria-pressed="false">Legacy (the bug)</button></span>
+  <span>Browser relock</span><span class="seg" id="relock"><button data-v="ok" aria-pressed="true">Allowed</button><button data-v="no" aria-pressed="false">Refused</button></span>
+  <span>Wheel key</span><span class="seg" id="wmode"><button data-v="hold" aria-pressed="true">Hold</button><button data-v="toggle" aria-pressed="false">Toggle</button></span>
+  <span id="statechip" class="pill">PLAY</span>
+ </div>
+ <div class="stage" id="stage" data-state="play">
+  <svg class="bg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+   <defs><linearGradient id="gw" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#162338"/><stop offset="1" stop-color="#0a121f"/></linearGradient>
+   <linearGradient id="gf" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0b1320"/><stop offset="1" stop-color="#1b2a3f"/></linearGradient>
+   <radialGradient id="gl" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#f2a03d" stop-opacity=".5"/><stop offset="1" stop-color="#f2a03d" stop-opacity="0"/></radialGradient></defs>
+   <rect width="1600" height="900" fill="#070b12"/>
+   <polygon points="0,0 560,250 560,640 0,900" fill="url(#gw)"/><polygon points="1600,0 1040,250 1040,640 1600,900" fill="url(#gw)"/>
+   <polygon points="0,0 1600,0 1040,250 560,250" fill="#0c1422"/><polygon points="0,900 1600,900 1040,640 560,640" fill="url(#gf)"/>
+   <rect x="560" y="250" width="480" height="390" fill="#0a111b"/><rect x="690" y="330" width="220" height="310" fill="#05080e" stroke="#2c3f5a" stroke-width="3"/><path d="M800 330v310" stroke="#2c3f5a" stroke-width="3"/>
+   <g stroke="#1d2c42" stroke-width="2"><path d="M140 70L560 250M0 330L560 330M0 560L560 540M1460 70L1040 250M1600 330L1040 330M1600 560L1040 540M200 900L560 640M1400 900L1040 640M500 900L690 640M1100 900L910 640"/></g>
+   <ellipse cx="800" cy="40" rx="300" ry="70" fill="url(#gl)"/><rect x="560" y="26" width="480" height="8" rx="4" fill="#ffd9a0" opacity=".85"/>
+   <g fill="#58c9b9" opacity=".7"><rect x="720" y="300" width="160" height="6"/></g>
+   <text x="800" y="318" text-anchor="middle" fill="#8fd8ff" font-family="monospace" font-size="20" opacity=".7">ENGINEERING  DECK 4</text>
+  </svg>
+  <!-- things you can look at -->
+  <div class="tgt" id="tg-console" data-type="console" data-name="Engineering console" style="left:9%;top:36%;width:15%">
+   <div class="ring"></div><div class="affs"></div>
+   <svg viewBox="0 0 200 220"><path d="M20 210l-6-110 40-36h92l40 36-6 110z" fill="#101a2a" stroke="#3a5272" stroke-width="3"/><rect x="40" y="72" width="120" height="70" fill="#07131a" stroke="#58c9b9" stroke-width="3"/><path d="M52 126l22-20 18 10 24-28 26 22" fill="none" stroke="#58c9b9" stroke-width="3"/><rect x="38" y="152" width="124" height="22" fill="#1b2a40"/><g fill="#f2a03d"><rect x="48" y="158" width="14" height="10"/><rect x="68" y="158" width="14" height="10"/></g><g fill="#ff5a4a"><rect x="148" y="158" width="10" height="10"/></g></svg></div>
+  <div class="tgt" id="tg-crew" data-type="crew" data-name="Ens. Park" style="left:57%;top:34%;width:9%">
+   <div class="ring"></div><div class="affs"></div>
+   <svg viewBox="0 0 100 230"><ellipse cx="50" cy="30" rx="19" ry="23" fill="#8d5f43"/><path d="M31 26c0-16 8-22 19-22s19 6 19 22c-6-8-12-9-19-9s-13 1-19 9z" fill="#111"/><path d="M14 80c0-18 14-30 36-30s36 12 36 30v70H14z" fill="#f2a03d"/><rect x="16" y="150" width="68" height="72" fill="#23314a"/><rect x="34" y="62" width="32" height="8" fill="#c0392b" opacity=".0"/><path d="M22 88h56" stroke="#0a0d12" stroke-width="3" opacity=".4"/></svg></div>
+  <div class="tgt" id="tg-cart" data-type="cart" data-name="Supply cart" style="left:72%;top:56%;width:15%">
+   <div class="ring"></div><div class="affs"></div>
+   <svg viewBox="0 0 220 160"><path d="M10 40h200l-14 80H24z" fill="#1c2a40" stroke="#4a6283" stroke-width="3"/><rect x="30" y="10" width="46" height="32" fill="#5a4630" stroke="#f2a03d"/><rect x="86" y="18" width="40" height="24" fill="#365a58" stroke="#58c9b9"/><rect x="136" y="6" width="50" height="36" fill="#5a3a3a" stroke="#ff8a7a"/><circle cx="50" cy="138" r="14" fill="#0a1019" stroke="#4a6283" stroke-width="3"/><circle cx="170" cy="138" r="14" fill="#0a1019" stroke="#4a6283" stroke-width="3"/><path d="M196 40l16-30h8" fill="none" stroke="#4a6283" stroke-width="4"/></svg></div>
+  <div class="tgt" id="tg-item" data-type="item" data-name="Spare coupling" style="left:40%;top:72%;width:5%">
+   <div class="ring"></div><div class="affs"></div>
+   <svg viewBox="0 0 80 60"><ellipse cx="40" cy="52" rx="34" ry="7" fill="#000" opacity=".45"/><rect x="12" y="14" width="56" height="34" rx="4" fill="#3b4b66" stroke="#8fd8ff" stroke-width="2"/><circle cx="40" cy="31" r="9" fill="none" stroke="#f2a03d" stroke-width="3"/></svg></div>
+
+  <div class="hud badge">Condition green</div>
+  <div class="hud lockchip"><i></i><span id="lockt">locked · crosshair</span></div>
+  <div class="hud" style="left:12px;top:10px" id="s-dhud"></div>
+  <div class="hud bars"><div>HEALTH</div><div class="bar"><i style="width:82%;background:linear-gradient(90deg,#c9372f,#ff7a66)"></i></div><div>STAMINA</div><div class="bar" style="margin-bottom:0"><i style="width:64%;background:linear-gradient(90deg,#2f8fc0,#7fdcff)"></i></div></div>
+  <div class="hud comm" id="s-comm"></div>
+  <div class="hud hint" id="s-hint"></div>
+  <div class="hud reticle"><svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="2"/><path d="M13 2v5M13 19v5M2 13h5M19 13h5"/></svg></div>
+  <div class="hud prompt" id="s-prompt"></div>
+  <div class="hud toasts" id="s-toasts"></div>
+  <div class="pframe" id="pf-duty"><div class="ph"><h3>Duty board</h3><span class="cap" style="margin:0">J · Esc closes</span><button class="x" data-close>Esc</button></div><div class="pb dpanel" id="pb-duty"></div></div>
+  <div class="pframe" id="pf-radio"><div class="ph"><h3>Comm badge</h3><span class="cap" style="margin:0">H · Esc closes</span><button class="x" data-close>Esc</button></div><div class="pb" id="pb-radio"></div></div>
+  <div class="pframe" id="pf-log"><div class="ph"><h3>Comm log</h3><span class="cap" style="margin:0">L · Esc closes</span><button class="x" data-close>Esc</button></div><div class="pb" id="pb-log"></div></div>
+  <div class="liftp pnl" id="liftp"><h4 style="font-size:.8rem;color:var(--lc4);margin-bottom:6px">Tubelift · pick a deck</h4><div id="liftrows"></div><div class="cap">click · arrows + Enter · digits 1-9, 0 = deck 10 · Esc steps out</div></div>
+  <div class="wlayer" id="wlayer"><svg id="wsvg" viewBox="-340 -272 680 544"></svg></div>
+  <div class="dock" id="dock">
+   <button id="d-wheel" title="press and hold, slide to a sector, release"><svg class="ico"><use href="#i-order"/></svg>Wheel</button>
+   <button data-open="duty"><svg class="ico"><use href="#i-duty"/></svg>Duty</button>
+   <button data-open="radio"><svg class="ico"><use href="#i-radio"/></svg>Radio</button>
+   <button data-open="log"><svg class="ico"><use href="#i-log"/></svg>Log</button>
+   <button data-open="lift"><svg class="ico"><use href="#i-lift"/></svg>Lift</button>
+  </div>
+  <div class="pause"><h2>Paused</h2><p style="margin:0;color:var(--dim);font-size:.85rem">Console locked · shift in progress</p><button class="chipbtn" id="resumebtn" style="padding:8px 26px;font:800 .9rem var(--f-d);letter-spacing:.16em;background:var(--lc1);color:#08101a;border:0">CLICK TO RESUME</button><p class="cap" id="pausewhy" style="max-width:420px"></p></div>
+  <div class="resumechip">Click to resume<div class="cap" style="margin-top:3px;text-transform:none;letter-spacing:0">The browser refused an instant re-lock. One click and you are back; no pause screen, no lost menu state.</div></div>
+ </div>
+ <p class="cap">Try: hover the console, hold Q, flick up-right to Duty... or hold <kbd>J</kbd> for the duty wheel, <kbd>H</kbd> radio wheel, <kbd>V</kbd> tools wheel. Switch "Esc behaviour" to Legacy, open J, press Esc: both the menu closes and Pause opens. In Proposed it only closes the layer.</p>
+</section>
+
+<!-- =============================== WHEELS =============================== -->
+<section class="tab" id="t-wheels" data-title="Wheels">
+ <p class="lead"><b>Radial quick-menu anatomy.</b> One wheel, eight sectors, two rings: inner ring = category, outer ring = the choices inside it (appears on hover, labelled by icon + word, numbered when you use keys). Centre hub = what you are about to do. The dead zone in the middle means "cancel" on release. Sector 1 is always <b>This</b>: the verbs for the exact thing in the reticle.</p>
+ <div class="grid2 w" id="wheelgal"></div>
+ <h2 class="sec">How the three gestures map to one wheel</h2>
+ <div class="grid2">
+  <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2)">Flick (fast, mouse)</h4><p class="cap" style="font-size:.8rem">Hold Q. The hand moves ~1 cm toward an icon (past the dead zone, a gesture, not a target). The outer ring appears under the cursor; flick on to the choice. Release. 300 ms total after practice. Releasing on a category runs its default choice (marked with a dot).</p></div>
+  <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2)">Tap / click (slow, precise)</h4><p class="cap" style="font-size:.8rem">Tap Q (&lt;0.2 s). The wheel pins and the OS cursor appears (pointer lock released by us, not by Esc). Click an icon, click the hub or press Esc to leave. This is also the touch and mouse-only path.</p></div>
+  <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2)">Number keys (no mouse)</h4><p class="cap" style="font-size:.8rem">While open: digit = category, second digit = choice, same digit twice = default. Backspace = back a level. Same muscle memory as the current J menu, but now two keystrokes deep at most.</p></div>
+  <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2)">Gamepad</h4><p class="cap" style="font-size:.8rem">Hold LB: right stick picks, release LB commits (left stick keeps walking, a real advantage over modal menus). D-pad L/R rotates, A confirms, B backs out.</p></div>
+ </div>
+</section>
+
+<!-- =============================== RADIO =============================== -->
+<section class="tab" id="t-radio" data-title="Radio + Log">
+ <p class="lead"><b>Radio becomes contact cards; the log becomes a timeline.</b> Cards carry what the text list could not: who (portrait), rank (pips), department (colour <i>and</i> letter), whether they can answer (status shape), how far away they are. A card is a target; the action tray under it holds the 4-6 things you can do with that person.</p>
+ <div class="grid2">
+  <div><h2 class="sec" style="margin-top:0">Contact cards (H)</h2><div class="pnl"><div id="r-cards"></div></div></div>
+  <div><h2 class="sec" style="margin-top:0">Comm log timeline (L)</h2><div class="pnl"><div id="r-log" style="max-height:640px;overflow:auto"></div></div></div>
+ </div>
+ <h2 class="sec">Alert card (K)</h2>
+ <div class="grid2" id="r-alert"></div>
+</section>
+
+<!-- =============================== DUTY =============================== -->
+<section class="tab" id="t-duty" data-title="Duty">
+ <p class="lead"><b>Two zoom levels.</b> The always-on HUD is a row of clock rings (icon + time left, colour <i>and</i> shape-coded state) plus mission pips: glance, never read. The full board (J) is a swim-lane timeline of the 20-minute watch: your rounds, mission tasks, what your crew is doing, and ship events as a band. Click a block for the actions on exactly that block. Time runs live.</p>
+ <h2 class="sec" style="margin-top:0">Compact HUD</h2>
+ <div class="pnl" style="display:flex;gap:30px;flex-wrap:wrap;align-items:center"><div id="d-hud"></div><div class="cap" style="max-width:520px;font-size:.78rem;font-family:'Helvetica Neue',Arial">Ring = how close the next window is (fills as it approaches), amber when due, red + pulse when overdue, cyan while working, purple when a subordinate has it, green when done. Number = minutes left or <b>!</b>. Pips = mission tasks (green done, amber now, red missed, hollow pending). Reduce-motion stops the pulse; colour is never the only cue (ring numerals, icon, pip fill).</div></div>
+ <h2 class="sec">Full board (J)</h2>
+ <div class="pnl dpanel" id="d-panel" style="position:relative"></div>
+</section>
+
+<!-- =============================== KEYS =============================== -->
+<section class="tab" id="t-keys" data-title="Keys + Access">
+ <p class="lead"><b>One rule: tap = panel or instant action, hold = wheel.</b> Digits only mean anything while a wheel/panel/lift is open, so they never clash with movement. Nothing that exists today moves except J/H/K/L/B/V which gain a hold behaviour. White dot = changed. Click a key to inspect.</p>
+ <div class="btnrow" id="kbmode"><span class="seg"><button data-v="next" aria-pressed="true">Proposed</button><button data-v="now" aria-pressed="false">Today</button></span></div>
+ <div class="gl" id="kbleg"></div>
+ <div class="kb" id="kb"></div>
+ <div class="pnl" id="kbinfo" style="min-height:64px;font-size:.85rem"></div>
+ <h2 class="sec">Rebind (live: the sandbox uses these)</h2>
+ <div class="grid2"><div class="pnl"><table class="t" id="bindtbl"></table><p class="cap">Click a binding, press the new key. Conflicts turn red and are refused. Esc cancels. Persist as <code>fb_keys</code> in localStorage next to <code>fb_cfg</code>.</p></div>
+ <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2);margin-bottom:6px">Accessibility checklist</h4>
+ <ul style="margin:0;padding-left:18px;font-size:.82rem;line-height:1.6">
+  <li><b>Everything doable with mouse only</b>: tap-pinned wheel + on-screen dock (toggle at top of this page) + clickable panels.</li>
+  <li><b>Everything doable with keyboard only</b>: digits, arrows, Enter, Backspace, Esc; Tab order in panels.</li>
+  <li><b>Hold vs toggle</b> for wheel keys (stagebar in Sandbox) for people who cannot hold.</li>
+  <li><b>Text size</b> 80-160% (page header A-/A+); panels use rem. Game CSS must move off fixed px in panels.</li>
+  <li><b>Reduce motion</b>: stops pulses/spin-in; the game already has <code>body.reduce-motion</code> and the media query, so reuse them.</li>
+  <li><b>Colour is never alone</b>: status = shape + colour; dept = letter + colour; priority = icon shape + colour.</li>
+  <li><b>High-contrast</b> toggle (header) raises borders and dims.</li>
+  <li><b>Sticky wheel deadzone/size</b> sliders (sensitivity of flick) in Settings.</li>
+ </ul></div></div>
+ <h2 class="sec">Controller and touch</h2>
+ <div class="grid2">
+  <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2)">Gamepad (standard mapping)</h4><table class="t"><tr><th>Input</th><th>Action</th></tr>
+  <tr><td>LS / RS</td><td>move / look (look frozen and routed to the wheel while LB held)</td></tr><tr><td>LB hold</td><td>main wheel; RS selects; release commits</td></tr>
+  <tr><td>X</td><td>use / context primary (E)</td></tr><tr><td>Y tap · hold</td><td>duty panel · duty wheel</td></tr>
+  <tr><td>RB tap · hold</td><td>cycle handheld · tools wheel</td></tr><tr><td>LT / RT</td><td>sprint / use handheld</td></tr>
+  <tr><td>D-pad up</td><td>radio contacts; left/right rotate selection inside any wheel/panel</td></tr>
+  <tr><td>B</td><td>back one layer</td></tr><tr><td>Start</td><td>pause (script-initiated: always resumable)</td></tr><tr><td>Select</td><td>ship status (hold)</td></tr></table></div>
+  <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2)">Touch (if it ever ships)</h4><ul style="margin:0;padding-left:18px;font-size:.82rem;line-height:1.6"><li>Left thumb stick, right thumb look.</li><li>One round <b>wheel button</b> bottom-right: press-hold, slide to an icon, lift. Same code path as the mouse dock button in the Sandbox (pointerdown/move/up with capture).</li><li>Tap the reticle target = E. Long-press = context wheel.</li><li>Panels are full-screen sheets with a visible X; no hover-only information.</li><li>Targets 44 px minimum; wheel scales with <code>min(vw,vh)</code>.</li></ul></div>
+ </div>
+</section>
+
+<!-- =============================== STATE =============================== -->
+<section class="tab" id="t-state" data-title="Esc bug + states">
+ <h2 class="sec" style="margin-top:0">Diagnosis (js/main.js, js/hud-duty.js, js/hud-comms.js)</h2>
+ <div class="grid2">
+ <div class="pnl"><ol style="margin:0;padding-left:18px;font-size:.84rem;line-height:1.6">
+  <li>J / H / K / L / talk / terminal menus are <b>overlays only</b>. They never leave <code>G.phase === 'play'</code> and never release pointer lock (hud-duty.js <code>openMenu</code>, hud-comms.js <code>openPanel</code>; main.js <code>talkMenu</code>, <code>terminalMenu</code>).</li>
+  <li>The player presses <kbd>Esc</kbd>. The browser <b>consumes it at UA level to exit pointer lock</b>. Whether the page also gets the keydown is browser-dependent (Chrome often swallows it), so the page cannot rely on it either way.</li>
+  <li><code>pointerlockchange</code> (main.js:594-597) runs: <code>locked=false</code>, phase is still <code>'play'</code>, so it does <code>G.phase='paused'; showScreen('pause')</code>. There is no notion of "this unlock was expected".</li>
+  <li>If the keydown <i>was</i> delivered, <code>DutyHUD.onKey</code> (hud-duty.js:63) or <code>CommsHUD.onKey</code> (hud-comms.js:136) closes the menu first: result = menu closes <b>and</b> pause opens. If swallowed, pause opens and the menu DOM stays up under it until the next key (<code>onKey</code> bails on <code>ph!=='play'</code>). Both match the playtest report.</li>
+  <li>The tubelift panel is <i>not</i> affected: it calls <code>exitPointerLock()</code> itself (phase <code>'select'</code>), so Esc arrives as a plain keydown and <code>closeLiftPanel()</code> re-locks inside that keydown gesture.</li>
+ </ol></div>
+ <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2);margin-bottom:6px">Fix: unlock on purpose, then Esc belongs to the page</h4>
+<pre class="code"><span class="c">// ui-mode.js (pure, unit-testable like tools/test-*.mjs)</span>
+UI = { stack:[], expectUnlock:false, scriptPause:false }
+<span class="n">openLayer(kind)</span>: stack.push(kind)
+   if (locked) { expectUnlock = true; document.exitPointerLock() }
+<span class="n">closeLayer()</span>: stack.pop()
+   if (!stack.length) relock()          <span class="c">// inside the keydown/click = user gesture</span>
+<span class="n">relock()</span>: canvas.requestPointerLock().catch(() =>
+   UI.needClick = true)                 <span class="c">// shows "click to resume", NOT pause</span>
+
+<span class="c">// main.js pointerlockchange</span>
+locked = document.pointerLockElement === canvas
+if (!locked && G.phase === 'play') {
+  if (UI.expectUnlock || UI.stack.length) { UI.expectUnlock = false; return }
+  if (UI.wheelHeld) { UI.cancelWheel(); UI.needClick = true; return }
+  pause()      <span class="c">// genuine native Esc in plain play</span>
+}
+<span class="c">// mousedown: if (G.phase==='play' &amp;&amp; !locked &amp;&amp; !UI.stack.length) requestLock()</span>
+<span class="c">//            and ignore clicks whose target is inside .ui-layer</span></pre></div>
+ </div>
+ <h2 class="sec">State machine (live: driven by the Sandbox and by these buttons)</h2>
+ <div class="pnl"><svg class="sm" viewBox="-70 0 1100 480" id="smsvg" role="img" aria-label="state diagram">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#59708c"/></marker></defs>
+  <g class="nd" id="n-wheel"><rect x="40" y="20" width="230" height="90" rx="6"/><text x="155" y="48">WHEEL (held)</text><text class="s" x="155" y="66">locked · mouse deltas feed wheel</text><text class="s" x="155" y="81">key still down</text><text class="s" x="155" y="98" style="fill:#ff8a7a">Esc here: cancel + click-to-resume</text></g>
+  <g class="nd" id="n-play"><rect x="40" y="200" width="230" height="86" rx="6"/><text x="155" y="232">PLAY</text><text class="s" x="155" y="252">locked · crosshair · sim runs</text><text class="s" x="155" y="268">phase = 'play'</text></g>
+  <g class="nd" id="n-menu"><rect x="470" y="200" width="250" height="86" rx="6"/><text x="595" y="230">MENU</text><text class="s" x="595" y="250">unlocked by us · cursor free</text><text class="s" x="595" y="266">panels · pinned wheel · talk · terminal</text></g>
+  <g class="nd" id="n-lift"><rect x="830" y="200" width="180" height="86" rx="6"/><text x="920" y="230">LIFT</text><text class="s" x="920" y="250">unlocked by script</text><text class="s" x="920" y="266">phase select / ride</text></g>
+  <g class="nd" id="n-paused"><rect x="40" y="390" width="230" height="78" rx="6"/><text x="155" y="422">PAUSED</text><text class="s" x="155" y="442">native Esc (or P) · overlay</text></g>
+  <g class="nd" id="n-resume"><rect x="470" y="390" width="250" height="78" rx="6"/><text x="595" y="422">CLICK TO RESUME</text><text class="s" x="595" y="442">relock refused · small chip, sim runs</text></g>
+  <path class="e" d="M95 200 L95 110"/><text class="el" x="86" y="160" style="text-anchor:end">hold Q / J / H / V</text>
+  <path class="e" d="M215 110 L215 200"/><text class="el" x="224" y="160" style="text-anchor:start">release = choose</text>
+  <path class="e" d="M270 55 C420 55 540 100 580 200"/><text class="el" x="470" y="78">tap (&lt;0.2 s) = pin / open panel</text>
+  <path class="e" d="M270 228 L470 228"/><text class="el" x="370" y="220">tap J/H/K/L, E on crew/console</text>
+  <path class="e" d="M470 258 L270 258"/><text class="el" x="370" y="276">Esc / Back → relock</text>
+  <path class="e" d="M720 228 L830 228"/><text class="el" x="775" y="220">E in car</text>
+  <path class="e" d="M830 258 L720 258"/><text class="el" x="775" y="276">Esc / deck</text>
+  <path class="e bad" d="M110 286 L110 390"/><text class="el bad" x="100" y="340" style="text-anchor:end">native Esc, no layer</text>
+  <path class="e" d="M210 390 L210 286"/><text class="el" x="220" y="340" style="text-anchor:start">click Resume</text>
+  <path class="e" d="M595 286 L595 390"/><text class="el" x="605" y="340" style="text-anchor:start">relock rejected</text>
+  <path class="e" d="M470 405 C400 380 330 330 262 286"/><text class="el" x="352" y="388">click</text>
+ </svg></div>
+ <div class="grid2" style="margin-top:12px">
+  <div><div class="btnrow" id="smbtn"></div><div class="ulog" id="ulog"></div></div>
+  <div class="pnl"><table class="t"><tr><th>Condition</th><th>Rule</th></tr>
+   <tr><td>pointerlockchange, lost, no layer, no wheel</td><td>genuine native Esc: <b>pause</b></td></tr>
+   <tr><td>lost, <code>UI.expectUnlock</code> or layer open</td><td>ignore (menu-initiated)</td></tr>
+   <tr><td>lost, wheel held</td><td>cancel wheel, show click-to-resume (not pause)</td></tr>
+   <tr><td>Esc keydown, layer open</td><td>pop one layer; <code>stopImmediatePropagation</code>; relock when stack empties</td></tr>
+   <tr><td>Esc keydown, nothing open, locked</td><td>never delivered reliably; browser unlocks, rule 1</td></tr>
+   <tr><td>P / Start button</td><td>script pause: <code>expectUnlock=true; exitPointerLock()</code>; Esc/P/click all resume (gesture OK)</td></tr>
+   <tr><td>relock promise rejects / <code>pointerlockerror</code></td><td><code>needClick</code> chip; one click resumes</td></tr>
+   <tr><td>phase != 'play' (lift, perk, brief, end)</td><td>layers ignored, pause logic untouched</td></tr>
+   <tr><td>click while unlocked, target in .ui-layer</td><td>do <b>not</b> relock, do not fire()</td></tr>
+  </table></div>
+ </div>
+</section>
+
+<!-- =============================== ALTERNATIVES =============================== -->
+<section class="tab" id="t-alt" data-title="Alternatives">
+ <p class="lead"><b>Three interaction models.</b> A is recommended; B and C reuse most of A's pieces, so choosing A does not close the others off.</p>
+ <div class="grid2">
+  <div class="alt rec pnl"><h3><span class="pill r">Recommended</span> A · Hold-wheel + tap-panels</h3>
+   <svg viewBox="0 0 480 270"><rect width="480" height="270" fill="#070b12"/><g transform="translate(240 135)"><circle r="104" fill="none" stroke="#2b3d57" stroke-width="30"/><g stroke="#05070c" stroke-width="3"><path d="M0 0L0 -120M0 0L85 -85M0 0L120 0M0 0L85 85M0 0L0 120M0 0L-85 85M0 0L-120 0M0 0L-85 -85"/></g><path d="M0 -89 A89 89 0 0 1 63 -63 L84 -84 A119 119 0 0 0 0 -119z" fill="#f2a03d"/><circle r="48" fill="#05070c" stroke="#3a4b61"/><text y="4" text-anchor="middle" fill="#ffd9a0" font-family="Arial" font-size="13" font-weight="800" letter-spacing="2">DUTY</text><g fill="none" stroke="#58c9b9" stroke-width="2"><circle cx="88" cy="-120" r="14"/><circle cx="130" cy="-98" r="14"/></g></g><text x="14" y="26" fill="#8fa0b6" font-family="monospace" font-size="12">hold Q · flick · release</text><text x="14" y="250" fill="#8fa0b6" font-family="monospace" font-size="12">tap J/H/K/L = panels (free cursor)</text></svg>
+   <ul><li>Fastest for the common acts (do duty, hail bridge, switch tool).</li><li>One mental model; letter keys keep working.</li><li>Pinned mode doubles as the mouse-only and touch path.</li><li>Cost: new DOM/SVG component + ui-mode state machine.</li></ul></div>
+  <div class="alt pnl"><h3><span class="pill g">B</span> Command mode (hold Alt = free cursor over the HUD)</h3>
+   <svg viewBox="0 0 480 270"><rect width="480" height="270" fill="#070b12"/><rect x="12" y="12" width="150" height="64" fill="none" stroke="#f2a03d" stroke-dasharray="5 4"/><text x="20" y="30" fill="#f2a03d" font-family="monospace" font-size="11">duty HUD (clickable)</text><g fill="#1b2a3f" stroke="#58c9b9"><circle cx="40" cy="54" r="12"/><circle cx="76" cy="54" r="12"/><circle cx="112" cy="54" r="12"/></g><rect x="310" y="12" width="158" height="120" fill="none" stroke="#58c9b9" stroke-dasharray="5 4"/><text x="318" y="30" fill="#58c9b9" font-family="monospace" font-size="11">contacts strip</text><g fill="#16202e" stroke="#6f8fb8"><rect x="318" y="38" width="40" height="40"/><rect x="364" y="38" width="40" height="40"/><rect x="410" y="38" width="40" height="40"/><rect x="318" y="84" width="40" height="40"/><rect x="364" y="84" width="40" height="40"/></g><path d="M230 140l0 18 5-5 4 10 4-2-4-10 7 0z" fill="#fff" stroke="#000"/><text x="14" y="250" fill="#8fa0b6" font-family="monospace" font-size="12">HUD is always on screen; Alt frees the pointer</text></svg>
+   <ul><li>No new component: existing HUD widgets become buttons.</li><li>Always-visible info is the menu (Fallout 76 / Rust style).</li><li>Needs screen real estate permanently; clutters the "calm ship" feel; slower for keyboard players.</li><li>Good fallback layer inside A (that is what pinned mode is).</li></ul></div>
+  <div class="alt pnl"><h3><span class="pill g">C</span> Diegetic PADD (hold Tab raises it)</h3>
+   <svg viewBox="0 0 480 270"><rect width="480" height="270" fill="#070b12"/><g transform="rotate(-6 240 260)"><rect x="120" y="70" width="240" height="220" rx="12" fill="#101a2a" stroke="#4a6283" stroke-width="3"/><rect x="132" y="82" width="216" height="196" rx="4" fill="#06101a" stroke="#58c9b9"/><g fill="none" stroke="#58c9b9" stroke-width="2"><rect x="144" y="94" width="46" height="34"/><rect x="198" y="94" width="46" height="34"/><rect x="252" y="94" width="46" height="34"/><rect x="306" y="94" width="34" height="34" /></g><g fill="#2a3a52"><rect x="144" y="140" width="196" height="12"/><rect x="144" y="158" width="196" height="12"/><rect x="144" y="176" width="140" height="12"/></g></g><text x="14" y="26" fill="#8fa0b6" font-family="monospace" font-size="12">tabs: Duty · Crew · Log · Ship · Map</text></svg>
+   <ul><li>On-theme; the PADD item already exists in handhelds.</li><li>One surface for all panels, easy gamepad nav.</li><li>Slow to reach (raise animation), not usable mid-sprint, and the world stays live behind a half-screen prop.</li><li>Best as the visual shell for A's panels, later.</li></ul></div>
+  <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2);margin-bottom:6px">Why A</h4><ul style="margin:0;padding-left:18px;font-size:.84rem;line-height:1.6"><li>Fixes the owner's three complaints directly: icons not text, no clunky key per sub-menu, and Esc stops fighting.</li><li>The game is a real-time walk-around; the quick path must not take the hand off WASD (Q/E/V/J/H are all left-hand).</li><li>It includes B (pinned wheel, dock) as its slow path and can host C later.</li></ul></div>
+ </div>
+</section>
+</main>
+
+<script>
+'use strict';
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const ico=(n,c='')=>`<svg class="ico ${c}"><use href="#i-${n}"/></svg>`;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+/* ---------------- header / tabs / a11y ---------------- */
+const TABS=$$('section.tab');
+$('#tabs').innerHTML=TABS.map(s=>`<button role="tab" aria-selected="false" data-t="${s.id}">${s.dataset.title}</button>`).join('');
+function showTab(id){TABS.forEach(s=>s.classList.toggle('on',s.id===id));$$('#tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===id));try{history.replaceState(null,'','#'+id)}catch(e){}}
+$('#tabs').onclick=e=>{const b=e.target.closest('button');if(b)showTab(b.dataset.t)};
+let TS=1;const setTS=v=>{TS=clamp(v,.8,1.6);document.documentElement.style.setProperty('--ts',TS)};
+$('#ts-').onclick=()=>setTS(TS-.1);$('#ts\\+').onclick=()=>setTS(TS+.1);
+const tog=(id,fn)=>{const b=$(id);b.onclick=()=>{const on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on);fn(on)}};
+tog('#rm',on=>document.body.classList.toggle('rm',on));tog('#hc',on=>document.documentElement.classList.toggle('hc',on));tog('#dk',on=>document.body.classList.toggle('dockon',on));
+/* ---------------- data ---------------- */
+const DEPT={cmd:{n:'Command',c:'#ff6b5a',g:'C'},eng:{n:'Engineering',c:'#f2a03d',g:'E'},ops:{n:'Operations',c:'#d6c85a',g:'O'},med:{n:'Medical',c:'#58c9b9',g:'M'},sci:{n:'Science',c:'#6f9bff',g:'S'},sec:{n:'Security',c:'#c77dff',g:'X'}};
+const ST={duty:['On watch','#4fd18b'],busy:['Busy',' #ffb347'.trim()],transit:['In transit','#8fd8ff'],off:['Off watch','#7e8ea6'],down:['Unreachable','#ff5a4a']};
+const CREW=[
+ {id:'co',short:'Capt. Rhee',title:'Commanding Officer',dept:'cmd',rank:5,st:'duty',deck:1,d:120,sk:1,hr:2,head:1,bridge:1},
+ {id:'xo',short:'Cdr. Okafor',title:'Executive Officer',dept:'cmd',rank:4,st:'duty',deck:1,d:118,sk:2,hr:0,head:1,bridge:1},
+ {id:'ce',short:'Lt Cdr. Varga',title:'Chief Engineer',dept:'eng',rank:3,st:'busy',deck:4,d:14,sk:0,hr:1,head:1,boss:1},
+ {id:'cmo',short:'Cdr. Osei',title:'Chief Medical Officer',dept:'med',rank:4,st:'duty',deck:5,d:42,sk:2,hr:3,head:1},
+ {id:'cso',short:'Lt Cdr. Ito',title:'Chief Science Officer',dept:'sci',rank:3,st:'busy',deck:3,d:58,sk:3,hr:0,head:1},
+ {id:'cos',short:'Lt. Brandt',title:'Chief of Security',dept:'sec',rank:2,st:'transit',deck:4,d:31,sk:0,hr:2,head:1},
+ {id:'e2',short:'Ens. Park',title:'Coolant Technician',dept:'eng',rank:1,st:'busy',deck:4,d:3,sk:3,hr:0,sub:1,near:1},
+ {id:'e3',short:'Ens. Duval',title:'Conduit Technician',dept:'eng',rank:1,st:'transit',deck:4,d:9,sk:1,hr:1,sub:1,near:1},
+ {id:'m1',short:'Lt. Adeyemi',title:'Staff Nurse',dept:'med',rank:2,st:'off',deck:6,d:66,sk:2,hr:3},
+ {id:'o1',short:'Ens. Lindqvist',title:'Helm Officer',dept:'ops',rank:1,st:'down',deck:1,d:121,sk:0,hr:1,bridge:1}
+];
+const byId=id=>CREW.find(c=>c.id===id);
+const ME={short:'Lt. Marsh',title:'Power Systems Officer',dept:'eng',rank:2,sk:0,hr:1,boss:'Lt Cdr. Varga'};
+function portrait(p,s=54){
+ const c=DEPT[p.dept].c, sk=['#d8b99a','#b98a67','#8d5f43','#e6cdb3'][p.sk||0], hr=['#2a2018','#5a3b22','#c9c2b0','#111'][p.hr||0];
+ const H=['<path d="M21.500 24C21 14 26 11.500 32 11.500S43 14 42.500 24C40 19 36 18 32 18S24 19 21.500 24z"/>','<path d="M20 26C19 14 25 9 32 9s13 5 12 17l1 13-4-2V23c-3-3-6-4-9-4s-6 1-9 4v14l-4 2z"/>','','<path d="M21.500 24C22 14 27 11.500 32 11.500S42 14 42.500 24C39 19.500 36 18.500 32 18.500S25 19.500 21.500 24z"/><circle cx="32" cy="10" r="4"/>'][p.hr%4];
+ return `<svg class="p" width="${s}" height="${s}" viewBox="0 0 64 64"><rect width="64" height="64" fill="#0d1522"/><path d="M5 64c0-14 11-21 27-21s27 7 27 21z" fill="${c}" opacity=".9"/><path d="M25 44l7 9 7-9" fill="none" stroke="#06090f" stroke-width="2" opacity=".45"/><rect x="28" y="36" width="8" height="11" fill="${sk}"/><ellipse cx="32" cy="26" rx="10.500" ry="12" fill="${sk}"/><g fill="${hr}">${H}</g></svg>`;
+}
+function dot(st){const col=ST[st][1].trim(),t=ST[st][0];const s={duty:`<circle cx="8" cy="8" r="5" fill="${col}"/>`,busy:`<path d="M8 2l6 6-6 6-6-6z" fill="${col}"/>`,transit:`<path d="M3 2l11 6-11 6z" fill="${col}"/>`,off:`<circle cx="8" cy="8" r="4.500" fill="none" stroke="${col}" stroke-width="2"/>`,down:`<path d="M3 3l10 10M13 3L3 13" stroke="${col}" stroke-width="2.600"/>`}[st];return `<svg class="dot" viewBox="0 0 16 16" role="img" aria-label="${t}"><title>${t}</title>${s}</svg>`}
+const pips=(n)=>`<span class="pips" title="rank ${n}/5">${[1,2,3,4,5].map(i=>`<i class="${i<=n?'':'e'}"></i>`).join('')}</span>`;
+/* ---------------- shared log ---------------- */
+const hhmm=h=>{const hh=Math.floor(h),mm=Math.floor((h-hh)*60);return String(hh).padStart(2,'0')+String(mm).padStart(2,'0')};
+const LOG=[
+ {h:7+0.2/60,ch:'pa',p:'routine',from:'Ship PA',text:'All decks report nominal. Second seating in the galley begins at 0720.'},
+ {h:7+1.1/60,ch:'comm',p:'routine',from:'Capt. Rhee',to:'Bridge',text:'Engineering, report on warp core coolant temperature.'},
+ {h:7+1.9/60,ch:'comm',p:'routine',from:'Lt Cdr. Varga',to:'Capt. Rhee',text:'Coolant within limits. Marsh is running the rounds.'},
+ {h:7+3.1/60,ch:'intercom',p:'routine',from:'Ens. Park',to:'Lt. Marsh',text:'Sir, conduit 4-C reads warm. Want me to look?'},
+ {h:7+4.6/60,ch:'alert',p:'urgent',from:'Ship',text:'Yellow alert raised: plasma conduit anomaly, Deck 4.',alert:1},
+ {h:7+5.2/60,ch:'order',p:'urgent',from:'Cdr. Okafor',to:'All engineering',text:'Isolate conduit 4-C. Report when done.'},
+ {h:7+6.7/60,ch:'comm',p:'emergency',from:'Ens. Duval',to:'Lt. Marsh',text:'Venting on 4-C! I am clear but I need a hand.'}
+];
+const CHI={pa:'speaker',comm:'badge',intercom:'intercom',alert:'alert',order:'order'};
+let toastHook=()=>{};
+function addLog(o){LOG.push({h:CLOCK.hour,...o});renderAllLogs();}
+/* ---------------- duty sim ---------------- */
+const T=20;
+const CLOCK={now:7.4,get hour(){return 7+this.now/60}};   // watch starts 0700; 1 unit = 1 ship minute
+const LOOPS=[
+ {id:'core',label:'Warp core check',short:'Core',ic:'do',room:'Engineering',every:6,off:1.0,dur:1.2},
+ {id:'cond',label:'Plasma conduit walk',short:'Conduit',ic:'tools',room:'Deck 4 corridor',every:8,off:3.0,dur:1.6},
+ {id:'logE',label:'Engineering log entry',short:'Log',ic:'log',room:'Console',every:5,off:2.0,dur:.7}
+];
+const TASKS=[{id:'t1',label:'Calibrate relay',at:4,len:3,room:'Eng. bay',state:'done',q:'proper'},{id:'t2',label:'Inventory couplings',at:10,len:4,room:'Stores',state:'pending'},{id:'t3',label:'Test lift coupling',at:15,len:4,room:'Lift shaft',state:'pending'}];
+const INST=[];
+LOOPS.forEach(l=>{let k=0;for(let s=l.off;s<T;s+=l.every,k++){INST.push({id:l.id+k,loop:l,start:s,dur:l.dur,state:'pending',kind:'loop'})}});
+const QS=['proper','proper','rushed','faked','proper','proper'];let qi=0;
+INST.forEach(i=>{if(i.start+i.dur+1.5<CLOCK.now){const q=QS[qi++%6];i.state=q==='proper'?'done':q}});
+INST.find(i=>i.id==='cond1').state='delegated';
+const CREWBLK=[{who:'e2',label:'Coolant sweep',at:6,len:3,state:'working'},{who:'e2',label:'Log review',at:12,len:2,state:'pending'},{who:'e3',label:'Conduit walk (you)',at:11,len:1.8,state:'delegated'},{who:'e3',label:'Break',at:16,len:1.5,state:'pending'}];
+const ALERTBAND={from:9,to:13,label:'Yellow alert'};
+function phaseOf(i){ // current display state of an instance
+ if(['done','rushed','faked','skipped','delegated','doing','working'].includes(i.state))return i.state;
+ const n=CLOCK.now; if(n<i.start)return 'pending'; return n<=i.start+1.5?'due':'overdue';
+}
+function ringFor(i){const n=CLOCK.now,st=phaseOf(i);let frac=0,txt='';
+ if(st==='pending'){const w=i.loop.every;frac=clamp(1-(i.start-n)/w,0,1);txt=Math.max(0,Math.ceil(i.start-n))+'m'}
+ else if(st==='due'){frac=clamp(1-(n-i.start)/1.5,0,1);txt=Math.ceil(i.start+1.5-n)+'m'}
+ else if(st==='overdue'){frac=1;txt='!'}
+ else if(st==='doing'){frac=clamp((n-i.t0)/i.dur,0,1);txt='…'}
+ else if(st==='delegated'){frac=.6;txt='Duv'}
+ else{frac=1;txt='✓'}
+ return {st,frac,txt}}
+function nextPerLoop(){return LOOPS.map(l=>{const arr=INST.filter(i=>i.loop===l);const live=arr.find(i=>['due','overdue','doing'].includes(phaseOf(i)))||arr.find(i=>phaseOf(i)==='delegated'&&i.start+i.dur>CLOCK.now-.5)||arr.find(i=>phaseOf(i)==='pending');return live||arr[arr.length-1]})}
+function ringHTML(i){const r=ringFor(i),C=2*Math.PI*17;return `<div class="rg s-${r.st}" title="${esc(i.loop.label)}"><svg class="r" viewBox="0 0 44 44"><circle class="tr" cx="22" cy="22" r="17"/><circle class="pg" cx="22" cy="22" r="17" stroke-dasharray="${(C*r.frac).toFixed(1)} ${C}"/></svg><span class="ic">${ico(i.loop.ic)}</span><small>${r.txt}</small></div>`}
+function pipsHTML(){return TASKS.map(t=>{const c=t.state==='done'?'d':t.state==='missed'?'m':(CLOCK.now>=t.at&&CLOCK.now<t.at+t.len)?'a':'';return `<i class="${c}" title="${esc(t.label)}"></i>`}).join('')}
+function dhudHTML(){const al=CLOCK.now>=ALERTBAND.from&&CLOCK.now<ALERTBAND.to;return `<div class="dhud"><div><div class="t">Duty <em>${hhmm(CLOCK.hour)}</em></div><div class="rings">${nextPerLoop().map(ringHTML).join('')}</div><div class="pipsrow">${pipsHTML()}<span>&nbsp;tasks ${TASKS.filter(t=>t.state==='done').length}/${TASKS.length}</span>${al?`<span style="color:#ffb347;margin-left:6px">${ico('alert')}</span>`:''}</div></div></div>`}
+/* duty panel */
+let popFor=null;
+function blkHTML(i,lab){const st=phaseOf(i),ln=i.loop||i,w=(i.dur||i.len)/T*100,l=(i.start??i.at)/T*100;const ic={done:'check',rushed:'rush',faked:'fake',skipped:'skip',delegated:'delegate',doing:'clock',due:'clock',overdue:'alert',pending:'clock',working:'person'}[st];return `<button class="blk s-${st}${w<6.5?' nar':''}" data-k="${i.id}" style="left:${l}%;width:${Math.max(w,2.6)}%" title="${esc((i.loop?i.loop.label:i.label)+' · '+st)}">${ico(ic)}<span>${esc(lab)}</span></button>`}
+function dpanelHTML(){
+ const ax=Array.from({length:T/2+1},(_,k)=>`<span style="left:${k*2/T*100}%">${hhmm(7+k*2/60)}</span>`).join('');
+ const now=`<div class="now" style="left:${CLOCK.now/T*100}%"></div>`;
+ const band=(h)=>`<div class="alertband" style="left:${ALERTBAND.from/T*100}%;width:${(ALERTBAND.to-ALERTBAND.from)/T*100}%">${h?`<span>${ico('alert')}${ALERTBAND.label}</span>`:''}</div>`;
+ const rows=[];
+ rows.push(`<div class="lh grp">Your rounds</div><div class="ln grp">${band(1)}</div>`);
+ LOOPS.forEach(l=>{rows.push(`<div class="lh">${ico(l.ic)}<span>${l.short}<small>${l.room} · every ${l.every}m</small></span></div><div class="ln">${band(0)}${INST.filter(i=>i.loop===l).map(i=>blkHTML(i,l.short)).join('')}</div>`)});
+ rows.push(`<div class="lh grp">Mission tasks</div><div class="ln grp"></div>`);
+ rows.push(`<div class="lh">${ico('duty')}<span>Tasks<small>${TASKS.filter(t=>t.state==='done').length}/${TASKS.length} done</small></span></div><div class="ln">${band(0)}${TASKS.map(t=>blkHTML({...t,kind:'task',start:t.at,dur:t.len},t.label)).join('')}</div>`);
+ rows.push(`<div class="lh grp">Your crew</div><div class="ln grp"></div>`);
+ ['e2','e3'].forEach(id=>{const p=byId(id);rows.push(`<div class="lh"><span class="pt">${portrait(p,22)}</span><span>${p.short.replace('Ens. ','')}<small>${p.title}</small></span></div><div class="ln">${band(0)}${CREWBLK.filter(b=>b.who===id).map((b,ix)=>blkHTML({id:'c'+id+ix,label:b.label,start:b.at,dur:b.len,state:b.state,_s:b.state},b.label)).join('')}</div>`)});
+ const sc=Math.round(82);
+ return `<div class="hd"><span class="pt">${portrait(ME,46)}</span><div><b>${ME.short} · ${ME.title}</b><small>Engineering · reports to ${ME.boss} · 2 under your command</small></div><div class="sc"><div><b>${sc}%</b>duty score</div><div><b>71%</b>crew trust</div><div><b>${hhmm(CLOCK.hour)}</b>ship time</div></div></div>
+ <div class="lanes"><div></div><div class="axis">${ax}</div>${rows.join('')}</div>
+ <div class="legend">${[['pending','Later'],['due','Due now'],['overdue','Overdue'],['doing','Working'],['done','Done properly'],['rushed','Rushed'],['faked','Log faked'],['skipped','Skipped'],['delegated','Delegated']].map(([s,t])=>`<span style="--c:${{pending:'#7e8ea6',due:'#ffb347',overdue:'#ff5a4a',doing:'#8fd8ff',done:'#4fd18b',rushed:'#c8d94a',faked:'#d38bff',skipped:'#6b7586',delegated:'#b79cff'}[s]}"><i></i>${t}</span>`).join('')}</div>
+ <div style="position:absolute;left:0;top:0;right:0;pointer-events:none" id="popwrap"></div>`;
+}
+function renderPanel(root){
+ root.innerHTML=dpanelHTML();
+ const lanes=$('.lanes',root);const lh=lanes.children[0];
+ // place the NOW line over the lane area
+ const area=document.createElement('div');area.style.cssText='position:absolute;left:128px;right:0;top:0;bottom:0;pointer-events:none';area.innerHTML=`<div class="now" style="left:${CLOCK.now/T*100}%;"></div>`;lanes.style.position='relative';
+ const w=window.innerWidth<=760?86:128;area.style.left=w+'px';lanes.appendChild(area);
+ if(popFor)showPop(root,popFor);
+}
+function showPop(root,k){
+ const i=INST.find(x=>x.id===k)||TASKS.find(x=>x.id===k);const b=$(`.blk[data-k="${k}"]`,root);if(!b)return;
+ const isLoop=!!i?.loop,st=i?phaseOf(isLoop?i:{...i,start:i.at,dur:i.len,loop:{every:6}}):'pending';
+ const lab=isLoop?i.loop.label:(i?i.label:'Crew item'),room=isLoop?i.loop.room:(i?i.room:'');
+ const q=(id,ic,t,sub)=>`<button class="act" data-do="${id}" data-k="${k}">${ico(ic)}${t}<span style="opacity:.6;letter-spacing:0;text-transform:none">${sub}</span></button>`;
+ let body;
+ if(!i){body=`<div class="lbl">Orders</div><div class="row"><button class="act" data-do="nudge" data-k="${k}">${ico('order')}Nudge</button><button class="act" data-do="radio" data-k="${k}">${ico('radio')}Hail</button></div>`}
+ else if(['done','rushed','faked'].includes(st))body=`<div class="lbl">Report to the bridge</div><div class="row">${q('rep1','report','Honest','trust +')}${st!=='done'?q('rep0','fake','"All fine"','risky'):''}</div>`;
+ else if(st==='skipped')body=`<div class="cap">Nothing to do. It was skipped.</div>`;
+ else if(st==='delegated')body=`<div class="cap">Ens. Duval has this. ${ico('radio')} hail to check in.</div><div class="row"><button class="act" data-do="radio" data-k="${k}">${ico('radio')}Check in</button></div>`;
+ else body=`<div class="lbl">How will you do it?</div><div class="row">${q('proper','proper','Properly','4 s')}${q('rushed','rush','Rush','2 s')}${q('faked','fake','Fake log','0 s · risk')}${q('skipped','skip','Skip','0 s')}</div>${isLoop?`<div class="lbl">Or delegate to</div><div class="row">${CREW.filter(c=>c.sub).map(c=>`<button class="act" data-do="deleg:${c.id}" data-k="${k}"><span class="pt" style="display:block">${portrait(c,26)}</span>${c.short.replace('Ens. ','')}<span style="opacity:.6;letter-spacing:0">${dot('busy').replace('class="dot"','style="width:11px;height:11px"')}</span></button>`).join('')}</div>`:''}`;
+ const pop=document.createElement('div');pop.className='pop';pop.style.pointerEvents='auto';
+ pop.innerHTML=`<h4>${esc(lab)}</h4><small>${esc(room)} · ${st} <button class="x" data-popx style="float:right;background:none;border:1px solid var(--line);font:.6rem var(--f-m);padding:0 6px;color:var(--dim)">close</button></small>${body}`;
+ const wrap=$('#popwrap',root);wrap.innerHTML='';wrap.appendChild(pop);
+ const br=b.getBoundingClientRect(),rr=root.getBoundingClientRect(),pw=Math.min(330,rr.width*.92);
+ let left=clamp(br.left-rr.left+br.width/2-pw/2,6,rr.width-pw-6),top=br.top-rr.top+br.height+6;
+ if(top+190>rr.height)top=Math.max(4,br.top-rr.top-196);
+ pop.style.left=left+'px';pop.style.top=top+'px';$$('.blk',root).forEach(x=>x.classList.toggle('sel',x===b));
+}
+function dutyClick(root,rerender){
+ root.onclick=e=>{
+  if(e.target.closest('[data-popx]')){popFor=null;rerender();return}
+  const a=e.target.closest('[data-do]');
+  if(a){const i=INST.find(x=>x.id===a.dataset.k),d=a.dataset.do;
+   if(['proper','rushed','faked','skipped'].includes(d)&&i){if(d==='skipped'||d==='faked'){i.state=d}else{i.state='doing';i.t0=CLOCK.now;i._q=d}toast(`${i.loop.label}: ${d}`,d==='faked'?'warn':'');}
+   else if(d.startsWith('deleg:')&&i){i.state='delegated';toast(`${i.loop.label} delegated to ${byId(d.slice(6)).short}`);}
+   else if(d==='rep1'||d==='rep0'){addLog({ch:'comm',p:'routine',from:ME.short,to:'Bridge',text:d==='rep1'?'Report: round completed as logged.':'Report: all fine.'});toast('Reported to the bridge')}
+   else if(d==='radio'||d==='nudge'){toast('Hailing…')}
+   popFor=null;rerender();return}
+  const b=e.target.closest('.blk');if(b){popFor=popFor===b.dataset.k?null:b.dataset.k;rerender()}
+ };
+}
+/* ---------------- contacts ---------------- */
+let rFilter='all',rSel=null;
+function cardHTML(p){const D=DEPT[p.dept],dist=p.d>=100?'bridge':p.d+' m';return `<button class="card" style="--c:${D.c}" data-id="${p.id}" aria-label="${esc(p.short)}, ${esc(p.title)}, ${ST[p.st][0]}, ${dist}"><span class="pt">${portrait(p)}<span class="dot">${dot(p.st)}</span></span><span><span class="nm">${esc(p.short)}</span><span class="tt">${esc(p.title)}</span></span><span class="dg">${D.g}</span><span class="mt">${pips(p.rank)}<span class="dist"><b><i style="width:${clamp(100-p.d*1.2,6,100)}%"></i></b>D${p.deck}·${p.d>=100?'—':p.d+'m'}</span></span></button>`}
+function renderContacts(root,st){
+ const f={all:()=>true,heads:p=>p.head,mine:p=>p.sub,near:p=>p.d<40&&p.st!=='down',bridge:p=>p.bridge};
+ const list=CREW.filter(f[rFilter]).sort((a,b)=>(a.st==='down')-(b.st==='down')||a.d-b.d);
+ const sel=byId(rSel);
+ const A=[['badge','Hail','hail'],['order','Order duty','order'],['delegate','Ask help','help'],['pin','Locate','loc'],['greet','Say hi','hi']];
+ root.innerHTML=`<div class="chips" role="group" aria-label="filter">${[['all','Everyone'],['heads','Dept heads'],['mine','My reports'],['near','Nearby'],['bridge','Bridge']].map(([k,t])=>`<button data-f="${k}" aria-pressed="${rFilter===k}">${t}</button>`).join('')}</div>
+ <div class="cards">${list.map(cardHTML).join('')}</div>
+ <div class="tray">${sel?`<span class="who" style="color:${DEPT[sel.dept].c}">${esc(sel.short)}</span>${A.map(([i,t,id])=>`<button class="act${sel.st==='down'&&id!=='loc'?' off':''}${id==='order'&&!sel.sub?' off':''}" data-ca="${id}">${ico(i)}${t}</button>`).join('')}`:`<span class="cap" style="margin:0">Select a card: ${ico('badge')} hail · ${ico('order')} order · ${ico('delegate')} ask for help · ${ico('pin')} locate</span>`}</div>
+ <p class="cap">${ico('heads')} Status: ${Object.entries(ST).map(([k,v])=>dot(k).replace('class="dot"','style="width:12px;height:12px;vertical-align:-2px"')+' '+v[0]).join(' &nbsp; ')}</p>`;
+ root.onclick=e=>{const f=e.target.closest('[data-f]');if(f){rFilter=f.dataset.f;renderContacts(root);return}
+  const a=e.target.closest('[data-ca]');if(a){const p=byId(rSel);const id=a.dataset.ca;
+   if(id==='hail'){addLog({ch:'comm',p:'routine',from:ME.short,to:p.short,text:`${p.short}, Marsh. Do you have a moment?`});setTimeout(()=>addLog({ch:'comm',p:'routine',from:p.short,to:ME.short,text:'Go ahead, sir.'}),1200)}
+   toast(`${a.textContent.trim()} · ${p.short}`);return}
+  const c=e.target.closest('.card');if(c){rSel=c.dataset.id;renderContacts(root)}};
+}
+/* ---------------- log timeline ---------------- */
+let lFilter='all';
+function renderLog(root,small){
+ const rows=LOG.filter(m=>lFilter==='all'||m.ch===lFilter||(lFilter==='urgent'&&m.p!=='routine'));
+ let lastH=-1,html='';
+ rows.forEach(m=>{const hr=Math.floor(m.h*60/ 60)*0; const mm=Math.floor((m.h-7)*60);const bucket=Math.floor(mm/5);
+  if(bucket!==lastH){html+=`<div class="hr">${hhmm(7+bucket*5/60)}</div>`;lastH=bucket}
+  html+=`<div class="ev p-${m.p} ch-${m.ch}"><time>${hhmm(m.h)}</time><span class="nd">${ico(CHI[m.ch])}</span><div class="bd${small?' sm':''}"><b>${esc(m.from)}${m.to?` ${ico('order').replace('<svg class="ico "','<svg style="width:.9em;height:.9em;transform:rotate(90deg)" class="ico "')} ${esc(m.to)}`:''}<em>${m.ch==='pa'?'PA':m.ch==='alert'?'ALERT':m.ch==='order'?'ORDER':m.ch==='intercom'?'INTERCOM':'COMM'}${m.p!=='routine'?' · '+m.p.toUpperCase():''}</em></b>${esc(m.text)}</div></div>`});
+ // alert band along the rail
+ root.innerHTML=`<div class="chips">${[['all','All'],['comm','Comm'],['pa','PA'],['order','Orders'],['alert','Alerts'],['urgent','Urgent']].map(([k,t])=>`<button data-lf="${k}" aria-pressed="${lFilter===k}">${t}</button>`).join('')}</div><div class="tl">${html||'<div class="cap">No traffic yet.</div>'}</div><p class="cap">${ico('speaker')} PA  ${ico('badge')} comm  ${ico('intercom')} intercom  ${ico('order')} order  ${ico('alert')} alert · ring colour = priority (blue routine, amber urgent, red emergency)</p>`;
+ root.onclick=e=>{const b=e.target.closest('[data-lf]');if(b){lFilter=b.dataset.lf;renderLog(root,small)}};
+ root.scrollTop=root.scrollHeight;
+}
+const LOGROOTS=[];
+function renderAllLogs(){LOGROOTS.forEach(r=>renderLog(r.el,r.small));}
+/* ---------------- wheel ---------------- */
+const R0=62,R1=150,R2=158,R3=206,DZ=38;
+const rad=d=>d*Math.PI/180;
+const pol=(r,a)=>[r*Math.cos(rad(a)),r*Math.sin(rad(a))];
+function ann(r0,r1,a0,a1){const [x0,y0]=pol(r1,a0),[x1,y1]=pol(r1,a1),[x2,y2]=pol(r0,a1),[x3,y3]=pol(r0,a0),L=a1-a0>180?1:0;return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r1} ${r1} 0 ${L} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}A${r0} ${r0} 0 ${L} 0 ${x3.toFixed(1)} ${y3.toFixed(1)}z`}
+const S={carry:null,focus:null};
+const CTX={
+ console:[{id:'c.use',ic:'console',label:'Use terminal',def:1,desc:'Open the ship terminal'},{id:'c.status',ic:'ship',label:'Ship status',desc:'Systems that are not nominal'},{id:'c.mission',ic:'duty',label:'Mission',desc:'Crew tasks on track'},{id:'c.locate',ic:'pin',label:'Locate crew',desc:'Where is everyone?'},{id:'c.alerts',ic:'alert',label:'Alert log',desc:'Active alerts'},{id:'c.repair',ic:'do',label:'Repair',desc:'Hold E to repair this console'}],
+ crew:[{id:'p.greet',ic:'greet',label:'Greet',def:1,desc:'Say hello'},{id:'p.doing',ic:'ask',label:'What now?',desc:'Ask what they are doing'},{id:'p.duty',ic:'duty',label:'Their duty',desc:'Ask about their duty'},{id:'p.order',ic:'order',label:'Order',desc:'Order them to do their duty'},{id:'p.give',ic:'give',label:'Give item',desc:'Hand over what you carry',needsCarry:1},{id:'p.hail',ic:'radio',label:'Hail',desc:'Call them on the badge'}],
+ cart:[{id:'k.grab',ic:'grab',label:'Grab cart',def:1,desc:'Hold and push the cart'},{id:'k.take',ic:'box',label:'Take item',desc:'Take an item from the cart (R)'},{id:'k.put',ic:'give',label:'Put on cart',desc:'Put what you carry on the cart (G)',needsCarry:1},{id:'k.look',ic:'inspect',label:'Contents',desc:'Look at what is on it'}],
+ item:[{id:'i.take',ic:'hand',label:'Take',def:1,desc:'Pick it up (E)'},{id:'i.look',ic:'inspect',label:'Inspect',desc:'What is it?'},{id:'i.rep',ic:'report',label:'Report found',desc:'Tell the bridge you found it'}]
+};
+const FIC={console:'console',crew:'person',cart:'cart',item:'box'};
+function mainSectors(){
+ const f=S.focus,subs=CREW.filter(c=>c.sub);
+ return [
+  {id:'ctx',ic:f?FIC[f.type]:'eye',label:f?'This':'This',sub:f?f.name:'nothing in view',ctx:1,off:!f,kids:f?CTX[f.type].map(k=>({...k,off:k.needsCarry&&!S.carry})):[]},
+  {id:'duty',ic:'duty',label:'Duty',sub:'do · delegate · report',kids:[{id:'duty.do',ic:'do',label:'Do duty',def:1,desc:'Do the next due round'},{id:'duty.deleg',ic:'delegate',label:'Delegate',desc:'Hand a due round to a subordinate'},{id:'duty.rep',ic:'report',label:'Report',desc:'Report a finished round'},{id:'duty.board',ic:'clock',label:'Board',desc:'Open the full duty board (J)'}]},
+  {id:'order',ic:'order',label:'Order',sub:'your reports',kids:[...subs.map(c=>({id:'order.'+c.id,ic:'person',label:c.short.replace('Ens. ',''),def:c.id==='e2',desc:'Order '+c.short+' to do their duty',col:DEPT[c.dept].c})),{id:'order.more',ic:'heads',label:'More…',desc:'Pick anyone'}]},
+  {id:'radio',ic:'radio',label:'Radio',sub:'bridge · dept heads',kids:[{id:'r.bridge',ic:'bridge',label:'Bridge',def:1,desc:'Hail the bridge'},{id:'r.heads',ic:'heads',label:'Dept heads',desc:'Pick a department head'},{id:'r.status',ic:'check',label:'Status',desc:'Report status'},{id:'r.assist',ic:'delegate',label:'Assistance',desc:'Request assistance'},{id:'r.fault',ic:'alert',label:'Fault',desc:'Report a fault'},{id:'r.orders',ic:'order',label:'Orders?',desc:'Ask for orders'}]},
+  {id:'insp',ic:'map',label:'Inspect / Map',sub:'map · status · alerts',kids:[{id:'n.map',ic:'map',label:'Deck map',def:1,desc:'Where am I? (M)'},{id:'n.ship',ic:'ship',label:'Ship status',desc:'Hold Tab'},{id:'n.alerts',ic:'alert',label:'Alerts',desc:'Alert details (K)'},{id:'n.log',ic:'log',label:'Comm log',desc:'Open the log (L)'}]},
+  {id:'tools',ic:'tools',label:'Tools',sub:'handhelds',kids:[{id:'t.tri',ic:'tools',label:'Tricorder',def:1,desc:'Engineering tricorder'},{id:'t.padd',ic:'padd',label:'PADD',desc:'PADD'},{id:'t.badge',ic:'badge',label:'Comm badge',desc:'Comm badge'},{id:'t.phaser',ic:'phaser',label:'Phaser',desc:'Type-1 phaser (stun)'},{id:'t.none',ic:'hand',label:'Empty hands',desc:'Holster / put away'}]},
+  {id:'carry',ic:'grab',label:'Carry',sub:S.carry||'hands empty',off:!S.carry,kids:S.carry?[{id:'y.put',ic:'give',label:'Put down',def:1,desc:'Put it down (G)'},{id:'y.hand',ic:'person',label:'Hand over',desc:'Give it to who you look at'},{id:'y.look',ic:'inspect',label:'Inspect',desc:'Look at it'}]:[]},
+  {id:'sys',ic:'gear',label:'System',sub:'pause · keys',kids:[{id:'s.pause',ic:'pause',label:'Pause',def:1,desc:'Pause (P)'},{id:'s.keys',ic:'gear',label:'Settings',desc:'Settings and key bindings'},{id:'s.help',ic:'help',label:'Help',desc:'Controls and briefing'}]}
+ ];
+}
+function directSectors(kind){const m=mainSectors();return {duty:m[1],radio:m[3],tools:m[5]}[kind].kids}
+function kidLayout(n,pa){const span=Math.min(n*34,176);return {span,start:pa-span/2,w:span/n}}
+function wheelSVG(W,o={}){
+ const sec=W.sectors,n=sec.length,seg=360/n,hub=W.title||'';let s=`<circle class="wdz" r="${DZ}"/>`;
+ const gap=1.4;
+ sec.forEach((c,i)=>{const a=-90+i*seg,hov=i===W.sel&&!W.direct||(W.direct&&i===W.sel);
+  const kids=c.kids||[];
+  s+=`<path class="wseg${hov?' hov':''}${c.off?' off':''}${c.ctx?' ctx':''}" d="${ann(R0,R1,a-seg/2+gap,a+seg/2-gap)}"/>`;
+  const [ix,iy]=pol((R0+R1)/2+(W.direct?6:0),a);
+  s+=`<svg class="wic${hov?' hov':''}" x="${ix-17}" y="${iy-19}" width="34" height="34" viewBox="0 0 24 24" style="color:${hov?'#08101a':c.off?'#5a6b82':'#dfe9f5'}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${c.ic}"/></svg>`;
+  s+=`<text class="wlab${hov?' hov':''}${c.off?' off':''}" x="${ix}" y="${iy+25}" text-anchor="middle" style="font-size:9.5px;${hov?'fill:#08101a':''}">${esc(c.label.replace('Inspect / Map','Inspect'))}</text>`;
+  const [nx,ny]=pol(R1-1,a);s+=`<circle class="wnum" cx="${nx}" cy="${ny}" r="8" stroke="#3a4b61"/><text class="wnumt" x="${nx}" y="${ny+.5}">${i+1}</text>`;
+  if(c.def&&W.direct){}
+ });
+ // kids ring for selected sector
+ const P=sec[W.sel];
+ if(P&&P.kids&&P.kids.length&&!W.direct){const pa=-90+W.sel*seg,L=kidLayout(P.kids.length,pa);
+  P.kids.forEach((k,j)=>{const a0=L.start+j*L.w,a1=a0+L.w,am=(a0+a1)/2,hov=j===W.sub;
+   s+=`<path class="wkid${hov?' hov':''}${k.off?' off':''}" d="${ann(R2,R3,a0+.8,a1-.8)}"/>`;
+   const [kx,ky]=pol((R2+R3)/2,am);
+   s+=`<svg x="${kx-11}" y="${ky-11}" width="22" height="22" viewBox="0 0 24 24" style="color:${hov?'#08101a':k.off?'#5a6b82':k.col||'#dfe9f5'}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-${k.ic}"/></svg>`;
+   if(k.def)s+=`<circle cx="${pol(R2+4,am)[0]}" cy="${pol(R2+4,am)[1]}" r="2.200" fill="${hov?'#08101a':'#ffe9a8'}"/>`;
+   const [lx,ly]=pol(R3+9,am),cx=Math.cos(rad(am)),anc=cx>.3?'start':cx<-.3?'end':'middle';
+   s+=`<text class="wlab${hov?' hov':''}${k.off?' off':''}" x="${lx}" y="${ly+(Math.sin(rad(am))<-.5?-1:Math.sin(rad(am))>.5?9:3)}" text-anchor="${anc}">${esc(k.label)}</text>`;
+   if(W.keyKids){const [nx,ny]=pol(R3-9,am);s+=`<circle class="wnum" cx="${nx}" cy="${ny}" r="7.500" style="fill:#ffe9a8"/><text class="wnumt" style="fill:#06090f" x="${nx}" y="${ny+.5}">${j+1}</text>`}
+  });}
+ if(W.direct){ // flat wheel: kids ARE the sectors; show defaults dot + number
+  sec.forEach((c,i)=>{if(c.def){const a=-90+i*seg,[dx,dy]=pol(R0+7,a);s+=`<circle cx="${dx}" cy="${dy}" r="2.600" fill="${i===W.sel?'#08101a':'#ffe9a8'}"/>`}});
+ }
+ // hub
+ const cur=W.sel>=0?(P&&P.kids&&W.sub>=0&&!W.direct?P.kids[W.sub]:P):null;
+ let t1=hub,t2='release here = cancel';
+ if(cur){t1=(cur.label||'').toUpperCase();t2=cur.desc||cur.sub||''}
+ else if(W.sel<0)t2=W.pinned?'click an icon · Esc closes':'move to choose';
+ if(W.sel>=0&&P&&P.kids&&P.kids.length&&W.sub<0&&!W.direct){t2=(P.sub?P.sub+' · ':'')+'release = '+(P.kids.find(k=>k.def)||P.kids[0]).label.toLowerCase()}
+ if(W.sel>=0&&P&&P.off&&W.sub<0)t2='unavailable right now';
+ s+=`<circle class="whub" r="${R0-6}"/><text class="wt1" y="-3" style="font-size:${t1.length>11?10.5:13}px">${esc(t1.length>16?t1.slice(0,15)+'…':t1)}</text>`;
+ const words=String(t2).split(' ');let l1='',l2='';words.forEach(w=>{if((l1+' '+w).length<22&&!l2)l1+=(l1?' ':'')+w;else l2+=(l2?' ':'')+w});
+ s+=`<text class="wt2" y="12">${esc(l1)}</text><text class="wt2" y="24">${esc(l2.length>24?l2.slice(0,23)+'…':l2)}</text>`;
+ if(W.cursor&&!W.pinned){const r=Math.hypot(W.vx,W.vy),k=r>R3+34?(R3+34)/r:1;s+=`<circle class="wcur" cx="${W.vx*k}" cy="${W.vy*k}" r="4"/>`}
+ return s;
+}
+function hit(W,vx,vy){
+ const r=Math.hypot(vx,vy),n=W.sectors.length,seg=360/n;
+ if(r<DZ)return{sel:-1,sub:-1};
+ let a=Math.atan2(vy,vx)*180/Math.PI,k=Math.floor(((a+90+seg/2)%360+360)%360/seg)%n;
+ const P=W.sectors[W.sel];
+ if(!W.direct&&r>R1+8&&P&&P.kids&&P.kids.length&&W.sel>=0){
+  const pa=-90+W.sel*seg,L=kidLayout(P.kids.length,pa);let rel=((a-pa+540)%360)-180;
+  if(Math.abs(rel)>L.span/2+5)return{sel:W.sel,sub:-1};
+  return{sel:W.sel,sub:clamp(Math.floor((rel+L.span/2)/L.w),0,P.kids.length-1)};
+ }
+ return{sel:k,sub:-1};
+}
+/* ---------------- UI state machine ---------------- */
+const U={state:'play',stack:[],wheel:null,legacy:false,refuse:false,toggleMode:false,paused:false,scriptPause:false,needClick:false,lift:false,log:[]};
+const stage=$('#stage');
+function ulog(t,bad){U.log.push({t,bad});const el=$('#ulog');if(el){el.innerHTML=U.log.slice(-60).map(l=>`<div class="${l.bad?'bad':''}">${l.t}</div>`).join('');el.scrollTop=el.scrollHeight}}
+function computeState(){return U.paused?'paused':U.needClick?'resume':U.lift?'lift':U.stack.length?'menu':U.wheel&&U.wheel.held?'wheel':'play'}
+function render(){
+ U.state=computeState();stage.dataset.state=U.state;
+ const chip=$('#statechip');chip.textContent=U.state.toUpperCase();
+ $('#lockt').textContent=['play','wheel'].includes(U.state)?'pointer locked · crosshair':['paused','resume'].includes(U.state)?'pointer FREE · (browser took it)':'pointer FREE · by design';
+ $$('.pframe[id^=pf-]').forEach(p=>p.classList.remove('on'));
+ const top=U.stack.filter(x=>['duty','radio','log'].includes(x)).slice(-1)[0];
+ if(top)$('#pf-'+top).classList.add('on');
+ const wOn=!!U.wheel;$('#wlayer').classList.toggle('on',wOn);
+ if(wOn)drawWheel();
+ $$('#smsvg .nd').forEach(n=>n.classList.toggle('cur',n.id==='n-'+U.state));
+ refreshHints();
+}
+function refreshHints(){
+ const K=KEYS,f=S.focus;
+ $('#s-hint').innerHTML=`<kbd>${kn(K.wheel)}</kbd> hold: wheel &nbsp; <kbd>${kn(K.use)}</kbd> use &nbsp; <kbd>${kn(K.duty)}</kbd> duty &nbsp; <kbd>${kn(K.radio)}</kbd> radio<br><kbd>${kn(K.log)}</kbd> log &nbsp; <kbd>${kn(K.tools)}</kbd> tools &nbsp; <kbd>P</kbd> pause`;
+ const pr=$('#s-prompt');if(f&&['play','wheel'].includes(U.state)&&!U.wheel){pr.style.display='block';pr.innerHTML=`${ico(FIC[f.type])}[${kn(K.use)}] ${esc(CTX[f.type][0].label)} · ${esc(f.name)} &nbsp;<span style="opacity:.7">[hold ${kn(K.wheel)}] more</span>`}else pr.style.display='none';
+}
+function relock(why){
+ if(U.refuse){U.needClick=true;ulog(`<b>${why}</b> → requestLock() rejected (browser cooldown) → <b>click to resume</b> chip (no pause screen)`)}
+ else{U.needClick=false;ulog(`<b>${why}</b> → requestLock() inside a user gesture → locked, back in PLAY`)}
+}
+function openLayer(k){
+ if(U.paused)return;if(U.lift&&k!=='lift')return;
+ const had=U.stack.length||U.wheel&&!U.wheel.held;
+ if(!U.stack.includes(k))U.stack.push(k);
+ if(k==='lift'){U.lift=true;U.stack=U.stack.filter(x=>x!=='lift')}
+ if(U.legacy){ulog(`legacy: ${k} opens as an overlay, pointer stays locked`)}
+ else if(!had)ulog(`<b>openLayer(${k})</b>: expectUnlock=true; exitPointerLock() → cursor free`);
+ U.needClick=false;
+ if(k==='duty'||k==='radio'||k==='log')renderLayer(k);
+ render();
+}
+function renderLayer(k){if(k==='duty'){renderPanel($('#pb-duty'))}if(k==='radio'){renderContacts($('#pb-radio'))}if(k==='log'){renderLog($('#pb-log'),true)}}
+function closeTop(why='Esc'){
+ if(U.wheel&&U.wheel.pinned){closeWheel();U.stack=U.stack.filter(x=>x!=='wheel')}
+ else if(U.lift){U.lift=false}
+ else U.stack.pop();
+ popFor=null;
+ if(!U.stack.length&&!U.lift&&!U.wheel){relock(`${why}: layers empty`)}else ulog(`<b>${why}</b> → closed one layer (${U.stack.length} left)`);
+}
+function escape(){
+ if(U.paused){if(U.scriptPause){U.paused=false;U.scriptPause=false;relock('Esc on script-pause')}else{ulog('Esc on native pause: browser cooldown, ignored; click Resume');}render();return}
+ if(U.needClick){render();return}
+ if(U.legacy&&(U.stack.length||U.wheel||U.lift)){
+  U.stack=[];U.lift=false;closeWheel(true);U.paused=true;ulog('<b>LEGACY</b>: Esc → browser unlocks → pointerlockchange → phase=paused  (menu closes AND pause opens)',true);render();return}
+ if(U.wheel&&U.wheel.held){closeWheel(true);U.needClick=true;ulog('<b>Esc while wheel held</b> → native unlock → wheel cancelled, click-to-resume chip (not pause)');render();return}
+ if(U.stack.length||U.lift||U.wheel){closeTop('Esc');render();return}
+ U.paused=true;ulog('<b>Esc in plain PLAY</b> → browser unlocks (page may not even see the key) → pointerlockchange: no layer, no wheel → pause');render();
+}
+function pauseScript(){if(U.paused||U.needClick)return;U.stack=[];closeWheel(true);U.lift=false;U.paused=true;U.scriptPause=true;ulog('<b>P / Start</b> → expectUnlock=true; exitPointerLock() → script pause (Esc, P or click all resume)');render()}
+function resume(){if(!U.paused&&!U.needClick)return;const was=U.paused;U.paused=false;U.scriptPause=false;U.needClick=false;ulog(`<b>click</b> → ${was?'pause screen hidden, ':''}requestLock() in a user gesture → PLAY`);render()}
+/* wheel control */
+function openWheel(opts){
+ if(U.paused||U.lift||U.needClick)return;
+ const W={sectors:opts.sectors,direct:!!opts.direct,title:opts.title||'',sel:-1,sub:-1,vx:0,vy:0,held:!!opts.held,pinned:!opts.held,t0:performance.now(),moved:false,keyKids:false,ox:opts.ox,oy:opts.oy,cursor:true,src:opts.src||'key'};
+ U.wheel=W;if(W.pinned){U.stack.push('wheel')}
+ else ulog(`<b>wheel held</b> (${W.src}): mouse deltas feed the wheel, pointer lock kept`);
+ if(W.pinned)ulog('<b>wheel pinned</b>: free cursor, click an icon');
+ render();
+}
+function closeWheel(silent){if(!U.wheel)return;U.wheel=null;U.stack=U.stack.filter(x=>x!=='wheel');$('#wlayer').classList.remove('on')}
+function wheelRect(){const r=$('#wsvg').getBoundingClientRect();return r}
+function toView(x,y){const r=wheelRect(),sc=680/r.width;return[(x-r.left-r.width/2)*sc,(y-r.top-r.height/2)*sc]}
+function moveWheel(x,y){const W=U.wheel;if(!W)return;
+ if(W.held){const sc=680/wheelRect().width;W.vx=clamp((x-W.ox)*sc,-300,300);W.vy=clamp((y-W.oy)*sc,-300,300);if(Math.hypot(W.vx,W.vy)>14)W.moved=true;}
+ else{const [vx,vy]=toView(x,y);W.vx=vx;W.vy=vy}
+ const h=hit(W,W.vx,W.vy);if(h.sel!==W.sel||h.sub!==W.sub){W.sel=h.sel;W.sub=h.sub;if(W.sel<0)W.keyKids=false;drawWheel()}else drawWheel(true)}
+function drawWheel(light){const W=U.wheel;if(!W)return;$('#wsvg').innerHTML=wheelSVG(W)}
+function commitWheel(){
+ const W=U.wheel;if(!W)return;const P=W.sectors[W.sel];let item=null;
+ if(P&&!P.off){if(W.direct)item=P;else if(P.kids&&P.kids.length)item=(W.sub>=0?P.kids[W.sub]:P.kids.find(k=>k.def)||P.kids[0]);else item=P}
+ if(item&&item.off)item=null;
+ closeWheel();
+ if(item){ulog(`wheel → <b>${esc(item.label)}</b>`);runItem(item)}else{ulog('wheel cancelled (dead zone / unavailable)')}
+ if(!U.stack.length&&!U.lift&&!U.needClick&&!U.paused)relock('wheel closed');
+ render();
+}
+function endHold(){const W=U.wheel;if(!W||!W.held)return;
+ if(!W.moved&&performance.now()-W.t0<220&&!U.toggleMode){W.held=false;W.pinned=true;U.stack.push('wheel');ulog('<b>tap</b> → pinned: cursor released by us (expectUnlock) so Esc is ours');W.sel=-1;drawWheel();render();return}
+ if(U.toggleMode&&!W.moved&&performance.now()-W.t0<220){return}
+ commitWheel()}
+/* run an action */
+function toast(t,cls=''){const d=document.createElement('div');d.className='toast '+cls;d.textContent=t;const w=$('#s-toasts');w.appendChild(d);while(w.children.length>3)w.firstChild.remove();setTimeout(()=>d.remove(),2800)}
+function runItem(it){
+ const id=it.id;toast(it.label+(S.focus&&id[1]==='.'?' · '+S.focus.name:''));
+ if(id==='duty.board'||id==='duty.do'||id==='duty.deleg'||id==='duty.rep'){setTimeout(()=>openLayer('duty'),0)}
+ else if(id==='r.heads'||id==='order.more'){rFilter=id==='r.heads'?'heads':'mine';setTimeout(()=>openLayer('radio'),0)}
+ else if(id==='n.log'){setTimeout(()=>openLayer('log'),0)}
+ else if(id==='r.bridge'){addLog({ch:'comm',p:'routine',from:ME.short,to:'Bridge',text:'Bridge, Marsh. Requesting a moment.'});setTimeout(()=>addLog({ch:'comm',p:'routine',from:'Capt. Rhee',to:ME.short,text:'Go ahead, Marsh.'}),1300)}
+ else if(id==='r.status'){addLog({ch:'comm',p:'routine',from:ME.short,to:'Bridge',text:'Reporting in on Deck 4. All quiet.'})}
+ else if(id==='r.fault'){addLog({ch:'comm',p:'urgent',from:ME.short,to:'Bridge',text:'Reporting a fault: conduit 4-C running warm.'})}
+ else if(id==='i.take'||id==='k.take'){S.carry='Spare coupling';toast('You take: Spare coupling. [G] put it down')}
+ else if(id==='y.put'||id==='k.put'||id==='p.give'||id==='y.hand'){S.carry=null}
+ else if(id==='c.use'){toast('Terminal: all systems nominal.','')}
+ else if(id==='s.pause'){setTimeout(pauseScript,0)}
+ else if(id.startsWith('order.')&&id!=='order.more'){const p=byId(id.slice(6));addLog({ch:'order',p:'routine',from:ME.short,to:p.short,text:'Carry on with your duty.'})}
+ else if(id==='p.hail'){addLog({ch:'comm',p:'routine',from:ME.short,to:'Ens. Park',text:'Park, Marsh. A moment?'})}
+}
+/* ---------------- keys ---------------- */
+const KEYS={wheel:'KeyQ',use:'KeyE',tools:'KeyV',duty:'KeyJ',radio:'KeyH',alerts:'KeyK',log:'KeyL',map:'KeyM',board:'KeyB',status:'Tab'};
+const KN=c=>c.replace('Key','').replace('Digit','');const kn=KN;
+const ACT=[['wheel','Quick wheel','hold = wheel, tap = pin'],['use','Use / interact','tap; hold = repair'],['tools','Handhelds','tap cycle, hold wheel'],['duty','Duty','tap panel, hold wheel'],['radio','Radio','tap contacts, hold wheel'],['alerts','Alerts','tap panel'],['log','Comm log','tap panel'],['map','Minimap','toggle'],['board','HUD size','cycle compact/full/off'],['status','Ship status','hold']];
+let capturing=null;
+function renderBinds(){
+ const dup=c=>Object.values(KEYS).filter(v=>v===c).length>1;
+ $('#bindtbl').innerHTML=`<tr><th>Action</th><th>Binding</th><th>Behaviour</th></tr>`+ACT.map(([k,n,d])=>`<tr><td>${n}</td><td><button class="bind${capturing===k?' cap':''}${dup(KEYS[k])?' bad':''}" data-b="${k}">${capturing===k?'press a key…':kn(KEYS[k])}</button></td><td style="color:var(--dim)">${d}</td></tr>`).join('');
+}
+$('#bindtbl').onclick=e=>{const b=e.target.closest('[data-b]');if(b){capturing=b.dataset.b;renderBinds()}};
+const RESERVED=['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft','KeyC','KeyF','KeyG','KeyR','KeyT','KeyX','Escape','Backspace','Enter','KeyP'];
+addEventListener('keydown',e=>{
+ if(capturing){e.preventDefault();e.stopPropagation();if(e.code==='Escape'){capturing=null;renderBinds();return}
+  if(RESERVED.includes(e.code)||Object.entries(KEYS).some(([k,v])=>v===e.code&&k!==capturing)){const b=$(`[data-b="${capturing}"]`);b.classList.add('bad');b.textContent='in use';setTimeout(()=>{capturing=null;renderBinds()},700);return}
+  KEYS[capturing]=e.code;capturing=null;renderBinds();refreshHints();return}
+ if(!$('#t-play').classList.contains('on')&&!$('#t-state').classList.contains('on'))return;
+ if(e.ctrlKey||e.metaKey||e.altKey)return;
+ const c=e.code;
+ if(c==='Escape'){e.preventDefault();escape();return}
+ if(c==='KeyP'&&!e.repeat){pauseScript();return}
+ if(U.paused||U.needClick){return}
+ if(U.lift){const m=/^Digit(\d)$/.exec(c);if(m){const d=m[1]==='0'?10:+m[1];toast('Riding to deck '+d);U.lift=false;relock('deck chosen');render()}return}
+ if(U.wheel){
+  const W=U.wheel,m=/^(?:Digit|Numpad)(\d)$/.exec(c);
+  if(m){e.preventDefault();const d=+m[1]-1;
+   if(W.direct){if(W.sectors[d]){W.sel=d;commitWheel()}return}
+   if(W.keyKids){const P=W.sectors[W.sel];if(P&&P.kids[d]){W.sub=d;commitWheel()}return}
+   if(W.sectors[d]){if(W.sel===d){commitWheel();return}W.sel=d;W.sub=-1;const P=W.sectors[d];W.keyKids=!!(P.kids&&P.kids.length)&&!P.off;if(!W.keyKids)commitWheel();else drawWheel()}
+   return}
+  if(c==='Backspace'){e.preventDefault();if(W.keyKids){W.keyKids=false;W.sub=-1;drawWheel()}else closeTop('Backspace');render();return}
+  if(c==='Enter'||c==='Space'){e.preventDefault();commitWheel();return}
+  if(c==='ArrowRight'||c==='ArrowLeft'){e.preventDefault();const n=W.sectors.length;W.sel=((W.sel<0?(c==='ArrowRight'?-1:0):W.sel)+(c==='ArrowRight'?1:-1)+n)%n;W.sub=-1;drawWheel();return}
+  return}
+ if(U.stack.length&&c==='Backspace'){closeTop('Backspace');render();return}
+ if(e.repeat)return;
+ if(c===KEYS.wheel||c===KEYS.tools||c===KEYS.duty||c===KEYS.radio){
+  if(U.stack.length&&!U.wheel){ // second tap of a panel key closes it
+   const map={[KEYS.duty]:'duty',[KEYS.radio]:'radio',[KEYS.log]:'log'};if(map[c]&&U.stack.includes(map[c])){closeTop('toggle key');render()}return}
+  const t0=performance.now();const kind=c===KEYS.wheel?'main':c===KEYS.tools?'tools':c===KEYS.duty?'duty':'radio';
+  heldKey={code:c,kind,t0};
+  if(kind==='main'){S.focusAtOpen=S.focus;openWheel({sectors:mainSectors(),held:true,ox:lastMouse.x,oy:lastMouse.y,src:'Q'})}
+  else{const ttl={tools:'Tools',duty:'Duty',radio:'Radio'}[kind];openWheel({sectors:directSectors(kind),direct:true,title:ttl,held:true,ox:lastMouse.x,oy:lastMouse.y,src:kn(c)})}
+  return}
+ if(c===KEYS.log||c===KEYS.alerts){if(U.stack.includes('log')){closeTop();render()}else openLayer('log');return}
+ if(c===KEYS.use){const f=S.focus;if(f){const it=CTX[f.type][0];runItem(it);}else toast('Nothing to use');return}
+});
+let heldKey=null;
+addEventListener('keyup',e=>{
+ if(heldKey&&e.code===heldKey.code){const k=heldKey;heldKey=null;
+  if(U.wheel&&U.wheel.held){const W=U.wheel;
+   if(!W.moved&&performance.now()-W.t0<220&&!U.toggleMode){ // quick tap: tap-panel for J/H, pinned wheel for Q/V
+     closeWheel();if(k.kind==='duty'){openLayer('duty');return}if(k.kind==='radio'){openLayer('radio');return}
+     openWheel({sectors:k.kind==='main'?mainSectors():directSectors(k.kind),direct:k.kind!=='main',title:k.kind,held:false});return}
+   if(U.toggleMode){return} commitWheel()}
+  else if(!U.wheel&&(k.kind==='duty'||k.kind==='radio')&&performance.now()-k.t0<220){}
+ }
+});
+let lastMouse={x:0,y:0};
+addEventListener('mousemove',e=>{lastMouse={x:e.clientX,y:e.clientY};if(U.wheel)moveWheel(e.clientX,e.clientY)});
+$('#wlayer').addEventListener('mousedown',e=>{const W=U.wheel;if(!W)return;
+ if(W.pinned||U.toggleMode){moveWheel(e.clientX,e.clientY);if(U.toggleMode&&W.held){W.held=false;W.pinned=true;U.stack.push('wheel')}commitWheel()}});
+/* stage targets */
+$$('.tgt').forEach(t=>{
+ const f={type:t.dataset.type,name:t.dataset.name};
+ const aff=t.querySelector('.affs');aff.innerHTML=CTX[f.type].slice(0,5).map(k=>`<span title="${k.label}">${ico(k.ic)}</span>`).join('');
+ t.addEventListener('mouseenter',()=>{if(U.state==='play'){S.focus=f;t.classList.add('focus');refreshHints()}});
+ t.addEventListener('mouseleave',()=>{if(U.state==='play'||U.state==='wheel'&&false){if(S.focus===f||S.focus&&S.focus.name===f.name)S.focus=null;t.classList.remove('focus');refreshHints()}});
+});
+stage.addEventListener('mousedown',e=>{
+ if(e.target.closest('.pframe,.dock,#liftp,#wlayer'))return;
+ if(U.state==='resume'||U.state==='paused'){if(!e.target.closest('#resumebtn')&&U.state==='paused')return;resume();return}
+ if(U.state==='play'){toast('Use handheld · click (fire/use)');}
+ else if(U.state==='menu'&&!U.legacy&&!U.wheel){ulog('click on the game view while a layer is open: <b>ignored</b> (target outside .ui-layer would have re-locked and fired in the old handler)')}
+});
+$('#resumebtn').onclick=resume;
+stage.addEventListener('click',e=>{if(e.target.closest('[data-close]')){closeTop('close button');render()}});
+$$('#dock [data-open]').forEach(b=>b.onclick=()=>{const k=b.dataset.open;if(k==='lift'){U.lift=true;ulog('<b>step into the lift</b> → phase select, script unlock');render();return}if(U.stack.includes(k)){closeTop('dock');render()}else openLayer(k)});
+{const b=$('#d-wheel');
+ b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);openWheel({sectors:mainSectors(),held:true,ox:e.clientX,oy:e.clientY,src:'dock button'})});
+ b.addEventListener('pointermove',e=>{if(U.wheel&&U.wheel.held)moveWheel(e.clientX,e.clientY)});
+ b.addEventListener('pointerup',e=>{if(U.wheel&&U.wheel.held){const W=U.wheel;if(!W.moved){closeWheel();openWheel({sectors:mainSectors(),held:false});return}commitWheel()}});}
+/* lift */
+const DECKN=['Bridge','Wardroom','Science','Engineering','Sickbay','Quarters','Cargo','Shuttlebay'];
+$('#liftrows').innerHTML=DECKN.map((n,i)=>`<div class="row${i===3?' cur':''}" data-i="${i}"><i>${i+1}</i><b style="font:700 .76rem var(--f-d);letter-spacing:.08em">Deck ${i+1} · ${n}</b><span>${ico('lift')}</span></div>`).join('');
+$('#liftrows').onclick=e=>{const r=e.target.closest('.row');if(r){toast('Riding to deck '+(+r.dataset.i+1));U.lift=false;relock('deck chosen');render()}};
+/* settings segs */
+const seg=(id,fn)=>$(id).onclick=e=>{const b=e.target.closest('button');if(!b)return;$$('button',$(id)).forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset.v)};
+seg('#escmode',v=>{U.legacy=v==='legacy';ulog(`mode: ${U.legacy?'<b>legacy</b> (overlay menus, lock kept)':'<b>proposed</b> (menus unlock on purpose)'}`)});
+seg('#relock',v=>{U.refuse=v==='no';ulog(`browser relock after a layer closes: ${U.refuse?'refused':'allowed'}`)});
+seg('#wmode',v=>{U.toggleMode=v==='toggle'});
+/* gamepad */
+let padHeld=false;
+function padLoop(){
+ try{const gp=(navigator.getGamepads?navigator.getGamepads():[])[0];
+  if(gp){const lb=gp.buttons[4]?.pressed;
+   if(lb&&!padHeld&&!U.wheel&&$('#t-play').classList.contains('on')){padHeld=true;openWheel({sectors:mainSectors(),held:true,ox:0,oy:0,src:'gamepad LB'});}
+   if(padHeld&&U.wheel){const x=gp.axes[2]||0,y=gp.axes[3]||0;if(Math.hypot(x,y)>.4){const W=U.wheel;W.moved=true;W.vx=x*190;W.vy=y*190;const h=hit(W,W.vx,W.vy);W.sel=h.sel;W.sub=h.sub;drawWheel()}if(!lb){padHeld=false;commitWheel()}}
+   else if(!lb)padHeld=false;
+   if(gp.buttons[9]?.pressed&&!padLoop.st){padLoop.st=1;pauseScript()}if(!gp.buttons[9]?.pressed)padLoop.st=0;
+   if(gp.buttons[1]?.pressed&&!padLoop.b){padLoop.b=1;escape()}if(!gp.buttons[1]?.pressed)padLoop.b=0;}
+ }catch(e){}
+ requestAnimationFrame(padLoop)}
+requestAnimationFrame(padLoop);
+/* ---------------- state tab buttons ---------------- */
+$('#smbtn').innerHTML=[['Tap J (open panel)',()=>{showTab('t-state');openLayer('duty')}],['Tap H',()=>openLayer('radio')],['Hold Q (pin)',()=>{openWheel({sectors:mainSectors(),held:false})}],['Hold Q (held)',()=>{openWheel({sectors:mainSectors(),held:true,ox:0,oy:0,src:'button'})}],['Release hold',()=>{if(U.wheel&&U.wheel.held)commitWheel()}],['Esc',()=>escape()],['P / pause',()=>pauseScript()],['Click',()=>resume()],['Enter lift',()=>{if(!U.paused){U.lift=true;ulog('<b>lift</b>: phase select');render()}}]].map(([t,f],i)=>`<button data-i="${i}">${t}</button>`).join('');
+const SMF=[()=>openLayer('duty'),()=>openLayer('radio'),()=>openWheel({sectors:mainSectors(),held:false}),()=>openWheel({sectors:mainSectors(),held:true,ox:0,oy:0,src:'button'}),()=>{if(U.wheel&&U.wheel.held){U.wheel.sel=-1;commitWheel()}},()=>escape(),()=>pauseScript(),()=>resume(),()=>{if(!U.paused){U.lift=true;ulog('<b>lift</b>: phase select');render()}}];
+$('#smbtn').onclick=e=>{const b=e.target.closest('button');if(!b)return;SMF[+b.dataset.i]();render()};
+/* ---------------- static galleries ---------------- */
+function staticWheels(){
+ const mk=(title,sub,W)=>`<div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2)">${title}</h4><p class="cap" style="margin:2px 0 6px">${sub}</p><svg viewBox="-340 -272 680 544" style="width:100%;height:auto;background:radial-gradient(circle,#0a111c,#04060a);border:1px solid var(--line)">${wheelSVG(W)}</svg></div>`;
+ S.focus=null;const m=mainSectors();
+ const a={sectors:m,sel:3,sub:0};
+ const mm=mainSectors();
+ S.focus={type:'crew',name:'Ens. Park'};S.carry='Spare coupling';const c=mainSectors();
+ const b={sectors:c,sel:0,sub:3};
+ S.focus={type:'console',name:'Engineering console'};S.carry=null;const k=mainSectors();
+ const d={sectors:k,sel:0,sub:-1};
+ S.focus=null;
+ const t={sectors:directSectors('tools'),direct:true,title:'Tools',sel:1,sub:-1};
+ const du={sectors:directSectors('duty'),direct:true,title:'Duty',sel:-1,sub:-1};
+ const pin={sectors:m,sel:-1,sub:-1,pinned:true};
+ $('#wheelgal').innerHTML=mk('Main wheel (hold Q) · Radio hovered','Release now = Hail the bridge (default dot). Flick on to a child icon to pick another.',a)
+  +mk('Context: looking at crew (Park), carrying a part','Sector 1 "This" = verbs for exactly this person. Give item is live because hands are full.',b)
+  +mk('Context: looking at a console','Console verbs. Same slot, different contents; no relearning.',d)
+  +mk('Direct wheel: hold V (tools)','Tapping V cycles handhelds as today; holding V skips the main wheel and shows only the handhelds.',t)
+  +mk('Direct wheel: hold J (duty)','J keeps its meaning. Tap = full panel, hold = this wheel. Release in the middle cancels.',du)
+  +mk('Pinned wheel (tap Q)','Free cursor, click an icon, Esc or the hub closes. No pointer lock involved, so no Esc conflict.',pin);
+}
+/* keyboard */
+const KB_ROWS=[['Escape|Esc|w2','F3|F3','F4|F4'],['Digit1|1','Digit2|2','Digit3|3','Digit4|4','Digit5|5','Digit6|6','Digit7|7','Digit8|8','Digit9|9','Digit0|0'],['Tab|Tab|w2','KeyQ|Q','KeyW|W','KeyE|E','KeyR|R','KeyT|T','KeyY|Y','KeyU|U','KeyI|I','KeyO|O','KeyP|P'],['CapsLock|Caps|w2','KeyA|A','KeyS|S','KeyD|D','KeyF|F','KeyG|G','KeyH|H','KeyJ|J','KeyK|K','KeyL|L'],['ShiftLeft|Shift|w3','KeyZ|Z','KeyX|X','KeyC|C','KeyV|V','KeyB|B','KeyN|N','KeyM|M'],['ControlLeft|Ctrl|w2','Space|Space|w6','Enter|Enter|w2','Backspace|Bksp|w2']];
+const GRP={move:['Movement','#4f9dff'],ctx:['Use / context','#ffb347'],wheel:['Hold = wheel · tap = panel','#f2a03d'],panel:['Panels / HUD','#58c9b9'],item:['Items','#c77dff'],menu:['Digits: only inside menus','#8d9bb0'],sys:['System / debug','#ff6b5a'],free:['Free','#2a3446']};
+const KD={
+ KeyW:['move','Move forward','same'],KeyA:['move','Strafe left','same'],KeyS:['move','Back','same'],KeyD:['move','Strafe right','same'],ShiftLeft:['move','Sprint','same'],KeyC:['move','Crouch','same'],ControlLeft:['move','Crouch','same'],Space:['move','Jump (also confirms in menus)','same'],
+ KeyE:['ctx','Use / talk / take; hold to repair','Unchanged. Primary verb of whatever you look at.'],
+ KeyQ:['wheel','Grapple (old roguelike mode only)','NEW: hold = main wheel (Nominal). Tap = pin it. Grapple stays in Madness mode; fallback key Z.'],
+ KeyV:['wheel','Cycle handheld (Shift+V setting)','Tap unchanged; NEW: hold = tools wheel.'],
+ KeyJ:['wheel','Duty text menu','NEW: tap = duty board panel (swim lanes); hold = duty wheel.'],
+ KeyH:['wheel','Radio text menu','NEW: tap = contact cards; hold = radio wheel.'],
+ KeyK:['panel','Alert details','Tap: alert card with icon steps.'],KeyL:['panel','Comm log','Tap: timeline.'],KeyM:['panel','Minimap toggle','Unchanged.'],KeyB:['panel','Big duty board','Cycles duty HUD: compact / full / off (panel now lives on J).'],Tab:['panel','Ship status (hold)','Unchanged.'],
+ KeyF:['item','Torch','Unchanged.'],KeyG:['item','Put down','Unchanged (also in Carry sector).'],KeyR:['item','Take from cart','Unchanged (also in cart context).'],KeyT:['item','Throw','Unchanged.'],KeyX:['item','Use handheld job','Unchanged.'],
+ Digit1:['menu','Menu / lift deck / perk choice','Only meaningful while a wheel, panel, lift or perk is open. Optional: handheld quick-slots 1-5 in plain play.'],
+ Escape:['sys','Close menu AND native pause (bug)','Back one layer. Never pauses if a layer was open. In plain play: native pause.'],
+ F3:['sys','Direction debug','Unchanged.'],F4:['sys','Alert debug cycle','Unchanged.'],
+ Backspace:['sys','Menu back','Back one wheel level / panel layer.'],Enter:['sys','Begin / new run','Also confirms in wheel/panel.'],
+ KeyP:['sys','(unused)','NEW: script pause. Always resumable by Esc/P/click.'],
+ KeyZ:['free','(free)','Reserved alt wheel key if Q is needed for grapple.']
+};
+for(let i=2;i<=9;i++)KD['Digit'+i]=KD.Digit1;KD.Digit0=KD.Digit1;
+const NOW={KeyQ:['move'],};
+let kbMode='next';
+function renderKB(){
+ const chgd=new Set(['KeyQ','KeyV','KeyJ','KeyH','KeyB','Escape','KeyP','KeyK','KeyL']);
+ $('#kbleg').innerHTML=Object.values(GRP).map(g=>`<span style="--c:${g[1]}"><i></i>${g[0]}</span>`).join('');
+ $('#kb').innerHTML=KB_ROWS.map(r=>`<div class="kr">${r.map(s=>{const [code,lab,w]=s.split('|');const d=KD[code];let g=d?d[0]:'free';
+  if(kbMode==='now'){g={KeyQ:'item',KeyV:'item',KeyJ:'panel',KeyH:'panel',KeyB:'panel',KeyK:'panel',KeyL:'panel',KeyP:'free',Escape:'sys'}[code]||g}
+  const c=GRP[g][1];const sub=d?d[1].split(/[ ;(]/)[0]:'';return `<button class="k ${w||''}${kbMode==='next'&&chgd.has(code)?' chg':''}" style="--c:${c}" data-c="${code}">${lab}<small>${esc(kbMode==='now'&&code==='KeyQ'?'Grapple':kbMode==='now'&&code==='KeyP'?'':kbMode==='now'&&['KeyJ','KeyH','KeyK','KeyL','KeyB'].includes(code)?{KeyJ:'Duty menu',KeyH:'Radio menu',KeyK:'Alerts',KeyL:'Log',KeyB:'Board'}[code]:{KeyQ:'Wheel',KeyV:'Tool',KeyJ:'Duty',KeyH:'Radio',KeyK:'Alerts',KeyL:'Log',KeyM:'Map',KeyB:'HUD',Tab:'Status',KeyE:'Use',KeyF:'Torch',KeyG:'Drop',KeyR:'Take',KeyT:'Throw',KeyX:'Job',KeyW:'Fwd',KeyA:'Left',KeyS:'Back',KeyD:'Right',KeyC:'Crouch',Escape:'Back',Space:'Jump',KeyP:'Pause',KeyZ:'',ShiftLeft:'Sprint',ControlLeft:'Crouch',Digit1:'menu',Digit2:'menu',Digit3:'menu',Digit4:'menu',Digit5:'menu',Digit6:'menu',Digit7:'menu',Digit8:'menu',Digit9:'menu',Digit0:'menu',Backspace:'Back',Enter:'OK',F3:'dbg',F4:'dbg'}[code]||'')}</small></button>`}).join('')}</div>`).join('');
+ showKey('KeyJ');
+}
+function showKey(c){const d=KD[c];$$('#kb .k').forEach(k=>k.classList.toggle('hl',k.dataset.c===c));
+ $('#kbinfo').innerHTML=d?`<b style="font-family:var(--f-d);letter-spacing:.1em;color:var(--lc4)">${kn(c)||c}</b> &nbsp; <span style="color:var(--dim)">today:</span> ${esc(d[1])}<br><span style="color:var(--dim)">proposed:</span> ${esc(d[2])}`:`<b>${kn(c)}</b> free`}
+$('#kb').onclick=e=>{const k=e.target.closest('.k');if(k)showKey(k.dataset.c)};$('#kb').onmouseover=e=>{const k=e.target.closest('.k');if(k)showKey(k.dataset.c)};
+$('#kbmode').onclick=e=>{const b=e.target.closest('button');if(!b)return;$$('button',$('#kbmode')).forEach(x=>x.setAttribute('aria-pressed',x===b));kbMode=b.dataset.v;renderKB()};
+/* alert card */
+function renderAlert(){
+ $('#r-alert').innerHTML=`<div class="alertcard" style="--c:#ffb347"><h4>${ico('alert')} Yellow alert <small style="font:.7rem var(--f-m);color:var(--dim);letter-spacing:0;text-transform:none">Deck 4 · 02:10 · ordered by Cdr. Okafor</small></h4><div class="sev" title="severity 2 of 5">${[1,2,3,4,5].map(i=>`<i class="${i<=2?'f':''}"></i>`).join('')}</div><div style="font-size:.82rem">Plasma conduit anomaly. Stay alert; non-essential work stops.</div><div class="steps" style="--c:#ffb347"><div>${ico('pin')}Go to Deck 4</div><div>${ico('do')}Isolate conduit 4-C</div><div>${ico('report')}Report to the bridge</div></div></div>
+ <div class="pnl"><h4 style="font-size:.78rem;color:var(--lc2);margin-bottom:6px">Severity strip replaces the legend wall</h4><div style="display:flex;gap:6px;flex-wrap:wrap">${[['Green','#4fd18b','check'],['Notice','#8fd8ff','speaker'],['Yellow','#ffb347','alert'],['Red','#ff5a4a','alert'],['Evac','#ff3b30','alert'],['Abandon','#d38bff','alert']].map(([n,c,i],ix)=>`<div style="--c:${c};border:1.5px solid ${c};padding:5px 8px;font:700 .64rem var(--f-d);letter-spacing:.1em;text-transform:uppercase;display:flex;gap:5px;align-items:center;color:${c}">${ico(i)}${ix} ${n}</div>`).join('')}</div><p class="cap" style="font-size:.78rem;font-family:'Helvetica Neue',Arial">Today K prints a 6-row legend and a paragraph per alert. Here: one card with the three things to do as icon steps, and a severity bar; the meaning and "why" are one click deeper (hover/ focus the step).</p></div>`;
+}
+/* ---------------- boot ---------------- */
+function mountStatic(){
+ const hud=$('#d-hud');hud.innerHTML=dhudHTML();
+ const p=$('#d-panel');renderPanel(p);dutyClick(p,()=>renderPanel(p));
+ renderContacts($('#r-cards'));
+ {const el=$('#r-log');LOGROOTS.push({el,small:false});renderLog(el,false)}
+ {const el=$('#pb-log');LOGROOTS.push({el,small:true})}
+ renderAlert();staticWheels();renderBinds();renderKB();
+ const pb=$('#pb-duty');dutyClick(pb,()=>renderPanel(pb));
+}
+mountStatic();
+// live clock
+let lastT=performance.now();
+setInterval(()=>{const t=performance.now(),dt=(t-lastT)/1000;lastT=t;CLOCK.now=Math.min(T-.01,CLOCK.now+dt/6);
+ INST.forEach(i=>{if(i.state==='doing'&&CLOCK.now-i.t0>=i.dur)i.state=i._q==='rushed'?'rushed':'done'});
+ $('#d-hud').innerHTML=dhudHTML();$('#s-dhud').innerHTML=dhudHTML();
+ if($('#t-duty').classList.contains('on')&&!popFor){renderPanel($('#d-panel'))}
+ if(U.stack.includes('duty')&&!popFor)renderPanel($('#pb-duty'));
+},1000);
+$('#s-dhud').innerHTML=dhudHTML();
+$('#s-comm').innerHTML=LOG.slice(-2).map(m=>`<div class="ln"><b>${esc(m.from)}${m.to?' → '+esc(m.to):''}</b>${esc(m.text)}</div>`).join('');
+render();ulog('ready · state machine shared with the Sandbox');
+showTab((location.hash||'#t-play').slice(1).replace(/^$/,'t-play'));
+if(!document.getElementById((location.hash||'#t-play').slice(1)))showTab('t-play');
+window.__mock={U,openLayer,escape,openWheel,mainSectors,render,showTab,commitWheel,moveWheel,S,KEYS};
+</script>
+</body>
+</html>
