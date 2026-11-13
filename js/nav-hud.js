@@ -8,7 +8,7 @@
 // Inputs: G.duty (board), G.pin ({kind, id, room, deck}: set by the tasks agent for the guided first task), G.plan, G.shipDecks, world.
 // main.js calls frame(dt) every play frame (route recompute is internal at 0.12 s), renderStatus(el) from renderStatus().
 import { ICONS, CATS, SHAPES, drawIcon, badgeSvg, iconSvg } from './icons.js';
-import { ROOM_CAT, Pins, dutyItems, ringNav, planRoute, pinKey, liftTile, WALK } from './nav.js';
+import { ROOM_CAT, Pins, dutyItems, ringNav, deckRoomTypes, planRoute, pinKey, liftTile, WALK } from './nav.js';
 import { bakeDeck, deckBounds, drawLocal, drawPlan, drawBadge, ROUTE, DUE, LATE, IDLE, DOING } from './minimap.js';
 import { Compass } from './compass.js';
 import { schematicHTML, SCHEMATIC_CSS } from './schematic.js';
@@ -48,6 +48,7 @@ body.nominal #minimap{top:12px;right:14px;width:208px;height:208px;image-renderi
 .nv-k{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;border:1px solid #9fb2c8;border-bottom-width:3px;border-radius:4px;background:#101a2c;color:#fff;font:700 10px var(--f-m,monospace)}
 #nv-legend{position:fixed;right:14px;width:208px;z-index:5;pointer-events:none;flex-wrap:wrap;gap:3px 8px;padding:4px 7px;background:rgba(7,11,19,.72);border:1px solid rgba(150,180,210,.26);font:600 9px var(--f-m,monospace);color:#cfe1f3}
 #nv-legend span,#nv-map .leg span{display:inline-flex;align-items:center;gap:3px}
+#liftui .lr em.lb{display:inline-flex;margin-left:3px;vertical-align:middle}#liftui .lr.pre{border-color:#8ef3ff;box-shadow:inset 3px 0 0 #8ef3ff}#liftui .lr.pre b::after{content:'  ▸ guide destination (Enter)';color:#8ef3ff;font-size:11px}
 #nv-compass{position:fixed;left:50%;top:36px;transform:translateX(-50%);width:min(520px,50vw);height:auto;aspect-ratio:520/62;z-index:4;pointer-events:none}
 body.nominal #faults{top:316px}
 #nv-map{position:fixed;inset:0;z-index:12;display:none;background:#03060c;color:#e8eef6;font:12px var(--f-d,Arial)}#nv-map.on{display:flex}
@@ -98,6 +99,9 @@ export class NavHUD {
 
   // ---- pins
   setPin(p, sayIt = true) { this.pins.set(p); this.pins.cleared = !p; this.planKey = ''; this.tick(); if (sayIt) this.G.say?.(p ? `Guide: ${short(p.label || label(p.room || p.type), 4)}` : 'Guide off', 'comp'); return p; }
+  /** lift panel: room-type badges for deck i (js/nav.js deckRoomTypes) and the deck the guided pin leads to */
+  liftBadges(i, types) { return deckRoomTypes(this.G.plan, i, types).map(t => `<em class="lb" title="${esc(label(t))}">${bdg(t, 15)}</em>`).join(''); }
+  destDeck() { return this.on() && this.pin ? (this.dest?.deck ?? this.pin.deck ?? null) : null; }
   /** pin a duty / task by id (duty board 'Guide me') */
   pinItem(kind, id) { this.items = dutyItems(this.G.duty); const it = this.items.find(i => i.kind === kind && i.id === id); if (!it || !it.room) return null; return this.setPin({ kind: it.kind, id: it.id, room: it.room, label: it.label, icon: it.icon }); }
   /** duty-board ring extras for a loop id: { pinned, notch, late } (js/nav.js ringNav) */

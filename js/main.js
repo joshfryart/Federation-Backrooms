@@ -814,7 +814,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Tab') { e.preventDefault(); if (!e.repeat && G.phase === 'play') showStatus(true); }
   if (!e.repeat) { if (e.code === 'Space') pressed.jump = true; if (e.code === 'KeyC' || e.code === 'ControlLeft') pressed.crouch = true; }
   keys[e.code] = true;
-  if (G.phase === 'select') { const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code); if (m && +m[1] >= 1 && +m[1] <= G.ship.decks) chooseDeck(+m[1] - 1); else if (e.code === 'Escape' || e.code === 'KeyE') closeLiftPanel(); }
+  if (G.phase === 'select') { const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code); if (m && +m[1] >= 1 && +m[1] <= G.ship.decks) chooseDeck(+m[1] - 1); else if (e.code === 'Enter' && G.nav?.destDeck() != null && G.nav.destDeck() !== G.shipDeck) chooseDeck(G.nav.destDeck()); else if (e.code === 'Escape' || e.code === 'KeyE') closeLiftPanel(); }
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
   if (G.phase === 'play') {
     if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
@@ -1410,7 +1410,7 @@ function renderLiftPanel() {
   $('liftsub').textContent = `${G.ship.name} · ${G.ship.reg}`;
   $('liftbig').textContent = ride ? `${L.to > L.from ? '▼' : '▲'} DECK ${String(L.disp + 1).padStart(2, '0')}` : '';
   $('liftfoot').textContent = ride ? `Riding to Deck ${L.to + 1} — ${deckZone(L.to)}` : 'Press 1–' + D + ' or click a deck · Esc to step out';
-  $('liftrows').innerHTML = Array.from({ length: D }, (_, i) => { const nt = deckNotes(i); return `<div class="lr${!ride && i === G.shipDeck ? ' cur' : ''}${ride && i === L.to ? ' dest' : ''}${ride && i === L.disp ? ' here' : ''}" data-i="${i}"><i>${i + 1}</i><b>Deck ${i + 1} — ${deckZone(i)} </b><span>${nt.length ? '· ' + nt.join(' · ') : ''}</span></div>`; }).join('');
+  $('liftrows').innerHTML = Array.from({ length: D }, (_, i) => { const nt = deckNotes(i); return `<div class="lr${!ride && i === G.shipDeck ? ' cur' : ''}${ride && i === L.to ? ' dest' : ''}${ride && i === L.disp ? ' here' : ''}${!ride && i === G.nav?.destDeck() && i !== G.shipDeck ? ' pre' : ''}" data-i="${i}"><i>${i + 1}</i><b>Deck ${i + 1} — ${deckZone(i)} </b><span>${nt.length ? '· ' + nt.join(' · ') : ''}</span>${G.nav?.liftBadges(i, NOTABLE) || ''}</div>`; }).join('');
   $('liftui').className = 'show' + (ride ? ' ride' : '');
 }
 $('liftrows').onclick = (e) => { const r = e.target.closest('.lr'); if (r && G.phase === 'select') chooseDeck(+r.dataset.i); };

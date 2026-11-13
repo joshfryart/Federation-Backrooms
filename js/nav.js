@@ -198,6 +198,8 @@ export function dutyItems(duty) {
   return out;
 }
 /** smaller = more urgent: late duties, then least time left, then open tasks (board order), then the soonest upcoming */
+/** lift panel: room types of `types` present on a deck, from the ship plan ({type: [{deck,...}]}) */
+export const deckRoomTypes = (plan, deck, types) => types.filter(t => plan?.[t]?.some(r => r.deck === deck));
 /** duty-board ring extras for one item: is it the guided pin, and where does the walk ETA land on its time-left ring (0..1 of the window; null = no countdown)? late = you will not make it */
 export function ringNav(it, pin, plan) {
   const pinned = !!(it && pin && pin.kind === it.kind && pin.id === it.id); if (!pinned || !plan || it.left == null || !it.total) return { pinned, notch: null, late: false };

@@ -33,3 +33,5 @@ import { ringNav } from '../js/nav.js';
 { const it = { kind: 'duty', id: 'a', left: 60, total: 100 }, pin = { kind: 'duty', id: 'a' };
   assert(!ringNav(it, null, { eta: 10 }).pinned); const r = ringNav(it, pin, { eta: 20 }); assert(r.pinned && Math.abs(r.notch - 0.4) < 1e-9 && !r.late);
   assert(ringNav(it, pin, { eta: 90 }).late && ringNav(it, pin, { eta: 90 }).notch === 0); assert(ringNav({ ...it, left: null }, pin, { eta: 5 }).notch === null); console.log('ringNav ok'); }
+import { deckRoomTypes } from '../js/nav.js';
+assert(deckRoomTypes({ lab: [{ deck: 2 }], gym: [{ deck: 1 }] }, 2, ['gym', 'lab', 'bridge']).join() === 'lab'); console.log('liftbadges ok');
