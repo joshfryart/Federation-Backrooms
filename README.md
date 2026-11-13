@@ -14,7 +14,7 @@ Serve the folder statically (ES modules need http):
 No build step; three.js and its addons are vendored in `vendor/`. Models, textures and the HDRI are in `assets/`.
 
 ## Controls
-Tab ship status · hold E repair · WASD move · Shift sprint (loud) · Space jump / climb props / wall-jump · C creep, or slide while sprinting · Q or right click grapple line · Mouse look · Click fire zapper (stuns) · E interact / shake off a Clingon · F flashlight · M map
+Tab ship status · hold E repair · WASD move · Shift sprint (loud) · Space jump / climb props / wall-jump · C creep, or slide while sprinting · Q or right click grapple line · Mouse look · Click fire zapper (stuns) · E interact / shake off a Ceiling Crawler · F flashlight · M map
 
 Sprint and jump along a bulkhead to wall-run. Slide into man-sized hostiles to trip them. The grapple reels you to walls, ceilings and crate tops.
 

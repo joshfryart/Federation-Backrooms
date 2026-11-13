@@ -407,7 +407,7 @@ export function makeItem(kind) {
 }
 
 // =====================================================================
-//  CLINGON CRAWLER (spider-ish ceiling ambusher). Built standing on the floor; flipped when on the ceiling.
+//  CEILING CRAWLER (spider-ish ceiling ambusher). Built standing on the floor; flipped when on the ceiling.
 // =====================================================================
 let spM = null;
 function spiderMats() {
