@@ -5,6 +5,7 @@ import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { has, get } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { toBones } from './movement.js';
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -232,24 +233,31 @@ float sh_n(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f)
              mix(mix(sh_h(i + vec3(0,0,1)), sh_h(i + vec3(1,0,1)), f.x), mix(sh_h(i + vec3(0,1,1)), sh_h(i + vec3(1,1,1)), f.x), f.y), f.z); }
 float sh_f(vec3 p){ return 0.5 * sh_n(p) + 0.25 * sh_n(p * 2.03 + 7.1) + 0.125 * sh_n(p * 4.1 + 3.7) + 0.0625 * sh_n(p * 8.3 + 1.3); }
 `;
-export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
-  const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale } };
+export function skinShader(m, { wound = 0, seed = 0, pale = 0, freck = 1, flush = 0 } = {}) {
+  const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale }, uFreck: { value: freck }, uFlush: { value: flush }, uBlob: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] } };   // uBlob: bite / gash centres (object space xyz, radius w; w = 0 is off)
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale, uFreck, uFlush; uniform vec4 uBlob[3];\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
       .replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 q = vObj * 9.0 + uSeed;
         float mot = sh_f(q * 0.5), pore = sh_n(vObj * 260.0 + uSeed), freck = smoothstep(0.72, 0.8, sh_n(vObj * 70.0 + uSeed * 1.7));
         float vein = smoothstep(0.47, 0.5, sh_f(vObj * 14.0 + uSeed)) * smoothstep(0.53, 0.5, sh_f(vObj * 14.0 + uSeed));
         diffuseColor.rgb *= 0.9 + 0.2 * mot;
         diffuseColor.rgb *= vec3(1.0, 1.0 - 0.06 * (mot - 0.5), 1.0 - 0.12 * (mot - 0.5));     // blotchy flush
-        diffuseColor.rgb *= 1.0 - 0.1 * pore - 0.18 * freck;
+        diffuseColor.rgb *= 1.0 - 0.1 * pore - 0.18 * freck * uFreck;
+        diffuseColor.rgb *= mix(vec3(1.0), vec3(1.04, 0.93, 0.91), uFlush * smoothstep(0.3, 0.8, mot));
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.86, 1.05), vein * (0.25 + uPale * 0.6));
         float w = sh_f(vObj * 6.5 + uSeed * 3.1); gWound = uWound * smoothstep(0.6, 0.68, w);
         float bruise = uWound * smoothstep(0.52, 0.64, sh_f(vObj * 4.0 + uSeed * 5.3 + 11.0));
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.6, 0.38, 0.5), bruise * 0.6);
+        float blobRim = 0.0, blobCore = 0.0;
+        for (int i = 0; i < 3; i++) { vec4 b = uBlob[i]; if (b.w > 0.0) { float d = length(vObj - b.xyz) / b.w + 0.28 * (sh_f(vObj * 38.0 + float(i) * 3.7) - 0.5);
+          blobCore = max(blobCore, smoothstep(0.8, 0.45, d)); blobRim = max(blobRim, smoothstep(1.9, 0.9, d)); } }
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.55, 0.3, 0.42), blobRim * 0.7);      // bruised, inflamed ring
+        gWound = max(gWound, blobCore);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.17, 0.015, 0.02), gWound);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.06, 0.07), blobCore * 0.35 * sh_n(vObj * 90.0));   // wet flesh glints in the crater
         gH = 0.45 * pore + 0.5 * mot - 1.1 * gWound; }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor * (0.92 + 0.2 * pore_r()), 0.12, gWound);')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -258,15 +266,65 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
         vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad * 0.0012); }`)
       .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0');
   };
-  m.customProgramCacheKey = () => 'skin1';
+  m.customProgramCacheKey = () => 'skin2';
   m.needsUpdate = true;
   return u;
+}
+
+// ---- torn cloth: object-space noise rips holes (vertical claw rakes + patches) and frays the trouser hems, edges stained dark; whatever is under shows through ----
+export function tornShader(m, { thr = 0.7, seed = 0, y0 = 0, unit = 1, hem = 0.04 } = {}) {   // unit: object-space length -> body heights (the glb positions are quantised, so it differs per mesh)
+  const u = { uTThr: { value: thr }, uTSeed: { value: seed }, uTY0: { value: y0 }, uTH: { value: unit }, uTHem: { value: hem } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uTThr, uTSeed, uTY0, uTH, uTHem;\n' + SKIN_GLSL)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      { vec3 q = vObj * uTH;
+        float rake = sh_f(vec3(q.x * 7.0, q.y * 2.4, q.z * 7.0) + uTSeed), blot = sh_f(q * 10.0 + uTSeed * 1.7 + 5.0);
+        float cut = max(rake - uTThr, blot - uTThr - 0.09);
+        float hy = (vObj.y - uTY0) * uTH, hm = uTHem * (0.45 + 1.3 * sh_f(vec3(q.x * 45.0, 0.0, q.z * 45.0) + uTSeed)), low = step(hy, 0.3);
+        if (cut > 0.0 || (hm - hy) * low > 0.0) discard;
+        float edge = max(smoothstep(-0.04, 0.0, cut), smoothstep(0.014, 0.0, hy - hm) * low);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.09, 0.012, 0.012), edge * 0.85); }`);
+  };
+  m.customProgramCacheKey = () => 'torn1'; m.needsUpdate = true; m.side = THREE.DoubleSide;
+  return u;
+}
+
+// ---- hair styles (the baked hair mesh is one style per body): scalp caps, mohawk, bun, ponytail, afro built from the measured skull ----
+export const HAIR_STYLES = ['native', 'buzz', 'bald', 'mohawk', 'bun', 'ponytail', 'afro', 'slick'];
+const headMeta = {};
+function headFit(kind, inner, u) {
+  if (headMeta[kind]) return headMeta[kind];
+  const cast = bindSurface(inner, (n, o) => o.material.name === 'body'), sc = inner.scale, hp = inner.getObjectByName('Head').getWorldPosition(new THREE.Vector3());
+  const first = (...a) => cast(...a)[0], top = first(hp.x, hp.y + 0.6, hp.z, 0, -1, 0); if (!top) return null;
+  const crown = top.p.y, yc = crown - 0.105 * u;
+  const hit = (ox, oz, dx, dz) => first(ox, yc, oz, dx, 0, dz);
+  const L = hit(hp.x + 0.5, hp.z, -1, 0), R = hit(hp.x - 0.5, hp.z, 1, 0), F = hit(hp.x, hp.z + 0.5, 0, -1), B = hit(hp.x, hp.z - 0.5, 0, 1);
+  const w = L && R ? (L.p.x - R.p.x) / 2 : 0.075 * u, cx = L && R ? (L.p.x + R.p.x) / 2 : hp.x, d = F && B ? (F.p.z - B.p.z) / 2 : 0.095 * u, cz = F && B ? (F.p.z + B.p.z) / 2 : hp.z;
+  return headMeta[kind] = { cx: cx / sc.x, cy: yc / sc.y, cz: cz / sc.z, rx: w / sc.x, ry: 0.105 * u / sc.y, rz: d / sc.z, crown: crown / sc.y, u };
+}
+function addHairStyle(kind, inner, height, style, col) {
+  const m0 = headFit(kind, inner, height / 1.75); if (!m0 || style === 'native') return;
+  const { cx, cy, cz, rx, ry, rz } = m0, s = inner.scale, geos = [];
+  const sph = (R, th, k = 1, o = [0, 0, 0]) => { const g = new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, th); g.scale(rx * R * k, ry * R * k * (th > 3 ? 1 : 1.04), rz * R * k); g.translate(cx + o[0], cy + o[1], cz + o[2]); return g; };
+  const hu = height / 1.75 / s.y;   // 1 cm-ish unit in inner space
+  if (style === 'buzz') geos.push(sph(1.12, 1.55, 1, [0, 0.006 * hu, -0.004 * hu]));
+  else if (style === 'slick') geos.push(sph(1.15, 1.62, 1, [0, 0.006 * hu, -0.004 * hu]));
+  else if (style === 'afro') geos.push(sph(1.38, 2.05, 1, [0, 0.035 * hu, -0.03 * hu]));
+  else if (style === 'bun') { geos.push(sph(1.13, 1.6, 1, [0, 0.006 * hu, -0.004 * hu])); const b = new THREE.SphereGeometry(0.05 * hu, 12, 10); b.translate(cx, cy + ry * 0.9, cz - rz * 0.75); geos.push(b); }
+  else if (style === 'ponytail') { geos.push(sph(1.13, 1.62, 1, [0, 0.006 * hu, -0.004 * hu])); const t = new THREE.CylinderGeometry(0.02 * hu, 0.006 * hu, 0.2 * hu, 8, 1); t.rotateX(-0.25); t.translate(cx, cy - ry * 0.35 - 0.09 * hu, cz - rz * 1.18); geos.push(t); const k = new THREE.SphereGeometry(0.026 * hu, 8, 6); k.translate(cx, cy - ry * 0.05, cz - rz * 1.02); geos.push(k); }
+  else if (style === 'mohawk') { for (let i = 0; i < 9; i++) { const a = -0.95 + i * 0.22, hgt = (0.032 + 0.03 * Math.sin((i + 0.5) / 9 * Math.PI)) * hu, b = new THREE.BoxGeometry(0.012 * hu, hgt, 0.04 * hu); b.translate(0, hgt / 2, 0); b.rotateX(-a * 0.35); b.translate(cx, cy + ry * 0.98 * Math.cos(a) , cz + rz * 1.0 * Math.sin(a) * 0.92); geos.push(b); } geos.push(sph(1.025, 1.12)); }
+  if (!geos.length) return;
+  const g = mergeGeometries(geos.map(flat)); const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(...col.map(c => Math.min(1, c * 0.5))).multiplyScalar(style === 'slick' ? 0.8 : 1), roughness: style === 'slick' ? 0.35 : 0.85, metalness: 0 });
+  const mesh = new THREE.Mesh(g, mat); mesh.castShadow = false; mesh.frustumCulled = false; inner.add(mesh); inner.updateMatrixWorld(true); inner.getObjectByName('Head').attach(mesh);
 }
 
 /**
  * opts: kind, height, uniform (hex), skin (hex), hair ([r,g,b] multiplier), material (override, e.g. hologram),
  *       bloody (0..1), pale (0..1), slime (bool), tint (hex multiply on everything), shadow (blob), rnd,
- *       person (roster member: fixes the look per person and puts their name on the plate), seed, name, kit (false = no badges/belt)
+ *       person (roster member: fixes the look per person and puts their name on the plate), seed, name, kit (false = no badges/belt),
+ *       hairStyle (one of HAIR_STYLES; default is drawn per person), torn (0..1 ripped cloth; default 0.7 * bloody), wounds (0..3 bite/gash craters on bare skin; default from bloody), flush / freckles (skin variation overrides)
  */
 export function makeHuman(opts = {}) {
   const per = opts.person; let seed = opts.seed;
@@ -299,6 +357,31 @@ export function makeHuman(opts = {}) {
   if (!opts.material && kind !== 'suit' && opts.kit !== false) addKit(kind, inner, height, uniform, opts.name ?? per?.family ?? '');
   if (opts.rank !== undefined && !opts.material && kind !== 'suit') { addPips(inner, opts.rank); g.userData.rank = RANKS[opts.rank][0]; }
   if (kind !== 'suit' && !opts.height) { const b = 0.96 + rnd() * 0.09; inner.scale.x *= b; inner.scale.z *= b * (0.98 + rnd() * 0.04); }   // slight build variation
+  // ---- extras drawn from their own stream so existing looks (skin, height, build) stay as they were ----
+  if (!opts.material) {
+    const vr = mulberry32((((seed ?? Math.floor(rnd() * 1e9)) >>> 0) ^ 0x5bd1e995) >>> 0), bm = mats.body;
+    if (bm && kind !== 'suit' && !opts.slime) {   // skin variation: warm/cool undertone, lightness, ruddy flush, freckles
+      bm.color.offsetHSL((vr() - 0.5) * 0.024, (vr() - 0.5) * 0.14, (vr() - 0.5) * 0.06);
+      if (mats.skinU) { mats.skinU.uFlush.value = opts.flush ?? (vr() < 0.3 ? 0.3 + vr() * 0.4 : vr() * 0.2); mats.skinU.uFreck.value = opts.freckles ?? (vr() < 0.25 ? 1.6 + vr() * 0.7 : 0.5 + vr() * 0.6); }
+    }
+    const style = opts.hairStyle || (kind === 'crew_f2' || kind === 'suit' ? 'native' : (() => { const r = vr(); return r < 0.46 ? 'native' : r < 0.6 ? 'buzz' : r < 0.66 ? 'bald' : r < 0.72 ? 'mohawk' : r < 0.82 ? 'bun' : r < 0.9 ? 'ponytail' : r < 0.95 ? 'afro' : 'slick'; })());
+    if (style !== 'native' && kind !== 'suit' && HAIR_STYLES.includes(style)) { addHairStyle(kind, inner, height, style, hair); if (mats.hair) mats.hair.visible = false; inner.traverse(o => { if (o.isMesh && o.material.name === 'hair') o.visible = false; }); g.userData.hairStyle = style; }
+    // wounds + torn cloth on the madness / corpse looks
+    const bl = opts.bloody || 0, nw = Math.min(3, opts.wounds ?? Math.round(bl * 2.6)), tn = opts.torn ?? bl * 0.7;
+    inner.updateMatrixWorld(true);
+    const body = []; inner.traverse(o => { if (o.isSkinnedMesh) { if (o.material.name === 'body') body.push(o); } });
+        if (nw > 0 && body[0] && mats.skinU && kind !== 'suit') {
+      const o = body[0], W = (n) => inner.getObjectByName(n)?.getWorldPosition(new THREE.Vector3()), sites = [], u = height / 1.75;
+      const along = (a, b, t, side = 0) => { const A = W(a), B = W(b); if (!A || !B) return null; const p = A.lerp(B, t); p.x += side * 0.02 * u; p.z += 0.025 * u; return p; };
+      const pool = [() => along('neck_01', 'Head', 0.12, vr() < 0.5 ? -2 : 2), () => along('lowerarm_l', 'hand_l', 0.4), () => along('lowerarm_r', 'hand_r', 0.45), () => along('upperarm_l', 'lowerarm_l', 0.62, 1), () => along('upperarm_r', 'lowerarm_r', 0.62, -1), () => along('hand_r', 'hand_r', 0), () => along('Head', 'neck_01', 0.15, vr() < 0.5 ? -3 : 3)];
+      const pick = []; while (pick.length < nw && pick.length < pool.length) { const i = Math.floor(vr() * pool.length); if (!pick.includes(i)) pick.push(i); }
+      if (!pick.includes(0) && vr() < 0.6) pick[0] = 0;   // the throat is the classic
+      const sc = o.matrixWorld.getMaxScaleOnAxis(), inv = o.matrixWorld.clone().invert();
+      pick.forEach((i, k) => { const p = pool[i](); if (!p) return; p.applyMatrix4(inv); mats.skinU.uBlob.value[k].set(p.x, p.y, p.z, (0.034 + vr() * 0.03) * u / sc); });
+    }
+    if (tn > 0.05 && kind !== 'suit') inner.traverse(o => { if (!o.isSkinnedMesh) return; const n = o.material.name || ''; if (!n.startsWith('garment') || n.includes('shoes')) return;
+      o.geometry.boundingBox || o.geometry.computeBoundingBox(); const gb = o.geometry.boundingBox; mats.tornU = tornShader(o.material, { thr: 0.8 - tn * 0.2, seed: vr() * 40, y0: gb.min.y, unit: o.matrixWorld.getMaxScaleOnAxis() / height, hem: 0.012 + tn * 0.05 }); });
+  }
   if (opts.shadow !== false) { const bs = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false })); bs.rotation.x = -Math.PI / 2; bs.position.y = 0.02; g.add(bs); g.userData.blob = bs; }
   const mixer = new THREE.AnimationMixer(inner); const acts = {}; let cur = null, curKey = '';
   const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'upperarm_l', 'clavicle_l', 'clavicle_r', 'thigh_l', 'thigh_r', 'foot_l', 'foot_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
@@ -339,32 +422,95 @@ export function makeSurvivor(rnd = Math.random, person = null) {
   H.play(pose, { fade: 0 }); H.standing = pose.startsWith('idle'); H.face({ LeftInnerBrowUp: 0.8, RightInnerBrowUp: 0.8 });
   return g;
 }
-// corpses: on their back (end of death01), face-down, or slumped where they sat down
-export function makeCorpse(rnd = Math.random, person = null, pose = null) {
-  const g = makeHuman({ rnd, person, bloody: 1, pale: 0.5, shadow: false, rank: person ? person.rank : Math.floor(rnd() * 4), kind: person ? person.body : pickOf([...CREW_KINDS, 'crew_heavy'], rnd), ...(person ? { uniform: person.uniform } : {}) }); if (!g) return null; const H = g.userData.human;
-  pose = pose || pickOf(['back', 'back', 'facedown', 'facedown', 'slumped'], rnd); g.userData.pose = pose;
-  const B = (n) => H.inner.getObjectByName(n);
+// a dropped stun-zapper (original chunky pistol shape): lies on the deck by a body, emitter still faintly lit
+let zapMats = null;
+export function makeDroppedZapper(rnd = Math.random) {
+  zapMats = zapMats || { body: new THREE.MeshStandardMaterial({ color: 0x3b4350, roughness: 0.45, metalness: 0.7 }), grip: new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.8, metalness: 0.2 }), glow: new THREE.MeshStandardMaterial({ color: 0x113a44, emissive: 0x28d8ff, emissiveIntensity: 0.9, roughness: 0.3 }) };
+  const z = new THREE.Group(), part = (geo, mat, x, y, zz, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, zz); m.rotation.x = rx; m.castShadow = true; z.add(m); return m; };
+  part(new THREE.BoxGeometry(0.045, 0.06, 0.2), zapMats.body, 0, 0.03, 0);                       // slide
+  part(new THREE.CylinderGeometry(0.014, 0.018, 0.1, 10), zapMats.body, 0, 0.034, 0.145, Math.PI / 2);   // emitter barrel
+  part(new THREE.TorusGeometry(0.02, 0.005, 6, 12), zapMats.glow, 0, 0.034, 0.185);              // emitter ring
+  part(new THREE.BoxGeometry(0.04, 0.115, 0.05), zapMats.grip, 0, -0.04, -0.06, 0.28);          // grip
+  part(new THREE.BoxGeometry(0.012, 0.012, 0.09), zapMats.glow, 0.0235, 0.04, 0.0);            // charge strip
+  z.scale.setScalar(1.05); z.userData.prop = 'zapper';
+  const hold = new THREE.Group(); hold.add(z); z.rotation.z = rnd() < 0.55 ? Math.PI / 2 : 0; z.position.y = z.rotation.z ? 0.026 : 0.06;   // on its side, or upright on the grip heel
+  hold.rotation.y = rnd() * 6.28; return hold;
+}
+// corpses: on their back (end of death01), face-down, slumped where they sat down, or curled up on their side.
+//   g.userData: pose, wallBack (slumped: distance from the origin to the back plane when facing +Z, put a wall that far behind and set rotation.y to face away from it), drop (zapper prop or null)
+export const CORPSE_POSES = ['back', 'facedown', 'slumped', 'curled'];
+export function makeCorpse(rnd = Math.random, person = null, pose = null, { zapper } = {}) {
+  const g = makeHuman({ rnd, person, bloody: 0.85 + rnd() * 0.15, torn: 0.35 + rnd() * 0.65, pale: 0.5, shadow: false, rank: person ? person.rank : Math.floor(rnd() * 4), kind: person ? person.body : pickOf([...CREW_KINDS, 'crew_heavy'], rnd), ...(person ? { uniform: person.uniform } : {}) }); if (!g) return null; const H = g.userData.human;
+  pose = pose || pickOf(['back', 'back', 'facedown', 'facedown', 'slumped', 'curled'], rnd); g.userData.pose = pose;
+  const B = (n) => H.inner.getObjectByName(n), rest = get(H.kind).scene, flip = rnd() < 0.5 ? -1 : 1;
   if (pose === 'slumped') {
     H.pose('sitting_idle', 1); H.mixer.setTime(4 + rnd() * 2);   // past the cross-fade from idle
-    for (const [n, x, z] of [['spine_01', 0.3, 0.1], ['spine_02', 0.3, 0.08], ['spine_03', 0.25, 0.1], ['neck_01', 0.45, 0.2], ['Head', 0.35, -0.25]]) { const b = B(n); if (b) { b.rotateX(x); b.rotateZ(z * (rnd() < 0.5 ? -1 : 1)); } }
+    for (const [n, x, z] of [['spine_01', 0.3, 0.1], ['spine_02', 0.3, 0.08], ['spine_03', 0.25, 0.1], ['neck_01', 0.45, 0.2], ['Head', 0.35, -0.25]]) { const b = B(n); if (b) { b.rotateX(x); b.rotateZ(z * flip); } }
     for (const n of ['upperarm_l', 'upperarm_r']) B(n)?.rotateX(0.25 + rnd() * 0.3);
-    const rest = get(H.kind).scene; for (const n of ['calf_l', 'calf_r', 'foot_l', 'foot_r']) { const b = B(n), r = rest.getObjectByName(n); if (b && r) b.quaternion.copy(r.quaternion); }   // legs straight out: sitting on the deck, not on a chair
+    for (const n of ['calf_l', 'calf_r', 'foot_l', 'foot_r']) { const b = B(n), r = rest.getObjectByName(n); if (b && r) b.quaternion.copy(r.quaternion); }   // legs straight out: sitting on the deck, not on a chair
     B('calf_l')?.rotateX(0.12); B('thigh_r')?.rotateZ(0.18);
+  } else if (pose === 'curled') {   // fetal: hunched crouch, knees to chest, arms wrapped round the shins, then rolled onto one side
+    H.pose('crouch_idle', 1); H.mixer.setTime(0.5);
+    for (const [n, x] of [['spine_01', 0.42], ['spine_02', 0.5], ['spine_03', 0.4], ['neck_01', 0.35], ['Head', 0.3]]) B(n)?.rotateX(x);
+    for (const n of ['thigh_l', 'thigh_r']) B(n)?.rotateX(-0.75); for (const n of ['calf_l', 'calf_r']) B(n)?.rotateX(0.55);
+    for (const n of ['upperarm_l', 'upperarm_r']) B(n)?.rotateX(0.9 + rnd() * 0.2); for (const n of ['lowerarm_l', 'lowerarm_r']) B(n)?.rotateX(1.5);
+    B('upperarm_l')?.rotateZ(0.5); B('upperarm_r')?.rotateZ(-0.5);
   } else {
     H.pose('death01', 0.86 + rnd() * 0.14); H.mixer.update(0);
   }
   H.face({ JawDrop: 0.3 + rnd() * 0.5, LeftUpperLidClosed: rnd(), RightUpperLidClosed: rnd() });
-  // settle the body on the deck: roll it over for the face-down pose, then drop the lowest skinned point to the floor
+  // settle the body on the deck: roll it over for the face-down / curled poses, then drop the lowest skinned point to the floor
   H.inner.updateMatrixWorld(true); const pel = B('pelvis').getWorldPosition(new THREE.Vector3());
   if (pose === 'facedown') {
     const head = B('Head').getWorldPosition(new THREE.Vector3()), axis = head.sub(pel).setY(0).normalize(), q = new THREE.Quaternion().setFromAxisAngle(axis, Math.PI + (rnd() - 0.5) * 0.3);
     const piv = new THREE.Group(); piv.position.copy(pel); g.add(piv); piv.attach(H.inner); piv.quaternion.copy(q); piv.updateMatrixWorld(true);
+  } else if (pose === 'curled') {
+    const piv = new THREE.Group(); piv.position.copy(pel); g.add(piv); piv.attach(H.inner); piv.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), flip * (Math.PI / 2 - 0.12)); piv.updateMatrixWorld(true);
   }
-  let lowY = Infinity; const v = new THREE.Vector3();
-  H.inner.traverse(o => { if (!o.isSkinnedMesh || !/^(body|garment)/.test(o.material.name || '')) return; o.skeleton.update(); const n = o.geometry.attributes.position.count; for (let i = 0; i < n; i += 7) { o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld); if (v.y < lowY) lowY = v.y; } });
+  let lowY = Infinity, backZ = Infinity; const v = new THREE.Vector3(); g.updateMatrixWorld(true);
+  H.inner.traverse(o => { if (!o.isSkinnedMesh || !/^(body|garment)/.test(o.material.name || '')) return; o.skeleton.update(); const n = o.geometry.attributes.position.count; for (let i = 0; i < n; i += 7) { o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld); if (v.y < lowY) lowY = v.y; if (v.z < backZ) backZ = v.z; } });
   if (isFinite(lowY)) (H.inner.parent === g ? H.inner : H.inner.parent).position.y -= lowY - 0.015;
+  g.userData.wallBack = isFinite(backZ) ? -backZ + 0.01 : 0.3;
+  // a dropped zapper near the hand that let go of it
+  g.userData.drop = null;
+  if (zapper ?? rnd() < 0.6) {
+    g.updateMatrixWorld(true); const hand = B(rnd() < 0.5 ? 'hand_r' : 'hand_l').getWorldPosition(new THREE.Vector3()), a = rnd() * 6.28, z = makeDroppedZapper(rnd);
+    z.position.set(hand.x + Math.sin(a) * 0.3, 0, hand.z + Math.cos(a) * 0.3); if (pose === 'slumped') z.position.z = Math.max(z.position.z, hand.z + 0.1); g.add(z); g.userData.drop = z;
+  }
   g.rotation.y = rnd() * 6.28; return g;
 }
+
+// ---- Space-Madness: shamble / lurch / spasm / lunge-and-bite as an additive bone layer over the stock UAL clips (walk, jog, sprint, idle). ----
+// Call every frame after the clip is chosen:  madness(H, t, { attacking })  — it fills H.add (consumed by H.update) and drives the jaw.
+// For js/enemies.js:  humanModel(opts, { ...MADNESS_CFG, face: CRAZED_FACE }, …)  (its tick → madness; attack clip is 'idle' so the lunge layer owns the pose).
+const sstep = (a, b, x) => { x = Math.min(1, Math.max(0, (x - a) / (b - a))); return x * x * (3 - 2 * x); };
+export function madness(H, t, f = {}) {
+  const S = H.mad || (H.mad = { ph: Math.random() * 6.28, atk: -1, last: t, dir: 1 });
+  const dt = Math.min(0.1, Math.max(0, t - S.last)); S.last = t; const ph = S.ph;
+  const run = /^(sprint|jog_fwd)$/.test(H.current), still = H.current === 'idle' || H.current === 'crouch_idle', k = run ? 0.45 : 1;
+  if (f.attacking) S.atk = S.atk < 0 ? 0 : S.atk + dt; else S.atk = -1;
+  const spasm = Math.max(0, Math.sin(t * 11.3 + ph) * Math.sin(t * 2.7 + ph * 2) - 0.55) * 2.2;    // brief violent twitches
+  if (spasm > 0.4) S.dir = Math.sin(t * 7.1 + ph) > 0 ? 1 : -1;
+  const lurch = Math.pow(0.5 + 0.5 * Math.sin(t * 3.1 + ph), 2);                                          // gait surges and stalls
+  if (H.mixer.timeScale > 0 && !still) H.mixer.timeScale = run ? 1 : 0.6 + 0.75 * lurch;
+  const ch = {
+    waist_bow: 0.2 * k + 0.1 * lurch, spine_bow: 0.12 * k, spine_lean: 0.06 + 0.1 * Math.sin(t * 1.3 + ph), spine_twist: 0.18 * Math.sin(t * 2.6 + ph * 2) * k,
+    pelvis_roll: 0.07 * Math.sin(t * 3.4 + ph) * k, neck_tilt: 0.12, head_tilt: 0.24 + 0.1 * Math.sin(t * 3.1 + ph) + spasm * 0.25 * S.dir, head_turn: 0.45 * Math.sin(t * 1.7 + ph) + spasm * 0.55 * S.dir, head_nod: 0.1 + 0.08 * Math.sin(t * 4.3 + ph),
+    arm_fwd_r: 0.3 + 0.1 * Math.sin(t * 2 + ph), elbow_r: 0.85, wrist_r: 0.5 * Math.sin(t * 5.1 + ph), shrug_r: 0.2 + spasm * 0.2,        // right arm hangs hooked and limp
+    arm_fwd_l: 0.55 + 0.4 * Math.sin(t * 1.5 + ph + 1) + spasm * 0.3, elbow_l: 0.7, arm_out_l: 0.15, wrist_l: 0.4 * Math.sin(t * 6.3 + ph),    // left arm gropes forward
+  };
+  let jaw = 0.3 + 0.35 * Math.abs(Math.sin(t * 4 + ph)) + spasm * 0.3;
+  if (S.atk >= 0) {   // lunge: rear back and gape, throw the body forward with both hands out to grab, then snap and thrash
+    const a = S.atk, wind = sstep(0, 0.16, a) * (1 - sstep(0.2, 0.3, a)), hit = sstep(0.2, 0.34, a), thrash = hit * Math.sin(a * 40);
+    ch.waist_bow = -0.2 * wind + 0.65 * hit; ch.spine_bow = -0.22 * wind + 0.35 * hit; ch.head_nod = -0.4 * wind + 0.5 * hit; ch.head_tilt = 0.3 * hit; ch.head_turn = thrash * 0.4; ch.spine_twist = 0;
+    const w = Math.max(wind * 0.55, hit); ch.arm_fwd_l = 0.5 + 1.1 * w; ch.arm_fwd_r = 0.3 + 1.25 * w; ch.elbow_l = 0.7 - 0.45 * w; ch.elbow_r = 0.85 - 0.6 * w; ch.arm_out_l = 0.15 + 0.35 * wind; ch.arm_out_r = -0.35 * wind; ch.wrist_l = thrash * 0.4; ch.wrist_r = -thrash * 0.4;
+    jaw = wind * 1 + hit * (0.08 + 0.3 * Math.abs(Math.sin(a * 30)));
+  }
+  H.add = toBones(ch, 1); H.face({ JawDrop: Math.min(1, jaw) });
+  return S.atk >= 0;
+}
+export const MADNESS_CFG = { attack: 'idle', attackSpeed: 1, tick: (mesh, H, t, f) => madness(H, t, f) };
+
 // a Slimeling wearing someone: the tell is small — eyes that catch the light green, skin a little too glossy, a bead of slime at the nape
 let tellMat = null;
 export function markImpostor(g) {
