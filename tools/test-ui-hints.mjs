@@ -35,3 +35,6 @@ import { ringNav } from '../js/nav.js';
   assert(ringNav(it, pin, { eta: 90 }).late && ringNav(it, pin, { eta: 90 }).notch === 0); assert(ringNav({ ...it, left: null }, pin, { eta: 5 }).notch === null); console.log('ringNav ok'); }
 import { deckRoomTypes } from '../js/nav.js';
 assert(deckRoomTypes({ lab: [{ deck: 2 }], gym: [{ deck: 1 }] }, 2, ['gym', 'lab', 'bridge']).join() === 'lab'); console.log('liftbadges ok');
+import { TourState } from '../js/tour.js';
+{ const T = new TourState(undefined, 8, 7); assert(T.tick(1, 2) === -1 && T.tick(1, 9) === 0 && T.tick(5, 9, true) === 0 && T.tick(7, 9) === 1);
+  for (let k = 0; k < 10; k++) T.tick(7, 99); assert(T.done && T.tick(1, 99) === -1); console.log('tour ok'); }

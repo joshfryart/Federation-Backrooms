@@ -15,6 +15,7 @@ import { schematicHTML, SCHEMATIC_CSS } from './schematic.js';
 import { mountBrief } from './briefmap.js';
 import { ROOMS } from './data.js';
 import { UIHUB } from './ui-mode.js';
+import { Tour } from './tour.js';
 import { zoneOf } from './ships.js';
 
 const ZCOL = { Command: '#6ea8ff', Habitat: '#58c9b9', Services: '#c6d25e', Engineering: '#e8892b' };
@@ -84,7 +85,7 @@ export class NavHUD {
     this.map.querySelector('.find').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) this.find(b.dataset.t); };
     this.mapC.addEventListener('mousemove', (e) => { if (!this.locked()) this.hoverAt(e.offsetX, e.offsetY); });
     this.mapC.addEventListener('click', (e) => { if (!this.locked()) this.clickAt(e.offsetX, e.offsetY); });
-    UIHUB.nav = this;
+    UIHUB.nav = this; this.tour = new Tour((() => { try { return localStorage; } catch (e) { return null; } })());
     addEventListener('keydown', (e) => this.onKey(e), true);
     addEventListener('mousemove', (e) => this.onMouse(e), true);
     addEventListener('mousedown', (e) => this.onDown(e), true);
@@ -171,6 +172,7 @@ export class NavHUD {
 
   // ---- per frame
   frame(dt) {
+    this.tour?.frame(dt, this.G.time || 0, !!this.G.menuPause || this.G.phase !== 'play');
     const w = this.world; if (!w || !this.on() || typeof document === 'undefined') return; this.t += dt;
     if (w !== this._w) { this._w = w; this.layers.clear(); this.planKey = ''; this.exCount = -1; }
     this.tickT -= dt; if (this.tickT <= 0) { this.tickT = 0.12; this.tick(); }
