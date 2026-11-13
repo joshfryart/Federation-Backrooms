@@ -6,7 +6,9 @@ import { ClingHud } from './cling-hud.js';
 import { Hiding } from './hide.js';
 import { Tutor } from './hints.js';
 import { hunterCount, hunterDelay, floorClingers, tubeClingerOk } from './balance.js';
-import { makeEnemy, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
+import { makeEnemy as makeEnemy0, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
+import { Ambience } from './ambience.js';
+import { EnvFx } from './fx-env.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, impostorSheen, makeHuman } from './humans.js';
@@ -125,6 +127,8 @@ function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e =
 
 const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
+const ambience = new Ambience(sound), envfx = new EnvFx(scene);   // js/ambience.js (room beds, positional enemy audio), js/fx-env.js (coolant mist, alert smoke)
+function makeEnemy(...a) { const e = makeEnemy0(...a); try { e.sound = ambience.bindEnemy(e); } catch (_) { /* keep the flat sound */ } return e; }   // enemy voices are panned at the enemy and muffled behind walls
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
 const dynres = createDynRes();
 function applyPixelRatio() { const pr = (CFG.quality === 'high' ? Math.min(devicePixelRatio, 1.5) : 1) * dynres.scale; renderer.setPixelRatio(pr); post?.composer?.setPixelRatio?.(pr); resize(); }
@@ -206,7 +210,7 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, deckOptions(ship, G.shipDeck)); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  G.fieldCache = null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
+  G.fieldCache = null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); envfx.setDeck(world); ambience.occluded = (x, z) => !world.los(P.x, P.z, x, z);
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
@@ -1145,6 +1149,7 @@ function step(dt, t) {
   lamp.intensity = 9 * (0.15 + 0.85 * world.powerAmt);
 
   // particles & ambient events
+  envfx.update(dt, P.x, P.z, world.alertAmt, (x, z) => ambience.at('hiss', x, z, 1)); ambience.update(dt, camera, rt);
   updateSplats(dt); blood.update(dt); sparks.update(dt); steam.update(dt); water.update(dt); dust.update(dt, P.x, P.z, camera, P.torch);
   updatePanelLights(dt);
   // rolling blackouts: the hum stops, the lights die, something is still walking
