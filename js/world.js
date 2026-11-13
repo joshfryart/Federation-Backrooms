@@ -9,6 +9,7 @@ import { spaceMat, screenMat, envTick } from './fx-env.js';
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
 export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
+export const ROOM_H = { shuttlebay: 5.6, arboretum: 4.6 };   // per-room-type ceiling height (m) where taller than WH; walls grow an extension, adjoining lower tiles get step walls
 export const TUBE_UP = 1.7; // floor height of a tube's upper run (reached by ladder)
 const TUBE_SIDE = 0.65;     // thickness of the tube's own side walls: leaves a 1.2 m wide crawlway in a 2.5 m tile
 
@@ -615,7 +616,7 @@ export class World {
   headroomAt(x, y) { return this.ceilAt(x, y) - this.floorAt(x, y); }
   ceilAt(x, y) {
     if (this.d.room[y]?.[x] === 'jefferies') return this.tubeKind(x, y) === 'lo' ? TUBE_H : TUBE_UP + TUBE_H;
-    if (this.d.room[y]?.[x]) return WH;
+    if (this.d.room[y]?.[x]) return ROOM_H[this.d.room[y][x]] || WH;
     const h = Math.sin((x >> 1) * 12.9898 + (y >> 1) * 78.233 + this.d.deck * 3.1) * 43758.5453; const f = h - Math.floor(h);
     return f < 0.3 ? 2.45 : WH;
   }
@@ -864,7 +865,7 @@ export class World {
           const ch = this.ceilAt(x, y); dummy.position.set((x + 0.5) * TS, ch - 0.02, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
           // room-specific light colour; corridor tubes vary a little in age (some yellowed, some dim)
           const r = d.room[y][x], col = new THREE.Color(ROOM_LIGHT[r] || 0xffffff); if (!r) col.lerp(new THREE.Color(0xffdfae), rndv() * 0.55).multiplyScalar(0.78 + rndv() * 0.22);
-          im.setColorAt(i, col); this.panels.push({ x: (x + 0.5) * TS, y: ch - 0.3, z: (y + 0.5) * TS, flick: name === 'flick', col, room: r });
+          im.setColorAt(i, col); this.panels.push({ x: (x + 0.5) * TS, y: Math.min(ch - 0.3, 3.3), z: (y + 0.5) * TS, flick: name === 'flick', col, room: r });
         });
         g.add(im); return mat;
       };
@@ -877,7 +878,7 @@ export class World {
     {
       // bulkhead variant per block: the room it faces decides (painted panel, padded, grille); corridors follow the hull class
       const geo = new THREE.BoxGeometry(TS, WH, TS);
-      const corridorWall = T.d[CORRIDOR_WALL[ship.hull]] ? CORRIDOR_WALL[ship.hull] : 'wall', groups = {}; this.wallKind = {};
+      const corridorWall = T.d[CORRIDOR_WALL[ship.hull]] ? CORRIDOR_WALL[ship.hull] : 'wall', groups = {}; this.wallKind = {}; let wallMat0 = null;
       for (const [x, y] of walls) {
         const cnt = {}; let best = null;
         for (const [dx, dy] of DIRS) { const c = this.grid[y + dy]?.[x + dx]; if (c === undefined || c === 1) continue; const k = WALL_OF[d.room[y + dy][x + dx]]; if (k && T.d[k]) { cnt[k] = (cnt[k] || 0) + 1; if (!best || cnt[k] > cnt[best]) best = k; } }
@@ -893,7 +894,20 @@ export class World {
           im.setColorAt(i, base.clone().multiplyScalar(0.82 + rndv() * 0.22));
         });
         im.castShadow = true; im.receiveShadow = true; g.add(im);
+        // taller rooms: the bulkhead continues above WH next to a high ceiling (same material, texture scale kept)
+        const ext = list.map(([x, y]) => { let h = 0; for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) { const c = this.grid[y + oy]?.[x + ox]; if (c !== undefined && c !== 1 && !this.isTube(x + ox, y + oy)) h = Math.max(h, this.ceilAt(x + ox, y + oy)); } return [x, y, h - WH]; }).filter(e => e[2] > 0.05);
+        if (ext.length) { const cache = {}, xm = new THREE.InstancedMesh(new THREE.BoxGeometry(TS, 1, TS), mat, ext.length);
+          const mats = []; ext.forEach(([x, y, h], i) => { dummy.position.set((x + 0.5) * TS, WH + h / 2, (y + 0.5) * TS); dummy.scale.set(1, h, 1); dummy.updateMatrix(); xm.setMatrixAt(i, dummy.matrix); xm.setColorAt(i, base.clone().multiplyScalar(0.82 + rndv() * 0.22)); }); dummy.scale.set(1, 1, 1);
+          xm.castShadow = true; xm.receiveShadow = true; g.add(xm); void cache; void mats; }
+        wallMat0 = wallMat0 || mat;
       }
+      // step walls where a tall ceiling meets a lower one without a bulkhead between (doorways into a shuttlebay etc.)
+      if (wallMat0) { const steps = [];
+        for (const [x, y] of d.openTiles) { if (this.grid[y][x] === 1 || this.isTube(x, y)) continue; const c = this.ceilAt(x, y);
+          for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy; if (this.grid[ny]?.[nx] === undefined || this.grid[ny][nx] === 1 || this.isTube(nx, ny)) continue; const nc = this.ceilAt(nx, ny); if (c - nc > 0.1) steps.push({ x, y, dx, dy, lo: nc, h: c - nc }); } }
+        if (steps.length) { const sm = new THREE.InstancedMesh(new THREE.BoxGeometry(TS, 1, 0.06), wallMat0, steps.length);
+          steps.forEach((st, i) => { dummy.position.set((st.x + 0.5 + st.dx * 0.5) * TS - st.dx * 0.03, st.lo + st.h / 2, (st.y + 0.5 + st.dy * 0.5) * TS - st.dy * 0.03); dummy.rotation.set(0, st.dx ? Math.PI / 2 : 0, 0); dummy.scale.set(1, st.h, 1); dummy.updateMatrix(); sm.setMatrixAt(i, dummy.matrix); sm.setColorAt(i, wallCol.clone().multiplyScalar(0.85)); });
+          dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); sm.receiveShadow = true; g.add(sm); } }
     }
     // wall decorations on faces adjoining open tiles
     {
