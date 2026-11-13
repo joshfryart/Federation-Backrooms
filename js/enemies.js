@@ -11,9 +11,34 @@ const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // ------------------------------------------------------------------
 // Model wrappers: { mesh, tick(dt, speed, flags) }
 // ------------------------------------------------------------------
+// Gronk: base rig lives in actors.js; this wrapper adds the roar heave, lunge, limp after being zapped, and clawed footprints
+let printTex = null, printM = null, printGeo = null;
 function gronkModel() {
-  const mesh = makeGorn(); let t = 0;
-  return { mesh, tick(dt, speed, f) { t += dt; animateGorn(mesh, f.stunned ? 0 : speed, t, f.roaring, f); mesh.rotation.z = f.stunned ? Math.sin(t * 40) * 0.05 : 0; mesh.userData.body.rotation.x = f.stunned ? 0.35 : 0; } };
+  const mesh = makeGorn(); let t = 0, atk = 0, roar = 0, hits = 0, wasStun = false, hurt = 0, stride = 0, side = 1, pi = 0; const u = mesh.userData, prints = [];
+  const wound = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0x3a0c10, roughness: 0.2, emissive: 0x300000, emissiveIntensity: 0.4 })); wound.scale.set(1.3, 0.8, 0.4); wound.position.set(-0.28, 0.4, 0.33); wound.visible = false; u.torso.add(wound);
+  return { mesh, tick(dt, speed, f) {
+    t += dt; if (f.stunned && !wasStun) hits++; wasStun = !!f.stunned; hurt += ((Math.min(1, hits * 0.45)) - hurt) * Math.min(1, dt * 2); wound.visible = hurt > 0.2;
+    const lim = hurt * (f.stunned ? 0 : 1), sp = f.stunned ? 0 : speed * (1 - hurt * 0.2);
+    atk += ((f.attacking ? 1 : 0) - atk) * Math.min(1, dt * (f.attacking ? 16 : 5)); roar += ((f.roaring ? 1 : 0) - roar) * Math.min(1, dt * 8);
+    animateGorn(mesh, sp, t, f.roaring, f); mesh.rotation.z = f.stunned ? Math.sin(t * 40) * 0.05 : 0;
+    // lunge: whole body drives forward, chest drops, both arms slash down
+    u.body.position.z = atk * 0.55 - roar * 0.08; u.torso.rotation.x += atk * 0.55 - roar * 0.1; u.head.rotation.x += atk * 0.3; u.jaw.rotation.x += atk * 0.5;
+    u.arms.forEach((a, i) => { a.sh.rotation.x += atk * (-1.4 + Math.sin(t * 30 + i) * 0.1); a.el.rotation.x += atk * -0.4; });
+    u.tail.forEach((sg, i) => { sg.rotation.y += atk * Math.sin(t * 16 - i * 0.7) * 0.25; });   // tail whips as it strikes
+    // roar: chest swells, head thrown back, whole body shakes
+    if (roar > 0.01) { u.body.position.x = Math.sin(t * 60) * 0.012 * roar; u.chest.scale.x *= 1 + roar * 0.12; u.chest.scale.z *= 1 + roar * 0.15; u.neck.rotation.x = -0.6 - roar * 0.25; }
+    // injured: favours one leg, slumps, drips
+    if (lim > 0) { const L = u.legs[0]; L.hip.rotation.x *= 1 - lim * 0.5; L.knee.rotation.x -= lim * 0.35; u.body.rotation.z += lim * 0.07 * Math.sin(t * 4.6 * (0.5 + speed * 0.3)); u.body.position.y -= lim * 0.06; u.torso.rotation.x += lim * 0.14; u.head.rotation.x += lim * 0.12; }
+    // footprints: a pair of three-toed claw prints per stride, fading over about a minute
+    if (!f.stunned && speed > 0.4 && mesh.parent && typeof document !== 'undefined') {
+      stride += speed * dt; if (stride > 0.95) { stride = 0; side = -side;
+        if (!printGeo) { printTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = 'rgba(0,0,0,0.75)'; g.beginPath(); g.ellipse(32, 44, 10, 14, 0, 0, 7); g.fill(); for (const x of [-16, 0, 16]) { g.beginPath(); g.ellipse(32 + x, 22 - Math.abs(x) * 0.2, 4, 10, x * 0.02, 0, 7); g.fill(); g.beginPath(); g.moveTo(28 + x, 10 - Math.abs(x) * 0.2); g.lineTo(32 + x, 0); g.lineTo(36 + x, 10 - Math.abs(x) * 0.2); g.fill(); } return new THREE.CanvasTexture(c); })(); printGeo = new THREE.PlaneGeometry(0.5, 0.5); printGeo.rotateX(-Math.PI / 2); }
+        if (prints.length < 10) { const m = new THREE.Mesh(printGeo, new THREE.MeshBasicMaterial({ map: printTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 })); m.visible = false; m.renderOrder = 1; mesh.parent.add(m); prints.push({ m, age: 99 }); }
+        const pr = prints[pi++ % prints.length]; pr.age = 0; const a = mesh.rotation.y, sc = mesh.scale.x; pr.m.visible = true; pr.m.position.set(mesh.position.x + Math.cos(a) * side * 0.42 * sc, mesh.position.y + 0.025, mesh.position.z - Math.sin(a) * side * 0.42 * sc); pr.m.rotation.y = a; pr.m.scale.set(side, 1, 1);
+      }
+    }
+    for (const pr of prints) if (pr.m.visible) { pr.age += dt; pr.m.material.opacity = Math.max(0, 0.8 - pr.age / 60); if (pr.age > 60) pr.m.visible = false; }
+  } };
 }
 function crewFallback(color) { const mesh = makeCrew(color, false, null, { species: 'human' }); return { mesh, tick(dt, speed, f) { mesh.userData.torso.rotation.x = Math.min(0.5, speed * 0.1); } }; }
 
