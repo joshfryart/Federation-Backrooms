@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
+import { hunterCount, hunterDelay, floorClingers, tubeClingerOk } from './balance.js';
 import { makeEnemy, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
@@ -248,7 +249,7 @@ function loadDeck(n) {
     const kind = rnd() < 0.5 ? 'battery' : 'medkit'; add(kind, mid, makeItem(kind));
   }
   if (NM) G.threats = []; else spawnThreats(data, n, rnd);
-  for (const t of data.tubes) if (!NM && n >= 3 && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[t.ladder === 1 ? 0 : 1], n, 0, scene, sound));
+  for (const t of data.tubes) if (!NM && tubeClingerOk(n, gorns.filter(g => g.kind === 'clinger').length) && t.tiles.length >= 3 && rnd() < 0.4) gorns.push(makeEnemy('clinger', world, t.tiles[t.ladder === 1 ? 0 : 1], n, 0, scene, sound));
   if (!NM) placeGore(data, rnd, n);
   placeRepairPoints(data);
   if (NM) G.mad = null; else startDeckMadness(data, n, rnd);
@@ -268,15 +269,15 @@ function loadDeck(n) {
 function spawnThreats(data, n, rnd) {
   const pool = shuffle(['gronk', 'drone', 'phantom']);
   const chosen = n === 1 ? [] :   // deck 1 is only the madness: a redshirt who loses it in front of you
-    pool.slice(0, n < 3 ? 1 : n < 6 ? 2 : 3);
+    pool.slice(0, hunterCount(n));   // caps and numbers: js/balance.js
   G.threats = ['crazed'];
   const far = (f) => data.pickTile(([x, y]) => data.dist[x + y * data.W] >= data.maxD * f) || data.gornSpawn;
   chosen.forEach((type, i) => {
-    const delay = Math.max(10, 28 - n * 2) + i * 22 + 15;
+    const delay = hunterDelay(n, i);
     gorns.push(makeEnemy(type, world, i === 0 ? data.gornSpawn : far(0.4), n, delay, scene, sound));
     G.threats.push(type);
   });
-  const nc = n >= 2 ? Math.min(4, 1 + Math.floor(rnd() * (1 + n / 3))) : 0; let made = 0;
+  const nc = floorClingers(n, rnd); let made = 0;
   for (let i = 0; i < nc; i++) { const t = data.pickTile(([x, y]) => !data.room[y][x] && data.dist[x + y * data.W] > data.maxD * 0.15); if (t) { gorns.push(makeEnemy('clinger', world, t, n, 0, scene, sound)); made++; } }
   if (made) G.threats.push('clinger');
   if (n >= 2 && ents.some(e => e.fake)) G.threats.push('slimeling');
