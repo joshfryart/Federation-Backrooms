@@ -41,6 +41,7 @@ import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / 
 import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
+import { createDynRes } from './dynres.js';   // dynamic resolution scale ahead of the quality drop (js/dynres.js)
 import { createSave, mountStatsScreen } from './save.js';   // run stats + service record screen (js/save.js)
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
@@ -123,8 +124,10 @@ function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e =
 const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
+const dynres = createDynRes();
+function applyPixelRatio() { const pr = (CFG.quality === 'high' ? Math.min(devicePixelRatio, 1.5) : 1) * dynres.scale; renderer.setPixelRatio(pr); post?.composer?.setPixelRatio?.(pr); resize(); }
 function setQuality(q) {
-  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
+  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; applyPixelRatio(); saveCfg();
   const el = $('qsel'); if (el) el.value = q;
 }
 
@@ -1605,7 +1608,8 @@ function frame() {
   G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
-  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
+  if (G.phase === 'play') { const sc = dynres.update(dt); if (sc != null) applyPixelRatio(); }   // first resolve slowness by lowering the render resolution (js/dynres.js)
+  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4 && dynres.atMin) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
     post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
