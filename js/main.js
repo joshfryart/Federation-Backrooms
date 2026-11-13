@@ -4,6 +4,7 @@ import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
 import { ClingHud } from './cling-hud.js';
 import { Hiding } from './hide.js';
+import { ACC, load as loadAccess, applyBody as applyAccess, mountUI as mountAccess, Captions } from './access.js';
 import { Tutor } from './hints.js';
 import { hunterCount, hunterDelay, floorClingers, tubeClingerOk } from './balance.js';
 import { makeEnemy as makeEnemy0, S, THREATS, purrFurble, updateSplats, clearEnemySplats } from './enemies.js';
@@ -46,6 +47,8 @@ import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
 import { createDynRes } from './dynres.js';   // dynamic resolution scale ahead of the quality drop (js/dynres.js)
+import { initTouch } from './touch.js';   // touch controls (js/touch.js, shown on touch devices only)
+import { initGamepad } from './gamepad.js';   // gamepad sticks / buttons / menu navigation (js/gamepad.js)
 import { createSave, mountStatsScreen } from './save.js';   // run stats + service record screen (js/save.js)
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
@@ -127,6 +130,7 @@ function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e =
 
 const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
+loadAccess(localStorage); new Captions().attach(sound);
 const ambience = new Ambience(sound), envfx = new EnvFx(scene);   // js/ambience.js (room beds, positional enemy audio), js/fx-env.js (coolant mist, alert smoke)
 function makeEnemy(...a) { const e = makeEnemy0(...a); try { e.sound = ambience.bindEnemy(e); } catch (_) { /* keep the flat sound */ } return e; }   // enemy voices are panned at the enemy and muffled behind walls
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
@@ -165,7 +169,7 @@ G.say = function (msg, cls = '') {
 };
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('show', s.id === id); }
 function hideScreens() { for (const s of document.querySelectorAll('.screen')) s.classList.remove('show'); }
-function flash(color = '#c00', op = 0.6) { const f = $('flash'); f.style.background = color; f.style.transition = 'none'; f.style.opacity = op; requestAnimationFrame(() => { f.style.transition = 'opacity .5s'; f.style.opacity = 0; }); }
+function flash(color = '#c00', op = 0.6) { const f = $('flash'); f.style.background = color; f.style.transition = 'none'; f.style.opacity = op * ACC.flash; requestAnimationFrame(() => { f.style.transition = 'opacity .5s'; f.style.opacity = 0; }); }
 function fade(to, ms = 700) { const f = $('fade'); f.style.transition = `opacity ${ms}ms`; f.style.opacity = to; }
 
 function updateHUD() {
@@ -781,6 +785,7 @@ G.onEnemyStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.
 G.onEnemySpotted = (g) => { flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
 G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
 G.cling = new ClingHud();
+applyAccess(); mountAccess(document, localStorage, () => { if (post) post.final.uniforms.grain.value = ACC.grain; }); if (post) post.final.uniforms.grain.value = ACC.grain;
 G.tutor = new Tutor((() => { try { return localStorage; } catch (e) { return null; } })(), (m, c) => G.say(m, c));
 G.hideEnabled = () => !NOM() && G.phase === 'play';
 G.hide = new Hiding({ get world() { return world; }, P, sound, game: G, enemies: () => gorns, S });
@@ -835,6 +840,10 @@ addEventListener('mousemove', (e) => {
 addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('mousedown', (e) => { if (e.target.closest?.('.ui-layer') || (NOM() && G.phase === 'play' && G.menuPause)) return; if (G.phase === 'play' && locked && e.button === 2) { if (!(NOM() && G.combat?.secondary(true))) fireGrapple(); } else if (G.phase === 'play' && locked && e.button === 0) fire(); else if (G.phase === 'paused' && !e.target.closest('.settings, .noresume')) resumeGame(); else if (G.phase === 'play' && !locked && !e.target.closest('#liftui')) requestLock(); });
 function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
+// touch + gamepad glue: G.xin (analog move, added to WASD in step), G.act (actions without a mouse), G.ticks (per-frame pollers)
+G.P = P; G.xin = { mx: 0, mz: 0, src: {} }; G.ticks = [];
+G.act = { fire: () => { if (G.phase === 'play') fire(); }, alt: () => { if (G.phase === 'play' && !(NOM() && G.combat?.secondary(true))) fireGrapple(); }, pause: () => { if (G.phase === 'play') { G.phase = 'paused'; showScreen('pause'); } } };
+initTouch({ G, CFG, act: G.act }); initGamepad({ G, CFG, act: G.act });
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
 $('qsel').onchange = (e) => setQuality(e.target.value);
@@ -1030,6 +1039,7 @@ function step(dt, t) {
   // movement
   let fx = 0, fz = 0;
   if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
+  fx += G.xin.mx; fz += G.xin.mz;   // touch stick / gamepad stick (js/vkeys.js)
   const moving = fx || fz;
   P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1) * (P.hidden ? 0 : 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
   movePlayer(dt, P, world, { fx, fz, sprint: !!(keys.ShiftLeft || keys.ShiftRight), crouch: !!(keys.KeyC || keys.ControlLeft), crouchPressed: pressed.crouch, jump: pressed.jump && !(P.clung > 0), grappleCancel: pressed.grappleCancel }, moveApi);
@@ -1191,7 +1201,7 @@ function step(dt, t) {
   const dip = Math.sin(Math.min(1, P.land) * Math.PI) * 0.14 * Math.min(1, P.land * 2);
   fp.update(dt, G.phase === 'play'); camera.position.set(P.x, P.y + P.eye + bobY - dip + fp.cam.y, P.z);
   camera.rotation.order = 'YXZ';
-  camera.rotation.set(P.pitch + fp.cam.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * 0.05, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * 0.05, P.roll + fp.cam.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
+  camera.rotation.set(P.pitch + fp.cam.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * ACC.shake * 0.05, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * ACC.shake * 0.05, P.roll + fp.cam.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
   const fovT = 75 + Math.max(0, Math.min(1, (speedNow - 3.6) / 6)) * 15 + (P.mode === 'grapple' ? 7 : 0) + (P.mode === 'slide' ? 4 : 0);
   camera.fov += (fovT - camera.fov) * Math.min(1, dt * 5); camera.updateProjectionMatrix();
   $('grap').className = P.mode === 'grapple' ? 'on' : P.grapCd > 0 ? 'cd' : ''; $('grap').firstElementChild.style.width = (100 - Math.min(1, P.grapCd / MOVE.grapCooldown) * 100) + '%';
@@ -1620,6 +1630,7 @@ function frame() {
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
   else if (G.phase === 'talk' && world) G.talk.step(dt, t);   // conversation close-up: only the speaker, the camera and the talk UI run (js/talk.js)
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
+  for (const f of G.ticks) f(dt);   // touch overlay + gamepad poll (js/touch.js, js/gamepad.js)
   G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
@@ -1627,7 +1638,7 @@ function frame() {
   if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4 && dynres.atMin) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
-    post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
+    post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 * ACC.flash + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
   } else { renderer.render(scene, camera); renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true; }
 }
 

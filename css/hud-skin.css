@@ -402,3 +402,6 @@ body:is(:has(.screen.show), :has(#bd-brief.show), :has(#bd-end.show), :has(#ship
 #statsscreen h4{margin:1.4vh 0 .6vh;letter-spacing:.2em;text-transform:uppercase;font-size:12px;opacity:.8}
 #statsscreen .st-hist{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 #statsscreen .st-hist th,#statsscreen .st-hist td{text-align:left;padding:3px 8px;border-bottom:1px solid rgba(111,143,184,.15)}
+
+/* ---- gamepad menu focus (js/gamepad.js) ---- */
+.padfocus{outline:2px solid #ffd9a0!important;outline-offset:3px}
