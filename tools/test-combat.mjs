@@ -114,7 +114,9 @@ export async function combatBrowser(page, mad, fail) {
     G.simT = 0; let restrained = false, n = 0; for (; n < 30 * 120 && (M.sec || restrained); n++) { tick(1); if (M.restrained > 0) restrained = true; if (!M.sec) break; }
     G.simT = 1e9; out.security = { restrained, secs: +(n / 30).toFixed(1), chain: g.duty.chain.filter(c => /[Ss]ecurity/.test(c)).slice(-2), phase: G.phase, over: !M.sec, slow: P.cbSlow };
     // 3) grab another crew member at a console: their work stops, the body follows the hold point, release -> they resume
-    const f = es.find(x => x !== e && x !== w && !x.cb) || es[2]; clear(f); const cp = W.d.props.find(p => p.kind === 'console' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => open(...W.center(p.tx + a, p.ty + b))));
+    G.simT = 0; for (let i = 0; i < 30 * 90 && (M.sec || M.restrained > 0); i++) tick(1); G.simT = 1e9;   // a witness who called it in may have started a second response
+    const live = () => g.ents.filter(x => x.simmed && x.mesh?.userData.human && x.person.dept !== 'security' && !(x.cb && (x.cb.ctl || x.cb.fleeT > 0 || x.cb.inj.state !== 'ok')));   // bodies come and go while security walks over: pick from the live ones
+    const f = live().find(x => x !== e && x !== w) || live()[0]; if (!f) { out.skip = 'no free crew body after the security response'; return out; } clear(f); const cp = W.d.props.find(p => p.kind === 'console' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => open(...W.center(p.tx + a, p.ty + b))));
     if (cp) { const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [cp.tx + a, cp.ty + b]).find(([x, y]) => open(...W.center(x, y))), [x, z] = W.center(nb[0], nb[1]); f.walk = null; f.x = x; f.z = z; f.mesh.position.set(x, 0, z); f.faceAt = W.center(cp.tx, cp.ty); f.spot = 'console'; g.opEnd(f); g.opStart(f); clear(f); }
     tick(5); const wasOp = !!f.op; stand(f, 0.85); let grabbed = false, tries = 0;
     for (; tries < 8 && !grabbed; tries++) { if (!M.g) { stand(f, 0.85); M.secondary(true); } for (let i = 0; i < 25 && !grabbed; i++) { tick(1); grabbed = ['grabbed', 'held'].includes(M.g?.gs.state) && M.g.e === f; } }
@@ -123,7 +125,8 @@ export async function combatBrowser(page, mad, fail) {
     M.secondary(false); tick(3); out.grab.released = !M.g;
     let resumed = false; for (let i = 0; i < 30 * 40 && !resumed; i++) { tick(1); resumed = !f.cb?.ctl && !f.cb?.fleeT && (!!f.op || !!f.walk || !f.cower); } out.grab.resumed = resumed; out.grab.update = !hum(f)._cbOrig;
     // 4) the player gets hit: HP, stagger, knock-down instead of death
-    const h = es.find(x => x !== e && x !== f && x !== w) || w; clear(h); M.release?.(); g.sim.release(h.person); if (h.op) g.opEnd(h); h.walk = null; stand(h, 1.0); M.takeOver(h); M.start(h, 'fight'); const hp0 = G.hp; let minSlow = 1, flash = false, hpLow = G.hp;
+    G.simT = 0; for (let i = 0; i < 30 * 90 && M.sec; i++) tick(1);   // a second offence (the restrain above) can call security again: let it finish
+    G.simT = 1e9; const h = live().find(x => x !== e && x !== f) || live()[0]; if (!h) { out.skip = 'no free crew body for the fight'; return out; } clear(h); M.release?.(); g.sim.release(h.person); if (h.op) g.opEnd(h); h.walk = null; stand(h, 1.0); M.takeOver(h); M.start(h, 'fight'); const hp0 = G.hp; let minSlow = 1, flash = false, hpLow = G.hp;
     const trace = []; for (let i = 0; i < 30 * 12 && G.hp > hp0 - 15; i++) { tick(1); if (i % 45 === 0) trace.push([h.cb.ai, h.cb.pend?.kind, +Math.hypot(h.x - P.x, h.z - P.z).toFixed(1), +h.cb.cd.toFixed(1), h.cb.inj.state, !!h.cb.ctl, h.cb.fleeT || 0, M.stance, M.ko > 0, !!h.walk].join(':')); minSlow = Math.min(minSlow, P.cbSlow); if (M.flashT > 0) flash = true; hpLow = Math.min(hpLow, G.hp); }
     let downed = false; for (let i = 0; i < 30 * 20 && !downed; i++) { G.hp = Math.min(G.hp, 3); if (h.cb.ai !== 'fight') { M.start(h, 'fight'); } tick(1); downed = M.ko > 0; }
     out.hurt = { hp0, hpLow: +hpLow.toFixed(1), staggered: minSlow < 1, flash, downed, hpAfter: +G.hp.toFixed(1), phase: G.phase, alive: G.hp > 0 && G.phase === 'play', grabbedYou: !!M.grabbedBy, h: h.person.short, trace };
@@ -134,7 +137,7 @@ export async function combatBrowser(page, mad, fail) {
     return out;
   });
   console.log('combat browser:', JSON.stringify(r));
-  if (!r.have || r.n < 3) { fail('combat browser: no crew to test with ' + JSON.stringify(r)); return r; }
+  if (!r.have || r.n < 3 || r.skip) { fail('combat browser: no crew to test with ' + JSON.stringify(r)); return r; }
   const s = r.strike; if (!(s.hits > 0 && s.clips.length && s.stunned && s.victimTrust < -0.15 && s.lost >= 1 && s.chain && s.sec && s.alert && s.ctl)) fail('combat: strike -> reaction / stun / trust / witnesses / security ' + JSON.stringify(s));
   if (s.witnessTrust !== null && !(s.witnessTrust < 0)) fail('combat: a witness standing by lost no trust ' + JSON.stringify(s));
   const gr = r.grab; if (!(gr.grabbed && gr.opEnded && gr.follows > 0.4 && gr.gap < 1.3 && gr.slow < 1 && gr.hud && gr.released && gr.resumed && gr.update)) fail('combat: grab / hold / drag / release / resume ' + JSON.stringify(gr));

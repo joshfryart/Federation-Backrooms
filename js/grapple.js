@@ -31,7 +31,7 @@ export class Melee {
   on() { const C = this.C; return !!C && C.G.mode !== 'madness' && C.G.phase === 'play' && !!C.G.player; }
   reset(first = false) {
     if (!first) for (const e of [...this.active]) this.letGo(e, true);
-    this.active = new Set(); this.g = null; this.act = null; this.cool = 0; this.guarding = false; this.grabbedBy = null; this.restrained = 0; this.ko = 0; this.stagger = 0; this.flashT = 0; this.sec = null; this.lastAssault = -99; this.lastTarget = null; this.snapT = 120; this.combo = 0; this.lastStrike = -9; this.vmPose = null;
+    this.active = new Set(); this.g = null; this.act = null; this.cool = 0; this.guarding = false; this.grabbedBy = null; this.restrained = 0; this.ko = 0; this.stagger = 0; this.flashT = 0; this.sec = null; this.lastAssault = -99; this.lastTarget = null; this.secEnd = null; this.snapT = 120; this.combo = 0; this.lastStrike = -9; this.vmPose = null;
     const C = this.C; if (C?.P) { C.P.cbSlow = 1; } this.world = C?.world || null; this.who = C?.G?.player || null; this.beam = null;
   }
   crew() { return this.C.ents.filter(e => e.kind === 'crew' && e.person && e.mesh && !e.fake && e.person.status !== 'dead'); }
@@ -263,7 +263,8 @@ export class Melee {
 
   // ---------------------------------------------------------------- security response
   callSecurity(suspect, reason = '') {
-    const C = this.C, G = C.G, S = G.sim; if (this.sec && this.sec.suspect === suspect) return this.sec; const sp = suspect === 'player' ? G.player : suspect.person;
+    const C = this.C, G = C.G, S = G.sim; if (this.sec && this.sec.suspect === suspect) return this.sec; if (suspect === 'player' && this.secEnd != null && this.lastAssault <= this.secEnd) return null;   // already dealt with: only a new assault brings them back
+    const sp = suspect === 'player' ? G.player : suspect.person;
     const ppl = CB.responders(G.roster, { exclude: [sp], n: 2 }); if (!ppl.length) return null;
     const [tx, ty] = C.world.tile(suspect === 'player' ? C.P.x : suspect.x, suspect === 'player' ? C.P.z : suspect.z), room = C.world.d.room[ty]?.[tx] || G.duty?.place.room || 'corridor';
     for (const p of ppl) S?.redirect(p, room, 'door', 120, 'responding', { prio: 2, site: { deckNo: G.shipDeck + 1, tx, ty } });
@@ -307,7 +308,7 @@ export class Melee {
     this.beam.visible = true; this.beamT = 0.18;
   }
   endSec(done) {
-    const C = this.C, G = C.G, s = this.sec; if (!s) return; this.sec = null;
+    const C = this.C, G = C.G, s = this.sec; if (!s) return; this.sec = null; if (s.suspect === 'player') this.secEnd = G.time;
     for (const p of s.people) { G.sim?.release(p, 2); const e = C.ents.find(x => x.simmed && x.person === p); if (e?.cb?.ai === 'arrest') { if (done) { const l = CB.line('securityDone', G.runSeed, p.id); G.say(`${p.short}: "${l}"`, 'npc'); } this.letGo(e); } }
     if (done && s.suspect === 'player') { G.duty?.chain.push('Security restrained you after an assault; the incident is logged for the captain'); if (G.duty) { G.duty.maxScore += 1; G.duty.stats.restrained = (G.duty.stats.restrained || 0) + 1; } G.say('Security lets you go with a warning. The incident is on your record.', 'warn'); this.restrained = 0; this.stance = 'relaxed'; }
     if (done && s.suspect !== 'player') { s.suspect.cb.hostile = false; G.duty?.chain.push(`Security restrained ${s.suspect.person.short}`); }
@@ -346,7 +347,7 @@ export class Melee {
         if (c.ai === 'fight' && this.stance === 'handsup' && !c.hostile && c.t > 1) { G.say(`${e.person.short}: "Fine. Stay away from me."`, 'npc'); this.calm(e); break; }
         if (this.ko > 0 && !foe) { if (c.t > 2) { G.say(`${e.person.short}: "Stay down."`, 'npc'); this.calm(e); } break; }
         if ((c.ai === 'fight' && (c.t > 28 || fd > 14)) || (c.ai === 'hostile' && c.t > 90)) { this.calm(e); break; }
-        if (!this.steer(e, fx, fz, fd > 3 ? 3.0 : 1.6, dt, 0.95)) break;
+        if (!this.steer(e, fx, fz, fd > 3 ? 3.0 : 1.6, dt, 0.95) && fd > 1.2) break;   // close in (a prop in the way: swing from where they are)
         if (c.cd <= 0 && !(c.one?.t > 0)) this.npcAttack(e, foe);
         break;
       }
