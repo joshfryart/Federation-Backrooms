@@ -1269,12 +1269,14 @@ export class World {
 
   // pick a piece of clutter up: hide its instance and drop it from the look list
   takeClutter(c) { if (c.gone) return false; c.gone = true; if (c.inst) { const d = new THREE.Object3D(); d.scale.set(0, 0, 0); d.updateMatrix(); c.inst.im.setMatrixAt(c.inst.i, d.matrix); c.inst.im.instanceMatrix.needsUpdate = true; } const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
-  // doors part for the player (and anyone in `who`, [{x, z}]) within reach and close again behind them
+  // doors part for the player (and anyone in `who`, [{x, z, w}]) within reach and close again behind them. Sealed doors (doorLock) stay shut
+  // for everyone; a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player pried)
   slideDoors(dt, px, pz, who = [], onOpen = null) {
     if (!this.doors) return; const k = Math.min(1, dt * 7);
     for (const d of this.doors) {
       if (d.pried > 0) d.pried -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
       const dx = d.f.x - px, dz = d.f.z - pz; const sealed = this.doorLock && !(d.pried > 0); let near = !sealed && dx * dx + dz * dz < 2.7 * 2.7;
+      if (sealed && d.open < 0.5) { let at = false; for (const w of who) if (w.w) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.6 * 1.6) { at = true; break; } } d.npry = at ? (d.npry || 0) + dt : 0; if (d.npry > 2.5) { d.npry = 0; d.pried = 10; } }
       if (!near && !sealed) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
       if (near && !d.near && dx * dx + dz * dz < 14 * 14) onOpen?.(Math.hypot(dx, dz)); d.near = near;
       const target = near ? 1 : 0; if (Math.abs(d.open - target) < 0.002) continue; d.open += (target - d.open) * k;

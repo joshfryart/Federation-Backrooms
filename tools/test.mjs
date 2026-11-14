@@ -22,6 +22,8 @@ import { unitTests as commsUnit, hudTests as commsHud } from './test-comms.mjs';
 await commsUnit(fail);
 import { simTests } from './test-sim.mjs';
 await simTests(fail);
+import { walkTests, walkBrowser } from './test-walk.mjs';   // NPC walking between schedule blocks: sim.bodies, lift, sealed doors, friends (tools/test-walk.mjs)
+await walkTests(fail);
 import { dutyTests } from './test-duty.mjs';
 await dutyTests(fail);
 import { socialTests } from './test-social.mjs';   // social tracker + sim/duty hooks (tools/test-social.mjs)
@@ -250,7 +252,7 @@ const nom = await page2.evaluate(async () => {
   const G = g.G, D = G.ship.decks;
   out.start = { mode: G.mode, deck: G.deck, shipDeck: G.shipDeck, inCar: g.inCarTile(), decks: G.shipDecks.length, D, director: g.director, auto: g.shipState.auto, objective: getComputedStyle(document.getElementById('objective')).display };
   tick(900);   // 30 s: nothing hostile, no madness, no faults
-  out.calm = { gorns: g.gorns.length, mad: G.mad, faults: g.shipState.faulted().length, hostileEnts: g.ents.filter(e => e.fake || e.kind === 'body').length, simBodies: g.ents.filter(e => e.simmed).length, simHere: g.sim.onDeck(G.shipDeck + 1).length };
+  out.calm = { gorns: g.gorns.length, mad: G.mad, faults: g.shipState.faulted().length, hostileEnts: g.ents.filter(e => e.fake || e.kind === 'body').length, simBodies: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, simHere: g.sim.bodies(G.shipDeck + 1).size };   // bodies on their way into the lift have already left in the sim
   if (out.calm.simBodies > out.calm.simHere || (out.calm.simHere && !out.calm.simBodies)) out.simBad = out.calm;
   // walk out and back in: doors open as you approach, the panel opens when you step into the car
   const w = g.world, c = w.car; const far = (k) => { P.x = c.x + c.dx * k; P.z = c.z + c.dy * k; P.vx = P.vz = 0; };
@@ -281,7 +283,7 @@ const nom = await page2.evaluate(async () => {
       G.phase = 'play'; const w = g.world, e = g.ents.find(x => x.simmed); out.walk = { have: !!e };
       if (e) { const tiles = w.d.openTiles.filter(([x, y]) => w.d.grid[y][x] === 0 && !w.isTube(x, y)), here = w.tile(e.x, e.z), f0 = w.field(here[0], here[1], true);
         const far = tiles.filter(([x, y]) => f0[x + y * w.W] > 8 && f0[x + y * w.W] < 30)[0]; out.walk.far = !!far;
-        if (far) { const f = g.pathField(far[0], far[1]), d0 = f[here[0] + here[1] * w.W]; P.x = e.x + 3; P.z = e.z; g.startWalk(e, far[0], far[1], false); tick(240); const now = w.tile(e.x, e.z), d1 = f[now[0] + now[1] * w.W]; out.walk.d0 = d0; out.walk.d1 = d1; out.walk.closer = d1 < d0 || !e.walk; out.walk.inside = w.d.grid[now[1]][now[0]] === 0; tick(900); const fin = w.tile(e.x, e.z); out.walk.gait = g.describeGait(g.gaitFor(e) && e.gaitBase); out.walk.fid = e.fid?.hist.length || 0; out.walk.add = !!e.mesh.userData.human.add; out.walk.arrived = !e.walk && fin[0] === far[0] && fin[1] === far[1]; } }
+        if (far) { const f = g.pathField(far[0], far[1]), d0 = f[here[0] + here[1] * w.W]; P.x = e.x + 3; P.z = e.z; g.startWalk(e, far[0], far[1], false); tick(240); const now = w.tile(e.x, e.z), d1 = f[now[0] + now[1] * w.W]; out.walk.d0 = d0; out.walk.d1 = d1; out.walk.closer = d1 < d0 || !e.walk; out.walk.inside = w.d.grid[now[1]][now[0]] === 0; const tw = e.walk; for (let i = 0; i < 900 && e.walk === tw && tw; i++) tick(1); const fin = w.tile(e.x, e.z);   /* until this walk ends: afterwards the sim may walk the body back to its spot */ out.walk.gait = g.describeGait(g.gaitFor(e) && e.gaitBase); out.walk.fid = e.fid?.hist.length || 0; out.walk.add = !!e.mesh.userData.human.add; out.walk.arrived = e.walk !== tw && fin[0] === far[0] && fin[1] === far[1]; } }
     }
     { // running, dodging, crawling through tubes and climbing ladders, evacuation
       G.phase = 'play'; const di = G.shipDecks.findIndex((d, i) => d.data.tubes.some(tb => tb.tiles.length >= 3 && tb.ladder > 0) && g.sim.onDeck(i + 1).length > 1); if (di >= 0 && di !== G.shipDeck) { g.loadDeck(di + 1); tick(5); G.phase = 'play'; } g.simBodies(0, true);
@@ -432,6 +434,7 @@ await vpage.goto(`http://localhost:${port}/voices.html?ship=3&seed=2`); await vp
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
 console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && vp.chips > vp.rows * 8 && /\[/.test(vp.said) && vp.eng > 0 && vp.eng < vp.total)) fail('voices.html');
 await navBrowser(page2, fail);
+await walkBrowser(page2, fail);
 await commsHud(page2, fail);
 await uiBrowser(page2, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
 await talkBrowser(page2, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
