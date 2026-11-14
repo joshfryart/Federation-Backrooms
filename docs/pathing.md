@@ -227,3 +227,105 @@ knock-down / grab drag, all depending on where the random deck puts people), and
 The first dodge failure was real (a crowded-room step walk nulled by the test lost the body's sim key) and is fixed in f1f9000.
 
 Requests to other owners (iteration 3): none.
+
+### Iteration 4 (2026-11-14)
+
+Harness additions: `--alert red@60` (raise that alert 60 s into each deck: people of the deck sent to their stations, sim median to get
+there, bodies that stood in it, left the deck, never), a `lift queue` line (most lift walkers waiting at once, how many of them in the line
+beyond the 6 door spots, pair-s of lift walkers < 0.45 m apart, stuck walks not counting people waiting at a lift spot on purpose), in-sight
+pop samples now carry the body's distance from the car / slot / held flag, and delegated duties go to the nearest subordinate
+(`Duty.byDistance`, when the build has it). Art batches 5-8 and 11 landed during this iteration (8522164, a25f79a: every seed's layout
+changed), so before = a25f79a and after = a25f79a + this iteration's `js/main.js` / `js/haul.js` / `js/duty.js`, both with the new harness,
+same seeds (decks 3, 4, 2, 150 s each, clock x6). A first pair on d4daa26 (before the art commits) pointed the same way. Runs are chaotic:
+one change moves every later walk; step times are not comparable (load average 8-17 from other agents' browsers).
+
+| | seed 11 before | after | seed 12 + surge 60 before | after | Manitoba (`--ship 4 --surge 60`) before | after | seed 11 + red alert at 60 s before | after |
+|---|---|---|---|---|---|---|---|---|
+| stuck walks (count, body-s) | 3, 2.4 | 2, 0.7 | 4, 6.7 | 4, 5.2 | 9, 16.7 | 6, 13.5 | 0, 0 | 1, 0.4 |
+| ... not waiting at a lift spot | 3, 2.4 | 2, 0.7 | 4, 6.3 | 3, 4.3 | 9, 16.7 | 5, 11.8 | 0, 0 | 0, 0 |
+| lift walkers < 0.45 m apart (pair-s) | 2.6 | 3.9 | 7.4 | 13.7 | 43.4 | 30.7 | 2.7 | 15.2 |
+| brushing near the lift (pair-s within 3.5 m) | 15.6 | 7.0 | 19.1 | 21.7 | 31.5 | 21.4 | 5.6 | 4.5 |
+| lift queue > 15 s (within 3.5 m of the car) | 3 | 1 | 2 | 2 | 4 | 3 | 0 | 0 |
+| most waiting at once (in the line) | 5 (0) | 9 (4) | 6 (0) | 10 (6) | 6 (0) | 11 (5) | 5 (0) | 10 (6) |
+| boarders waiting in the car > 10 s | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| teleports in sight | 0 | 0 | 3 | 1 | 0 | 0 | 2 | 0 |
+| pops in sight (appear / vanish) | 0 / 0 | 0 / 0 | 0 / 0 | 1 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| far pops (14-30 m in clear sight) | 0 | 1 | 0 | 0 | 21 | 7 | 0 | 0 |
+| walking through walls / props (body-s) | 4.0 | 1.9 | 3.6 | 0.6 | 2.7 | 1.7 | 5.3 | 2.5 |
+| orders given / never got there by the end of the deck | 26 / 13 | 26 / 13 | 26 / 12 | 16 / 5 | 30 / 14 | 30 / 17 | 26 / 12 | 23 / 19 |
+| red alert: sent to stations (stood there / left the deck / never) | | | | | | | 0 | 11 (1 / 10 / 0) |
+
+Manitoba deck 3 (the deck the surge empties through the lift): stuck 9 -> 6 walks (16.7 -> 13.5 body-s), lift walkers in a crowd 38.3 ->
+29.8 pair-s, queue > 15 s 2 -> 0, up to 11 waiting (5 in the line). The red-alert run's crowd (15.2 pair-s) is the stations surge itself:
+11 people of decks 3 and 4 leave by lift within 8 s (sim median 58-69 s to their station); before this iteration a red alert moved
+nobody. Seed 12 gave fewer orders after (16 vs 26): the harness now delegates to the nearest subordinate, the same person several times,
+whose trust drops with each refusal (9 refusals on deck 4); in play the J menu offers all of them.
+
+Found and fixed:
+1. **Surge crowds at the lift: a line behind the door spots, called forward in turn.** `liftQueueSpots` (main.js): up to 14 places on the
+   tiles 2-4 steps from the car (path field), two per side of the walkway, the middle left free, checked against walls and props. While
+   the car is shut / full / held (or anyone is already waiting) lift walkers within 4 path steps take the nearest free door spot, else the
+   front-most free place in the line, and move up when a place ahead frees. When the doors open only as many leave the line as the car has
+   room for (6 minus boarders minus those already on their way), front first (`e.liftGo`, so nobody flips back into the line); newcomers
+   join the line behind. While walking to a place they keep their personal space; standing at it they do not squeeze through anyone.
+   Trace (Manitoba deck 3): before, all 13 of a surge rushed the doors whenever they opened, 7 then had to back off again; a first version
+   of the line made it worse (walkers beyond 4.2 m were not counted as on their way, so the whole line left at once).
+2. **Equipment / seat snaps in sight.** (a) `opStart` snapped the mesh onto the use point when the *logical* tile was > 10 m and out of
+   line of sight, while the old or new mesh position could be in sight: now only when both mesh positions are out of sight (> 14 m or no
+   line of sight), else the body steps over (opHook, 1.1 m/s); `opEnd` eases back whenever either end is in sight (was < 22 m and < 2 m).
+   (b) A pushed cart shoving someone seated / at a console set the mesh onto the logical spot (0.8-1 m jumps, 2 per incident; the
+   "teleports in sight" of iteration 3): it now nudges the mesh only, and opHook steps it back.
+3. **Player standing in the lift car without using the panel.** After 5 s with the doors open and the player in the car (`L.held`),
+   boarders step back out (one says "We'll take the next one."), everyone waits beside the doors / in the line, and they board as soon as
+   the player steps out.
+4. **Boarders sent off on other jobs.** A cart / carry job (haul.js) or a repair walk could pick a body already standing in the lift car
+   (no walk, `board`), walk it out, and the closing doors then removed it in sight (seen once per seed-11 run after the line change made it
+   likelier). Boarders are excluded from both.
+5. **Red alert ("All hands to stations") moved nobody** (`--alert red@60`: 0 sent; only gaits changed). `alertStations` (main.js): crew
+   who are off their post go to the first block of their billet's day (where their watch begins) at sim priority 3 ('stations', staggered
+   over 8 s, running); released when the alert is cleared; not in the collapse (evacuation takes over). Yellow alert ("check your
+   stations") moves nobody, as before. Orders (priority 2) wait underneath until the alert is cleared, so ordered jobs stall during red
+   alert (19 of 23 never got there in that run).
+6. **Delegating: nearest first.** `Duty.byDistance(people, room)` (sim.estimate, people already on a job last); the J menu's "Delegate
+   to" list is sorted by it and each row shows the ETA ("~30 s", "~2 min", "there"). Orders still unfinished at the end of a 150 s deck
+   (13 of 26 on seed 11, unchanged) are orders given in the last 60-90 s of the deck (late arrivals 59-112 s): acceptable, not a bug.
+7. **test.mjs failures across runs** (iteration 3 logs re-read with a checker for each condition of `nominal ship / turbolift`): dodge
+   `back` 41.8 m once after f1f9000 = the test nulls the walk of a body that may be mid schedule walk, then simBodies walks it on to its sim
+   spot (in play a dodge only starts with no walk): the test now holds the schedule still during the dodge (in tools/test.mjs, committed
+   with 8522164). `doors2.open` false: `World.slideDoors` opens for the player only (the test passes no crew), so it was the door lock
+   (ship power), not pathing. `walk ... arrived` false once (the walk test's own walk, no sim key) and "handheld not in hand", combat
+   knock-down / grab drag: their bodies are held by the test (`G.simT = 1e9`) or not walking; no pathing cause found. `turbolift` in those
+   logs was always one of the above (the failure name covers the whole nominal block).
+
+Tests: `tools/test-walk.mjs` node part (`Duty.byDistance`: nearest first, people on a job last, no room = roster order) and browser parts
+12 (8-10 people leave by lift while the player stands in the open car: boarders step out after 5 s with the line, nobody stays in the car,
+waiting people >= 0.45 m apart, the line used when more wait than there are door spots, all gone once the player steps out, nobody > 10 s
+in the car) and 13 (red alert: everyone off post gets a priority-3 'stations' override to their billet's first room; cleared = released).
+
+Still broken / next, by measured size:
+1. **Lift throughput under surges**: one car, 6-7 per cycle; at x6 a deck-wide surge still keeps 10-11 people waiting and 3-4 walks
+   > 15 s near the car. Ideas: a second car / lift on big decks (generator: other owner), or the sim sending some by Jefferies tube.
+2. **Orders during red alert** stall under the stations override (by the priority ladder). If the owner wants orders to win, give
+   `ordered` priority 3.5 during alerts, or release stations for ordered people.
+3. **Far pops** 7-21 per Manitoba run (14-30 m, mostly lift departures at the end of long corridors), teleports in sight 0-1 per run
+   (a walker shoved by a pushed cart: the non-op shove still sets the mesh).
+4. The harness delegates to the nearest person every time; make it rotate among the 3 nearest so refusals do not pile on one person.
+
+Human play-test list (iteration 4):
+- Watch the lift on a busy deck during an evacuation or a red alert: people should stand beside the doors and in a line further back
+  (two files, the middle of the corridor free), and go in a carful at a time, front first, without a crush at the doors.
+- Stand inside the open lift car without choosing a deck for 5+ s while people want to board: they should step back out ("We'll take
+  the next one."), wait, and board once you step out.
+- Watch someone sit down at a bar / bunk / console from a few metres away, and push a cart past seated people: no jumps.
+- Red alert (F4 debug cycle, or a crisis): off-duty crew in the mess / quarters should run to their stations (many by lift); after the
+  alert clears they go back to their schedule.
+- J menu > Delegate a due duty: the list should start with whoever is nearest, with "~30 s" / "~2 min" / "there" notes.
+
+`node tools/test.mjs` (run with the art agent's uncommitted working tree, a random ship each run): run 1 crashed the renderer (out of
+memory, three browsers on the box); run 2 failed only `combat: player HP / stagger / knock-down` (the fighter stands 1.4 m from the player
+for 12 s without striking, `walk` false, schedule held by the test: grapple.js approach / reach, the same signature as iteration 3's
+logs), every `npc walking` check passed (parts 12 and 13 included).
+
+Requests to other owners (iteration 4): js/main.js has uncommitted `dressCrew` hunks from the art agent (import + two call sites); this
+iteration committed main.js without them (index built from HEAD + the pathing hunks), so they are still in the working tree for that agent
+to commit together with js/actors.js.
