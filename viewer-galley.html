@@ -1,0 +1,58 @@
+<!doctype html><meta charset="utf-8"><title>Galley and lounge art viewer</title>
+<style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
+#l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.8;line-height:1.6}#l a{color:#9cf;margin-right:10px;text-decoration:none}
+.tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000}</style>
+<canvas id="c"></canvas><div id="l"><a href="?set=galley">galley</a><a href="?set=lounge">lounge</a><a href="?set=props">all props</a><a href="?set=items">items 2x</a><a href="?set=items&frame=grip&scale=1">items life size, grip frame</a> &middot; ?only=range,bar &middot; ?spin=0 &middot; ?cam=x,y,z,tx,ty,tz &middot; ?ref=0 hides the 1.75 m figure</div>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { kinds, KINDS } from './js/propart-galley.js';
+import { DEFS_GALLEY } from './js/itemart-galley.js';
+const q = new URLSearchParams(location.search); const set = q.get('set') || 'galley', only = q.get('only'), spin = q.get('spin') === null ? 0.35 : +q.get('spin'), showRef = q.get('ref') !== '0';
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
+r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.1;
+const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.55; }
+const key = new THREE.DirectionalLight(0xfff0d8, 2.4); key.position.set(3, 6, 6); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -12, right: 12, top: 8, bottom: -4 }); s.add(key);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), new THREE.MeshStandardMaterial({ color: 0x2a3040, roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
+const list = []; const add = (name, mesh, tick, w = 1.1) => { if (mesh && (!only || only.split(',').includes(name.split(' ')[0].toLowerCase()))) list.push({ name, mesh, tick, w }); };
+const sets = { props: KINDS, lounge: ['bar', 'barstool', 'barback', 'bar_plain'], galley: ['range', 'servery', 'dishwasher', 'wastebin', 'range_bare'] };
+const PI = Math.PI;
+// item materials: the subset of js/itemart.js mats() that the galley items use (itemart.js does not export it)
+const S = (o) => new THREE.MeshStandardMaterial(o);
+const IM = { steel: S({ color: 0xb4bac2, metalness: 0.9, roughness: 0.3 }), gun: S({ color: 0x3b414b, metalness: 0.8, roughness: 0.38 }), alu: S({ color: 0xd0d4da, metalness: 0.75, roughness: 0.45 }), dark: S({ color: 0x24272d, metalness: 0.15, roughness: 0.5 }), rubber: S({ color: 0x15161a, roughness: 0.92 }), black: S({ color: 0x0e0f12, roughness: 0.6, metalness: 0.3 }) };
+const box3 = new THREE.Box3();
+function itemOf(kind, frame) {   // mirrors itemart.js buildItem for frame 'grip' and 'base'
+  const d = DEFS_GALLEY[kind], inner = new THREE.Group(); d.build(inner, IM, {}); inner.userData.item = kind; let out = inner;
+  if (frame === 'base') { out = new THREE.Group(); out.add(inner); if (d.flat) inner.rotation.x = -PI / 2; else if (d.lie) inner.rotation.z = PI / 2; out.updateMatrixWorld(true); box3.setFromObject(out); inner.position.set(-(box3.min.x + box3.max.x) / 2, -box3.min.y, -(box3.min.z + box3.max.z) / 2); }
+  out.updateMatrixWorld(true); box3.setFromObject(out); out.userData.size = box3.getSize(new THREE.Vector3()).toArray(); let n = 0; out.traverse(m => { if (m.isMesh) n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); out.userData.tris = Math.round(n); return out;
+}
+if (set === 'items') {
+  const sc = +(q.get('scale') || 2), frame = q.get('frame') || 'base';
+  for (const k of Object.keys(DEFS_GALLEY)) { const m = itemOf(k, frame), w = new THREE.Group(); m.scale.setScalar(sc); w.add(m); if (frame === 'grip') w.position.y = 0.45 * sc; const sz = m.userData.size; add(`${k} (${m.userData.tris} tris)`, w, (dt) => { w.rotation.y += dt * spin; }, Math.max(0.5, Math.max(sz[0], sz[2], frame === 'grip' ? sz[1] : 0) * sc + 0.2)); }
+} else for (const k of sets[set] || KINDS) { const m = kinds[k](); const w = new THREE.Group(); w.add(m); const sz = m.userData.size; add(`${k} (${m.userData.tris} tris)`, w, (dt) => { w.rotation.y += dt * spin; }, Math.max(sz[0], sz[2]) + 0.6); }
+let total = 0; for (const l of list) total += l.w; let x = -total / 2;
+const refMat = new THREE.MeshStandardMaterial({ color: 0x4ad0c0, transparent: true, opacity: 0.55, roughness: 0.6 });
+for (const l of list) {
+  l.mesh.position.x = x + l.w / 2; x += l.w; s.add(l.mesh); l.mesh.traverse(o => { if (o.isMesh) { o.castShadow = o.castShadow !== false; o.receiveShadow = true; } });
+  l.el = document.createElement('div'); l.el.className = 'tag'; l.el.textContent = l.name; document.body.appendChild(l.el);
+  if (showRef && set !== 'items') { const cap = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.75 - 0.44, 4, 12), refMat); cap.position.set(l.mesh.position.x - l.w / 2 + 0.2, 0.875, 0); s.add(cap); }
+}
+const C = (q.get('cam') || '').split(',').map(Number); let tgt = new THREE.Vector3(C[3] || 0, C[4] ?? 0.9, C[5] || 0), yaw = 0.2, pitch = 0.22, dist = Math.max(4.6, total * 0.9);
+if (C.length >= 3 && q.get('cam')) { const p = new THREE.Vector3(C[0], C[1], C[2]).sub(tgt); dist = p.length(); yaw = Math.atan2(p.x, p.z); pitch = Math.asin(p.y / dist); }
+let drag = false; addEventListener('pointerdown', () => drag = true); addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => { if (drag) { yaw -= e.movementX * 0.006; pitch = Math.max(-0.2, Math.min(1.3, pitch + e.movementY * 0.005)); } });
+addEventListener('wheel', e => { dist *= e.deltaY > 0 ? 1.1 : 0.9; });
+addEventListener('resize', () => { r.setSize(innerWidth, innerHeight, false); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+const clock = new THREE.Clock(); const v = new THREE.Vector3();
+function frame() {
+  requestAnimationFrame(frame); const dt = Math.min(0.05, clock.getDelta());
+  for (const l of list) l.tick?.(dt);
+  cam.position.set(tgt.x + Math.sin(yaw) * Math.cos(pitch) * dist, tgt.y + Math.sin(pitch) * dist, tgt.z + Math.cos(yaw) * Math.cos(pitch) * dist); cam.lookAt(tgt);
+  for (const l of list) { v.set(l.mesh.position.x, -0.08, 0.5).project(cam); l.el.style.left = (v.x * 0.5 + 0.5) * innerWidth + 'px'; l.el.style.top = (-v.y * 0.5 + 0.5) * innerHeight + 'px'; }
+  r.render(s, cam);
+}
+frame(); window.__ready = true;
+</script>
