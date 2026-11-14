@@ -221,4 +221,9 @@ Human play-test list (iteration 3):
 - Walk a long corridor toward the lift during heavy traffic: watch for people appearing / vanishing at the far end (14-30 m).
 - Push a cart through a corridor while crew walk by: they currently pass through parked carts; report if it looks bad.
 
+`node tools/test.mjs` (8 runs this iteration, a random ship each run): every `npc walking` check passed every time; one other check
+failed per run, a different one each time (dodge return, a walk test that found no body, `doors2.open`, handheld in hand, combat
+knock-down / grab drag, all depending on where the random deck puts people), and the commit before the crowded-room change printed OK.
+The first dodge failure was real (a crowded-room step walk nulled by the test lost the body's sim key) and is fixed in f1f9000.
+
 Requests to other owners (iteration 3): none.
