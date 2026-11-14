@@ -32,13 +32,13 @@ export function opStart(e) {
   // logical position (e.x/e.z: paths, dodging, line of sight) stays on the walkable tile, as close to the use point as it allows; only the mesh goes onto the use point
   { let [tx, ty] = W.tile(e.x, e.z); if (W.solid(tx, ty)) { const n = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [tx + a, ty + b]).find(([x, y]) => !W.solid(x, y)); if (n) [tx, ty] = n; }
     const [cx, cz] = W.center(tx, ty), k = 0.95; e.opAnchor = [cx + Math.max(-k, Math.min(k, goal.x - cx)), cz + Math.max(-k, Math.min(k, goal.z - cz))]; e.x = e.opAnchor[0]; e.z = e.opAnchor[1]; }
-  e.ease = null; { const pd = Math.hypot(C.P.x - e.x, C.P.z - e.z); if (pd > 22 || (pd > 10 && !W.los(C.P.x, C.P.z, e.x, e.z))) { e.mesh.position.x = goal.x; e.mesh.position.z = goal.z; e.mesh.rotation.y = goal.yaw; } }   // out of sight: snap onto the use point; in sight: shuffle over (opHook)
+  e.ease = null; { const hid = (x, z) => Math.hypot(C.P.x - x, C.P.z - z) > 14 || !W.los(C.P.x, C.P.z, x, z), mp = e.mesh.position; if (hid(mp.x, mp.z) && hid(goal.x, goal.z)) { mp.x = goal.x; mp.z = goal.z; e.mesh.rotation.y = goal.yaw; } }   // out of sight at both ends: snap onto the use point; else step over (opHook). docs/pathing.md iteration 4: the old test looked from the logical tile only (> 10 m and no line of sight), so a body whose use point the player could see jumped 0.8-0.9 m
   const o = e.op.update(0); H.play(H.has(o.clip) ? o.clip : 'idle', { fade: 0.3 }); H.standing = false; e.walking = false; e.opClip = o.clip;
   return true;
 }
 export function opEnd(e) {
   const H = e.mesh?.userData.human; if (H) { for (const h of ['hand_r', 'hand_l']) if (e.opHeld?.[h]) dropItem(H, h); H.add = null; }
-  e.op = null; e.opGoal = null; e.opHeld = null; e.seatDY = null; if (e.mesh) { const mp = e.mesh.position, ox = mp.x - e.x, oz = mp.z - e.z, q = ox * ox + oz * oz; mp.y = e.y || 0; if (q > 0.01 && q < 4 && Math.hypot(C.P.x - e.x, C.P.z - e.z) < 22) e.ease = [ox, oz]; else { e.ease = null; mp.x = e.x; mp.z = e.z; } }   // near the player the mesh eases back from the seat / use point (main loop), else it snaps
+  e.op = null; e.opGoal = null; e.opHeld = null; e.seatDY = null; if (e.mesh) { const mp = e.mesh.position, ox = mp.x - e.x, oz = mp.z - e.z, q = ox * ox + oz * oz; mp.y = e.y || 0; const hid = (x, z) => Math.hypot(C.P.x - x, C.P.z - z) > 14 || !C.world.los(C.P.x, C.P.z, x, z); if (q > 0.01 && !(hid(mp.x, mp.z) && hid(e.x, e.z))) e.ease = [ox, oz]; else { e.ease = null; mp.x = e.x; mp.z = e.z; } }   // in sight at either end the mesh eases back from the seat / use point (main loop), else it snaps (iteration 4: was < 22 m and < 2 m)
 }
 // the additive layer while operating / pushing / carrying. true = handled (fidgetStep returns)
 export function opHook(e, dt, d) {
@@ -124,6 +124,7 @@ export class Haul {
     return null;
   }
   startJob(e, force = false) {
+    if (e.board) return null;   // standing in the lift car: they are leaving the deck (docs/pathing.md iteration 4)
     const spec = HAULERS[e.person.billet] || (force ? { cart: 'cargo', to: ['stores', 'cargo', 'lift'] } : null); if (!spec) return null; const dest = this.destFor(e, spec); if (!dest) return null; this.n++;
     const job = { e, dest, phase: 'go', t: 0, age: 0, kind: spec.cart && (!spec.carry || hash01('ck', this.seed, this.n) < 0.6) ? 'cart' : 'carry', item: spec.carry || 'smallbox' };
     if (e.op) opEnd(e); e.haul = job;
@@ -142,7 +143,7 @@ export class Haul {
     const ents = C.ents;
     this.t -= dt; if (this.t <= 0) {
       this.t = 16 + hash01('jt', this.seed, this.n) * 22;
-      if (this.jobs.length < 2) { const cand = ents.filter(e => e.simmed && e.person && !e.walk && !e.haul && !e.cower && !e.repairing && HAULERS[e.person.billet] && e.mesh?.userData.human); if (cand.length) this.startJob(cand[Math.floor(hash01('who', this.seed, this.n) * cand.length)]); }
+      if (this.jobs.length < 2) { const cand = ents.filter(e => e.simmed && e.person && !e.walk && !e.board && !e.haul && !e.cower && !e.repairing && HAULERS[e.person.billet] && e.mesh?.userData.human); if (cand.length) this.startJob(cand[Math.floor(hash01('who', this.seed, this.n) * cand.length)]); }
     }
     for (const job of [...this.jobs]) {
       const e = job.e, H = e.mesh?.userData.human; job.age += dt;
@@ -159,7 +160,7 @@ export class Haul {
     const P = C.P;
     for (const c of this.carts) {
       const u = c.mesh.userData, r = u.half[0] + 0.1, off = Math.max(0, u.half[1] - u.half[0]), pts = [[c.x + Math.sin(c.yaw) * off, c.z + Math.cos(c.yaw) * off], [c.x - Math.sin(c.yaw) * off, c.z - Math.cos(c.yaw) * off]];
-      const shove = (o, rad, isP) => { for (const [px, pz] of pts) { const dx = o.x - px, dz = o.z - pz, dd = Math.hypot(dx, dz), need = r + rad; if (dd < need && dd > 1e-4) { o.x = px + dx / dd * need; o.z = pz + dz / dd * need; if (!isP && o.mesh) { o.mesh.position.x = o.x; o.mesh.position.z = o.z; } } } };
+      const shove = (o, rad, isP) => { const m = !isP && o.op && o.mesh ? o.mesh.position : null, q = m || o; for (const [px, pz] of pts) { const dx = q.x - px, dz = q.z - pz, dd = Math.hypot(dx, dz), need = r + rad; if (dd < need && dd > 1e-4) { q.x = px + dx / dd * need; q.z = pz + dz / dd * need; if (!isP && !m && o.mesh) { o.mesh.position.x = o.x; o.mesh.position.z = o.z; } } } };   // someone seated / at a console (op): their mesh sits on the use point, so the cart nudges the mesh (opHook steps it back) and not the logical spot (iteration 4: that set the mesh onto the spot, 0.8-1 m jumps)
       // a pushed cart makes people step aside; a parked cart is bumped out of a walker's way (never a deadlock on a path)
       for (const e of C.ents) { if (e.kind !== 'crew' || !e.mesh || e === c.pusher || Math.hypot(e.x - c.x, e.z - c.z) > 2 || C.world.isTube(...C.world.tile(e.x, e.z))) continue;
         if (c.pusher) { shove(e, 0.25, false); continue; } const before = { x: e.x, z: e.z }; shove(e, 0.25, true); if (e.x !== before.x || e.z !== before.z) { const q = { x: c.x - (e.x - before.x), z: c.z - (e.z - before.z), y: 0 }; e.x = before.x; e.z = before.z; C.world.resolve(q, Math.min(0.45, u.half[0] + 0.05)); c.x = q.x; c.z = q.z; c.mesh.position.set(c.x, 0, c.z); } }
