@@ -48,6 +48,53 @@ export class Sound {
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300;
       o.connect(lp); lp.connect(this.tension); o.start();
     }
+    // room bed: one filtered-noise layer + one tone, re-tuned per room type (setRoom); events from roomTick
+    const rn = ctx.createBufferSource(); rn.buffer = this.noiseBuf; rn.loop = true;
+    this.roomBP = ctx.createBiquadFilter(); this.roomBP.type = 'bandpass'; this.roomBP.frequency.value = 400; this.roomBP.Q.value = 0.7;
+    this.roomG = ctx.createGain(); this.roomG.gain.value = 0; rn.connect(this.roomBP); this.roomBP.connect(this.roomG); this.roomG.connect(this.master); rn.start();
+    this.roomOsc = ctx.createOscillator(); this.roomOsc.type = 'sine'; this.roomOsc.frequency.value = 100; this.roomTG = ctx.createGain(); this.roomTG.gain.value = 0; this.roomOsc.connect(this.roomTG); this.roomTG.connect(this.master); this.roomOsc.start();
+    this.roomT = 0;
+  }
+
+  // ambience per room type: noise band (Hz, Q, gain), a tone (Hz, gain, waveform) and sporadic events
+  static ROOM_AMB = {
+    engineering: { f: 140, q: 0.5, g: 0.03, t: [55, 0.03, 'sawtooth'], ev: ['clang', 9] },
+    bridge: { f: 2200, q: 1.5, g: 0.004, t: [1320, 0.0015, 'sine'], ev: ['chirp', 4] },
+    readyroom: { f: 900, q: 0.8, g: 0.004, ev: ['chirp', 14] },
+    sickbay: { f: 3000, q: 3, g: 0.003, t: [880, 0.002, 'sine'], ev: ['blip', 2.2] },
+    morgue: { f: 200, q: 0.6, g: 0.014, t: [60, 0.01, 'sine'] },
+    shuttlebay: { f: 220, q: 0.4, g: 0.02, ev: ['clang', 16] },
+    cargo: { f: 260, q: 0.5, g: 0.014, ev: ['clang', 20] },
+    stores: { f: 300, q: 0.6, g: 0.008 },
+    arboretum: { f: 1800, q: 0.7, g: 0.016, ev: ['drip', 4] },
+    plant: { f: 1600, q: 0.7, g: 0.016, ev: ['drip', 4] },
+    washroom: { f: 1400, q: 0.6, g: 0.014, ev: ['drip', 2.5] },
+    laundry: { f: 180, q: 0.6, g: 0.02, t: [30, 0.02, 'triangle'] },
+    gym: { f: 320, q: 0.5, g: 0.008, ev: ['thud', 5] },
+    lab: { f: 2600, q: 2.5, g: 0.004, t: [740, 0.0015, 'sine'], ev: ['blip', 3] },
+    datacore: { f: 1100, q: 0.9, g: 0.016, t: [120, 0.01, 'sawtooth'], ev: ['blip', 1.4] },
+    holodeck: { f: 600, q: 0.5, g: 0.002, t: [440, 0.001, 'sine'] },
+    brig: { f: 400, q: 0.8, g: 0.006, t: [60, 0.012, 'square'], ev: ['clang', 18] },
+    armory: { f: 500, q: 0.8, g: 0.004 },
+    mess: { f: 700, q: 0.6, g: 0.012, ev: ['clang', 12] },
+    lounge: { f: 500, q: 0.5, g: 0.008 },
+    quarters: { f: 350, q: 0.6, g: 0.004 },
+    workshop: { f: 900, q: 0.7, g: 0.008, ev: ['zap', 12] },
+    transporter: { f: 1000, q: 1.2, g: 0.006, t: [220, 0.008, 'sine'] },
+    airlock: { f: 250, q: 0.5, g: 0.012 },
+    jefferies: { f: 180, q: 0.5, g: 0.02, t: [48, 0.015, 'sawtooth'], ev: ['clang', 11] },
+  };
+  setRoom(key) {
+    if (!this.ctx || this.roomKey === key) return; this.roomKey = key; const a = Sound.ROOM_AMB[key], t = this.ctx.currentTime;
+    this.roomAmb = a || null; this.roomT = 2 + Math.random() * 3;
+    this.roomG.gain.setTargetAtTime(a ? a.g : 0.003, t, 0.6); if (a) { this.roomBP.frequency.setTargetAtTime(a.f, t, 0.5); this.roomBP.Q.value = a.q; }
+    const tn = a?.t; this.roomTG.gain.setTargetAtTime(tn ? tn[1] : 0, t, 0.6); if (tn) { this.roomOsc.type = tn[2]; this.roomOsc.frequency.setTargetAtTime(tn[0], t, 0.3); }
+  }
+  roomTick(dt) {
+    const a = this.roomAmb; if (!this.ctx || !a?.ev || this.muted) return; this.roomT -= dt; if (this.roomT > 0) return;
+    this.roomT = a.ev[1] * (0.6 + Math.random() * 0.9); const k = a.ev[0];
+    if (k === 'blip') { this.tone(1900, 0.05, 'sine', 0.012); this.tone(1900, 0.05, 'sine', 0.012, 0, 0.55); } else if (k === 'chirp') this.tone(1760, 0.07, 'sine', 0.025); else if (k === 'drip') this.tone(1400 + Math.random() * 600, 0.08, 'sine', 0.03, -500);
+    else if (k === 'clang') this.clang(0.04); else if (k === 'thud') this.thud(0.08); else if (k === 'zap') this.noise(0.12, 0.05, 2500, 1.5, 'bandpass');
   }
 
   setBuzz(v) { if (this.ctx) this.buzz.gain.setTargetAtTime(v * 0.012, this.ctx.currentTime, 0.15); }

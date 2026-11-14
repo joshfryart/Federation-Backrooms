@@ -1110,6 +1110,7 @@ function step(dt, t) {
   const [tx, ty] = world.tile(P.x, P.z);
   const rt = world.d.room[ty]?.[tx];
   $('roomname').textContent = rt ? ROOMS[rt].label : 'Corridor';
+  sound.setRoom(rt || null); sound.roomTick(dt);   // per-room ambience bed + events (js/audio.js ROOM_AMB)
   if (rt === 'jefferies' && !G.hints.tube) { G.hints.tube = 1; G.say('You squeeze into a Jiffy tube. The big ones cannot follow — the small ones can.', 'npc'); }
   mapT += dt; if (mapT > 0.12) { mapT = 0; world.reveal(P.x, P.z, 3); drawMap(); updateHUD(); }
   if (NOM()) G.nav?.frame(dt);   // route tick 0.12 s inside; minimap / compass 30 Hz; floor chevrons + beacon

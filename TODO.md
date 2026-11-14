@@ -80,7 +80,7 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 - [x] Lighting: AO baked into the generated sets, room-specific light colours, emergency lamps, vent light shafts. Still open: emergency lamps do not cast real light in a blackout (glow and halo only).
 - [ ] Weather-like effects: steam, coolant leaks, sparks (basic versions exist), smoke during alerts.
 - [ ] More liminal set dressing: duplicated rooms, impossible corridors/loops, signage that changes between visits, long empty stretches.
-- [ ] Sound/ambience per room type (engineering hum, sickbay beeps, shuttlebay echo); positional audio for enemies.
+- [x] Sound/ambience per room type: `Sound.ROOM_AMB` + `setRoom`/`roomTick` in `js/audio.js` (noise bed, tone, sporadic events per room type; not heard on real speakers yet). Still open: positional audio for enemies.
 - [ ] Optional: N8AO or GTAO behind High quality (GTAOPass ships with three r187 addons; additive light cones / decals must be excluded from its normal pass) (see research notes below); RectAreaLight for panels (limit 2–4, pooled).
 
 ## 3. GAMEPLAY / BALANCE
