@@ -18,11 +18,14 @@ import { hash, hash01 } from './clock.js';
 import { freeBlock } from './social.js';
 
 const DEAD = new Set(['dead', 'corpse', 'crazed', 'evacuated']);
-export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5, WALK_MAX = 20, TILE_S = 2.5 / 1.3;   // real seconds in transit; a walk on one deck takes about as long as the body needs (tiles * 2.5 m / 1.3 m/s), 3..20 s
+export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5, WALK_MAX = 75, TILE_S = 2.5 / 1.0, HOLD_MAX = 60;   // real seconds in transit; a walk on one deck takes about as long as the body needs (tiles * 2.5 m at ~1 m/s, the measured body pace), 3..75 s
+// (docs/pathing.md iteration 2: the old 20 s cap counted people as arrived 20-50 s before their body got there). With `lifts` (the lift
+// car tile per deck) a lift trip is walk to the car + ride + a walk leg from the car on the new deck; `holdBody(person, transit)` (the body
+// layer, js/main.js) keeps a trip open while the person's body on the player's deck is still walking it (at most HOLD_MAX s past the estimate).
 
 export class CrewSim {
-  constructor({ roster, clock, plan, data, seed = 1, decks = 8 }) {
-    Object.assign(this, { roster, clock, plan: plan || {}, data, seed, decks });
+  constructor({ roster, clock, plan, data, seed = 1, decks = 8, lifts = null }) {
+    Object.assign(this, { roster, clock, plan: plan || {}, data, seed, decks, lifts }); this.holdBody = null;
     this.t = 0; this.over = new Map(); this.st = new Map(); this.handlers = {}; this.player = null; this.acc = 0; this.log = [];
     for (const p of roster.people) this._init(p);
   }
@@ -102,8 +105,14 @@ export class CrewSim {
     this.t += dt;
     // finish trips
     for (const s of this.st.values()) {
-      if (!s.transit) continue; s.transit.eta -= dt;
-      if (s.transit.eta <= 0) { const t = s.transit; s.transit = null; Object.assign(s, { deckNo: t.to.deckNo, tx: t.to.tx, ty: t.to.ty, room: t.room, spot: t.spot, activity: t.activity, free: t.free }); this.log.push(`arrive:${s.person.id}:${t.to.deckNo}:${t.room}`); this._emit('arrive', { person: s.person, deckNo: s.deckNo, room: s.room, spot: s.spot, activity: s.activity, from: t.from }); }
+      if (!s.transit) continue; const t = s.transit, held = this.holdBody?.(s.person, t);
+      if (held && t.lift && !t.boarded) { if (t.eta - dt > t.ride) { t.eta -= dt; continue; } t.eta = t.ride; t.hold = (t.hold || 0) + dt; if (t.hold < HOLD_MAX) continue; }   // the body is still walking to / standing in the car: the ride starts when it is gone
+      t.boarded = true; t.eta -= dt;
+      if (t.eta <= 0 && held && (t.hold = (t.hold || 0) + dt) < HOLD_MAX) continue;   // the body is still on its way: it arrives when it gets there
+      if (t.eta <= 0 && t.lift && t.inLeg > 0) {   // off the car on the new deck: the walk from the car to the room (bodies() lists them there, walking)
+        s.deckNo = t.to.deckNo; const L = this.lifts[t.to.deckNo - 1]; s.tx = L[0]; s.ty = L[1]; s.transit = { lift: false, eta: t.inLeg, from: t.from, to: t.to, room: t.room, spot: t.spot, activity: t.activity, free: t.free }; continue;
+      }
+      if (t.eta <= 0) { s.transit = null; Object.assign(s, { deckNo: t.to.deckNo, tx: t.to.tx, ty: t.to.ty, room: t.room, spot: t.spot, activity: t.activity, free: t.free }); this.log.push(`arrive:${s.person.id}:${t.to.deckNo}:${t.room}`); this._emit('arrive', { person: s.person, deckNo: s.deckNo, room: s.room, spot: s.spot, activity: s.activity, from: t.from }); }
     }
     this.acc += dt; if (this.acc < 0.5) return; this.acc = 0;
     // new schedule blocks: a different room (or spot) sends the person there
@@ -113,9 +122,10 @@ export class CrewSim {
       const dest = this.site(p, b.room, s.deckNo, b);
       if (s.transit) { const t = s.transit; if (b.room === t.room && b.spot === t.spot && dest.deckNo === t.to.deckNo && dest.tx === t.to.tx && dest.ty === t.to.ty) continue; s.transit = null; }   // walking on this deck and the plan changed (orders, an alert, a repair call): turn round at once
       if (b.room === s.room && b.spot === s.spot && ((!this.social && !b.site) || (dest.deckNo === s.deckNo && dest.tx === s.tx && dest.ty === s.ty))) { s.activity = b.activity; s.free = !!b.free; continue; }
-      const lift = dest.deckNo !== s.deckNo;
-      const eta = lift ? LIFT_BASE + LIFT_PER_DECK * Math.abs(dest.deckNo - s.deckNo) + hash01('eta', this.seed, p.id, b.room) * 2 : Math.min(WALK_MAX, Math.max(3, (Math.abs(dest.tx - s.tx) + Math.abs(dest.ty - s.ty)) * TILE_S || WALK_TIME)) * (0.9 + 0.2 * hash01('walk', this.seed, p.id, b.room));
-      s.transit = { lift, eta, from: { deckNo: s.deckNo, room: s.room }, to: dest, room: b.room, spot: b.spot, activity: b.activity, free: !!b.free };
+      const lift = dest.deckNo !== s.deckNo, walk = (ax, ay, bx, by) => Math.min(WALK_MAX, Math.max(3, (Math.abs(bx - ax) + Math.abs(by - ay)) * TILE_S || WALK_TIME)) * (0.9 + 0.2 * hash01('walk', this.seed, p.id, b.room));
+      const L0 = lift && this.lifts?.[s.deckNo - 1], L1 = lift && this.lifts?.[dest.deckNo - 1];
+      const ride = lift ? LIFT_BASE + LIFT_PER_DECK * Math.abs(dest.deckNo - s.deckNo) + hash01('eta', this.seed, p.id, b.room) * 2 : 0, eta = lift ? ride + (L0 ? walk(s.tx, s.ty, L0[0], L0[1]) : 0) : walk(s.tx, s.ty, dest.tx, dest.ty);
+      s.transit = { lift, eta, ride, from: { deckNo: s.deckNo, room: s.room }, to: dest, room: b.room, spot: b.spot, activity: b.activity, free: !!b.free, inLeg: L1 ? walk(L1[0], L1[1], dest.tx, dest.ty) : 0 };
       this.log.push(`depart:${p.id}:${s.deckNo}->${dest.deckNo}:${b.room}`); this._emit('depart', { person: p, from: s.deckNo, to: dest.deckNo, room: b.room, lift });
     }
     if (this.log.length > 400) this.log.splice(0, this.log.length - 400);

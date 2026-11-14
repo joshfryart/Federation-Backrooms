@@ -31,7 +31,22 @@ export async function walkTests(fail) {
     there = false; const r2 = (() => { for (const s of duty.subs()) for (let k = 0; k < 40; k++) { duty.t += 5; const r = duty.order(s, null); if (r.ok) return r; } return null; })(); let waited = 0; while (r2 && duty.jobs.includes(r2.job) && waited < D.JOB_WAIT + r2.job.left + 30) { duty.tick(0.5); waited += 0.5; }
     order = { held, done, evJob: evs.some(e => e.type === 'ordered' && e.job === job) && evs.some(e => e.type === 'jobdone' && e.job === job), timeout: !r2 || waited >= D.JOB_WAIT };
     ck(order.held && order.done && order.evJob && order.timeout, 'ordered job clock waits for arrival ' + JSON.stringify(order)); }
-  return { walkers, riders, maxEta: +maxEta.toFixed(1), order };
+  // pathing iteration 2: the sim waits for the body (holdBody), at most HOLD_MAX past its estimate; with `lifts` a lift trip ends with a walk
+  // leg from the car on the new deck; a refusal carries the person (the body reacts on screen)
+  const { HOLD_MAX } = await imp('js/sim.js'); let hold = null;
+  { const decks = G.genShip(ship, seed), plan2 = G.shipPlan(ship, seed, decks), lifts = decks.map(x => x.exit), clock2 = new K.ShipClock({ seed }); clock2.assign(roster);
+    const s2 = new CrewSim({ roster, clock: clock2, plan: plan2, data, seed, decks: ship.decks, lifts }); let who = null, heldPast = false, released = false, legs = 0, legOk = true, rideFloor = true; const inLift = new Set();
+    for (let t = 0; t < 900; t += 0.5) {
+      if (!who) { const s = [...s2.st.values()].find(q => q.transit && !q.transit.lift && q.transit.eta < 2); if (s) { who = { p: s.person, t0: t, eta: s.transit.eta }; s2.holdBody = (p, tr) => p === who.p && !tr.lift; } }
+      s2.tick(0.5); clock2.advance(0.5);
+      if (who && !who.done) { const tr = s2.st.get(who.p.id)?.transit; if (t - who.t0 > who.eta + 10 && tr) heldPast = true; if (!tr) { who.done = true; released = t - who.t0 <= who.eta + HOLD_MAX + 2; who.secs = +(t - who.t0).toFixed(1); s2.holdBody = null; } }
+      for (const q of s2.st.values()) { const tr = q.transit; if (tr?.lift) { inLift.add(q.person.id); if (tr.eta < tr.ride - 1e-6) rideFloor = rideFloor && tr.boarded; } else if (inLift.has(q.person.id)) { inLift.delete(q.person.id); if (tr) { legs++; const L = lifts[q.deckNo - 1]; legOk = legOk && q.deckNo === tr.to.deckNo && q.tx === L[0] && q.ty === L[1] && s2.bodies(q.deckNo).get(q.person.id)?.walking === true; } } }
+    }
+    hold = { heldPast, released, secs: who?.secs, legs, legOk, rideFloor };
+    ck(who && heldPast && released && legs > 0 && legOk && rideFloor, 'sim waits for the body and walks from the lift car ' + JSON.stringify(hold)); }
+  let refusal = null; { const evs2 = []; duty.on(ev => evs2.push(ev)); for (const s of duty.subs()) for (let k = 0; k < 60 && !evs2.some(e => e.type === 'refused'); k++) { duty.t += 5; const r = duty.order(s, null); if (r.ok) duty.jobs.splice(duty.jobs.indexOf(r.job), 1); }
+    const ev = evs2.find(e => e.type === 'refused'); refusal = ev ? !!ev.person && ev.person.short === ev.who : 'none'; ck(refusal !== false, 'a refusal carries the person'); }
+  return { walkers, riders, maxEta: +maxEta.toFixed(1), order, hold, refusal };
 }
 
 export async function walkBrowser(page, fail) {
@@ -95,6 +110,17 @@ export async function walkBrowser(page, fail) {
         for (const e of B) { boarded.add(e.person); wait.set(e.person, (wait.get(e.person) || 0) + 1 / 30); maxWait = Math.max(maxWait, wait.get(e.person)); if (!e.walk) for (const q of B) if (q !== e && !q.walk) minGap = Math.min(minGap, Math.hypot(q.x - e.x, q.z - e.z)); }
         gone = ppl.filter(p => !body(p)).length; }
       out.carCycle = { n: ppl.length, boarded: boarded.size, gone, minGap: +minGap.toFixed(2), maxWait: +maxWait.toFixed(1) }; for (const p of ppl) S.release(p); }
+    // 9) pathing iteration 2: lift walkers wait beside the doors (both sides, apart, on open floor, outside the car), and wait there while someone steps out;
+    //    a refused order shows on the body (head shake)
+    { const W = g.liftWaitSpots(), apart = W.every((a, i) => W.every((b, j) => i === j || Math.hypot(a[0] - b[0], a[1] - b[1]) >= 0.6)), floor = W.every(([x, z]) => { const q = { x, z, y: 0 }; w.resolve(q, 0.28); return Math.hypot(q.x - x, q.z - z) < 0.05 && Math.hypot(x - car.x, z - car.z) > 1.6; });
+      const sides = new Set(W.map(([x, z]) => Math.sign(Math.round(((x - car.x) * -car.dy + (z - car.z) * car.dx) * 10)))).size;
+      const ppl = idle().slice(0, 2), [a, b] = ppl; let waited = null, minD = 9;
+      if (a && b && W.length) { waited = false; const [mx, mz] = [car.x + car.dx * 3.4, car.z + car.dy * 3.4]; a.x = car.x; a.z = car.z; a.mesh.position.set(a.x, 0, a.z); b.x = mx; b.z = mz; b.mesh.position.set(mx, 0, mz); w.setLiftOpen(true);
+        const t0 = d.rooms.find(r => r.type !== 'jefferies' && G.plan[r.type]?.length), [rx, ry] = [t0.x + (t0.w >> 1), t0.y + (t0.h >> 1)]; a.fromCar = G.time; g.startWalk(a, rx, ry, false); a.pauseT = 1.5; g.startWalk(b, car.tx, car.ty, true);
+        P.x = car.x + car.dx * 6 + car.dy * 2; P.z = car.z + car.dy * 6 - car.dx * 2; for (let n = 0; n < 45; n++) { tick(1); if (b.liftWait != null) waited = true; if (a.walk && Math.hypot(a.x - car.x, a.z - car.z) < 2.3) minD = Math.min(minD, Math.hypot(a.x - b.x, a.z - b.z)); }
+        a.walk = null; b.walk = null; b.liftWait = null; g.simBodies(0, true); }
+      const e = idle().find(q => Math.hypot(q.x - P.x, q.z - P.z) < 12 && w.los(P.x, P.z, q.x, q.z)) || idle()[0]; if (e) { P.x = e.x + 1.5; P.z = e.z; if (w.solidAt(P.x, P.z)) P.x = e.x - 1.5; if (e.fid) e.fid.cur = null; g.refuseReact(e.person, `${e.person.short}: "No."`); }
+      out.liftWait = { spots: W.length, apart, floor, sides, waited, minD: +minD.toFixed(2), shake: e ? e.fid?.cur?.id || null : 'none' }; }
     out.bodies = { n: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, sim: S.bodies(here).size };
     return out;
   });
@@ -109,6 +135,7 @@ export async function walkBrowser(page, fail) {
   const O = r.order; if (O && !(O.ord && (O.walked || O.from === O.to) && O.heldAway && O.ran && O.done && O.inRoom && O.released)) fail('npc ordered job walks to the job room ' + JSON.stringify(O));
   if (!(r.keepClear && r.keepClear.n > 0 && r.keepClear.bad === 0)) fail('npc spots keep the lift car clear ' + JSON.stringify(r.keepClear));
   const CC = r.carCycle; if (!(CC && CC.boarded >= Math.min(2, CC.n) && CC.gone === CC.n && CC.minGap >= 0.4 && CC.maxWait < 10)) fail('npc lift boarders spread out and the car cycles ' + JSON.stringify(CC));
+  const LW = r.liftWait; if (!(LW && LW.spots >= 2 && LW.apart && LW.floor && LW.sides === 2 && LW.waited !== false && LW.minD > 0.45 && (LW.shake === 'shake_head' || LW.shake === 'none'))) fail('npc lift waiting spots / refusal shake ' + JSON.stringify(LW));
   if (!(r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim ' + JSON.stringify(r.bodies));
   return r;
 }

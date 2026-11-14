@@ -354,14 +354,22 @@ function gaitFor(e) {   // this walker's gait right now: their own mix of parts,
   if (!e.gaitCtx || G.time - e.gaitT > 1 || e.gaitRun !== !!e.run) { e.gaitRun = !!e.run; const h = G.comms ? G.comms.clock.localHour(e.person) : 2; e.gaitT = G.time; e.gaitCtx = gaitNow(e.gaitBase, { run: !!e.run, alert: G.comms?.alerts?.top()?.def.severity ?? 0, tired: Math.max(0, Math.min(1, (h - 5) / 3)), relaxed: h > 8 && h < 20 }); }
   return e.gaitCtx;
 }
-function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, np: 0, opts }; e.run = !!opts.run; e.bestF = e.bestT = undefined; if (opts.sim) e.simKey = null; }
+function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, np: 0, opts, t0: G.time }; e.liftWait = null; e.run = !!opts.run; e.bestF = e.bestT = undefined; if (opts.sim) e.simKey = null; }
 const WALK_SEP = 0.55;   // m between two bodies' centres that a walker keeps (walkStep)
 const CAR_SLOTS = [[0, 0.55], [0.6, 0.55], [-0.6, 0.55], [0.3, -0.1], [-0.3, -0.1], [0, -0.6]];   // >= 0.58 m apart; [lateral, back] m from the car centre: where boarders stand while the doors close
+// where lift walkers wait while the car is shut / cycling or people are stepping out of it: beside the doors ([lateral, out] m from the car
+// centre, both sides, two rows), not in front of them, so arrivals get out first and corridor walkers get past (docs/pathing.md iteration 2)
+const LIFT_WAIT = [[-0.85, 2.0], [0.85, 2.0], [-0.9, 2.85], [0.9, 2.85], [-0.95, 3.6], [0.95, 3.6]];
+function liftWaitSpots(c) {
+  if (c.waitSpots) return c.waitSpots; const out = [];
+  for (const [l, b] of LIFT_WAIT) { const x = c.x + c.dx * b - c.dy * l, z = c.z + c.dy * b + c.dx * l, q = { x, z, y: 0 }; world.resolve(q, 0.3); if (Math.hypot(q.x - x, q.z - z) < 0.25 && !world.solidAt(q.x, q.z) && world.los(c.x + c.dx * 1.5, c.z + c.dy * 1.5, q.x, q.z)) out.push([q.x, q.z]); }
+  return (c.waitSpots = out);
+}
 const unseenAt = (x, z) => Math.hypot(x - P.x, z - P.z) > 14 || !world.los(P.x, P.z, x, z);
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, right-hand passing, braking, wall clearance.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, gt = gaitFor(e);
   const clampY = () => { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading || 0) * 0.6, e.z + Math.cos(e.heading || 0) * 0.6), gy = (e.v || 0) > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0, dy = gy - y0; e.y = y0 + Math.max(-2.4 * dt, Math.min(3.2 * dt, dy * Math.min(1, dt * 9))); e.mesh.position.y = e.y; };
-  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.opts.sim) e.simKey = w.opts.sim; if (w.opts.board) { if (H) { H.play('idle', { fade: 0.3 }); H.standing = true; H.add = null; } e.walking = false; return false; }   /* settled on a spot in the car */ if (w.vanish) { const c = world.car; if (c && G.lift && world.tile(e.x, e.z).join() === c.tx + ',' + c.ty) { const used = new Set(ents.filter(o => o.board).map(o => o.boardSlot)), pt = ([l, b]) => [c.x - c.dy * l - c.dx * b, c.z + c.dx * l - c.dy * b]; let k = 0, bd = 1e9; CAR_SLOTS.forEach((q, i) => { const [qx, qz] = pt(q), dd = Math.hypot(qx - e.x, qz - e.z) + (used.has(i) ? 100 : 0); if (dd < bd) { bd = dd; k = i; } }); const [sl, sb] = CAR_SLOTS[k]; e.boardSlot = k; e.board = true; G.lift.boardN = (G.lift.boardN || 0) + 1; G.lift.shutT ||= 1.6; startWalk(e, 0, 0, false, { point: [c.x - c.dy * sl - c.dx * sb, c.z + c.dx * sl - c.dy * sb], board: true }); return true; }   /* in the car: step to a free spot in it (not all on the centre), the doors close on them (carStep), then they are gone */   /* in the car: the doors close on them (carStep), then they are gone */ else dropBody(e); } else { if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
+  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.opts.sim) e.simKey = w.opts.sim; if (w.opts.board) { if (H) { H.play('idle', { fade: 0.3 }); H.standing = true; H.add = null; } e.walking = false; return false; }   /* settled on a spot in the car */ if (w.vanish) { const c = world.car; if (c && G.lift && world.tile(e.x, e.z).join() === c.tx + ',' + c.ty) { const used = new Set(ents.filter(o => o.board).map(o => o.boardSlot)), pt = ([l, b]) => [c.x - c.dy * l - c.dx * b, c.z + c.dx * l - c.dy * b]; let k = 0, bd = 1e9; CAR_SLOTS.forEach((q, i) => { const [qx, qz] = pt(q), dd = Math.hypot(qx - e.x, qz - e.z) + (used.has(i) ? 100 : 0); if (dd < bd) { bd = dd; k = i; } }); const [sl, sb] = CAR_SLOTS[k]; e.boardSlot = k; e.board = true; G.lift.boardN = (G.lift.boardN || 0) + 1;   /* the doors close when nobody else is walking up, or after 4 s (carStep) */ startWalk(e, 0, 0, false, { point: [c.x - c.dy * sl - c.dx * sb, c.z + c.dx * sl - c.dy * sb], board: true }); return true; }   /* in the car: step to a free spot in it (not all on the centre), the doors close on them (carStep), then they are gone */   /* in the car: the doors close on them (carStep), then they are gone */ else dropBody(e); } else { if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
   if (e.heading === undefined) e.heading = e.mesh.rotation.y;
   const turnTo = (gx, gz, k = 1) => { const want = Math.atan2(gx - e.x, gz - e.z); const err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading)); const mt = (e.v > 0.3 ? Math.min(5.2, gt.turn) : Math.min(3.4, gt.turn * 1.3)) * dt * k; e.heading += Math.max(-mt, Math.min(mt, err)); e.mesh.rotation.y = e.heading; return err; };
   const animate = (clip, scale) => { if (!H) return; if (!e.walking || e.clip !== clip) { try { H.play(clip, { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = clip; } };
@@ -389,7 +397,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (cur === 0) { gx = fx; gz = fz; }
   // pass others on the right-hand side (so two people meeting both step the same way), slow for anyone you cannot get round
   let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg, rx = uz, rz = -ux;   // (rx, rz) = right of travel
-  const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh && !o.board), { x: P.x, z: P.z, player: true }];
+  const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh && !o.board).map(o => ({ x: o.mesh.position.x, z: o.mesh.position.z, walk: !!o.walk, ent: o })), { x: P.x, z: P.z, player: true }];   // where their body really is (a seated / operating body sits on the seat or use point, not on its logical tile centre)
   if (cur < (e.bestF ?? 1e9) - 0.5) { e.bestF = cur; e.bestT = G.time; w.np = 0; } if (G.time - (e.bestT ?? G.time) > 5 && toEnd > 0.5) { e.forceT = 2; e.bestT = G.time; e.bestF = cur; if (++w.np >= 4 && w.opts.sim && unseenAt(e.x, e.z)) return finish(); }   // no progress for 5 s: ignore everyone and head straight down the field for a moment; a schedule walk held up for 20 s is cut short, but only out of sight
   if (e.forceT > 0) e.forceT -= dt;
   for (const o of (tubeish || e.forceT > 0) ? [] : others) {
@@ -398,6 +406,20 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
     if (od < 0.8 + gt.space * 0.3 && (!(e.ghost > 0) || o.player)) slow = Math.min(slow, Math.max(0.05, (od - 0.35) / 0.8));
   }
   if (w.vanish && toEnd < 2.4 && (world.grid[w.ty]?.[w.tx] !== 0 || (G.lift?.shutT > 0 && toEnd > 1.3))) slow = 0.05;   // the lift doors are shut (or closing on a full car): wait in front of them
+  // waiting for the lift: stand beside the doors (LIFT_WAIT) while the car is shut / cycling or someone is stepping out (arrivals first)
+  let liftWait = false; const car = world.car;
+  if (w.vanish && car && G.lift && toEnd < 4.2 && toEnd > 1.3) {
+    const shut = G.lift.shutT > 0 || !!G.fx?.liftLocked, out = !shut && ents.some(o => o !== e && o.fromCar > G.time - 10 && o.walk && !o.board && Math.hypot(o.x - car.x, o.z - car.z) < 2.3);   // someone who just came out of the car is still in it / its doorway
+    const spots = (shut || out) ? liftWaitSpots(car) : null;
+    if (spots?.length) {
+      const free = (q, i) => !ents.some(o => o !== e && o.kind === 'crew' && o.mesh && !o.board && (o.liftWait === i || Math.hypot(o.x - q[0], o.z - q[1]) < 0.5));   // nobody stands there or has claimed it
+      let k = e.liftWait ?? -1; if (k < 0 || k >= spots.length || !free(spots[k], k)) { k = -1; let bd = 1e9; spots.forEach((q, i) => { const dd = Math.hypot(q[0] - e.x, q[1] - e.z) + i * 0.15; if (dd < bd && free(q, i)) { bd = dd; k = i; } }); }
+      if (k >= 0) { e.liftWait = k; liftWait = true; const [qx, qz] = spots[k], dq = Math.hypot(qx - e.x, qz - e.z); if (dq < 0.2) { gx = car.x; gz = car.z; slow = 0; } else { gx = qx; gz = qz; slow = Math.max(0.05, Math.min(1, dq / 1.2)); } }
+    }
+  }
+  if (!liftWait) { e.liftWait = null; e.waitT0 = null; } else e.waitT0 ??= G.time;   // waitT0: since when (simBodies holds back new arrivals once someone has waited 3 s)
+  const doorWait = liftWait || (slow === 0.05 && w.vanish && toEnd < 2.4);
+  if (!w.chk || G.time - w.chk.t > 4) { if (w.chk && !doorWait && toEnd > 0.6 && !tubeish && Math.hypot(e.x - w.chk.x, e.z - w.chk.z) < 0.3) e.ghost = 1.5; w.chk = { t: G.time, x: e.x, z: e.z }; }   // creeping (< 0.3 m in 4 s) behind someone who will not clear the way: squeeze past too, not only when stopped dead
   // heading steers toward the goal at a capped rate; speed eases with turn error, nearness to the end, braking distance and obstacles
   const err = turnTo(gx, gz);
   e.pauseCool = (e.pauseCool || 0) - dt; if ((e.pauseT || 0) > 0) { e.pauseT -= dt; slow = Math.min(slow, 0.05); } else if (Math.abs(err) > 0.8 && e.v > 0.7 && e.pauseCool <= 0 && gt.pause > 0 && Math.random() < gt.pause * dt * 8) { e.pauseT = 0.5 + Math.random() * 0.8; e.pauseCool = 5; }
@@ -409,10 +431,11 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (w.vanish && cur === 0 && toEnd < 0.75) return finish();   // inside the car: step to a free spot in it (finish), not everyone onto its centre
   // blocked by someone for a while: squeeze past (ghost through NPCs) rather than teleport; a player in a one-tile corridor is simply waited for
   if (e.v < 0.05 && slow < 0.3) { w.stuck += dt; if (w.stuck > 2.5) e.ghost = 1.5; if (w.stuck > 30 && unseenAt(e.x, e.z)) return finish(); } else w.stuck = Math.max(0, w.stuck - dt);
+  if (e.fromCar > G.time - 6 && world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 1.6) e.ghost = Math.max(e.ghost || 0, 0.2);   // just out of the lift: step out of the car through the others who came with you (not the player)
   if (e.ghost > 0) e.ghost -= dt;
   const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp;
-  const nearCar = world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 2.6;   // the car and its doors have their own choreography (spots in the car, holding back while it cycles)
-  const sep = G.walkSep ?? WALK_SEP; if (!tubeish && !nearCar && toEnd > 0.3 && !(e.ghost > 0)) for (const o of others) { if (o.player) continue; const ox = e.x - o.x, oz = e.z - o.z, od = Math.hypot(ox, oz); if (od < sep) { const side = od > 1e-3 ? Math.sign(ox * rx + oz * rz) || 1 : (e.person.id & 1 ? 1 : -1), k = Math.min(sep - od, 0.8 * dt) * side; e.x += rx * k; e.z += rz * k; } }   // personal space: a walker slides sideways (never back) off anyone closer than `sep` (side by side in a doorway, overtaking) instead of walking through them; not while squeezing past (ghost)
+  const nearCar = world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 2.6;   // the car and its doors have their own choreography (spots in the car, holding back while it cycles); everyone keeps their space once outside the doors (iteration 2)
+  const sep = G.walkSep ?? WALK_SEP; if (!tubeish && (!nearCar || Math.hypot(e.x - world.car.x, e.z - world.car.z) > 1.3) && !liftWait && toEnd > 0.3 && !(e.ghost > 0)) for (const o of others) { if (o.player) continue; const ox = e.x - o.x, oz = e.z - o.z, od = Math.hypot(ox, oz); if (od < sep) { const side = od > 1e-3 ? Math.sign(ox * rx + oz * rz) || 1 : (e.person.id & 1 ? 1 : -1), k = Math.min(sep - od, 0.8 * dt) * side; e.x += rx * k; e.z += rz * k; } }   // personal space: a walker slides sideways (never back) off anyone closer than `sep` (side by side in a doorway, overtaking) instead of walking through them; not while squeezing past (ghost)
   if (!e.climbing) { const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.26); e.x = q.x; e.z = q.z; }   // never clip walls
   if (toEnd < 0.35 && !w.vanish) { const k = Math.min(1, dt * 7); e.x += (fx - e.x) * k; e.z += (fz - e.z) * k; }   // ease onto the exact spot
   e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
@@ -457,6 +480,12 @@ function simTileFor(person, e) {   // a tile in the person's room: beside the fu
   }
   return null;
 }
+// the abstract sim waits for the body (js/sim.js holdBody): a trip on the player's deck is not over while the person's body is still walking it
+function simHold(p, t) {
+  if (!world || !G.shipDecks || G.phase === 'ride' || G.phase === 'select') return false; const here = G.shipDeck + 1;
+  if (t.lift ? t.from.deckNo !== here : t.to.deckNo !== here) return false; const e = ents.find(x => x.simmed && x.person === p); if (!e) return false;
+  return t.lift ? true : !!e.walk?.opts.sim && !e.walk.vanish;   // leaving: still walking to / standing in the car; on this deck: still on a schedule walk
+}
 const dropBody = (e) => { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); };
 function simBodies(dt, force = false) {
   G.simT = (G.simT || 0) - dt; if (!force && G.simT > 0) return; G.simT = 1.5; if (!world || !G.sim || G.phase === 'ride' || G.phase === 'select') { if (!force) return; }
@@ -474,14 +503,16 @@ function simBodies(dt, force = false) {
     if (have.has(o.person) || o.person.status === 'dead' || o.person.status === 'crazed') continue;
     const k = `${o.room}|${o.spot}|${o.tx},${o.ty}`, t = simTileFor(o.person, o); if (!t) continue; let [cx, cz] = world.center(t[0], t[1]), rot = (o.person.id * 0.9) % 6.28, out = false;
     if (!force && car) {
-      const hid = unseenAt(car.x, car.z) && ents.every(q => !q.board || unseenAt(q.x, q.z));   // nobody waiting in the car is in sight either (they are removed when the car comes back) if (n >= 3 || G.fx?.liftLocked) continue;
+      const hid = unseenAt(car.x, car.z) && ents.every(q => !q.board || unseenAt(q.x, q.z));   // nobody waiting in the car is in sight either (they are removed when the car comes back)
+      if (n >= 3 || G.fx?.liftLocked) continue;   // at most 3 per cycle (this line sat inside the comment above until iteration 2)
       if (!hid && !(L && !world.liftOpen && L.closedT > 1)) { if (L && !inCarTile() && !(L.shutT > 0)) { L.shutT = 1.6; L.arrive = true; } continue; }   // the player is looking into the open car: it leaves and comes back with them
+      if (ents.some(q => q.liftWait != null && q.waitT0 != null && G.time - q.waitT0 > 3)) continue;   // people have been waiting beside the doors: let them board first (turns, not a steady stream out of the car)
       const spot = CAR_SLOTS.map(([l, b]) => [car.x - car.dy * l - car.dx * b, car.z + car.dx * l - car.dy * b]).find(([x, z]) => !ents.some(q => q.kind === 'crew' && q.mesh && !q.board && Math.hypot(q.x - x, q.z - z) < 0.6)); if (!spot) continue; n++; [cx, cz] = spot;   /* a free spot in the car (others may still be stepping out) */ rot = Math.atan2(car.dx, car.dy); out = true; if (L) { L.npcT = 4; if (L.boardN) { for (const e of ents.slice()) if (e.board) dropBody(e); L.boardN = 0; } } if (!world.liftOpen) world.setLiftOpen(true);
     } else if (!force && !unseenAt(cx, cz)) continue;
     o.person.status = 'seen';
     const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); m.position.set(cx, 0, cz); m.rotation.y = rot; m.userData.rank = o.person.short; scene.add(m);
     const ne = { kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, simKey: k }; place(ne, o, t); ents.push(ne);
-    if (out) { startWalk(ne, t[0], t[1], false, { sim: k, ...(runFor(o.person) ? { run: true } : {}) }); ne.pauseT = 0.9; ne.mesh.userData.human?.play('idle', { fade: 0 }); } else poseFor(ne);
+    if (out) { startWalk(ne, t[0], t[1], false, { sim: k, ...(runFor(o.person) ? { run: true } : {}) }); ne.pauseT = 0.5 + n * 1.0; ne.fromCar = G.time;   /* one after another, not all at once */ ne.mesh.userData.human?.play('idle', { fade: 0 }); } else poseFor(ne);
   }
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
@@ -586,12 +617,19 @@ function setupDuty() {
     else if (ev.type === 'task') { g(`Task open: ${ev.task} (${ev.room}) — due by end of shift`, 'comp'); if (ev.first) startIntro(ev); }
     else if (ev.type === 'taskdone' && G.intro && G.intro.task === ev.task) endIntro();
     else if (ev.type === 'done') g(ev.auto ? `Round skipped: ${ev.label}. It comes round again.` : ev.quality === 'proper' ? `${ev.label}: done properly.` : `${ev.label}: ${ev.quality}.`, ev.quality === 'proper' ? 'good' : ev.auto ? 'comp' : 'warn');
-    else if (ev.type === 'witness' || ev.type === 'audit' || ev.type === 'refused') g(`${ev.who}: ${ev.text}`, 'warn');
+    else if (ev.type === 'refused') { g(ev.text.startsWith(ev.who) ? ev.text : `${ev.who}: ${ev.text}`, 'warn'); if (ev.person) refuseReact(ev.person, ev.text); }
+    else if (ev.type === 'witness' || ev.type === 'audit') g(`${ev.who}: ${ev.text}`, 'warn');
     else if (ev.type === 'consequence') g(`${ev.name} is ${ev.status} — neglected maintenance.`, 'warn');
     else if (ev.type === 'missed' && !ev.shiftEnd) g(`Missed: ${ev.task}. ${ev.neglect}`, 'warn');
     else if (ev.type === 'jobdone') { g(`${ev.who} finished ${ev.label} (${ev.quality}).`, 'good'); if (ev.job) orderEnd(ev.job); }
     else if (ev.type === 'ordered') { g(`${ev.who} takes the job: ${ev.label}.`, 'comp'); if (ev.job) orderWalk(ev.job); }
   });
+}
+// a refused order / favour shows on the body when it is in sight on this deck: a head shake, and the line spoken aloud when close
+function refuseReact(p, text) {
+  const e = ents.find(x => x.simmed && x.person === p); if (!e?.mesh) return; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d > 16 || !world.los(P.x, P.z, e.x, e.z)) return;
+  e.fid = e.fid || new Fidgeter(e.person, G.runSeed); e.fid.force('shake_head');
+  if (d < 10) { try { speak(p, String(text).replace(/^[^:]*: "?|"$/g, ''), { gain: Math.max(0.3, 1.1 - 0.08 * d) }); } catch (er) { } }
 }
 // ordered / delegated jobs (js/duty.js): the person goes to the job room (sim priority 2, activity 'ordered': walks there on this deck, rides
 // the lift from another) and the job's clock only runs once they are there (Duty.atJob); done = released back to their schedule
@@ -725,7 +763,7 @@ function newRun() {
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
-  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks }) : null; if (G.sim) G.sim.setPlayer(G.player);
+  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.holdBody = simHold; }
   G.social = G.sim ? generateSocial(G.roster, { seed: G.runSeed, plan: G.plan, data: commsData(), clock: G.comms.clock, ship: G.ship }) : null; if (G.social) G.sim.setSocial(G.social);   // js/social.js: groups, friendships, rivalries (before setupDuty: seeds trust)
   setupDuty();
   hideScreens(); fade(0);
@@ -1650,7 +1688,7 @@ function frame() {
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)

@@ -159,7 +159,7 @@ export class Duty {
     const subs = this.subs(); if (!subs.includes(p) && !delegateOf) return { ok: false, why: `${p.short} does not report to you` };
     const bl = this.duties.billets?.[p.billet]; const lp = (delegateOf ? this.loop(delegateOf) : null) || bl?.loops?.find(l => l.id === jobId) || bl?.loops?.[0]; if (!lp) return { ok: false, why: 'nothing to order' };
     const w = this.willObey(p); this.stats.orders++;
-    if (w.roll > w.p) { this.stats.refused++; this._bump(p, -0.03); this.emit({ type: 'refused', who: p.short, text: `${p.short}: "${lp.label}? I've got my own work, ${RANK_SHORT[this.player.rank]}."` }); return { ok: false, refused: true }; }
+    if (w.roll > w.p) { this.stats.refused++; this._bump(p, -0.03); this.emit({ type: 'refused', who: p.short, person: p, text: `${p.short}: "${lp.label}? I've got my own work, ${RANK_SHORT[this.player.rank]}."` }); return { ok: false, refused: true }; }
     const rel = 0.55 + this.trust(p) * 0.4, q = hash01('q', this.seed, p.id, Math.floor(this.t)) < rel ? 'proper' : 'rushed';
     const job = { person: p, loop: lp, q, left: Math.max(6, lp.dur * SHIP_SEC_PER_MIN * 1.6), delegateOf }; this.jobs.push(job);
     this.emit({ type: 'ordered', who: p.short, label: lp.label, delegated: !!delegateOf, job }); return { ok: true, job };
@@ -168,7 +168,7 @@ export class Duty {
   askHelp(p) {
     const l = this.loops.find(x => x.state === 'due') || this.loops.find(x => x.state === 'idle'); if (!l) return { ok: false, why: 'You have no duty to hand off.' };
     if (p.dept !== this.player.dept && !this.subs().includes(p)) return { ok: false, why: `${p.short} has no reason to help you.` };
-    const w = this.willObey(p); if (w.roll > w.p - 0.2) { this._bump(p, -0.02); this.emit({ type: 'refused', who: p.short, text: `${p.short}: "Sorry, I can't spare the time right now."` }); return { ok: false, refused: true }; }
+    const w = this.willObey(p); if (w.roll > w.p - 0.2) { this._bump(p, -0.02); this.emit({ type: 'refused', who: p.short, person: p, text: `${p.short}: "Sorry, I can't spare the time right now."` }); return { ok: false, refused: true }; }
     return this.delegate(p, l.id);
   }
   delegate(p, loopId) {
