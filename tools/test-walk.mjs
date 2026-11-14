@@ -167,13 +167,14 @@ export async function walkBrowser(page, fail) {
       const mine = sent.filter(p => body(p)), moving = mine.filter(p => body(p).walk?.opts.sim).length; A.clear('red'); tick(3 * 30); out.stations = { sent: sent.length, ok, here: mine.length, moving, left: g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations').length }; } }
     // 14) pathing iteration 5: red alert vs player orders: someone already carrying an accepted order keeps walking to the job (no stations call);
     //     an order given during the alert takes the person off their station; once the job is done the stations call picks them up
-    { const A = g.alerts, D = g.duty; if (A && D) { const subs = D.subs().filter(p => S.st.has(p.id) && !D.jobs.some(j => j.person === p)); let a = null, b = null;
-      for (const p of subs) { if (a) break; for (let k = 0; k < 40 && !a; k++) { D.t += 5; const r = D.order(p, null); if (r?.ok && S.overrideOf(p)?.activity === 'ordered') a = p; } }
+    { const A = g.alerts, D = g.duty, lp = D?.loops.find(l => G.plan?.[l.room]?.length), give = (p) => D.delegate(p, lp.id), st0 = lp?.state;   // delegation: any crew member (the test billet may have no reports)
+      if (A && D && lp) { const subs = g.roster.people.filter(p => !p.isPlayer && S.st.has(p.id) && !S.overridden(p) && !D.jobs.some(j => j.person === p)).slice(0, 12); let a = null, b = null;
+      for (const p of subs) { if (a) break; for (let k = 0; k < 40 && !a; k++) { D.t += 5; const r = give(p); if (r?.ok && S.overrideOf(p)?.activity === 'ordered') a = p; } }
       if (a) { A.raise('red', { source: 'debug', reason: 'test' }); tick(12 * 30); const keep = S.overrideOf(a)?.activity === 'ordered' && !G.stations?.sent.has(a);
-        b = g.roster.people.find(p => p !== a && S.overrideOf(p)?.activity === 'stations' && D.subs().includes(p)); let taken = null;
-        if (b) for (let k = 0; k < 40 && taken == null; k++) { D.t += 5; const r = D.order(b, null); if (r?.ok) taken = S.overrideOf(b)?.activity === 'ordered' && !G.stations?.sent.has(b); }
+        b = g.roster.people.find(p => p !== a && S.overrideOf(p)?.activity === 'stations'); let taken = null;
+        if (b) for (let k = 0; k < 40 && taken == null; k++) { D.t += 5; const r = give(b); if (r?.ok) taken = S.overrideOf(b)?.activity === 'ordered' && !G.stations?.sent.has(b); }
         for (const j of D.jobs.slice()) if (j.person === a) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(a, 2); tick(10 * 30); const after = S.overrideOf(a)?.activity;
-        A.clear('red'); tick(3 * 30); for (const p of [a, b]) if (p) { for (const j of D.jobs.slice()) if (j.person === p) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(p, 2); }
+        A.clear('red'); tick(3 * 30); for (const p of [a, b]) if (p) { for (const j of D.jobs.slice()) if (j.person === p) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(p, 2); } lp.state = st0;
         out.alertOrders = { a: !!a, keep, b: !!b, taken, after, left: g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations').length }; } } }
     out.bodies = { n: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, sim: S.bodies(here).size };
     return out;
