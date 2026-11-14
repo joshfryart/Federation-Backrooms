@@ -353,13 +353,16 @@ function evacuationStep(dt) {
 // red alert ("All hands to stations", js/alerts.js): crew who are off their post go to their station, the first block of their billet's day
 // (where their watch begins), at sim priority 3 ('stations', staggered over 8 s); released when the alert is cleared. Not in the collapse:
 // evacuation (above) takes over. docs/pathing.md iteration 4: before this a red alert moved nobody (only their gait changed).
+// Iteration 5: crew carrying an accepted player order (prio 2 'ordered') finish it first (19 of 23 orders stalled under the stations
+// call); an order given during the alert takes them off their station (orderWalk); they go to their station once the job is done.
+const onOrder = (p) => G.sim?.overrideAt(p, 2)?.activity === 'ordered' && !!G.duty?.jobs.some(j => j.person === p);
 function alertStations(dt) {
   const S = G.sim, A = G.comms?.alerts; if (!S || !A || !G.roster) return; G.stationT = (G.stationT || 0) - dt; if (G.stationT > 0) return; G.stationT = 1;
   const on = A.has('red') && !(G.phases?.index >= 4), St = G.stations;
   if (!on) { if (St) { for (const p of St.sent) if (S.overrideAt(p, 3)?.activity === 'stations') S.release(p, 3); G.stations = null; } return; }
   const st = St || (G.stations = { t0: G.time, sent: new Set() });
   for (const p of G.roster.people) {
-    if (p.isPlayer || st.sent.has(p) || ['dead', 'crazed', 'evacuated', 'corpse'].includes(p.status) || !S.st.has(p.id) || (S.overrideOf(p)?.prio ?? 0) >= 3) continue;
+    if (p.isPlayer || st.sent.has(p) || ['dead', 'crazed', 'evacuated', 'corpse'].includes(p.status) || !S.st.has(p.id) || (S.overrideOf(p)?.prio ?? 0) >= 3 || onOrder(p)) continue;
     const day = S.data?.billets?.[p.billet]?.day, b = day?.[0]; if (!b || !G.plan?.[b[2]]?.length) continue;
     if (G.time - st.t0 < hash01('station', G.runSeed, p.id) * 8) continue; st.sent.add(p); S.redirect(p, b[2], b[3], undefined, 'stations', { prio: 3 });
   }
@@ -372,7 +375,7 @@ function gaitFor(e) {   // this walker's gait right now: their own mix of parts,
 }
 function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, np: 0, opts, t0: G.time }; e.liftWait = null; e.liftGo = false; e.run = !!opts.run; e.bestF = e.bestT = undefined; if (opts.sim) e.simKey = null; }
 const WALK_SEP = 0.55;   // m between two bodies' centres that a walker keeps (walkStep)
-const CAR_SLOTS = [[0, 0.55], [0.6, 0.55], [-0.6, 0.55], [0.3, -0.1], [-0.3, -0.1], [0, -0.6]];   // >= 0.58 m apart; [lateral, back] m from the car centre: where boarders stand while the doors close
+const CAR_SLOTS = [[0, 0.55], [0.6, 0.55], [-0.6, 0.55], [0.3, -0.1], [-0.3, -0.1], [0, -0.6], [0.6, -0.6], [-0.6, -0.6]];   // >= 0.58 m apart; [lateral, back] m from the car centre: where boarders stand while the doors close (8: iteration 5, one car per deck, so a surge needs bigger carfuls; the front pair stands 0.5 m inside the doors)
 // where lift walkers wait while the car is shut / cycling or people are stepping out of it: beside the doors ([lateral, out] m from the car
 // centre, both sides, two rows), not in front of them, so arrivals get out first and corridor walkers get past (docs/pathing.md iteration 2)
 const LIFT_WAIT = [[-0.85, 2.0], [0.85, 2.0], [-0.9, 2.85], [0.9, 2.85], [-0.95, 3.6], [0.95, 3.6]];
@@ -395,6 +398,7 @@ function liftQueueSpots(c) {
 }
 const liftComing = () => { const c = world.car; return !!c && ents.some(q => q.walk?.vanish && !q.board && Math.hypot(q.x - c.x, q.z - c.z) < 4.5); };   // someone is walking up to / waiting at the lift car
 const unseenAt = (x, z) => Math.hypot(x - P.x, z - P.z) > 14 || !world.los(P.x, P.z, x, z);
+const hiddenFar = (x, z) => Math.hypot(x - P.x, z - P.z) > 30 || !world.los(P.x, P.z, x, z);   // out of sight even down a long corridor (iteration 5: lift arrivals / walks cut short 14-30 m away in a clear line of sight were 7-21 'far pops' per Manitoba run)
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, right-hand passing, braking, wall clearance.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, gt = gaitFor(e);
   const clampY = () => { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading || 0) * 0.6, e.z + Math.cos(e.heading || 0) * 0.6), gy = (e.v || 0) > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0, dy = gy - y0; e.y = y0 + Math.max(-2.4 * dt, Math.min(3.2 * dt, dy * Math.min(1, dt * 9))); e.mesh.position.y = e.y; };
@@ -427,7 +431,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   // pass others on the right-hand side (so two people meeting both step the same way), slow for anyone you cannot get round
   let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg, rx = uz, rz = -ux;   // (rx, rz) = right of travel
   const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh && !o.board).map(o => ({ x: o.mesh.position.x, z: o.mesh.position.z, walk: !!o.walk, ent: o })), { x: P.x, z: P.z, player: true }];   // where their body really is (a seated / operating body sits on the seat or use point, not on its logical tile centre)
-  if (cur < (e.bestF ?? 1e9) - 0.5) { e.bestF = cur; e.bestT = G.time; w.np = 0; } if (G.time - (e.bestT ?? G.time) > 5 && toEnd > 0.5) { e.forceT = 2; e.bestT = G.time; e.bestF = cur; if (++w.np >= 4 && w.opts.sim && unseenAt(e.x, e.z)) return finish(); }   // no progress for 5 s: ignore everyone and head straight down the field for a moment; a schedule walk held up for 20 s is cut short, but only out of sight
+  if (cur < (e.bestF ?? 1e9) - 0.5) { e.bestF = cur; e.bestT = G.time; w.np = 0; } if (G.time - (e.bestT ?? G.time) > 5 && toEnd > 0.5) { e.forceT = 2; e.bestT = G.time; e.bestF = cur; if (++w.np >= 4 && w.opts.sim && (w.vanish ? hiddenFar : unseenAt)(e.x, e.z)) return finish(); }   /* a lift walk cut short vanishes: only where nobody can see it */   // no progress for 5 s: ignore everyone and head straight down the field for a moment; a schedule walk held up for 20 s is cut short, but only out of sight
   if (e.forceT > 0) e.forceT -= dt;
   for (const o of (tubeish || e.forceT > 0) ? [] : others) {
     const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 3.0 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.3) continue; const lat = ox * rx + oz * rz; if (Math.abs(lat) > 1.3) continue;
@@ -445,7 +449,8 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
     const shut = shutNow, out = !shut && ents.some(o => o !== e && o.fromCar > G.time - 8 && o.walk && !o.board && Math.hypot(o.x - car.x, o.z - car.z) < 1.8);   // someone who just came out of the car is still in it / its doorway
     // the car is open: as many as it has room for leave the line, front first (iteration 4: all 13 of a surge rushed the doors at once, then 7 had to back off again); newcomers join the line behind
     let stay = shut || out; if (!stay && Wq.length && !e.liftGo) { const room = CAR_SLOTS.length - (G.lift.boardN || 0) - ents.filter(o => o !== e && o.walk?.vanish && !o.board && o.liftWait == null && (o.liftGo || Math.hypot(o.x - car.x, o.z - car.z) < 4.2)).length;   /* already on their way in (called forward from anywhere in the line, or close) */ stay = e.liftWait != null ? Wq.filter(o => o.liftWait < e.liftWait).length >= room : Wq.length >= room; }
-    if (!stay && Wq.length) e.liftGo = true; else if (shut || out) e.liftGo = false;   // called forward: keeps going (no flip back into the line as a newcomer) until the doors shut / someone steps out again
+    if (!stay && Wq.length) e.liftGo = true; else if (shut || (out && Math.hypot(e.x - car.x, e.z - car.z) < 2.6)) e.liftGo = false;   // called forward: keeps going (no flip back into the line as a newcomer) until the doors shut / someone steps out again
+    if (e.liftGo && out && !shut) { stay = false; slow = Math.min(slow, 0.05); }   // arrivals stepping out while a called group walks up: those further out stop where they are and go on once the doorway is clear, not back to the line (iteration 5 trace: 8 called people sent back for 5 s per arrival)
     const door = stay ? liftWaitSpots(car) : null, spots = door && (door.length ? door.concat(liftQueueSpots(car)) : door), nd = door?.length || 0;   // the 6 door spots first, then the line further back (iteration 4)
     if (spots?.length) {
       const free = (q, i) => !ents.some(o => o !== e && o.kind === 'crew' && o.mesh && !o.board && (o.liftWait === i || Math.hypot(o.x - q[0], o.z - q[1]) < 0.5));   // nobody stands there or has claimed it
@@ -467,7 +472,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (toEnd < 0.05 && !w.vanish) return finish();
   if (w.vanish && cur === 0 && toEnd < 0.75 && !liftWait) return finish();   // inside the car: step to a free spot in it (finish), not everyone onto its centre
   // blocked by someone for a while: squeeze past (ghost through NPCs) rather than teleport; a player in a one-tile corridor is simply waited for
-  if (e.v < 0.05 && slow < 0.3) { w.stuck += dt; if (w.stuck > 2.5) e.ghost = 1.5; if (w.stuck > 30 && unseenAt(e.x, e.z)) return finish(); } else w.stuck = Math.max(0, w.stuck - dt);
+  if (e.v < 0.05 && slow < 0.3) { w.stuck += dt; if (w.stuck > 2.5) e.ghost = 1.5; if (w.stuck > 30 && (w.vanish ? hiddenFar : unseenAt)(e.x, e.z)) return finish(); } else w.stuck = Math.max(0, w.stuck - dt);
   if (atSpot) e.ghost = 0;   // standing in the lift line on purpose: not squeezing through anyone
   if (e.fromCar > G.time - 6 && world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 1.6) e.ghost = Math.max(e.ghost || 0, 0.2);   // just out of the lift: step out of the car through the others who came with you (not the player)
   if (e.ghost > 0) e.ghost -= dt;
@@ -542,10 +547,11 @@ function simBodies(dt, force = false) {
     if (have.has(o.person) || o.person.status === 'dead' || o.person.status === 'crazed') continue;
     const k = `${o.room}|${o.spot}|${o.tx},${o.ty}`, t = simTileFor(o.person, o); if (!t) continue; let [cx, cz] = world.center(t[0], t[1]); if (t.off) { cx += t.off[0]; cz += t.off[1]; } let rot = (o.person.id * 0.9) % 6.28, out = false;
     if (!force && car) {
-      const hid = unseenAt(car.x, car.z) && ents.every(q => !q.board || unseenAt(q.x, q.z));   // nobody waiting in the car is in sight either (they are removed when the car comes back)
+      const hid = hiddenFar(car.x, car.z) && ents.every(q => !q.board || hiddenFar(q.x, q.z));   // nobody waiting in the car is in sight either (they are removed when the car comes back)
       if (n >= 3 || G.fx?.liftLocked) continue;   // at most 3 per cycle (this line sat inside the comment above until iteration 2)
       if (!hid && !(L && !world.liftOpen && L.closedT > 1)) { if (L && !inCarTile() && !(L.shutT > 0) && !L.boardN && !liftComing()) L.shutT = 1.6; if (L) L.arrive = true; continue; }   // the player is looking into the open car: it leaves and comes back with them, but not while people are boarding or walking up to it: they arrive when the doors shut on those (one cycle, docs/pathing.md iteration 3)
       if (ents.some(q => q.liftWait != null && q.waitT0 != null && G.time - q.waitT0 > 3)) continue;   // people have been waiting beside the doors: let them board first (turns, not a steady stream out of the car)
+      if (world.liftOpen && (L?.boardN || ents.some(q => q.liftGo && q.walk?.vanish && !q.board))) continue;   // a carful is boarding / called forward: arrivals come behind the doors that shut on them (iteration 5 trace: arrivals in an open, unseen car dropped the boarders and sent the called group back for 5-15 s)
       const spot = CAR_SLOTS.map(([l, b]) => [car.x - car.dy * l - car.dx * b, car.z + car.dx * l - car.dy * b]).find(([x, z]) => !ents.some(q => q.kind === 'crew' && q.mesh && !q.board && Math.hypot(q.x - x, q.z - z) < 0.6)); if (!spot) continue; n++; [cx, cz] = spot;   /* a free spot in the car (others may still be stepping out) */ rot = Math.atan2(car.dx, car.dy); out = true; if (L) { L.npcT = 4; if (L.boardN) { for (const e of ents.slice()) if (e.board) dropBody(e); L.boardN = 0; } } if (!world.liftOpen) world.setLiftOpen(true);
     } else if (!force && !unseenAt(cx, cz)) continue;
     o.person.status = 'seen';
@@ -673,7 +679,7 @@ function refuseReact(p, text) {
 }
 // ordered / delegated jobs (js/duty.js): the person goes to the job room (sim priority 2, activity 'ordered': walks there on this deck, rides
 // the lift from another) and the job's clock only runs once they are there (Duty.atJob); done = released back to their schedule
-function orderWalk(j) { const p = j.person, l = j.loop; if (!G.sim || !l?.room || !G.plan?.[l.room]) return; G.sim.redirect(p, l.room, l.spot || 'door', j.left + JOB_WAIT + 60, 'ordered', { prio: 2 }); }
+function orderWalk(j) { const p = j.person, l = j.loop; if (!G.sim || !l?.room || !G.plan?.[l.room]) return; if (G.sim.overrideAt(p, 3)?.activity === 'stations') { G.sim.release(p, 3); G.stations?.sent.delete(p); }   /* red alert: the player's order wins over the stations call (iteration 5); alertStations sends them back once the job is done */ G.sim.redirect(p, l.room, l.spot || 'door', j.left + JOB_WAIT + 60, 'ordered', { prio: 2 }); }
 // how long an ordered person needs to get to the job (the sim's walk / lift estimate): told to the player with the order, since a
 // cross-deck order takes 30-90 s of real walking and riding (docs/pathing.md iteration 3)
 function orderEta(j) {
@@ -1568,6 +1574,9 @@ function riderStep(dt) {
   const r = G.lift?.rider; if (!r) return; r.clock += dt; if (r.h) { r.h.update(dt); liveFace(r.h, G.time, r.person.id * 3.1); }
   for (const e of r.events) if (!e.done && r.clock >= e.t) { e.done = true; e.fn(); }
 }
+// people called forward from the line (e.liftGo) still walking up to the open car: it waits for them (up to 7 s of boarding instead of 4),
+// else they reached the doors as they shut and walked back to the line, a crowd churning at the mouth (iteration 5, Manitoba surge deck)
+const liftCalled = () => { const c = world.car; return !!c && ents.some(e => e.liftGo && e.walk?.vanish && !e.board && Math.hypot(e.x - c.x, e.z - c.z) < 11); };
 function carStep(dt) {
   const c = world.car, L = G.lift; if (!c || G.phase !== 'play') return;
   const dx = P.x - c.x, dz = P.z - c.z, d = Math.hypot(dx, dz), inT = inCarTile(), s = dx * c.dx + dz * c.dy, locked = !!G.fx.liftLocked;
@@ -1576,8 +1585,8 @@ function carStep(dt) {
   if (d > 10) { L.far = true; if (L.rider) clearRider(); } else if (d < 6.5 && L.far) { L.far = false; rollRider(); }   // wander off and the rider is gone; come back and someone may be waiting
   // crew use the car too (simBodies): the doors open for someone walking up or stepping out (npcT), and shut for a moment (shutT) when
   // someone has boarded or is about to arrive while the player looks in — nobody appears or vanishes in an open car
-  L.npcT = Math.max(0, (L.npcT || 0) - dt); L.closedT = world.liftOpen ? 0 : (L.closedT || 0) + dt; if (L.shutT > 0) { L.shutT -= dt; if (inT || L.shutT < 0) L.shutT = 0; } else if (L.boardN && !inT && world.liftOpen && (!(L.npcT > 0) || L.boardW > 4 || L.boardN >= CAR_SLOTS.length)) L.shutT = 1.6;   // boarders leave when nobody else is coming, or after 4 s / a full car even if more are (they wait for the next car)
-  L.boardW = L.boardN ? (L.boardW || 0) + dt : 0; const shut = L.shutT > 0;
+  L.npcT = Math.max(0, (L.npcT || 0) - dt); L.closedT = world.liftOpen ? 0 : (L.closedT || 0) + dt; if (L.shutT > 0) { L.shutT -= dt; if (inT || L.shutT < 0) L.shutT = 0; } else if (L.boardN && !inT && world.liftOpen && ((!(L.npcT > 0) && !liftCalled()) || L.boardW > (liftCalled() ? 7 : 4) || L.boardN >= CAR_SLOTS.length)) L.shutT = 1.6;   // boarders leave when nobody else is coming, or after 4 s / a full car even if more are (they wait for the next car)
+  L.boardW = L.boardN ? (L.boardW || 0) + dt : 0; const shut = L.shutT > 0 || (!!L.boardN && !world.liftOpen && !L.held);   // shut doors with boarders behind them stay shut until the car has gone (closedT > 1.2), not reopen on the queue (iteration 5)
   // the player stands in the open car without using its panel (it keeps the doors open): after a few seconds the crew stop boarding, those
   // inside step back out to wait beside the doors ("We'll take the next one."), and they board once the player is out (docs/pathing.md iteration 4)
   L.inCarT = inT && world.liftOpen ? (L.inCarT || 0) + dt : 0; const held0 = L.held; L.held = L.inCarT > 5;

@@ -133,7 +133,7 @@ export async function walkBrowser(page, fail) {
       const e = idle().find(q => Math.hypot(q.x - P.x, q.z - P.z) < 12 && w.los(P.x, P.z, q.x, q.z)) || idle()[0]; if (e) { P.x = e.x + 1.5; P.z = e.z; if (w.solidAt(P.x, P.z)) P.x = e.x - 1.5; if (e.fid) e.fid.cur = null; g.refuseReact(e.person, `${e.person.short}: "No."`); }
       out.liftWait = { spots: W.length, apart, floor, sides, waited, minD: +minD.toFixed(2), shake: e ? e.fid?.cur?.id || null : 'none' }; }
     // 10) pathing iteration 3: the player watches the open car while up to 7 people leave and one arrives: the doors never shut on an empty car
-    //     while someone walks up to it (the arrival comes when they have boarded), a full car takes nobody from beyond its doorway (6 spots, 7 at most), nobody waits > 10 s in it
+    //     while someone walks up to it (the arrival comes when they have boarded), a full car takes nobody from beyond its doorway (8 spots since iteration 5, 9 at most), nobody waits > 10 s in it
     { const other = Object.keys(G.plan).map(k => G.plan[k].find(s => s.deckNo !== here)).find(Boolean), type = Object.keys(G.plan).find(k => G.plan[k].includes(other)), ppl = idle().slice(0, 7).map(e => e.person);
       const away = [...S.st.values()].find(q => q.deckNo !== here && !q.transit && !q.person.isPlayer && !S.overridden(q.person))?.person, rm = d.rooms.find(r => r.type !== 'jefferies' && G.plan[r.type]?.some(s => s.deckNo === here));
       if (away && rm) S.redirect(away, rm.type, 'door', 600, 'ordered', { prio: 2, site: G.plan[rm.type].find(s => s.deckNo === here) });
@@ -165,6 +165,16 @@ export async function walkBrowser(page, fail) {
     // 13) pathing iteration 4: red alert sends the crew who are off their post to their station (first block of their day, sim priority 3); cleared = released
     { const A = g.alerts; if (A) { A.raise('red', { source: 'debug', reason: 'test' }); tick(12 * 30); const sent = g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations'), ok = sent.every(p => S.overrideOf(p).room === S.data.billets[p.billet].day[0][2] && S.overrideOf(p).prio === 3);
       const mine = sent.filter(p => body(p)), moving = mine.filter(p => body(p).walk?.opts.sim).length; A.clear('red'); tick(3 * 30); out.stations = { sent: sent.length, ok, here: mine.length, moving, left: g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations').length }; } }
+    // 14) pathing iteration 5: red alert vs player orders: someone already carrying an accepted order keeps walking to the job (no stations call);
+    //     an order given during the alert takes the person off their station; once the job is done the stations call picks them up
+    { const A = g.alerts, D = g.duty; if (A && D) { const subs = D.subs().filter(p => S.st.has(p.id) && !D.jobs.some(j => j.person === p)); let a = null, b = null;
+      for (const p of subs) { if (a) break; for (let k = 0; k < 40 && !a; k++) { D.t += 5; const r = D.order(p, null); if (r?.ok && S.overrideOf(p)?.activity === 'ordered') a = p; } }
+      if (a) { A.raise('red', { source: 'debug', reason: 'test' }); tick(12 * 30); const keep = S.overrideOf(a)?.activity === 'ordered' && !G.stations?.sent.has(a);
+        b = g.roster.people.find(p => p !== a && S.overrideOf(p)?.activity === 'stations' && D.subs().includes(p)); let taken = null;
+        if (b) for (let k = 0; k < 40 && taken == null; k++) { D.t += 5; const r = D.order(b, null); if (r?.ok) taken = S.overrideOf(b)?.activity === 'ordered' && !G.stations?.sent.has(b); }
+        for (const j of D.jobs.slice()) if (j.person === a) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(a, 2); tick(10 * 30); const after = S.overrideOf(a)?.activity;
+        A.clear('red'); tick(3 * 30); for (const p of [a, b]) if (p) { for (const j of D.jobs.slice()) if (j.person === p) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(p, 2); }
+        out.alertOrders = { a: !!a, keep, b: !!b, taken, after, left: g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations').length }; } } }
     out.bodies = { n: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, sim: S.bodies(here).size };
     return out;
   });
@@ -180,10 +190,11 @@ export async function walkBrowser(page, fail) {
   if (!(r.keepClear && r.keepClear.n > 0 && r.keepClear.bad === 0)) fail('npc spots keep the lift car clear ' + JSON.stringify(r.keepClear));
   const CC = r.carCycle; if (!(CC && CC.boarded >= Math.min(2, CC.n) && CC.gone === CC.n && CC.minGap >= 0.4 && CC.maxWait < 10)) fail('npc lift boarders spread out and the car cycles ' + JSON.stringify(CC));
   const LW = r.liftWait; if (!(LW && LW.spots >= 2 && LW.apart && LW.floor && LW.sides === 2 && LW.waited !== false && LW.minD > 0.45 && (LW.shake === 'shake_head' || LW.shake === 'none'))) fail('npc lift waiting spots / refusal shake ' + JSON.stringify(LW));
-  const OW = r.oneWindow; if (!(OW && OW.gone === OW.n && OW.arrived !== false && OW.emptyShut === 0 && OW.maxBoard <= 7 && OW.maxWait < 10)) fail('npc lift: board and arrive in one cycle while watched, full car ' + JSON.stringify(OW));
+  const OW = r.oneWindow; if (!(OW && OW.gone === OW.n && OW.arrived !== false && OW.emptyShut === 0 && OW.maxBoard <= 9 && OW.maxWait < 10)) fail('npc lift: board and arrive in one cycle while watched, full car ' + JSON.stringify(OW));
   const FR = r.fullRoom; if (FR && !(FR.n > 0 && FR.minD >= 0.4)) fail('npc full room: people spread over the tiles ' + JSON.stringify(FR));
   const LH = r.liftHeld; if (!(LH && LH.held && (!LH.boarded || LH.stepOut) && LH.inCar === 0 && LH.minGap >= 0.45 && LH.gone === LH.n && LH.maxWait < 10 && (LH.waitN <= LH.nd || LH.inLine > 0 || LH.line === 0))) fail('npc lift: held by the player in the car, crowd waits beside the doors and in a line, then boards ' + JSON.stringify(LH));
   const ST = r.stations; if (ST && !(ST.sent > 0 && ST.ok && ST.left === 0)) fail('npc red alert: crew go to their stations, released on clear ' + JSON.stringify(ST));
+  const AO = r.alertOrders; if (AO && !(AO.keep && (AO.taken == null || AO.taken) && AO.after === 'stations' && AO.left === 0)) fail('npc red alert: ordered crew finish the order, an order takes someone off station, back to station after ' + JSON.stringify(AO));
   if (!(r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim ' + JSON.stringify(r.bodies));
   return r;
 }
