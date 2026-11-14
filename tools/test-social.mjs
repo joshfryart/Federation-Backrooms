@@ -140,6 +140,17 @@ export async function socialTests(fail) {
     ck(fr.every(f => D.trust(f) > plain.trust(f)), 'friends of the player do not start warmer');
     ck(foes.length && foes.every(f => D.trust(f) < plain.trust(f)), 'rivals of the player do not start cooler');
   }
+  // socialui: briefing lines + rumours (gated by trust, never repeated, never about the speaker)
+  {
+    const U = await imp('js/socialui.js'), { roster, g } = make(ship, 12, plan), me = roster.people[2];
+    const L = U.briefLines(g, me); ck(L.length > 0 && L.length <= 5 && L.every(l => l.text && !BAD.test(l.text)), 'briefLines empty or malformed'); ck(U.briefLines(null, me).length === 0, 'briefLines without graph');
+    const gos = roster.people.find(p => p !== me && g.profiles[p.id].gossip) || roster.people[5];
+    ck(U.rumourFor(g, gos, me, 0.05).none, 'rumour given to someone with no trust');
+    const seen = new Set(); let r, n = 0;
+    while ((r = U.rumourFor(g, gos, me, 0.95)).hook && n++ < 60) { ck(!seen.has(r.hook), 'rumour repeated'); seen.add(r.hook); ck(!r.hook.people.includes(gos.id) && !r.hook.people.slice(0, 3).includes(me.id), 'rumour about speaker or asker'); }
+    ck(seen.size > 0 && r.none, 'rumours never ran out / none given to a gossip with high trust');
+    const g2 = make(ship, 12, plan).g, lo = U.rumourFor(g2, gos, me, 0.5); ck(!lo.hook || !lo.hook.secret, 'secret told at middling trust');
+  }
   return { graphs: stats.graphs, medianMs: stats.ms, bridgeVsBaseline: +Math.min(...stats.bridgeRatio).toFixed(1), cargoOut: `${stats.cargoOut}/${stats.cargoSeeds}`, crossRank: `${stats.xrank[0]}/${stats.xrank[1]}`, seedDistance: stats.dist, friendsTogether: stats.together, convene: `${stats.convene[0]}/${stats.convene[1]}`, coupleMeet: `${stats.coupleMeet[0]}/${stats.coupleMeet[1]}`, triangleRuns: stats.tri, campRuns: stats.camps, hooksPerRun: +(stats.hooks / stats.graphs).toFixed(1), billetsWithBrief: `${stats.brief[0]}/${stats.brief[1]}`, billetsSomeoneCool: `${stats.cool[0]}/${stats.cool[1]}`, oneWayPerRun: +(stats.oneWay / stats.graphs).toFixed(1) };
 }
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) { const errs = []; const r = await socialTests(m => errs.push(m)); console.log(errs.length ? errs.slice(0, 40).join('\n') + (errs.length > 40 ? `\n... ${errs.length} failures` : '') : 'social OK ' + JSON.stringify(r)); process.exit(errs.length ? 1 : 0); }
