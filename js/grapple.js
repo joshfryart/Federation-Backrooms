@@ -126,7 +126,7 @@ export class Melee {
   setStance(s, quiet = false) { this.stance = s; if (!quiet) this.C.G.say(s === 'fists' ? 'You square up. [LMB] strike · [RMB] grab / block' : s === 'handsup' ? 'Hands up — you back off. Most people calm down.' : 'You lower your hands.', ''); }
   grab(e) {
     const C = this.C, G = C.G; if (this.g) return false; if (G.carry || C.P.pushing) { G.say(G.carry ? `Hands full — [G] put the ${G.carry.name} down first.` : 'Let go of the cart first.', 'warn'); return false; }
-    const c = this.takeOver(e); c.engT = G.time; const gs = CB.newGrapple(G.player.id, e.person.id); CB.gReach(gs); this.g = { e, gs, keep: true, t: 0 };
+    const c = this.takeOver(e); c.engT = G.time; const gs = CB.newGrapple(G.player.id, e.person.id); CB.gReach(gs); this.g = { e, gs, keep: true, t: 0 }; this.n++;   // each attempt rolls afresh (the grapple step seeds with runSeed + this.n: without the bump a missed grab missed again on every retry)
     G.stamina = Math.max(0, G.stamina - CB.ACTIONS.grab.stamina); if (this.stance !== 'fists') this.stance = 'fists'; this.noise(e, CB.ACTIONS.grab.noise); return true;
   }
   release(why = 'let go') {
@@ -327,12 +327,28 @@ export class Melee {
     const c = e.cb, W = this.C.world, d0 = Math.hypot(tx - e.x, tz - e.z);
     // no clear straight line (a console, a wall corner, a doorway): follow the path field toward the target's tile one tile at a time
     if (d0 > stop + 0.3 && ![[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]].every(([ox, oz]) => W.los(e.x + ox, e.z + oz, tx + ox, tz + oz))) {
-      const [gx, gy] = W.tile(tx, tz), [ex, ey] = W.tile(e.x, e.z), f = this.C.pathField?.(gx, gy); let best = null, bv = f ? f[ex + ey * W.W] : -1;
+      let [gx, gy] = W.tile(tx, tz); const [ex, ey] = W.tile(e.x, e.z);
+      if (W.solid(gx, gy)) {   // the target stands in a prop tile's free margin (beside a console, a bunk): the field of a solid tile leads nowhere, so head for its open side nearest the target
+        const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [gx + a, gy + b]).filter(([x, y]) => !W.solid(x, y)).sort((p, q) => { const [px, pz] = W.center(p[0], p[1]), [qx, qz] = W.center(q[0], q[1]); return Math.hypot(px - tx, pz - tz) - Math.hypot(qx - tx, qz - tz); })[0];
+        if (nb) [gx, gy] = nb;
+      }
+      const f = this.C.pathField?.(gx, gy); let best = null, bv = f ? f[ex + ey * W.W] : -1;
       if (f) for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const v = f[ex + a + (ey + b) * W.W]; if (v >= 0 && (bv < 0 || v < bv)) { bv = v; best = [ex + a, ey + b]; } }
-      if (best) { const [cx, cz] = W.center(best[0], best[1]); const dx = cx - e.x, dz = cz - e.z, d = Math.hypot(dx, dz) || 1, s = Math.min(d, speed * CB.speedMul(c.inj) * dt), q = { x: e.x + dx / d * s, z: e.z + dz / d * s, y: 0 }; W.resolve(q, 0.27); e.x = q.x; e.z = q.z; c.face = Math.atan2(dx, dz); c.moving = speed * CB.speedMul(c.inj); return false; }
+      if (best) { const [cx, cz] = W.center(best[0], best[1]); const dx = cx - e.x, dz = cz - e.z, d = Math.hypot(dx, dz) || 1; this.stepAround(e, dx / d, dz / d, Math.min(d, speed * CB.speedMul(c.inj) * dt)); c.face = Math.atan2(dx, dz); c.moving = speed * CB.speedMul(c.inj); return false; }
     }
     const dx = tx - e.x, dz = tz - e.z, d = Math.hypot(dx, dz); c.face = Math.atan2(dx, dz);
-    if (d <= stop) { c.moving = 0; return true; } const s = Math.min(d - stop, speed * CB.speedMul(c.inj) * dt), q = { x: e.x + dx / d * s, z: e.z + dz / d * s, y: 0 }; this.C.world.resolve(q, 0.27); e.x = q.x; e.z = q.z; c.moving = speed * CB.speedMul(c.inj); return false;
+    if (d <= stop) { c.moving = 0; return true; } this.stepAround(e, dx / d, dz / d, Math.min(d - stop, speed * CB.speedMul(c.inj) * dt)); c.moving = speed * CB.speedMul(c.inj); return false;
+  }
+  // one step along (ux, uz); when a prop or a wall corner swallows most of it, slide round the obstacle (left or right, keeping the side that worked)
+  // instead of pressing into it: a fighter with a console between them and you used to stand there for the whole fight. Tile-level paths cannot see
+  // these: both people can stand in a prop tile's free margin.
+  stepAround(e, ux, uz, s) {
+    const W = this.C.world, c = e.cb, go = (x, z) => { const q = { x: e.x + x * s, z: e.z + z * s, y: 0 }; W.resolve(q, 0.27); return q; };
+    let q = go(ux, uz);
+    if (s > 1e-4 && Math.hypot(q.x - e.x, q.z - e.z) < s * 0.3) {
+      for (const k of [c.side || 1, -(c.side || 1)]) { const sx = -uz * k + ux * 0.35, sz = ux * k + uz * 0.35, n = Math.hypot(sx, sz), q2 = go(sx / n, sz / n); if (Math.hypot(q2.x - e.x, q2.z - e.z) > s * 0.5) { q = q2; c.side = k; break; } }
+    }
+    e.x = q.x; e.z = q.z;
   }
   npcStep(e, dt) {
     const C = this.C, G = C.G, P = C.P, c = e.cb; if (!c) return; if (!C.ents.includes(e)) { this.active.delete(e); return; }
@@ -354,7 +370,7 @@ export class Melee {
         if (c.ai === 'fight' && this.stance === 'handsup' && !c.hostile && c.t > 1) { G.say(`${e.person.short}: "Fine. Stay away from me."`, 'npc'); this.calm(e); break; }
         if (this.ko > 0 && !foe) { if (c.t > 2) { G.say(`${e.person.short}: "Stay down."`, 'npc'); this.calm(e); } break; }
         if ((c.ai === 'fight' && (c.t > 28 || fd > 14)) || (c.ai === 'hostile' && c.t > 90)) { this.calm(e); break; }
-        if (!this.steer(e, fx, fz, fd > 3 ? 3.0 : 1.6, dt, 0.95) && fd > 1.2) break;   // close in (a prop in the way: swing from where they are)
+        if (!this.steer(e, fx, fz, fd > 3 ? 3.0 : 1.6, dt, 0.95) && fd > 1.5) break;   // close in (a prop or a door edge in the way: swing from where they are while still within a long reach; land() checks range + 0.35)
         if (c.cd <= 0 && !(c.one?.t > 0)) this.npcAttack(e, foe);
         break;
       }
