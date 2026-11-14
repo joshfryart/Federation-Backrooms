@@ -160,7 +160,7 @@ function updateHUD() {
   $('stbar').style.width = Math.max(0, G.stamina) + '%';
   const cells = $('cells'); let h = '';
   for (let i = 0; i < G.maxPhaser; i++) h += `<span class="${i < G.phaser ? '' : 'off'}"></span>`; cells.innerHTML = h;
-  if (vm) { vm.cells.forEach((c, i) => c.material.color.set(i < Math.ceil(G.phaser / G.maxPhaser * 3) ? 0x40c8ff : 0x10222c)); vm.ring.material.color.set(G.phaser > 0 ? 0xff9a3a : 0x30180a); }
+  if (vm && !vm.reloading?.()) { vm.cells.forEach((c, i) => c.material.color.set(i < Math.ceil(G.phaser / G.maxPhaser * 3) ? 0x40c8ff : 0x10222c)); vm.ring.material.color.set(G.phaser > 0 ? 0xff9a3a : 0x30180a); }
   const need = world ? world.d.chips.length : 0;
   $('objective').innerHTML = NOM() ? '' : G.chips >= need
     ? `<b>Tubelift online</b> — reach the lift<br>Chips ${G.chips}/${need}`

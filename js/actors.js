@@ -549,12 +549,20 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   const flash = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); flash.position.copy(muzzle.position); flash.scale.set(1, 1, 2.2); g.add(flash);
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
   // per-frame: recoil pitch, vents glowing after a shot, coil idling with the charge, comm screen ticking over
-  let heat = 0, tt = 0; const hot = new THREE.Color(0xff5a14), cold = new THREE.Color(0x1a0c06), base = g.rotation.x;
+  let heat = 0, tt = 0, lastCh = null, rel = 1, sway = 0; const hot = new THREE.Color(0xff5a14), cold = new THREE.Color(0x1a0c06), base = g.rotation.x;
   const tick = (dt, kick = 0, charge = 1) => {
     tt += dt; heat = Math.max(heat - dt * 0.55, kick); ventM.color.copy(cold).lerp(hot, Math.min(1, heat)).multiplyScalar(1 + heat);
     const c = charge > 0 ? 0.55 + 0.25 * Math.sin(tt * 5) + kick * 2 : 0.06; coilM.color.setRGB(1.0 * c, 0.48 * c, 0.13 * c);
     commM.color.setRGB(0.25, 0.78, 1).multiplyScalar(0.7 + 0.3 * (Math.sin(tt * 2.3) > 0.2 ? 1 : 0.4));
-    g.rotation.x = (g.userData.baseRx ?? base) + kick * kick * 0.16;
+    // reload: a fresh cell tips the gun over, seats with a flick, cells light one by one
+    if (lastCh !== null && charge > lastCh) rel = 0; lastCh = charge;
+    if (rel < 1) rel = Math.min(1, rel + dt / 0.9);
+    const rs = Math.sin(Math.PI * Math.min(1, rel * 1.1)), seat = rel > 0.55 && rel < 0.7 ? (0.7 - rel) / 0.15 * 0.05 : 0;
+    if (kick > 0.95) sway = (Math.random() - 0.5) * 0.05;
+    g.rotation.x = (g.userData.baseRx ?? base) + kick * kick * 0.16 - rs * 0.55 + seat;
+    g.rotation.y = sway * kick - rs * 0.4;
+    if (rel < 1) cells.forEach((c, i) => c.material.color.setRGB(0.25, 0.78, 1).multiplyScalar(rel > 0.4 + i * 0.15 ? 1.4 : 0.15));
+    ring.material.color.setRGB(1, 0.6 + 0.2 * rs, 0.23 + 0.5 * rs);
   };
-  return { group: g, muzzle, flash, cells, ring, lens, tick, vents };
+  return { group: g, muzzle, flash, cells, ring, lens, tick, vents, reloading: () => rel < 1 };
 }
