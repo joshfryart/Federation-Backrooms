@@ -1228,11 +1228,11 @@ function step(dt, t) {
   else if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
   else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
-  else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
   if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
   if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
   if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
+  if (!prompt && rp) prompt = `${SYS[rp.sys].name} — nominal`;   // status label last: a junction beside a fixture, clutter or terminal must not hide what [E] does there
   $('prompt').textContent = prompt;
 
   // room label + exploration
@@ -1386,7 +1386,7 @@ function nearestRepair(any = false) {
 }
 function placeRepairPoints(data) {
   repairPts = []; const rnd = mulberry32(G.runSeed * 7 + G.deck * 131);
-  const faces = world.wallFaces.filter(f => { const ox = f.tx + f.dx, oy = f.ty + f.dy; return !f.deco && data.grid[oy]?.[ox] === 0 && !world.isTube(ox, oy) && !(ox === data.exit[0] && oy === data.exit[1]); });
+  const faces = world.wallFaces.filter(f => { const ox = f.tx + f.dx, oy = f.ty + f.dy; return (f.jct || !f.deco) && data.grid[oy]?.[ox] === 0 && !world.isTube(ox, oy) && !(ox === data.exit[0] && oy === data.exit[1]); });
   for (let i = faces.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [faces[i], faces[j]] = [faces[j], faces[i]]; }
   const taken = [], deckCode = String(G.shipDeck + 1).padStart(2, '0');
   const takeFace = (dept) => {

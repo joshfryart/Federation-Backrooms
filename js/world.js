@@ -15,6 +15,7 @@ installIcons();   // U-1 / U-2: the handheld glyphs and the flight / operations 
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
+const JUNCTION_FACES = 21;   // one per ship system (js/crew.js SYSTEMS): wall faces kept bare for repair junctions
 export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
 export const TUBE_UP = 1.7; // floor height of a tube's upper run (reached by ladder)
 const TUBE_SIDE = 0.65;     // thickness of the tube's own side walls: leaves a 1.2 m wide crawlway in a 2.5 m tile
@@ -838,8 +839,18 @@ export class World {
         stripes.push({ px, pz, ry });
         const face = { tx: x, ty: y, dx, dy, px, pz, ry, room: roomT, wall: this.wallKind[x + y * W] }; this.wallFaces.push(face);   // .deco = something already hangs here
         if (this.grid[y + dy][x + dx] === 2) face.deco = true;   // a prop stands against this wall (gen.js wall placements): no fixture, search site or junction behind it
-        if (roll < 0.18) { lcars.push({ px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
-        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push({ px, pz, ry }); face.deco = true; face.win = true; }
+        if (roll < 0.18) { lcars.push(face.lc = { px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
+        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push(face.lc = { px, pz, ry }); face.deco = true; face.win = true; }
+      }
+      // keep wall space for the systems' repair junctions (main.js placeRepairPoints) before any decoration claims it: on small decks the
+      // decor passes used to take every free face and leave systems with no repair point on the deck. Spread out, room faces first; .jct faces stay bare.
+      {
+        const [ex, ey] = d.exit, h = (f) => { const v = Math.sin(f.tx * 12.9898 + f.ty * 78.233 + f.dx * 3.7 + f.dy * 5.3 + d.deck * 1.9) * 43758.5453; return v - Math.floor(v); };
+        const cand = this.wallFaces.filter(f => { const ox = f.tx + f.dx, oy = f.ty + f.dy; return this.grid[oy][ox] === 0 && !this.isTube(ox, oy) && !(ox === ex && oy === ey); }).sort((a, b) => h(a) - h(b));
+        const res = [], ok = (f, gap) => !f.jct && res.every(t => Math.hypot(t.px - f.px, t.pz - f.pz) > gap);
+        for (const gap of [7, 4, 1.5]) for (const rooms of [true, false]) for (const f of cand) { if (res.length >= JUNCTION_FACES) break; if ((!rooms || f.room) && ok(f, gap)) { f.jct = true; res.push(f); } }
+        const drop = new Set(res.map(f => f.lc).filter(Boolean)); if (drop.size) { const keep = (a) => a.filter(o => !drop.has(o)); lcars.splice(0, lcars.length, ...keep(lcars)); windows.splice(0, windows.length, ...keep(windows)); }
+        for (const f of res) { f.deco = true; f.win = false; delete f.lc; }
       }
       const sg = new THREE.PlaneGeometry(TS, 0.14);
       const sm = new THREE.InstancedMesh(sg, new THREE.MeshBasicMaterial({ color: 0xffffff }), stripes.length || 1);
