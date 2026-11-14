@@ -22,6 +22,8 @@ import { unitTests as commsUnit, hudTests as commsHud } from './test-comms.mjs';
 await commsUnit(fail);
 import { simTests } from './test-sim.mjs';
 await simTests(fail);
+import { walkTests, walkBrowser } from './test-walk.mjs';   // NPC walking between schedule blocks: sim.bodies, lift, sealed doors, friends (tools/test-walk.mjs)
+await walkTests(fail);
 import { dutyTests } from './test-duty.mjs';
 await dutyTests(fail);
 import { socialTests } from './test-social.mjs';   // social tracker + sim/duty hooks (tools/test-social.mjs)
@@ -250,7 +252,7 @@ const nom = await page2.evaluate(async () => {
   const G = g.G, D = G.ship.decks;
   out.start = { mode: G.mode, deck: G.deck, shipDeck: G.shipDeck, inCar: g.inCarTile(), decks: G.shipDecks.length, D, director: g.director, auto: g.shipState.auto, objective: getComputedStyle(document.getElementById('objective')).display };
   tick(900);   // 30 s: nothing hostile, no madness, no faults
-  out.calm = { gorns: g.gorns.length, mad: G.mad, faults: g.shipState.faulted().length, hostileEnts: g.ents.filter(e => e.fake || e.kind === 'body').length, simBodies: g.ents.filter(e => e.simmed).length, simHere: g.sim.onDeck(G.shipDeck + 1).length };
+  out.calm = { gorns: g.gorns.length, mad: G.mad, faults: g.shipState.faulted().length, hostileEnts: g.ents.filter(e => e.fake || e.kind === 'body').length, simBodies: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, simHere: g.sim.bodies(G.shipDeck + 1).size };   // bodies on their way into the lift have already left in the sim
   if (out.calm.simBodies > out.calm.simHere || (out.calm.simHere && !out.calm.simBodies)) out.simBad = out.calm;
   // walk out and back in: doors open as you approach, the panel opens when you step into the car
   const w = g.world, c = w.car; const far = (k) => { P.x = c.x + c.dx * k; P.z = c.z + c.dy * k; P.vx = P.vz = 0; };
@@ -281,7 +283,7 @@ const nom = await page2.evaluate(async () => {
       G.phase = 'play'; const w = g.world, e = g.ents.find(x => x.simmed); out.walk = { have: !!e };
       if (e) { const tiles = w.d.openTiles.filter(([x, y]) => w.d.grid[y][x] === 0 && !w.isTube(x, y)), here = w.tile(e.x, e.z), f0 = w.field(here[0], here[1], true);
         const far = tiles.filter(([x, y]) => f0[x + y * w.W] > 8 && f0[x + y * w.W] < 30)[0]; out.walk.far = !!far;
-        if (far) { const f = g.pathField(far[0], far[1]), d0 = f[here[0] + here[1] * w.W]; P.x = e.x + 3; P.z = e.z; g.startWalk(e, far[0], far[1], false); tick(240); const now = w.tile(e.x, e.z), d1 = f[now[0] + now[1] * w.W]; out.walk.d0 = d0; out.walk.d1 = d1; out.walk.closer = d1 < d0 || !e.walk; out.walk.inside = w.d.grid[now[1]][now[0]] === 0; tick(900); const fin = w.tile(e.x, e.z); out.walk.gait = g.describeGait(g.gaitFor(e) && e.gaitBase); out.walk.fid = e.fid?.hist.length || 0; out.walk.add = !!e.mesh.userData.human.add; out.walk.arrived = !e.walk && fin[0] === far[0] && fin[1] === far[1]; } }
+        if (far) { const f = g.pathField(far[0], far[1]), d0 = f[here[0] + here[1] * w.W]; P.x = e.x + 3; P.z = e.z; g.startWalk(e, far[0], far[1], false); tick(240); const now = w.tile(e.x, e.z), d1 = f[now[0] + now[1] * w.W]; out.walk.d0 = d0; out.walk.d1 = d1; out.walk.closer = d1 < d0 || !e.walk; out.walk.inside = w.d.grid[now[1]][now[0]] === 0; const tw = e.walk; for (let i = 0; i < 900 && e.walk === tw && tw; i++) tick(1); const fin = w.tile(e.x, e.z);   /* until this walk ends: afterwards the sim may walk the body back to its spot */ out.walk.gait = g.describeGait(g.gaitFor(e) && e.gaitBase); out.walk.fid = e.fid?.hist.length || 0; out.walk.add = !!e.mesh.userData.human.add; out.walk.arrived = e.walk !== tw && fin[0] === far[0] && fin[1] === far[1]; } }
     }
     { // running, dodging, crawling through tubes and climbing ladders, evacuation
       G.phase = 'play'; const di = G.shipDecks.findIndex((d, i) => d.data.tubes.some(tb => tb.tiles.length >= 3 && tb.ladder > 0) && g.sim.onDeck(i + 1).length > 1); if (di >= 0 && di !== G.shipDeck) { g.loadDeck(di + 1); tick(5); G.phase = 'play'; } g.simBodies(0, true);
@@ -333,7 +335,7 @@ const nom = await page2.evaluate(async () => {
     }
     { // sliding doors, clutter pick-up, terminal and talk menus
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
-      if (dr) { w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2; }
+      if (dr) { w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2;  w.setDoorLock(true); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.sealed = dr.open < 0.2; const q = { x: dr.f.x + (dr.f.ax ? 0.3 : 0), z: dr.f.z + (dr.f.ax ? 0 : 0.3), y: 0 }; w.resolve(q, 0.3); out.doors2.blocked = dr.f.ax ? q.x > dr.f.x + 0.3 : q.z > dr.f.z + 0.3; let pr = 0; for (let i = 0; i < 14; i++) pr = Math.max(pr, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.pried = pr >= 1 && dr.open > 0.5; w.setDoorLock(false); }
       const c = w.clutter[0], n0 = w.clutter.length; out.clutter = { took: c ? w.takeClutter(c) : null, left: w.clutter.length === n0 - 1 };
       G.phase = 'play'; g.shipState.repair('computer'); g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
       const ppl = g.sim.onDeck(G.shipDeck + 1)[0]; if (ppl) { g.talkMenu({ person: ppl.person }); out.talk = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu(); }
@@ -345,7 +347,7 @@ const nom = await page2.evaluate(async () => {
 });
 console.log('nominal:', JSON.stringify(nom));
 { const n = nom, D = n.start.D, ok = n.start.mode === 'nominal' && n.start.deck === 1 && n.start.shipDeck === 0 && n.start.inCar && n.start.decks === D && n.start.director === null && n.start.auto === false && n.start.objective === 'none'
-    && !n.simBad && n.billet.isPlayer && n.billet.loops > 0 && n.billet.hud && n.duty.ok && n.duty.quick.after === 'doing' && n.phases.index >= 3 && n.phases.mode && n.dead.shown && n.dead.btns >= 2 && n.cont.phase === 'play' && n.cont.changed && n.cont.newIsPlayer && n.cont.oldDead === 'dead' && n.cont.hp > 0 && n.cont.same && (!n.walk.far || (n.walk.add && n.walk.closer && n.walk.inside && n.walk.arrived)) && n.move2.have > 1 && (n.move2.tubes > 0 && n.move2.tube && (n.move2.tube.done && n.move2.tube.clips.includes('crouch_fwd'))) && n.move2.dodge.started && n.move2.walkNoScatter !== false && n.move2.dodge.run && n.move2.dodge.moved > 0.6 && n.move2.dodge.back < 1.3 && n.move2.evac > 3 && n.doors2.n > 0 && n.doors2.open && n.doors2.shut && n.clutter.took && n.clutter.left && n.term.open && n.term.rows >= 4 && (!n.talk || (n.talk.open && n.talk.rows >= 4)) && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
+    && !n.simBad && n.billet.isPlayer && n.billet.loops > 0 && n.billet.hud && n.duty.ok && n.duty.quick.after === 'doing' && n.phases.index >= 3 && n.phases.mode && n.dead.shown && n.dead.btns >= 2 && n.cont.phase === 'play' && n.cont.changed && n.cont.newIsPlayer && n.cont.oldDead === 'dead' && n.cont.hp > 0 && n.cont.same && (!n.walk.far || (n.walk.add && n.walk.closer && n.walk.inside && n.walk.arrived)) && n.move2.have > 1 && (n.move2.tubes > 0 && n.move2.tube && (n.move2.tube.done && n.move2.tube.clips.includes('crouch_fwd'))) && n.move2.dodge.started && n.move2.walkNoScatter !== false && n.move2.dodge.run && n.move2.dodge.moved > 0.6 && n.move2.dodge.back < 1.3 && n.move2.evac > 3 && n.doors2.n > 0 && n.doors2.open && n.doors2.shut && n.doors2.sealed && n.doors2.blocked && n.doors2.pried && n.clutter.took && n.clutter.left && n.term.open && n.term.rows >= 4 && (!n.talk || (n.talk.open && n.talk.rows >= 4)) && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
     && n.doors.nearOpen && n.doors.farShut && n.walkIn.phase === 'select' && n.walkIn.rows.length === D && /^1Deck 1 — Command · Bridge/.test(n.walkIn.rows[0]) && n.cancel === 'play'
     && n.down.to === D - 1 && n.down.secs >= 7.5 && n.down.secs <= 9 && n.down.inCar && n.down.indicator >= D - 1 && n.down.shaken
     && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
@@ -432,6 +434,7 @@ await vpage.goto(`http://localhost:${port}/voices.html?ship=3&seed=2`); await vp
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
 console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && vp.chips > vp.rows * 8 && /\[/.test(vp.said) && vp.eng > 0 && vp.eng < vp.total)) fail('voices.html');
 await navBrowser(page2, fail);
+await walkBrowser(page2, fail);
 await commsHud(page2, fail);
 await uiBrowser(page2, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
 await talkBrowser(page2, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)

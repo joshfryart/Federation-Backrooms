@@ -7,6 +7,8 @@
 //   sim.tick(dt)            real seconds; dispatches 'depart' / 'arrive' events
 //   sim.where(person)       { deckNo, room, spot, activity, transit }  (deckNo null while riding the lift)
 //   sim.onDeck(deckNo)      [{ person, room, spot, activity, tx, ty }] people standing on that deck right now
+//   sim.bodies(deckNo)      Map id -> { person, room, spot, activity, tx, ty, free, walking } for the body layer: everyone standing on the deck
+//                           plus those walking between two rooms of it (already listed at their destination); lift riders are on neither deck
 //   sim.setPlayer(p)        the player is not simulated
 //   sim.redirect(p, room, spot, secs, activity, { prio, site })  priority overrides (evac 3 / orders 2 / repair 1); overrideOf(p), release(p[, prio])
 //   Pace (js/pace.js): schedule blocks follow ShipClock.localHour, so the clock's pace rate stretches the schedule; transits stay real seconds.
@@ -16,7 +18,7 @@ import { hash, hash01 } from './clock.js';
 import { freeBlock } from './social.js';
 
 const DEAD = new Set(['dead', 'corpse', 'crazed', 'evacuated']);
-export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5;   // real seconds in transit
+export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5, WALK_MAX = 20, TILE_S = 2.5 / 1.3;   // real seconds in transit; a walk on one deck takes about as long as the body needs (tiles * 2.5 m / 1.3 m/s), 3..20 s
 
 export class CrewSim {
   constructor({ roster, clock, plan, data, seed = 1, decks = 8 }) {
@@ -65,11 +67,15 @@ export class CrewSim {
   _init(p) {
     if (p === this.player || DEAD.has(p.status)) return;
     const b = this.block(p) || { room: 'quarters', spot: 'bunk', activity: 'idle' }, s = this.site(p, b.room, null, b);
-    this.st.set(p.id, { person: p, deckNo: s.deckNo, tx: s.tx, ty: s.ty, room: b.room, spot: b.spot, activity: b.activity, transit: null, target: null });
+    this.st.set(p.id, { person: p, deckNo: s.deckNo, tx: s.tx, ty: s.ty, room: b.room, spot: b.spot, activity: b.activity, free: !!b.free, transit: null, target: null });
   }
   where(p) { const s = this.st.get(p.id); return s ? { deckNo: s.transit?.lift ? null : s.deckNo, room: s.transit ? (s.transit.lift ? 'lift' : 'corridor') : s.room, spot: s.spot, activity: s.activity, transit: !!s.transit } : null; }
   onDeck(deckNo) {
     const out = []; for (const s of this.st.values()) if (s.deckNo === deckNo && !s.transit && !DEAD.has(s.person.status)) out.push({ person: s.person, room: s.room, spot: s.spot, activity: s.activity, tx: s.tx, ty: s.ty });
+    return out;
+  }
+  bodies(deckNo) {
+    const out = new Map(); for (const s of this.st.values()) { const t = s.transit; if (s.deckNo !== deckNo || t?.lift || DEAD.has(s.person.status)) continue; const a = t ? { ...t, tx: t.to.tx, ty: t.to.ty } : s; out.set(s.person.id, { person: s.person, room: a.room, spot: a.spot, activity: a.activity, tx: a.tx, ty: a.ty, free: !!a.free, walking: !!t }); }
     return out;
   }
   inTransit() { return [...this.st.values()].filter(s => s.transit).map(s => ({ person: s.person, from: s.transit.from, to: s.transit.to, lift: s.transit.lift })); }
@@ -97,18 +103,19 @@ export class CrewSim {
     // finish trips
     for (const s of this.st.values()) {
       if (!s.transit) continue; s.transit.eta -= dt;
-      if (s.transit.eta <= 0) { const t = s.transit; s.transit = null; Object.assign(s, { deckNo: t.to.deckNo, tx: t.to.tx, ty: t.to.ty, room: t.room, spot: t.spot, activity: t.activity }); this.log.push(`arrive:${s.person.id}:${t.to.deckNo}:${t.room}`); this._emit('arrive', { person: s.person, deckNo: s.deckNo, room: s.room, spot: s.spot, activity: s.activity, from: t.from }); }
+      if (s.transit.eta <= 0) { const t = s.transit; s.transit = null; Object.assign(s, { deckNo: t.to.deckNo, tx: t.to.tx, ty: t.to.ty, room: t.room, spot: t.spot, activity: t.activity, free: t.free }); this.log.push(`arrive:${s.person.id}:${t.to.deckNo}:${t.room}`); this._emit('arrive', { person: s.person, deckNo: s.deckNo, room: s.room, spot: s.spot, activity: s.activity, from: t.from }); }
     }
     this.acc += dt; if (this.acc < 0.5) return; this.acc = 0;
     // new schedule blocks: a different room (or spot) sends the person there
     for (const s of this.st.values()) {
-      const p = s.person; if (s.transit || DEAD.has(p.status)) { if (DEAD.has(p.status)) this.st.delete(p.id); continue; }
+      const p = s.person; if (s.transit?.lift || DEAD.has(p.status)) { if (DEAD.has(p.status)) this.st.delete(p.id); continue; }
       const b = this.block(p); if (!b) continue;
       const dest = this.site(p, b.room, s.deckNo, b);
-      if (b.room === s.room && b.spot === s.spot && ((!this.social && !b.site) || (dest.deckNo === s.deckNo && dest.tx === s.tx && dest.ty === s.ty))) { s.activity = b.activity; continue; }
+      if (s.transit) { const t = s.transit; if (b.room === t.room && b.spot === t.spot && dest.deckNo === t.to.deckNo && dest.tx === t.to.tx && dest.ty === t.to.ty) continue; s.transit = null; }   // walking on this deck and the plan changed (orders, an alert, a repair call): turn round at once
+      if (b.room === s.room && b.spot === s.spot && ((!this.social && !b.site) || (dest.deckNo === s.deckNo && dest.tx === s.tx && dest.ty === s.ty))) { s.activity = b.activity; s.free = !!b.free; continue; }
       const lift = dest.deckNo !== s.deckNo;
-      const eta = lift ? LIFT_BASE + LIFT_PER_DECK * Math.abs(dest.deckNo - s.deckNo) + hash01('eta', this.seed, p.id, b.room) * 2 : WALK_TIME * (0.6 + hash01('walk', this.seed, p.id, b.room));
-      s.transit = { lift, eta, from: { deckNo: s.deckNo, room: s.room }, to: dest, room: b.room, spot: b.spot, activity: b.activity };
+      const eta = lift ? LIFT_BASE + LIFT_PER_DECK * Math.abs(dest.deckNo - s.deckNo) + hash01('eta', this.seed, p.id, b.room) * 2 : Math.min(WALK_MAX, Math.max(3, (Math.abs(dest.tx - s.tx) + Math.abs(dest.ty - s.ty)) * TILE_S || WALK_TIME)) * (0.9 + 0.2 * hash01('walk', this.seed, p.id, b.room));
+      s.transit = { lift, eta, from: { deckNo: s.deckNo, room: s.room }, to: dest, room: b.room, spot: b.spot, activity: b.activity, free: !!b.free };
       this.log.push(`depart:${p.id}:${s.deckNo}->${dest.deckNo}:${b.room}`); this._emit('depart', { person: p, from: s.deckNo, to: dest.deckNo, room: b.room, lift });
     }
     if (this.log.length > 400) this.log.splice(0, this.log.length - 400);

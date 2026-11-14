@@ -582,6 +582,7 @@ export class World {
         if (prop && (p.y || 0) >= this.topAt(x, y) - 0.03) continue;   // standing on / passing over a climbable prop
         const half = prop ? TS * 0.36 : TS / 2; push(cx, cz, half, half);
       }
+      if (this.doorLock && this.doors) for (const d of this.doors) { if (d.open > 0.5 || Math.abs(d.f.x - p.x) > TS || Math.abs(d.f.z - p.z) > TS) continue; d.f.ax ? push(d.f.x, d.f.z, 0.06, (TS - 0.52) / 2) : push(d.f.x, d.f.z, (TS - 0.52) / 2, 0.06); }   // sealed doors (power out) are solid
     }
   }
 
@@ -1143,7 +1144,8 @@ export class World {
       const lamp = inst(new Kit().box(0.02, 0.05, 1.3, 0, 0, 0xffffff, -0.65).done().solid, m.kitGlow, fr.flatMap(f => [-1, 1].map(s => ({ f, s }))), ({ f, s }, o) => { o.position.set(f.x + (f.ax ? s * 0.16 : 0), WH - 0.13, f.z + (f.ax ? 0 : s * 0.16)); o.rotation.y = f.ax ? 0 : Math.PI / 2; return new THREE.Color(ROOM_LIGHT[f.room] || 0xffffff).multiplyScalar(1.7); });
       if (lamp) lamp.receiveShadow = false;
       // sliding door leaves: two panels per doorway that part when someone walks up (World.slideDoors, driven by main.js)
-      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }), hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
+      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.roughness = 1; dm.metalness = 1; dm.color.set(0xb0b8c4); } }
+        const hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
         this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false }; }); }
     }
     // --- window frames with depth and a glass pane
@@ -1211,6 +1213,11 @@ export class World {
   setFancy(on) { this.cones.visible = on; }
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
+  setDoorLock(on) { if (this.doorLock === on) return; this.doorLock = on; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }
+  // nearest sealed door within reach of (px, pz), or null
+  sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
+  // hold E at a sealed door: ~3 s to force it, then it stays open 15 s. Returns progress 0..1 (or -1 when nothing to pry)
+  pryDoor(px, pz, dt) { const d = this.sealedDoorNear(px, pz); if (!d) return -1; d.prying = true; d.pry = (d.pry || 0) + dt; if (d.pry >= 3) { d.pried = 15; d.pry = 0; return 1; } return d.pry / 3; }
 
   setLiftOpen(open, keepWalkable = false) {
     this.liftStatus.material.color.set(open ? 0x40ff70 : 0xff3030);
@@ -1262,12 +1269,15 @@ export class World {
 
   // pick a piece of clutter up: hide its instance and drop it from the look list
   takeClutter(c) { if (c.gone) return false; c.gone = true; if (c.inst) { const d = new THREE.Object3D(); d.scale.set(0, 0, 0); d.updateMatrix(); c.inst.im.setMatrixAt(c.inst.i, d.matrix); c.inst.im.instanceMatrix.needsUpdate = true; } const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
-  // doors part for the player (and anyone in `who`, [{x, z}]) within reach and close again behind them
+  // doors part for the player (and anyone in `who`, [{x, z, w}]) within reach and close again behind them. Sealed doors (doorLock) stay shut
+  // for everyone; a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player pried)
   slideDoors(dt, px, pz, who = [], onOpen = null) {
     if (!this.doors) return; const k = Math.min(1, dt * 7);
     for (const d of this.doors) {
-      const dx = d.f.x - px, dz = d.f.z - pz; let near = dx * dx + dz * dz < 2.7 * 2.7;
-      if (!near) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
+      if (d.pried > 0) d.pried -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
+      const dx = d.f.x - px, dz = d.f.z - pz; const sealed = this.doorLock && !(d.pried > 0); let near = !sealed && dx * dx + dz * dz < 2.7 * 2.7;
+      if (sealed && d.open < 0.5) { let at = false; for (const w of who) if (w.w) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.6 * 1.6) { at = true; break; } } d.npry = at ? (d.npry || 0) + dt : 0; if (d.npry > 2.5) { d.npry = 0; d.pried = 10; } }
+      if (!near && !sealed) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
       if (near && !d.near && dx * dx + dz * dz < 14 * 14) onOpen?.(Math.hypot(dx, dz)); d.near = near;
       const target = near ? 1 : 0; if (Math.abs(d.open - target) < 0.002) continue; d.open += (target - d.open) * k;
       const o = d.open * (d.hw - 0.04); d.L.position.z = -d.hw / 2 - o; d.R.position.z = d.hw / 2 + o;

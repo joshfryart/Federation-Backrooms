@@ -32,13 +32,13 @@ export function opStart(e) {
   // logical position (e.x/e.z: paths, dodging, line of sight) stays on the walkable tile, as close to the use point as it allows; only the mesh goes onto the use point
   { let [tx, ty] = W.tile(e.x, e.z); if (W.solid(tx, ty)) { const n = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [tx + a, ty + b]).find(([x, y]) => !W.solid(x, y)); if (n) [tx, ty] = n; }
     const [cx, cz] = W.center(tx, ty), k = 0.95; e.opAnchor = [cx + Math.max(-k, Math.min(k, goal.x - cx)), cz + Math.max(-k, Math.min(k, goal.z - cz))]; e.x = e.opAnchor[0]; e.z = e.opAnchor[1]; }
-  if (Math.hypot(C.P.x - e.x, C.P.z - e.z) > 10) { e.mesh.position.x = goal.x; e.mesh.position.z = goal.z; e.mesh.rotation.y = goal.yaw; }
+  e.ease = null; { const pd = Math.hypot(C.P.x - e.x, C.P.z - e.z); if (pd > 22 || (pd > 10 && !W.los(C.P.x, C.P.z, e.x, e.z))) { e.mesh.position.x = goal.x; e.mesh.position.z = goal.z; e.mesh.rotation.y = goal.yaw; } }   // out of sight: snap onto the use point; in sight: shuffle over (opHook)
   const o = e.op.update(0); H.play(H.has(o.clip) ? o.clip : 'idle', { fade: 0.3 }); H.standing = false; e.walking = false; e.opClip = o.clip;
   return true;
 }
 export function opEnd(e) {
   const H = e.mesh?.userData.human; if (H) { for (const h of ['hand_r', 'hand_l']) if (e.opHeld?.[h]) dropItem(H, h); H.add = null; }
-  e.op = null; e.opGoal = null; e.opHeld = null; e.seatDY = null; if (e.mesh) { e.mesh.position.y = e.y || 0; e.mesh.position.x = e.x; e.mesh.position.z = e.z; }
+  e.op = null; e.opGoal = null; e.opHeld = null; e.seatDY = null; if (e.mesh) { const mp = e.mesh.position, ox = mp.x - e.x, oz = mp.z - e.z, q = ox * ox + oz * oz; mp.y = e.y || 0; if (q > 0.01 && q < 4 && Math.hypot(C.P.x - e.x, C.P.z - e.z) < 22) e.ease = [ox, oz]; else { e.ease = null; mp.x = e.x; mp.z = e.z; } }   // near the player the mesh eases back from the seat / use point (main loop), else it snaps
 }
 // the additive layer while operating / pushing / carrying. true = handled (fidgetStep returns)
 export function opHook(e, dt, d) {
