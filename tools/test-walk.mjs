@@ -29,8 +29,8 @@ export async function walkTests(fail) {
   let job = null; for (const s of duty.subs()) { for (let k = 0; k < 40 && !job; k++) { duty.t += 5; const r = duty.order(s, null); if (r.ok) job = r.job; } if (job) break; }
   let order = null; if (ck(job, 'an order was obeyed')) { const left0 = job.left; for (let i = 0; i < 60; i++) duty.tick(0.5); const held = job.left === left0 && duty.jobs.includes(job); there = true; for (let i = 0; i < left0 * 2 + 4; i++) duty.tick(0.5); const done = !duty.jobs.includes(job);
     there = false; const r2 = (() => { for (const s of duty.subs()) for (let k = 0; k < 40; k++) { duty.t += 5; const r = duty.order(s, null); if (r.ok) return r; } return null; })(); let waited = 0; while (r2 && duty.jobs.includes(r2.job) && waited < D.JOB_WAIT + r2.job.left + 30) { duty.tick(0.5); waited += 0.5; }
-    order = { held, done, evJob: evs.some(e => e.type === 'ordered' && e.job === job) && evs.some(e => e.type === 'jobdone' && e.job === job), timeout: !r2 || waited >= D.JOB_WAIT };
-    ck(order.held && order.done && order.evJob && order.timeout, 'ordered job clock waits for arrival ' + JSON.stringify(order)); }
+    order = { held, done, evJob: evs.some(e => e.type === 'ordered' && e.job === job) && evs.some(e => e.type === 'jobdone' && e.job === job), atjob: evs.filter(e => e.type === 'atjob' && e.job === job).length === 1, timeout: !r2 || waited >= D.JOB_WAIT };
+    ck(order.held && order.done && order.evJob && order.atjob && order.timeout, 'ordered job clock waits for arrival ' + JSON.stringify(order)); }
   // pathing iteration 2: the sim waits for the body (holdBody), at most HOLD_MAX past its estimate; with `lifts` a lift trip ends with a walk
   // leg from the car on the new deck; a refusal carries the person (the body reacts on screen)
   const { HOLD_MAX } = await imp('js/sim.js'); let hold = null;
@@ -44,9 +44,15 @@ export async function walkTests(fail) {
     }
     hold = { heldPast, released, secs: who?.secs, legs, legOk, rideFloor };
     ck(who && heldPast && released && legs > 0 && legOk && rideFloor, 'sim waits for the body and walks from the lift car ' + JSON.stringify(hold)); }
+  // pathing iteration 3: sim.estimate (told to the player with an order): 0 where they are, a walk on the same deck, walk + ride + walk to another deck
+  let est = null; { const decks = G.genShip(ship, seed), plan3 = G.shipPlan(ship, seed, decks), clock3 = new K.ShipClock({ seed }); clock3.assign(roster);
+    const s3 = new CrewSim({ roster, clock: clock3, plan: plan3, data, seed, decks: ship.decks, lifts: decks.map(x => x.exit) }), q = [...s3.st.values()].find(x => !x.transit), p = q.person;
+    const other = Object.keys(plan3).find(k => plan3[k].length && plan3[k].every(x => x.deckNo !== q.deckNo)), same = Object.keys(plan3).find(k => k !== q.room && plan3[k].some(x => x.deckNo === q.deckNo) && s3.site(p, k, q.deckNo, { room: k }).deckNo === q.deckNo);
+    est = { here: s3.estimate(p, q.room), same: same ? +s3.estimate(p, same).toFixed(1) : null, other: other ? +s3.estimate(p, other).toFixed(1) : null };
+    ck(est.here === 0 && (est.same == null || (est.same >= 3 && est.same <= WALK_MAX)) && (est.other == null || est.other > 3.5 + 1) && (est.same == null || est.other == null || est.other > est.same - WALK_MAX), 'sim.estimate ' + JSON.stringify(est)); }
   let refusal = null; { const evs2 = []; duty.on(ev => evs2.push(ev)); for (const s of duty.subs()) for (let k = 0; k < 60 && !evs2.some(e => e.type === 'refused'); k++) { duty.t += 5; const r = duty.order(s, null); if (r.ok) duty.jobs.splice(duty.jobs.indexOf(r.job), 1); }
     const ev = evs2.find(e => e.type === 'refused'); refusal = ev ? !!ev.person && ev.person.short === ev.who : 'none'; ck(refusal !== false, 'a refusal carries the person'); }
-  return { walkers, riders, maxEta: +maxEta.toFixed(1), order, hold, refusal };
+  return { walkers, riders, maxEta: +maxEta.toFixed(1), order, hold, est, refusal };
 }
 
 export async function walkBrowser(page, fail) {
