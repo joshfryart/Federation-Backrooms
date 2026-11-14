@@ -1,5 +1,6 @@
 // In-world hardware for ship systems: wall-mounted maintenance junction panels with a readable label and a status lamp.
 import * as THREE from 'three';
+import { makeJunctionOpen, setJunctionOpen } from './propart-plant.js';
 
 const STATUS = { nominal: new THREE.Color(0.25, 1.4, 0.55), degraded: new THREE.Color(1.6, 0.9, 0.15), offline: new THREE.Color(1.8, 0.18, 0.12) };
 let shared = null;
@@ -24,8 +25,18 @@ function labelTex(name, code, deptName, color) {
   g.fillStyle = '#8a96a8'; g.font = '12px monospace'; g.fillText(`${code} · ${deptName.toUpperCase()}`, 12, 132);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
-// returns { group, lamp } — group's +Z faces out of the wall
+// returns { group, lamp, door } — group's +Z faces out of the wall. ENG-2 cabinet (js/propart-plant.js): a hinged door carrying the label over a dead-front,
+// breakers and one insert module per system (power tap, fan cartridge, valve manifold, relay cards, field coil). Built closed; the status lamp rides on the
+// door so it stays in view. setJunctionDoor(j, t) swings it (t 0 shut .. 1 open, the door then sticks 0.6 m out of the wall).
 export function makeJunction(sys, code, deptName, color) {
+  const j = makeJunctionOpen(sys, code, deptName, color, 0), door = j.door, lamp = j.lamp;
+  lamp.removeFromParent(); lamp.position.set(0.53, 0.38, 0.0175); door.add(lamp);   // was at (0.22, 0.38, 0.1) inside the cabinet, behind the shut door
+  j.group.userData.junction = { door, open: 0, want: 0 };
+  return { group: j.group, lamp, door, insert: j.insert };
+}
+export function setJunctionDoor(j, t) { setJunctionOpen({ door: j.door || j.userData?.junction?.door }, t); }
+// the old plain box (no door): kept for anything that wants the flat panel
+export function makeJunctionPlain(sys, code, deptName, color) {
   const m = mats(), g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.86, 0.09), m.box); body.position.z = 0.045; g.add(body);
   const lt = labelTex(sys.name, code, deptName, color);

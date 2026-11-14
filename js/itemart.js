@@ -14,6 +14,8 @@
 //   ITEM_KINDS (ordered list), ITEM_INFO[kind] = { name, cls, frame, lie }, kindForName(name, shape) -> kind  (keyword map for ship-items.json names)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { DEFS_GALLEY, KW_GALLEY } from './itemart-galley.js';     // batch 2: ladle, stockpot, fryingpan
+import { DEFS_MEDICAL, KW_MEDICAL } from './itemart-medical.js';  // batch 4: stretcher, iv_bag, forceps, kidney_dish, bandage
 
 const PI = Math.PI;
 const HAS_DOM = typeof document !== 'undefined';
@@ -329,6 +331,7 @@ def('crowbar', 'pry bar', 'tool', (g, M) => {
   g.add(rb(0.036, 0.05, 0.008, 0.002, M.steel, 0.0, -0.2, 0, 1)); g.add(bx(0.003, 0.03, 0.01, M.dark, 0.062, 0.462, 0));
 }, { lie: true });
 
+Object.assign(DEFS, DEFS_GALLEY, DEFS_MEDICAL);   // art batches keep their rows in their own files (docs/propart-galley.md, docs/propart-medical.md)
 
 export const ITEM_KINDS = Object.keys(DEFS);
 export const ITEM_INFO = Object.fromEntries(ITEM_KINDS.map(k => [k, { name: DEFS[k].name, cls: DEFS[k].cls, frame: DEFS[k].base ? 'base' : 'grip', lie: !!DEFS[k].lie }]));
@@ -388,6 +391,7 @@ const KW = [
   [/box|carton|parts|spares|kit\b|bagged|pack\b|set\b|stock|refill|supply|supplies|bundle/i, 'smallbox'],
   [/spare|part\b|module|unit\b|assembly|bracket|valve|pump|filter|gear|motor|actuator|emitter|node|panel|insert|fitting|bearing|gasket|nozzle|piston|sensor/i, 'part'],
 ];
+KW.unshift(...KW_MEDICAL, ...KW_GALLEY);   // before the generic rows: 'dressing', 'clamp', 'tubing', 'pot', 'pan' would otherwise match crate_med / tool / hose / canister first
 const BY_SHAPE = [['smallbox', 'case', 'part', 'smallbox', 'crate_hazard', 'circuit'], ['canister', 'bottle', 'mug', 'canister', 'bottle', 'vial'], ['clipboard', 'padd', 'book', 'circuit', 'clipboard', 'book']];
 export function kindForName(name = '', shape = 0, hash = 0) {
   for (const [re, k] of KW) if (re.test(name)) return k;

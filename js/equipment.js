@@ -22,10 +22,10 @@ const wait = (dur, x = {}) => ({ g: null, dur, ...x });
 //      0.41 m behind the root, so a seat at s puts the root 0.41 m ahead of it, feet under the table); the nearest one to where the person
 //      walked in from is used, else a point just outside `box` [x0, x1, z0, z1] (+ gap) on the side they came from, facing the prop.
 export const EQUIPMENT = {
-  console: { name: 'ops console', props: ['console'], stance: 'stand', box: [-0.85, 0.85, -0.38, 0.38], gap: 0.32, spots: [[0, 0.72, PI], [-0.5, 0.72, PI], [0.5, 0.72, PI]],
+  console: { name: 'ops console', props: ['console', 'baycontrol', 'beampedestal', 'holodesk', 'secdesk', 'nursestation'], stance: 'stand', box: [-0.85, 0.85, -0.38, 0.38], gap: 0.32, spots: [[0, 0.72, PI], [-0.5, 0.72, PI], [0.5, 0.72, PI]],
     steps: [st('tap_console', [2, 3.4], { cue: 'beep' }), st('lean_in', [2.5, 4], { pose: 'lean_on' }), st('type_keys', [2.4, 4]), st('look_up_screen', [1.8, 3], { p: 0.6 }), st('press_panel', [1.1, 1.6], { fx: 'screen' }), st('rub_eyes', [1.8, 2.4], { p: 0.18 })],
     rest: [1.5, 4], idle: ['nod', 'head_tilt', 'look_around'] },
-  desk: { name: 'desk', props: ['desk'], stance: 'sit', seat: 0.48, box: [-0.9, 0.9, -0.43, 0.43], gap: 0.25, spots: [[0, 0.36, PI]],
+  desk: { name: 'desk', props: ['desk', 'helm', 'secdesk', 'nursestation', 'holodesk', 'reactorstation'], stance: 'sit', seat: 0.48, box: [-0.9, 0.9, -0.43, 0.43], gap: 0.25, spots: [[0, 0.36, PI]],
     steps: [st('type_keys', [3, 5], { cue: 'keys' }), st('check_tablet', [2.4, 3.6], { holdL: 'padd', pose: 'hold_padd' }), wait([1, 2], { holdL: null }), st('lean_in', [2.5, 4]), st('rub_eyes', [1.8, 2.4], { p: 0.25 }), st('stretch', [2.6, 3.4], { p: 0.15 })],
     rest: [2, 5], idle: ['head_tilt', 'nod', 'slow_blink'] },
   chair: { name: 'command chair', props: ['chair'], stance: 'sit', seat: 0.5, spots: [[0, -0.38, PI]], steps: [st('look_up_screen', [2.4, 4]), st('check_tablet', [2.4, 3.6], { holdL: 'padd' }), wait([1, 2], { holdL: null }), st('nod', [0.7, 1]), st('tap_console', [2, 3], { p: 0.5 })], rest: [3, 6], idle: ['look_around', 'head_tilt'] },
@@ -33,10 +33,10 @@ export const EQUIPMENT = {
   warpcore: { name: 'warp core', props: ['warpcore'], stance: 'stand', box: [-0.9, 0.9, -0.9, 0.9], gap: 0.3,
     steps: [st('look_up_screen', [2.4, 3.4]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', cue: 'beep' }), st('press_panel', [1.1, 1.6], { holdL: null, fx: 'core' }), st('tool_work', [2.2, 3.2], { hold: 'tool', p: 0.45 }), wait([0.6, 1], { hold: null })],
     rest: [2, 4], idle: ['look_around', 'rub_neck'] },
-  replicator: { name: 'replicator', props: ['replicator'], stance: 'stand', box: [-0.75, 0.75, 0.19, 0.62], gap: 0.3, spots: [[0, 1.1, PI], [-0.4, 1.1, PI], [0.4, 1.1, PI]],
+  replicator: { name: 'replicator', props: ['replicator', 'med_dispenser', 'fabricator'], stance: 'stand', box: [-0.75, 0.75, 0.19, 0.62], gap: 0.3, spots: [[0, 1.1, PI], [-0.4, 1.1, PI], [0.4, 1.1, PI]],
     steps: [st('press_panel', [1.1, 1.6], { cue: 'beep' }), wait([1.2, 2.2], { cue: 'replicate', fx: 'replicate' }), st('take_item', [1.0, 1.4], { hold: 'cup', p: 0.6 }), st('take_item', [1.0, 1.4], { hold: 'tray', pose: 'tray', p: 0.4 }), st('turn_away', [1.4, 2.2]), st('sip', [1.6, 2.2], { p: 0.6, needs: ['cup', 'glass'] }), wait([0.6, 1.2], { hold: null })],
     rest: [3, 7], idle: ['check_wrist', 'look_around'] },
-  workbench: { name: 'workbench', props: ['workbench'], stance: 'stand', box: [-0.85, 0.85, -0.4, 0.4], gap: 0.3, spots: [[0, 0.72, PI], [0.0, -0.72, 0]],
+  workbench: { name: 'workbench', props: ['workbench', 'labbench', 'steriliser'], stance: 'stand', box: [-0.85, 0.85, -0.4, 0.4], gap: 0.3, spots: [[0, 0.72, PI], [0.0, -0.72, 0]],
     steps: [st('lean_in', [2, 3], { pose: 'lean_on', hold: 'tool' }), st('tool_work', [2.2, 3.4], { cue: 'clank' }), st('inspect_item', [2, 3]), wait([0.5, 1], { hold: null }), st('tool_work', [3, 5], { clip: 'fixing_kneeling', hold: 'tool', p: 0.35, fx: 'sparks' }), st('wipe_surface', [2.4, 3.2], { hold: null, p: 0.3 })],
     rest: [1.5, 3.5], idle: ['crack_knuckles', 'scratch_head', 'rub_neck'] },
   labbench: { name: 'lab bench', props: ['labbench'], stance: 'stand', box: [-0.85, 0.85, -0.4, 0.4], gap: 0.3, spots: [[0, 0.72, PI]],
@@ -45,7 +45,7 @@ export const EQUIPMENT = {
   lathe: { name: 'fabrication lathe', props: ['lathe'], stance: 'stand', box: [-0.88, 0.88, -0.28, 0.28], gap: 0.32, spots: [[0, 0.62, PI]],
     steps: [st('press_panel', [1.1, 1.5], { cue: 'beep', fx: 'lathe' }), wait([2, 3.5], { cue: 'whine' }), st('lean_in', [2, 3]), st('take_item', [1, 1.4], { hold: 'tool' }), st('inspect_item', [2, 3]), wait([0.5, 1], { hold: null })],
     rest: [2, 4], idle: ['crack_knuckles', 'look_around'] },
-  biobed: { name: 'biobed', props: ['biobed'], stance: 'stand', box: [-0.48, 0.48, -1.0, 1.0], gap: 0.3, spots: [[0.78, 0, -PI / 2], [-0.78, 0, PI / 2], [0.78, 0.5, -PI / 2], [-0.78, -0.5, PI / 2]],
+  biobed: { name: 'biobed', props: ['biobed', 'surgical_table', 'exam_couch', 'autopsy_table'], stance: 'stand', box: [-0.48, 0.48, -1.0, 1.0], gap: 0.3, spots: [[0.78, 0, -PI / 2], [-0.78, 0, PI / 2], [0.78, 0.5, -PI / 2], [-0.78, -0.5, PI / 2]],
     steps: [st('scan_sweep', [2.4, 3.6], { hold: 'scanner', cue: 'scan' }), st('inspect_item', [2, 3]), wait([0.4, 0.8], { hold: null }), st('look_up_screen', [2, 3]), st('press_panel', [1.1, 1.5], { fx: 'monitor' }), st('nod', [0.7, 1], { p: 0.5 }), st('check_tablet', [2.4, 3.4], { holdL: 'padd', p: 0.5 }), wait([0.4, 0.8], { holdL: null })],
     rest: [2, 4], idle: ['head_tilt', 'rub_neck'] },
   treadmill: { name: 'treadmill', props: ['treadmill'], stance: 'stand', clip: 'jog_fwd', speed: 0.9, y: 0.22, spots: [[0, 0.15, PI]],
@@ -53,7 +53,7 @@ export const EQUIPMENT = {
   weightbench: { name: 'weight bench', props: ['weightbench'], stance: 'sit', seat: 0.5, spots: [[0, 0.7, 0]],
     steps: [st('curl_weights', [2.4, 3.4], { hold: 'dumbbell', holdL: 'dumbbell', cue: 'groan' }), st('curl_weights', [2.4, 3.4]), wait([1.5, 3]), st('curl_weights', [2.4, 3.4], { p: 0.7 }), wait([1, 2], { hold: null, holdL: null }), st('stretch', [2.6, 3.4], { p: 0.4 })],
     rest: [2, 4], idle: ['neck_roll', 'sigh'] },
-  bar: { name: 'bar', props: ['table', 'replicator', 'sofa'], stance: 'sit', seat: 0.48, hold: 'glass', box: [-0.76, 0.76, -0.5, 0.5], gap: 0.25, spots: [[0, 0.56, PI], [0, -0.56, 0], [0.45, 0.56, PI], [-0.45, -0.56, 0]],
+  bar: { name: 'bar', props: ['bar'], stance: 'sit', seat: 0.75, hold: 'glass', box: [-1.1, 1.1, -0.3, 0.3], gap: 0.3, spots: [[-0.7, 0.55, PI], [0, 0.55, PI], [0.7, 0.55, PI]],   // SVC-3: the three stools are part of the prop
     steps: [st('sip', [1.6, 2.4], { pose: 'hold_cup' }), wait([3, 6], { pose: 'hold_cup' }), st('nod', [0.7, 1]), st('small_smile', [1.4, 2.4]), st('sip', [1.6, 2.4], { pose: 'hold_cup', p: 0.7 })], rest: [2, 5], idle: ['look_around', 'swing_legs', 'head_tilt'] },
   table: { name: 'mess table', props: ['table'], stance: 'sit', seat: 0.48, box: [-0.76, 0.76, -0.5, 0.5], gap: 0.25, spots: [[0, 0.56, PI], [0, -0.56, 0], [0.45, 0.56, PI], [-0.45, -0.56, 0]],
     steps: [st('take_item', [1, 1.4], { hold: 'cup' }), st('sip', [1.6, 2.4], { pose: 'hold_cup' }), wait([2, 4], { pose: 'hold_cup' }), wait([0.5, 1], { hold: null }), st('lean_in', [2.5, 4]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', p: 0.4 }), wait([0.5, 1], { holdL: null })],
@@ -67,7 +67,7 @@ export const EQUIPMENT = {
     steps: [st('reach_low', [1.8, 2.6], { cue: 'clunk' }), st('take_item', [1, 1.4], { hold: 'linen', pose: 'carry_front' }), st('fold_cloth', [2.4, 3.4]), wait([0.5, 1], { hold: null }), st('press_panel', [1.1, 1.5], { fx: 'washer', cue: 'beep' })], rest: [2, 4], idle: ['sigh', 'look_around'] },
   servers: { name: 'computer core stack', props: ['servers'], stance: 'stand', box: [-1.0, 1.0, -0.43, 0.43], gap: 0.32, spots: [[0, 0.78, PI], [-0.6, 0.78, PI], [0.6, 0.78, PI]],
     steps: [st('look_up_screen', [2, 3]), st('check_tablet', [2.4, 3.6], { holdL: 'padd', cue: 'beep' }), st('press_panel', [1.1, 1.5], { holdL: null, fx: 'blink' }), st('reach_low', [1.8, 2.4], { p: 0.4 }), st('inspect_item', [2, 3], { hold: 'chip', p: 0.4 }), wait([0.4, 0.8], { hold: null })], rest: [2, 4], idle: ['rub_neck', 'head_tilt'] },
-  tank: { name: 'pressure vessel', props: ['tank'], stance: 'stand', box: [-0.6, 0.6, -0.6, 0.6], gap: 0.3,
+  tank: { name: 'pressure vessel', props: ['tank', 'pumpskid', 'heatexch', 'scrubber', 'fieldgen', 'fieldgen_damp'], stance: 'stand', box: [-0.6, 0.6, -0.6, 0.6], gap: 0.3,
     steps: [st('look_up_screen', [1.6, 2.4]), st('turn_valve', [2, 3], { cue: 'clank', fx: 'steam' }), st('check_tablet', [2.4, 3.4], { holdL: 'padd' }), wait([0.4, 0.8], { holdL: null }), st('tool_work', [2.2, 3.2], { hold: 'tool', clip: 'fixing_kneeling', p: 0.35 }), wait([0.4, 0.8], { hold: null })], rest: [2, 4], idle: ['look_around', 'rub_neck'] },
   drawers: { name: 'storage drawers', props: ['drawers'], stance: 'stand', box: [-0.8, 0.8, -0.45, 0.45], gap: 0.3, spots: [[0, 0.78, PI]],
     steps: [st('reach_low', [1.8, 2.6], { cue: 'drawer' }), st('take_item', [1, 1.4], { hold: 'smallbox' }), st('inspect_item', [2, 3]), st('reach_low', [1.8, 2.4], { hold: null, cue: 'drawer' }), st('check_tablet', [2.4, 3.4], { holdL: 'padd', p: 0.5 }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['scratch_head', 'look_around'] },
@@ -87,15 +87,54 @@ export const EQUIPMENT = {
   weaponrack: { name: 'arms locker', props: ['weaponrack'], stance: 'stand', box: [-0.85, 0.85, -0.28, 0.3], gap: 0.32, spots: [[0, 0.65, PI]],
     steps: [st('press_panel', [1.1, 1.5], { cue: 'beep' }), st('reach_shelf', [1.6, 2.4]), st('take_item', [1, 1.4], { hold: 'zapper' }), st('inspect_item', [2, 3]), st('reach_shelf', [1.6, 2.4], { hold: null }), st('check_tablet', [2.4, 3.2], { holdL: 'padd', p: 0.6 }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['cross_arms', 'look_around'] },
   suitrack: { name: 'suit locker', props: ['suitrack'], stance: 'stand', box: [-0.75, 0.75, -0.3, 0.3], gap: 0.32, spots: [[0, 0.65, PI]], steps: [st('reach_shelf', [1.6, 2.4]), st('inspect_item', [2, 3]), st('check_tablet', [2.4, 3.4], { holdL: 'padd', cue: 'beep' }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['look_around'] },
-  sinkunit: { name: 'wash basin', props: ['sinkunit'], stance: 'stand', box: [-0.78, 0.78, -0.28, 0.3], gap: 0.3, spots: [[-0.4, 0.62, PI], [0.4, 0.62, PI]], steps: [st('wipe_surface', [2.4, 3.4], { cue: 'water' }), st('look_up_screen', [1.4, 2]), st('adjust_collar', [1.3, 2])], rest: [2, 4], idle: ['look_around'] },
+  sinkunit: { name: 'wash basin', props: ['sinkunit', 'dishwasher'], stance: 'stand', box: [-0.78, 0.78, -0.28, 0.3], gap: 0.3, spots: [[-0.4, 0.62, PI], [0.4, 0.62, PI]], steps: [st('wipe_surface', [2.4, 3.4], { cue: 'water' }), st('look_up_screen', [1.4, 2]), st('adjust_collar', [1.3, 2])], rest: [2, 4], idle: ['look_around'] },
   tree: { name: 'arboretum bed', props: ['tree', 'plant'], stance: 'stand', box: [-0.6, 0.6, -0.6, 0.6], gap: 0.3, steps: [st('tend_plant', [2.2, 3.2]), st('inspect_item', [2, 3], { hold: 'vial', p: 0.4 }), wait([0.4, 0.8], { hold: null }), st('tend_plant', [2.2, 3.2], { clip: 'fixing_kneeling', p: 0.5 }), st('check_tablet', [2.4, 3.4], { holdL: 'padd', p: 0.4 }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['look_around', 'small_smile'] },
   plant: { name: 'potted plant', props: ['plant'], stance: 'stand', box: [-0.3, 0.3, -0.3, 0.3], gap: 0.35, steps: [st('tend_plant', [2.2, 3.2]), wait([1, 2])], rest: [3, 6], idle: ['look_around'] },
   junction: { name: 'maintenance junction', props: [], stance: 'kneel', steps: [st('tool_work', [2.4, 3.6], { hold: 'tool', cue: 'clank', fx: 'sparks' }), st('inspect_item', [2, 3]), wait([1, 2]), st('tool_work', [2.4, 3.6]), wait([0.5, 1], { hold: null, clip: 'idle' }), st('check_tablet', [2.4, 3.4], { clip: 'idle', holdL: 'padd' }), wait([0.4, 0.8], { clip: 'idle', holdL: null })], rest: [1, 2.5], idle: ['rub_neck'] },
-  counter: { name: 'galley counter', props: ['replicator', 'table'], stance: 'stand', box: [-0.75, 0.75, -0.5, 0.6], gap: 0.3, steps: [st('wipe_surface', [2.4, 3.4]), st('take_item', [1, 1.4], { hold: 'tray', pose: 'tray' }), st('turn_away', [1.4, 2.2]), wait([0.6, 1.2], { hold: null }), st('stir_pot', [2, 3], { p: 0.4 })], rest: [2, 4], idle: ['look_around', 'check_wrist'] },
-  stove: { name: 'galley range', props: ['replicator'], stance: 'stand', box: [-0.75, 0.75, 0.19, 0.62], gap: 0.3, steps: [st('stir_pot', [2, 3], { hold: 'tool', cue: 'sizzle' }), st('lean_in', [2, 3]), st('stir_pot', [2, 3]), wait([0.4, 0.8], { hold: null }), st('wipe_surface', [2.4, 3.2], { p: 0.4 })], rest: [1.5, 3], idle: ['look_around'] },
+  counter: { name: 'galley servery', props: ['servery'], stance: 'stand', box: [-1.1, 1.1, -0.4, 0.62], gap: 0.3, spots: [[-0.24, -0.7, 0], [0.5, -0.7, 0]], steps: [st('wipe_surface', [2.4, 3.4]), st('take_item', [1, 1.4], { hold: 'tray', pose: 'tray' }), st('turn_away', [1.4, 2.2]), wait([0.6, 1.2], { hold: null }), st('stir_pot', [2, 3], { p: 0.4 })], rest: [2, 4], idle: ['look_around', 'check_wrist'] },
+  stove: { name: 'galley range', props: ['range'], stance: 'stand', box: [-0.45, 0.45, -0.4, 0.4], gap: 0.3, spots: [[0, 0.62, PI]], steps: [st('stir_pot', [2, 3], { hold: 'ladle', cue: 'sizzle' }), st('lean_in', [2, 3]), st('stir_pot', [2, 3]), wait([0.4, 0.8], { hold: null }), st('wipe_surface', [2.4, 3.2], { p: 0.4 })], rest: [1.5, 3], idle: ['look_around'] },
   mat: { name: 'exercise mat', props: ['weightbench', 'treadmill'], stance: 'stand', box: [-0.4, 0.4, -0.9, 0.9], gap: 0.35, steps: [st('stretch', [2.6, 3.8]), st('neck_roll', [2, 3]), st('reach_low', [1.8, 2.6]), st('stretch', [2.6, 3.8])], rest: [1.5, 3], idle: ['sigh'] },
   post: { name: 'post', props: [], stance: 'stand', steps: [st('check_tablet', [2.4, 3.6], { holdL: 'padd' }), wait([0.5, 1], { holdL: null }), st('hands_behind_back', [4, 7], { p: 0.5 }), st('look_around', [2.2, 3.4])], rest: [3, 6], idle: ['weight_shift', 'adjust_collar', 'check_wrist'] },   // generic fallback: stand at your post, check a PADD
 };
+// ---- the art-batch props (js/propart-*.js, docs/propart-integration.md): one entry per placed kind (spots and boxes from each prop's userData),
+//      reusing the scripts above. The schedule spots reach them through the props lists (console, desk, stove, counter, bar, tank, replicator, workbench, biobed, sinkunit).
+//      standSpots: where someone stands at a seated station when their spot is a standing one (console users at the holo desk, the security desk, the nurses' station).
+{
+  const E = EQUIPMENT, like = (base, o) => ({ ...E[base], ...o });
+  Object.assign(EQUIPMENT, {
+    helm: like('desk', { name: 'helm station', props: ['helm'], box: [-0.73, 0.73, -0.4, 0.4], spots: [[0, 0.31, PI]], standSpots: [[-0.6, 0.7, PI], [0.6, 0.7, PI]],
+      steps: [st('type_keys', [3, 5], { cue: 'keys' }), st('look_up_screen', [2.4, 4]), st('lean_in', [2.5, 4]), st('press_panel', [1.1, 1.6], { fx: 'screen' }), st('rub_eyes', [1.8, 2.4], { p: 0.2 })] }),
+    secdesk: like('desk', { name: 'security desk', props: ['secdesk'], box: [-1.0, 1.0, -0.85, 0.85], spots: [[0.2, 0.31, PI]], standSpots: [[-0.45, 0.7, PI], [0.85, 0.7, PI]] }),
+    nursestation: like('desk', { name: "nurses' station", props: ['nursestation'], box: [-0.95, 0.95, -0.6, 0.6], spots: [[-0.15, 0.21, PI]], standSpots: [[-0.15, 0.5, PI], [0.55, 0.62, PI]] }),
+    holodesk: like('desk', { name: 'holo control desk', props: ['holodesk'], box: [-0.65, 0.65, -0.38, 0.38], spots: [[0, 0.31, PI]], standSpots: [[-0.55, 0.72, PI], [0.55, 0.72, PI]],
+      steps: [st('type_keys', [3, 5], { cue: 'keys' }), st('look_up_screen', [2.4, 4]), st('press_panel', [1.1, 1.6], { cue: 'beep', fx: 'screen' }), st('check_tablet', [2.4, 3.6], { holdL: 'padd', pose: 'hold_padd' }), wait([1, 2], { holdL: null })] }),
+    reactorstation: like('desk', { name: 'reactor station', props: ['reactorstation'], box: [-0.9, 0.9, -0.4, 0.4], spots: [[0, 0.31, PI]], standSpots: [[-0.7, 0.72, PI], [0.7, 0.72, PI]],
+      steps: [st('look_up_screen', [2.4, 3.4]), st('type_keys', [3, 5], { cue: 'keys' }), st('press_panel', [1.1, 1.6], { fx: 'screen', cue: 'beep' }), st('lean_in', [2.5, 4]), st('rub_neck', [1.8, 2.6], { p: 0.25 })] }),
+    baycontrol: like('console', { name: 'bay control desk', props: ['baycontrol'], box: [-0.95, 0.95, -0.5, 0.3], spots: [[0, 0.5, PI], [-0.5, 0.45, PI], [0.5, 0.45, PI]] }),
+    beampedestal: like('console', { name: 'transporter pedestal', props: ['beampedestal'], box: [-0.55, 0.55, -0.3, 0.3], spots: [[0, 0.66, PI], [-0.4, 0.66, PI], [0.4, 0.66, PI]],
+      steps: [st('press_panel', [1.1, 1.6], { cue: 'beep' }), st('look_up_screen', [2, 3]), st('type_keys', [2.4, 3.6]), st('press_panel', [1.1, 1.5], { fx: 'pad' }), st('hands_behind_back', [3, 5], { p: 0.4 })] }),
+    range: like('stove', { name: 'galley range', props: ['range'] }),
+    servery: like('counter', { name: 'servery', props: ['servery'] }),
+    dishwasher: { name: 'dishwasher', props: ['dishwasher'], stance: 'stand', box: [-1.15, 1.0, -0.38, 0.38], gap: 0.3, spots: [[-0.6, 0.62, PI], [0.72, 0.62, PI], [-1.0, 0.62, PI]],
+      steps: [st('wipe_surface', [2.4, 3.4], { cue: 'water' }), st('take_item', [1, 1.4], { hold: 'tray', pose: 'tray' }), st('reach_low', [1.8, 2.4], { cue: 'clunk' }), wait([0.5, 1], { hold: null }), st('press_panel', [1.1, 1.5], { cue: 'beep' })], rest: [2, 4], idle: ['look_around', 'sigh'] },
+    wastebin: { name: 'waste bin', props: ['wastebin'], stance: 'stand', box: [-0.16, 0.16, -0.19, 0.19], gap: 0.35, spots: [[0, 0.5, PI]], steps: [st('reach_low', [1.4, 2], { cue: 'clunk' }), wait([0.8, 1.4])], rest: [2, 4], idle: ['look_around'] },
+    pumpskid: like('tank', { name: 'pump skid', props: ['pumpskid'], box: [-0.65, 0.65, -0.25, 0.25], spots: [[0.5, 0.9, PI], [-0.3, 0.8, PI]] }),
+    heatexch: like('tank', { name: 'heat exchanger', props: ['heatexch'], box: [-1.0, 1.0, -0.45, 0.45], spots: [[0, 0.9, PI], [0.6, 0.9, PI]] }),
+    scrubber: like('tank', { name: 'CO2 scrubber', props: ['scrubber'], box: [-0.45, 0.45, -0.35, 0.35], spots: [[0, 0.8, PI]] }),
+    fieldgen: like('tank', { name: 'field generator', props: ['fieldgen'], box: [-1.1, 1.1, -0.8, 0.8], spots: [[0.72, 1.08, PI], [-0.35, 1.1, PI]] }),
+    fieldgen_damp: like('tank', { name: 'damper field generator', props: ['fieldgen_damp'], box: [-1.1, 1.1, -0.8, 0.8], spots: [[0.72, 1.08, PI], [-0.35, 1.1, PI]] }),
+    fabricator: like('lathe', { name: 'fabricator', props: ['fabricator'], box: [-0.95, 0.95, -0.5, 0.5], spots: [[0.26, 0.85, PI], [-0.74, 1.0, PI]] }),
+    steriliser: like('workbench', { name: 'steriliser bench', props: ['steriliser'], box: [-0.75, 0.75, -0.35, 0.35], spots: [[-0.2, 0.7, PI], [0.34, 0.7, PI]],
+      steps: [st('press_panel', [1.1, 1.6], { cue: 'beep' }), wait([1.6, 2.6], { cue: 'water' }), st('take_item', [1, 1.4], { hold: 'forceps' }), st('inspect_item', [2, 3]), wait([0.4, 0.8], { hold: null }), st('wipe_surface', [2.4, 3.2], { p: 0.5 })], idle: ['rub_neck', 'head_tilt'] }),
+    surgical_table: like('biobed', { name: 'surgical table', props: ['surgical_table'], box: [-0.5, 0.5, -1.0, 1.0], spots: [[-0.78, 0.05, PI / 2], [0.78, 0.05, -PI / 2], [0, -1.15, 0]] }),
+    exam_couch: like('biobed', { name: 'exam couch', props: ['exam_couch'], box: [-0.45, 0.66, -0.95, 0.95], spots: [[-0.75, 0.1, PI / 2], [-0.75, -0.4, PI / 2]] }),
+    autopsy_table: like('biobed', { name: 'autopsy table', props: ['autopsy_table'], box: [-0.6, 0.6, -1.05, 1.05], spots: [[-0.78, 0.1, PI / 2], [0.78, 0.35, -PI / 2]] }),
+    med_dispenser: like('replicator', { name: 'medication dispenser', props: ['med_dispenser'], box: [-0.4, 0.4, -0.3, 0.3], spots: [[0, 0.62, PI]],
+      steps: [st('press_panel', [1.1, 1.6], { cue: 'beep' }), st('type_keys', [1.6, 2.4]), wait([1, 1.6], { cue: 'clunk' }), st('take_item', [1, 1.4], { hold: 'vial' }), st('inspect_item', [1.6, 2.4]), wait([0.4, 0.8], { hold: null }), st('check_tablet', [2, 3], { holdL: 'padd', p: 0.5 }), wait([0.4, 0.8], { holdL: null })] }),
+    infusion_stand: { name: 'infusion stand', props: ['infusion_stand'], stance: 'stand', box: [-0.26, 0.26, -0.26, 0.26], gap: 0.3,
+      steps: [st('look_up_screen', [1.6, 2.4]), st('press_panel', [1.1, 1.5], { cue: 'beep' }), st('take_item', [1, 1.4], { hold: 'iv_bag' }), st('reach_shelf', [1.4, 2]), wait([0.4, 0.8], { hold: null })], rest: [2, 4], idle: ['head_tilt'] },
+  });
+}
 // schedule spots that are not prop kinds (assets/data/comms.json `day` blocks) -> an entry above; anything else -> 'post'
 export const SPOT_ALIAS = { captain_chair: 'chair', 'command chair': 'chair', readyroom: 'desk', serving_line: 'counter', sink: 'sinkunit', door: 'post', corridor: 'post', lift: 'post' };
 export const GENERIC = 'post';
@@ -104,10 +143,15 @@ export function equipFor(spot) { return EQUIPMENT[equipKey(spot)]; }
 export function propsFor(spot) { const k = equipKey(spot); return k === GENERIC && spot !== GENERIC ? [spot] : EQUIPMENT[k].props.length ? EQUIPMENT[k].props : [spot]; }
 
 // ---- where the body goes: prop = { cx, cz, rot } (world centre + y rotation), from = { x, z } where the person arrived ----
-export function standPoint(def, prop, from, taken = []) {   // taken: [[x, z], ...] use points other people already hold
+export function standPoint(def, prop, from, taken = []) {   // taken: [[x, z], ...] use points other people already hold; prop.kind (optional) picks that prop's own spots
+  const k = prop.kind && EQUIPMENT[prop.kind]; let y0 = 0;
+  if (k && k !== def) {   // the spot's script at another kind of prop: that prop's points, box and seat height (a body seated at a 0.75 m stool is lifted by the difference)
+    const sp = k.stance === def.stance ? k.spots : def.stance === 'stand' ? k.standSpots : null;
+    if (sp || k.stance === def.stance) { if (def.stance === 'sit' && k.seat && def.seat) y0 = k.seat - def.seat; def = { ...def, spots: sp || def.spots, box: k.box || def.box, gap: k.gap ?? def.gap }; }
+  }
   const c = Math.cos(prop.rot || 0), s = Math.sin(prop.rot || 0), toW = (lx, lz) => [prop.cx + lx * c + lz * s, prop.cz - lx * s + lz * c];   // three.js rotation.y
   let dx = from.x - prop.cx, dz = from.z - prop.cz; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
-  const y = def.y || 0;
+  const y = (def.y || 0) + y0;
   if (def.spots?.length) {   // the authored spot nearest to where they came in, unless it is round the far side
     let best = null, bd = 1e9; for (const sp of def.spots) { const [wx, wz] = toW(sp[0], sp[1]), d = Math.hypot(wx - from.x, wz - from.z) + (taken.some(t => Math.hypot(t[0] - wx, t[1] - wz) < 0.45) ? 50 : 0); if (d < bd) { bd = d; best = [wx, wz, sp[2] + (prop.rot || 0)]; } }
     if ((bd < Math.max(2.2, dl + 0.2) || !def.box) && bd < 50) return { x: best[0], z: best[1], yaw: best[2], y, spot: true };
@@ -203,6 +247,11 @@ export const ITEMS = {
   scalpel: { name: 'laser scalpel', w: 0.05, pose: 'hold_r', hand: 'r' }, wrench: { name: 'spanner', w: 0.6, pose: 'hold_r', hand: 'r' }, torch: { name: 'plasma torch', w: 1.8, pose: 'hold_r', hand: 'r' },
   flashlight: { name: 'hand lamp', w: 0.4, pose: 'hold_r', hand: 'r' }, extinguisher: { name: 'fire extinguisher', w: 6, pose: 'hold_r', hand: 'r' }, mop: { name: 'mop', w: 1.5, pose: 'hold_r', hand: 'r' },
   hook: { name: 'cargo hook', w: 0.5, pose: 'hold_r', hand: 'r' }, crowbar: { name: 'pry bar', w: 2.5, pose: 'hold_r', hand: 'r' },
+  // galley and medical batches (js/itemart-galley.js, js/itemart-medical.js; ids = model kinds)
+  ladle: { name: 'ladle', w: 0.3, pose: 'hold_r', hand: 'r' }, stockpot: { name: 'stock pot', w: 4, pose: 'hold_r', hand: 'r', load: true }, fryingpan: { name: 'frying pan', w: 1.3, pose: 'hold_r', hand: 'r' },
+  stretcher: { name: 'folding stretcher', w: 6, two: true, pose: 'tray', load: true },   // two-handed: tickHeld puts its centre between the hands
+  iv_bag: { name: 'IV fluid bag', w: 0.5, pose: 'hold_r', hand: 'r' }, kidney_dish: { name: 'kidney dish', w: 0.3, pose: 'hold_r', hand: 'r' }, bandage: { name: 'bandage roll', w: 0.1, pose: 'hold_r', hand: 'r', gift: 0.03 },
+  forceps: { name: 'surgical forceps', w: 0.05, pose: 'hold_r', hand: 'r' },
 };
 export const ITEM_IDS = Object.keys(ITEMS);
 // player speed multiplier for carrying an item (crates slow you, small things do not)
