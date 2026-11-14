@@ -10,7 +10,7 @@ import { makeGorn, animateGorn, makeCrew, makeTribble, makeItem, makeViewmodel }
 import { loadModels, loadTextures } from './js/assets.js';
 import { makeHuman, makeCorpse, markImpostor, holoMaterial, DIVISIONS, liveFace } from './js/humans.js';
 import { MODELS } from './js/enemies.js';
-import { buildProp, PROP_KINDS, buildDecor, DECOR_KINDS } from './js/world.js';
+import { buildProp, PROP_KINDS, PROP_GALLERY, buildDecor, DECOR_KINDS } from './js/world.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { makeItemMesh, makeCart, holdItem, dropItem, tickHeld, rollCart } from './js/carry.js';
 import { ITEM_IDS, Operator } from './js/equipment.js';
@@ -53,7 +53,7 @@ if (set === 'crew') {
   for (const id of (q.get('kinds') ? q.get('kinds').split(',') : ['tricorder_sci', 'tricorder_med', 'tricorder_eng', 'tricorder_sec', 'hypospray', 'dermal', 'scalpel', 'wrench', 'tool', 'torch', 'flashlight', 'hook', 'crowbar', 'phaser1', 'phaser2', 'rifle', 'zapper', 'mop', 'extinguisher', 'toolbox', 'medkit', 'toolbag', 'padd', 'mug'])) {
     const m = makeHuman({ kind: 'crew_m', uniform: DIVISIONS[id.length % 3] }); if (!m) continue; const H = m.userData.human; H.play(q.get('pose') || 'idle'); holdItem(H, buildItem(id, { frame: 'grip' }), id === 'padd' ? 'hand_l' : 'hand_r');
     add(id, m, (dt, t) => { H.update(dt); tickHeld(H); }, 0.9); }
-} else if (set === 'props') { for (const k of PROP_KINDS) add(k, buildProp(k), null, 2.6); }
+} else if (set === 'props') { for (const k of PROP_GALLERY) add(k, buildProp(k), null, 2.6); }   // PROP_KINDS + every art-batch kind (js/propart.js); ?only=helm,bar
 else if (set === 'decor') { for (const k of DECOR_KINDS) add(k, buildDecor(k), null, 2.3); }
 else if (set === 'carry') {   // carts (wheels roll), held items in a hand, and NPCs running equipment use scripts (js/carry.js, js/equipment.js)
   for (const [k, ld] of [['cargo', true], ['cargo', false], ['med', true], ['tool', true]]) { const c = makeCart(k, ld); add(`${k} cart${ld ? '' : ' (empty)'}`, c, (dt) => rollCart(c, dt * 0.8), 1.6); }
