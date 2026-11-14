@@ -127,6 +127,17 @@ export async function walkBrowser(page, fail) {
         a.walk = null; b.walk = null; b.liftWait = null; g.simBodies(0, true); }
       const e = idle().find(q => Math.hypot(q.x - P.x, q.z - P.z) < 12 && w.los(P.x, P.z, q.x, q.z)) || idle()[0]; if (e) { P.x = e.x + 1.5; P.z = e.z; if (w.solidAt(P.x, P.z)) P.x = e.x - 1.5; if (e.fid) e.fid.cur = null; g.refuseReact(e.person, `${e.person.short}: "No."`); }
       out.liftWait = { spots: W.length, apart, floor, sides, waited, minD: +minD.toFixed(2), shake: e ? e.fid?.cur?.id || null : 'none' }; }
+    // 10) pathing iteration 3: the player watches the open car while up to 7 people leave and one arrives: the doors never shut on an empty car
+    //     while someone walks up to it (the arrival comes when they have boarded), a full car takes nobody from beyond its doorway (6 spots, 7 at most), nobody waits > 10 s in it
+    { const other = Object.keys(G.plan).map(k => G.plan[k].find(s => s.deckNo !== here)).find(Boolean), type = Object.keys(G.plan).find(k => G.plan[k].includes(other)), ppl = idle().slice(0, 7).map(e => e.person);
+      const away = [...S.st.values()].find(q => q.deckNo !== here && !q.transit && !q.person.isPlayer && !S.overridden(q.person))?.person, rm = d.rooms.find(r => r.type !== 'jefferies' && G.plan[r.type]?.some(s => s.deckNo === here));
+      if (away && rm) S.redirect(away, rm.type, 'door', 600, 'ordered', { prio: 2, site: G.plan[rm.type].find(s => s.deckNo === here) });
+      for (const p of ppl) S.redirect(p, type, 'door', 600, 'ordered', { prio: 2, site: other }); let emptyShut = 0, shuts = 0, maxBoard = 0, maxWait = 0, arrived = false, gone = 0, open0 = w.liftOpen; const wait = new Map();
+      for (let n = 0; n < 120 * 30 && (gone < ppl.length || !arrived); n++) { P.x = car.x + car.dx * 3.2; P.z = car.z + car.dy * 3.2; P.vx = P.vz = 0; const bn = G.lift.boardN || 0; tick(1);
+        if (open0 && !w.liftOpen) { shuts++; if (!bn && g.ents.some(q => q.walk?.vanish && !q.board && Math.hypot(q.x - car.x, q.z - car.z) < 4.5)) emptyShut++; } open0 = w.liftOpen;
+        const B = g.ents.filter(e => e.board && e.simmed); maxBoard = Math.max(maxBoard, B.length); for (const e of B) { wait.set(e.person, (wait.get(e.person) || 0) + 1 / 30); maxWait = Math.max(maxWait, wait.get(e.person)); }
+        gone = ppl.filter(p => !body(p)).length; if (away && body(away)) arrived = true; }
+      out.oneWindow = { n: ppl.length, gone, arrived: away ? arrived : null, shuts, emptyShut, maxBoard, maxWait: +maxWait.toFixed(1) }; for (const p of ppl) S.release(p); if (away) S.release(away); }
     out.bodies = { n: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, sim: S.bodies(here).size };
     return out;
   });
@@ -142,6 +153,7 @@ export async function walkBrowser(page, fail) {
   if (!(r.keepClear && r.keepClear.n > 0 && r.keepClear.bad === 0)) fail('npc spots keep the lift car clear ' + JSON.stringify(r.keepClear));
   const CC = r.carCycle; if (!(CC && CC.boarded >= Math.min(2, CC.n) && CC.gone === CC.n && CC.minGap >= 0.4 && CC.maxWait < 10)) fail('npc lift boarders spread out and the car cycles ' + JSON.stringify(CC));
   const LW = r.liftWait; if (!(LW && LW.spots >= 2 && LW.apart && LW.floor && LW.sides === 2 && LW.waited !== false && LW.minD > 0.45 && (LW.shake === 'shake_head' || LW.shake === 'none'))) fail('npc lift waiting spots / refusal shake ' + JSON.stringify(LW));
+  const OW = r.oneWindow; if (!(OW && OW.gone === OW.n && OW.arrived !== false && OW.emptyShut === 0 && OW.maxBoard <= 7 && OW.maxWait < 10)) fail('npc lift: board and arrive in one cycle while watched, full car ' + JSON.stringify(OW));
   if (!(r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim ' + JSON.stringify(r.bodies));
   return r;
 }

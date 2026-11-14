@@ -366,6 +366,7 @@ function liftWaitSpots(c) {
   for (const [l, b] of LIFT_WAIT) { const x = c.x + c.dx * b - c.dy * l, z = c.z + c.dy * b + c.dx * l, q = { x, z, y: 0 }; world.resolve(q, 0.3); if (Math.hypot(q.x - x, q.z - z) < 0.25 && !world.solidAt(q.x, q.z) && world.los(c.x + c.dx * 1.5, c.z + c.dy * 1.5, q.x, q.z)) out.push([q.x, q.z]); }
   return (c.waitSpots = out);
 }
+const liftComing = () => { const c = world.car; return !!c && ents.some(q => q.walk?.vanish && !q.board && Math.hypot(q.x - c.x, q.z - c.z) < 4.5); };   // someone is walking up to / waiting at the lift car
 const unseenAt = (x, z) => Math.hypot(x - P.x, z - P.z) > 14 || !world.los(P.x, P.z, x, z);
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, right-hand passing, braking, wall clearance.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, gt = gaitFor(e);
@@ -406,11 +407,12 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
     const need = gt.space * 1.05 - (o.player ? 0.1 : 0) - lat * 0.0, k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0); gx += rx * off; gz += rz * off;   // always bear right of them
     if (od < 0.8 + gt.space * 0.3 && (!(e.ghost > 0) || o.player)) slow = Math.min(slow, Math.max(0.05, (od - 0.35) / 0.8));
   }
-  if (w.vanish && toEnd < 2.4 && (world.grid[w.ty]?.[w.tx] !== 0 || (G.lift?.shutT > 0 && toEnd > 1.3))) slow = 0.05;   // the lift doors are shut (or closing on a full car): wait in front of them
+  const carFull = (G.lift?.boardN || 0) >= CAR_SLOTS.length;   // a full car takes nobody else (they wait for the next one)
+  if (w.vanish && toEnd < 2.4 && (world.grid[w.ty]?.[w.tx] !== 0 || ((G.lift?.shutT > 0 || carFull) && toEnd > 1.3))) slow = 0.05;   // the lift doors are shut (or closing on a full car): wait in front of them
   // waiting for the lift: stand beside the doors (LIFT_WAIT) while the car is shut / cycling or someone is stepping out (arrivals first)
   let liftWait = false; const car = world.car;
   if (w.vanish && car && G.lift && toEnd < 4.2 && toEnd > 1.3) {
-    const shut = G.lift.shutT > 0 || !!G.fx?.liftLocked, out = !shut && ents.some(o => o !== e && o.fromCar > G.time - 8 && o.walk && !o.board && Math.hypot(o.x - car.x, o.z - car.z) < 1.8);   // someone who just came out of the car is still in it / its doorway
+    const shut = G.lift.shutT > 0 || carFull || !!G.fx?.liftLocked, out = !shut && ents.some(o => o !== e && o.fromCar > G.time - 8 && o.walk && !o.board && Math.hypot(o.x - car.x, o.z - car.z) < 1.8);   // someone who just came out of the car is still in it / its doorway
     const spots = (shut || out) ? liftWaitSpots(car) : null;
     if (spots?.length) {
       const free = (q, i) => !ents.some(o => o !== e && o.kind === 'crew' && o.mesh && !o.board && (o.liftWait === i || Math.hypot(o.x - q[0], o.z - q[1]) < 0.5));   // nobody stands there or has claimed it
@@ -506,7 +508,7 @@ function simBodies(dt, force = false) {
     if (!force && car) {
       const hid = unseenAt(car.x, car.z) && ents.every(q => !q.board || unseenAt(q.x, q.z));   // nobody waiting in the car is in sight either (they are removed when the car comes back)
       if (n >= 3 || G.fx?.liftLocked) continue;   // at most 3 per cycle (this line sat inside the comment above until iteration 2)
-      if (!hid && !(L && !world.liftOpen && L.closedT > 1)) { if (L && !inCarTile() && !(L.shutT > 0)) { L.shutT = 1.6; L.arrive = true; } continue; }   // the player is looking into the open car: it leaves and comes back with them
+      if (!hid && !(L && !world.liftOpen && L.closedT > 1)) { if (L && !inCarTile() && !(L.shutT > 0) && !L.boardN && !liftComing()) L.shutT = 1.6; if (L) L.arrive = true; continue; }   // the player is looking into the open car: it leaves and comes back with them, but not while people are boarding or walking up to it: they arrive when the doors shut on those (one cycle, docs/pathing.md iteration 3)
       if (ents.some(q => q.liftWait != null && q.waitT0 != null && G.time - q.waitT0 > 3)) continue;   // people have been waiting beside the doors: let them board first (turns, not a steady stream out of the car)
       const spot = CAR_SLOTS.map(([l, b]) => [car.x - car.dy * l - car.dx * b, car.z + car.dx * l - car.dy * b]).find(([x, z]) => !ents.some(q => q.kind === 'crew' && q.mesh && !q.board && Math.hypot(q.x - x, q.z - z) < 0.6)); if (!spot) continue; n++; [cx, cz] = spot;   /* a free spot in the car (others may still be stepping out) */ rot = Math.atan2(car.dx, car.dy); out = true; if (L) { L.npcT = 4; if (L.boardN) { for (const e of ents.slice()) if (e.board) dropBody(e); L.boardN = 0; } } if (!world.liftOpen) world.setLiftOpen(true);
     } else if (!force && !unseenAt(cx, cz)) continue;
