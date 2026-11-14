@@ -146,3 +146,79 @@ Requests to other owners (iteration 2): `TODO.md` first Handoff bullet (pathing)
 body walk time, brushing seated bodies." with "Iteration 2: the sim waits for the body (walk + ride + walk legs), lift walkers wait
 beside the doors and let arrivals out first, refusals show on the body. Next: lift queue time under heavy traffic, telling the player
 how long an ordered person needs, carts / tubes / long-corridor unseen radius."
+
+### Iteration 3 (2026-11-14)
+
+Re-baselined first: art integration (12f51a0 and the art batches after it) narrowed room edges with props. The harness gained
+`far pops` (appear / vanish 14-30 m away in a clear line of sight: the 14 m "unseen" radius in long corridors), `carts` (walkers'
+meshes within 0.55 m of a cart; walkers held up < 0.2 m/s within 1.5 m of a pushed one), `tube walks` and walking body-s on tube
+tiles, samples for stacked pairs and for boarders > 10 s. It also had a bug: the "beside a walker / busiest room" hops could put the player
+on a lift boarder, i.e. in the car, which holds the doors open (all 3 "boarders > 10 s" on deck 4 were that); the player no longer hops
+within 3 m of the car. Before = 4166dc8 with the lift change reverted, after = 25c65d4, both with the new harness, same seeds
+(decks 3, 4, 2, 150 s each, clock x6). Runs are chaotic: one change moves every later walk.
+
+| | seed 11 before | after | seed 12 + surge 60 before | after | Manitoba (`--ship 4 --surge 60`) before | after |
+|---|---|---|---|---|---|---|
+| lift queue > 15 s (walkers within 3.5 m of the car) | 7 | 1 | 10 | 1 | 5 | 4 |
+| boarders waiting in the car > 10 s | 0 | 0 | 0 | 0 | 0 | 0 |
+| brushing near the lift (pair-s within 3.5 m) | 31.7 | 18.4 | 23.5 | 21.7 | 42.4 | 31.3 |
+| stacked idle pairs (pairs, pair-s) | 1, 3.9 | 0, 0 | 6, 76.3 | 0, 0 | 34, 416.8 | 3, 8.3 |
+| stuck walks (count, body-s) | 2, 0.3 | 0, 0 | 1, 1.6 | 1, 1.2 | 2, 1 | 7, 16.9 |
+| deck 3 walk median / p90 | 9.2 / 29.6 s | 9.2 / 28.8 s | 11.4 / 36.9 s | 12.6 / 33.8 s | 17.7 / 62.7 s | 13.7 / 71 s |
+| walkers through a cart / held up by a pushed cart (body-s) | 4.3 / 3.7 | 3.3 / 8.8 | 0 / 1.6 | 0.1 / 0.5 | 0 / 2.8 | 0.3 / 8.3 |
+| tube walks | 4 | 3 | 9 | 8 | 12 | 14 |
+| far pops (14-30 m in clear sight) | 9 | 1 | 0 | 0 | 18 | 7 |
+| pops / teleports in sight | 1 / 0 | 0 / 2 | 0 / 2 | 0 / 2 | 0 / 1 | 0 / 1 |
+| step() p99 | 11.6 ms | 9.2 ms | 10.6 ms | 9.6 ms | 10.3 ms | 10.4 ms |
+
+Manitoba (the shuttlebay on deck 4, a busy deck): the evacuation surge there sent 4 people, all 4 bodies stood in the shuttlebay
+(median 33 s before / 55 s after, sim median 34 s). On deck 3 the same surge sends 5-7 to the lift at once; the 7 "stuck" walks after
+are all in that crowd 4-6 m from the car (more people than the 6 wait spots), not in the open.
+
+Found and fixed:
+1. **The car cycled empty while people walked up to it.** With the player in sight of the open car and anyone due to arrive, simBodies
+   shut the doors at once (`L.shutT = 1.6`, to let the arrival appear out of sight), even with people a few metres away walking up or
+   standing at the wait spots: they waited a whole extra cycle, one boarder per cycle (trace, seed 11 deck 3). Now the doors are only
+   forced shut for an arrival when nobody is boarding and no lift walker is within 4.5 m (`liftComing`); otherwise the arrival comes
+   when the doors shut on the boarders (one cycle: board, shut, arrive, open).
+2. **A full car kept taking walkers.** With all 6 car spots taken, walkers further than 1.3 m wait beside the doors (`carFull` counts as
+   shut in walkStep) instead of walking in and holding the doors open. Someone already in the doorway still gets in (7 at most).
+3. **Crowded rooms stacked people on one spot.** `simTileFor` tried 12 tiles and then returned a taken one: 17 crew at a 12-tile mess
+   (seed 12 deck 3), 34 pairs on Manitoba. Now it tries every tile, then shares the least crowded one, standing 0.62 m off its centre
+   (golden-angle steps, resolved against walls; `t.off`, the walk ends with a short step there).
+4. **Orders tell the player how long they take.** `sim.estimate(person, room)` (the same walk / lift legs as `tick()`); the order line
+   reads `Ens. X takes the job: Y. "On my way from deck 4, about a minute."` ("On it." / a few seconds / half a minute / about a minute /
+   a couple of minutes), and Duty emits `atjob` once when they get there after more than 3 s (`Ens. X is at the job: Y.`).
+
+Measured, small, not changed: carts (walkers pass through parked carts 0-4 body-s per run, held up by pushed ones 0.5-9 body-s), tube
+walks (3-14 per run, no stuck or slow walk in a tube), far pops (0-18 per run of appear / vanish 14-30 m away in clear sight, mostly
+lift arrivals / departures at the far end of a long corridor; the 14 m radius stays).
+
+Tests: `tools/test-walk.mjs` node part (`sim.estimate`: 0 where they are, a walk on the same deck, more for another deck; `atjob`
+fires once) and browser parts 10 (the player watches the open car while 7 leave and 1 arrives: all leave, the arrival comes, no door
+close on an empty car while someone walks up, at most 7 boarders, nobody > 10 s in the car) and 11 (more people than tiles in a small
+room stand >= 0.4 m apart).
+
+Still broken / next, by measured size:
+1. **Surge crowds at the lift**: 5-7 people leaving a deck at once overflow the 6 wait spots; the rest stand 4-6 m out in the corridor
+   (counted as stuck, 17 body-s on Manitoba deck 3). Ideas: a second row of wait spots further out / along the corridor, or two
+   batches per cycle (the car takes 6; the sim could send the rest by another lift / tube).
+2. **Orders "never there" by the end of a 150 s deck** (12 of 27): cross-deck orders take 30-90 s of real walking and riding, so orders
+   given in the last minute are still under way. Not a bug; the player now hears the estimate.
+3. **Teleports in sight 1-2 per run**: equipment-use snaps (`opStart` snaps onto the use point when the body counts as out of sight;
+   the soak's "seen" checks both ends), 0.8-0.9 m. Ideas: ease the mesh in whenever either end is in sight.
+4. The player standing in the lift car without using the panel holds the doors open, and boarders wait in the car until they leave
+   (real play: rare, the panel opens).
+5. Not measured yet: alert stations (prio 3, not evacuation) on a busy deck, the 6 % refused-order head shake in play.
+
+Human play-test list (iteration 3):
+- Stand at the lift on a busy deck (or watch the doors from the corridor) for a minute: people should board in groups, the doors shut,
+  and arrivals step out on the next opening; nobody should wait long beside the doors while the car comes and goes empty.
+- Order a subordinate who is on another deck (J menu): the log should say how long they need ("about a minute"), then
+  "X is at the job" when they get there. Check that the estimate feels right.
+- Visit the mess / a lounge at a meal or shift change: people should never stand inside each other; in a packed room some stand
+  between the tables.
+- Walk a long corridor toward the lift during heavy traffic: watch for people appearing / vanishing at the far end (14-30 m).
+- Push a cart through a corridor while crew walk by: they currently pass through parked carts; report if it looks bad.
+
+Requests to other owners (iteration 3): none.
