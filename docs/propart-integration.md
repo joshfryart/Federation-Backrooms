@@ -62,7 +62,7 @@ Measured over 320 to 360 levels (`tools/test.mjs` `room props:`): no unreachable
 * `standPoint(def, prop, from)` reads an optional `prop.kind`. With it, the spot's script uses that prop's own spots and box. A standing script at a seated station uses its `standSpots` (beside the chair). A seated one at a different seat height lifts the body by the difference (`y`), so `haul.js`'s seat drop lands the pelvis on the real seat. Without `kind` it behaves as before (the spot's own spots).
 
 ## Open junction (`js/sysview.js`)
-`makeJunction` now builds the ENG-2 cabinet (`makeJunctionOpen`, closed: `open = 0`) with the system's insert module. It returns `{ group, lamp, door, insert }`. The status lamp is moved onto the door's outside face, so it stays visible with the door shut and swings with the door; `setLamp` is unchanged. `setJunctionDoor(j, t)` swings the door. The old flat panel is kept as `makeJunctionPlain`. **The door stays shut in game**: opening it while someone repairs needs `js/main.js` (request 2 below).
+`makeJunction` now builds the ENG-2 cabinet (`makeJunctionOpen`, closed: `open = 0`) with the system's insert module. It returns `{ group, lamp, door, insert }`. The status lamp is moved onto the door's outside face, so it stays visible with the door shut and swings with the door; `setLamp` is unchanged. `setJunctionDoor(j, t)` swings the door. The old flat panel is kept as `makeJunctionPlain`. Since d81dac1, main.js eases the door open while the player or a crew member works at that junction (request 2 below), and it is shut the rest of the time.
 
 ## Examine text
 `tools/build-game-items.mjs` `PROP` gains keyword rows for the 24 new kinds, and `assets/data/ship-items.json` is rebuilt (only `examine` changed). Fixes: `tank` no longer matches `pump`, so in the plant room the pumps now name the `pumpskid` and `tank` reads "potable water tank" and similar. `tree` no longer matches "Plant control console" or the space nameplate. `exam_couch` and some generator rows have no matching inventory row (examine shows nothing there, as before for unmatched kinds).
@@ -79,12 +79,14 @@ Measured over 320 to 360 levels (`tools/test.mjs` `room props:`): no unreachable
 * Plant layout: a diagonal grid instead of `(x + y) % 3` (the doc's pattern left most plant rooms with one prop and the heat exchanger and scrubber in fewer than a quarter of them).
 
 ## Requests to the main.js / haul.js owner
-1. **Per-prop use points** (`js/haul.js` `opStart`, the `standPoint` call): pass the prop kind:
+Requests 1 and 2 were done by the main.js owner in d81dac1; 3-5 are open.
+
+1. **(done) Per-prop use points** (`js/haul.js` `opStart`, the `standPoint` call): pass the prop kind:
    ```js
    goal = standPoint(def, { cx, cz, rot: p.rot || 0, kind: p.kind }, { x: e.x, z: e.z }, ...);
    ```
-   Without it, console users at the bay control / pedestal / holo desk use the generic console spots (close but not exact; at seated stations one spot is in the chair). Diners at a desk-kind station sit at the desk spot `[0, 0.36]` instead of the station's own spot.
-2. **Junction door while repairing** (`js/main.js` `placeRepairPoints` and the per-frame lamp loop):
+   Before this change, console users at the bay control / pedestal / holo desk use the generic console spots (close but not exact; at seated stations one spot is in the chair). Diners at a desk-kind station sit at the desk spot `[0, 0.36]` instead of the station's own spot.
+2. **(done) Junction door while repairing** (`js/main.js` `placeRepairPoints` and the per-frame lamp loop):
    ```js
    import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js';
    // in placeRepairPoints, after makeJunction: keep the door on the point
