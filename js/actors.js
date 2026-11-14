@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { textures } from './world.js';
 import { pbr } from './assets.js';
 import { buildItem } from './itemart.js';
+import { wearOutfit, outfitFor } from './wearart.js';
 // generated normal + roughness (+AO) from tools/build-textures.mjs, when loaded; repeat set per use
 const withSet = (mat, set, rx = 1, ry = rx, ns = 1) => { const p = pbr(set); if (!p) return mat; const rep = (t) => { const c = t.clone(); c.needsUpdate = true; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(rx, ry); return c; }; mat.normalMap = rep(p.n); mat.normalScale = new THREE.Vector2(ns, ns); mat.roughnessMap = rep(p.r); mat.roughness = 1; return mat; };
 
@@ -579,4 +580,13 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
     ring.material.color.setRGB(1, 0.6 + 0.2 * rs, 0.23 + 0.5 * rs);
   };
   return { group: g, muzzle, flash, cells, ring, lens, tick, vents, reloading: () => rel < 1 };
+}
+
+// duty clothes by department (docs/wearart.md, docs/propart-integration.md "Batches 5-11"): engineering coveralls, medical scrubs, galley whites; everyone else keeps the uniform.
+// mesh = a makeSurvivor / makeHuman group (needs userData.human), person = a js/crew.js roster entry. Skinned on the human's own bones, so walking clips drive it as before.
+export function dressCrew(mesh, person) {
+  if (!mesh?.userData?.human || !person || mesh.userData.outfit !== undefined) return mesh?.userData?.outfit || null;
+  const o = outfitFor(person); let w = null;
+  if (o) { try { w = wearOutfit(mesh, o.outfit, o.opts); } catch (e) { console.warn('wearOutfit', o.outfit, e.message); } }
+  mesh.userData.outfit = w; return w;
 }

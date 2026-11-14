@@ -4,7 +4,7 @@ import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
-import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
+import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, dressCrew } from './actors.js';
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
@@ -555,7 +555,7 @@ function simBodies(dt, force = false) {
       const spot = CAR_SLOTS.map(([l, b]) => [car.x - car.dy * l - car.dx * b, car.z + car.dx * l - car.dy * b]).find(([x, z]) => !ents.some(q => q.kind === 'crew' && q.mesh && !q.board && Math.hypot(q.x - x, q.z - z) < 0.6)); if (!spot) continue; n++; [cx, cz] = spot;   /* a free spot in the car (others may still be stepping out) */ rot = Math.atan2(car.dx, car.dy); out = true; if (L) { L.npcT = 4; if (L.boardN) { for (const e of ents.slice()) if (e.board) dropBody(e); L.boardN = 0; } } if (!world.liftOpen) world.setLiftOpen(true);
     } else if (!force && !unseenAt(cx, cz)) continue;
     o.person.status = 'seen';
-    const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); m.position.set(cx, 0, cz); m.rotation.y = rot; m.userData.rank = o.person.short; scene.add(m);
+    const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); dressCrew(m, o.person); m.position.set(cx, 0, cz); m.rotation.y = rot; m.userData.rank = o.person.short; scene.add(m);
     const ne = { kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, simKey: k }; place(ne, o, t); ents.push(ne);
     if (out) { startWalk(ne, t[0], t[1], false, { sim: k, off: t.off, ...(runFor(o.person) ? { run: true } : {}) }); ne.pauseT = 0.4 + n * 0.6; ne.fromCar = G.time;   /* one after another, not all at once */ ne.mesh.userData.human?.play('idle', { fade: 0 }); } else poseFor(ne);
   }
@@ -1616,7 +1616,7 @@ function liftStep(dt, t) {
 // ---------------- space madness ----------------
 // One crew member at a time loses their mind, lowest rank first. They hunt the deck's other crew before you. Kill them
 // and, shortly after, someone else on the deck starts screaming.
-function npcFor(person, rnd = Math.random) { person.uniform = person.uniform || G.roster.uniformOf(person); const m = makeSurvivor(rnd, person) || makeCrew(person.uniform); m.userData.rank = person.short; return m; }
+function npcFor(person, rnd = Math.random) { person.uniform = person.uniform || G.roster.uniformOf(person); const m = makeSurvivor(rnd, person) || makeCrew(person.uniform); dressCrew(m, person); m.userData.rank = person.short; return m; }
 function startDeckMadness(data, n, rnd) {
   G.mad = { t: n === 1 ? 1e9 : 16 + rnd() * 14, pending: null };
   if (n !== 1) return;

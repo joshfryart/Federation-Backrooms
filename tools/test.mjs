@@ -217,7 +217,7 @@ const srch = await page.evaluate(async () => {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
   for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
   for (const s of g.world.searchSites) out.kinds[s.kind] = (out.kinds[s.kind] || 0) + 1;
-  const site = g.world.searchSites[0]; if (site) {
+  const site = g.world.searchSites.find(s => !g.ents.some(e => e.kind === 'crew' && Math.hypot(e.x - s.x - s.nx * 0.9, e.z - s.z - s.nz * 0.9) < 3)) || g.world.searchSites[0]; if (site) {   // one with nobody standing by (the prompt would offer a talk instead)
     P.x = site.x + site.nx * 0.9; P.z = site.z + site.nz * 0.9; P.yaw = Math.atan2(site.nx, site.nz); P.vx = P.vz = 0;   // stand in front, look at the wall
     g.step(1 / 60, 900); out.prompt = document.getElementById('prompt').textContent;
     const before = document.getElementById('msgs')?.textContent || '';
@@ -269,10 +269,10 @@ const propsOk = await page.evaluate(async () => {
     for (const [nm, k] of [['pH and EC meter, handheld', 'soil_meter'], ['Wheel chocks', 'wheel_chocks'], ['restraints, flexible cuffs', 'cuffs'], ['radio headset', 'headset'], ['trauma shears', 'snips'], ['Handheld multimeter', 'meter'], ['Nitrile gloves box', 'gloves_nitrile'], ['spare coil module', 'coil_cartridge']]) if (kindForName(nm) !== k) bad.push(`kindForName ${nm} -> ${kindForName(nm)}`);
     for (const [nm, k] of [['soup ladle', 'ladle'], ['stock pot, 40 L', 'stockpot'], ['frying pan', 'fryingpan'], ['saline bag', 'iv_bag'], ['gauze dressing roll', 'bandage'], ['folding stretcher', 'stretcher']]) if (kindForName(nm) !== k) bad.push(`kindForName ${nm} -> ${kindForName(nm)}`); }
   { const { World } = await import('./js/world.js'), { generate } = await import('./js/gen.js');   // batches 5-11 add-ons: the shuttle on its cradle, the core's detail, the bay door and systems board on the walls
-    let sh = 0, cradle = 0, bay = 0, bays = 0, bridges = 0;
-    for (let s = 1; s < 60 && (bays < 3 || bridges < 3); s++) { const d = generate(4, s * 131 + 7); if (!d.rooms.some(r => r.type === 'shuttlebay' || r.type === 'bridge')) continue;
+    let sh = 0, cradle = 0, bay = 0, bays = 0;
+    for (let s = 1, built = 0; s < 80 && bays < 2 && built < 3; s++) { const d = generate(4, s * 131 + 7); if (!d.rooms.some(r => r.type === 'shuttlebay')) continue; built++;   // a few worlds only (each one is a full deck)
       const w = new World(d, __game.world.ship); w.group.traverse(o => { if (o.userData?.name === 'shuttle_cradle') cradle++; if (o.userData?.name === 'bay_door') bay++; });
-      sh += d.props.filter(p => p.kind === 'shuttle').length; bays += d.rooms.filter(r => r.type === 'shuttlebay').length; bridges += d.rooms.filter(r => r.type === 'bridge').length; w.dispose?.(); }
+      sh += d.props.filter(p => p.kind === 'shuttle').length; bays += d.rooms.filter(r => r.type === 'shuttlebay').length; w.dispose?.(); }
     if (cradle < sh) bad.push(`shuttles on cradles ${cradle}/${sh}`); if (bays && !bay) bad.push('no bay door in ' + bays + ' shuttlebays'); }
   return { n: PROP_KINDS.length, gallery: PROP_GALLERY.length, art, maxTris, bad };
 });
@@ -502,9 +502,9 @@ const rep = await page2.evaluate(async () => {
   G.hp = G.maxHp = 1e6; G.phase = 'play'; let t = 0; const tick = (n, dt = 0.1) => { for (let i = 0; i < n; i++) { t += dt; G.phase = 'play'; g.step(dt, t); } };
   // a system serviced on this deck breaks: a crew member is dispatched, walks to it (body), works (marker), patches it to ~0.85 and reports on the comm bus
   const here = G.shipDeck + 1, sys = ['helm', 'alert', 'lifts', 'computer', 'sensors'].find(s => g.repair.site(s)?.deckNo === here) || Object.keys(g.repair.sites).find(s => g.repair.sites[s].deckNo === here);
-  const ev = []; g.repair.on(e => ev.push(e.type)); g.shipState.damage(sys, 0.5); let walked = false, posed = false, marker = false, lead = null, maxProg = 0;
-  for (let i = 0; i < 2600 && !ev.includes('done'); i++) { tick(1); const j = [...g.repair.jobs.values()][0]; if (j?.lead) lead = j.lead.person; if (lead) { const e = g.ents.find(x => x.simmed && x.person === lead); if (e?.walk) walked = true; if (e?.repairing?.npc) posed = true; if (e?.repMark) marker = true; } if (j) maxProg = Math.max(maxProg, j.need ? j.progress / j.need : 0); }
-  out.repair = { sys, events: [...new Set(ev)], lead: lead?.short || null, hp: +g.shipState.hp(sys).toFixed(2), walked, posed, marker, maxProg: +maxProg.toFixed(2), secs: +t.toFixed(0), report: g.comms.log.some(m => /patched/.test(m.text)), heading: g.comms.log.some(m => /heading to/.test(m.text)), released: lead ? !g.sim.overridden(lead) : null };
+  const ev = []; g.repair.on(e => ev.push(e.type)); g.shipState.damage(sys, 0.5); let walked = false, posed = false, marker = false, lead = null, maxProg = 0, body = false;
+  for (let i = 0; i < 2600 && !ev.includes('done'); i++) { tick(1); const j = [...g.repair.jobs.values()][0]; if (j?.lead) lead = j.lead.person; if (lead) { const e = g.ents.find(x => x.simmed && x.person === lead); if (e) body = true; if (e?.walk) walked = true; if (e?.repairing?.npc) posed = true; if (e?.repMark) marker = true; } if (j) maxProg = Math.max(maxProg, j.need ? j.progress / j.need : 0); }
+  out.repair = { sys, events: [...new Set(ev)], lead: lead?.short || null, hp: +g.shipState.hp(sys).toFixed(2), walked, posed, marker, body, maxProg: +maxProg.toFixed(2), secs: +t.toFixed(0), report: g.comms.log.some(m => /patched/.test(m.text)), heading: g.comms.log.some(m => /heading to/.test(m.text)), released: lead ? !g.sim.overridden(lead) : null };
   // world pause: nothing ticks while a menu is open
   const st0 = g.sim.t, dt0 = g.duty.t; G.menuPause = true; tick(30); out.paused = g.sim.t === st0 && g.duty.t === dt0; G.menuPause = false;
   // tasks stay open to the end of the shift, then count
@@ -513,7 +513,8 @@ const rep = await page2.evaluate(async () => {
 });
 console.log('pace/repair:', JSON.stringify(rep));
 { const r = rep, R = r.repair; if (!(r.first.T === 2.5 && r.first.firstDue >= 180 && r.first.firstTask >= 240 && r.first.run === 3000 && r.first.phaseAt === 2400 && r.crunch.T === 0.7 && r.crunch.run === 840 && r.std.T === 1 && r.std.run === 1200 && r.first.rate < r.std.rate && r.std.rate < r.crunch.rate && r.title.buttons === 3 && /Standard/.test(r.title.summary))) fail('pace presets ' + JSON.stringify(r));
-  if (!(R.events.includes('assign') && R.events.includes('done') && Math.abs(R.hp - 0.85) < 0.01 && R.report && R.heading && (R.posed || !R.walked) && R.marker && R.released && (R.walked || R.events.includes('arrive')))) fail('crew repair response ' + JSON.stringify(R));
+  // the lead can be dispatched from another deck (no body here, the job runs in the sim): the work marker is only required when their body was on this deck
+  if (!(R.events.includes('assign') && R.events.includes('done') && Math.abs(R.hp - 0.85) < 0.01 && R.report && R.heading && (R.posed || !R.walked) && (R.marker || !R.body) && R.released && (R.walked || R.events.includes('arrive')))) fail('crew repair response ' + JSON.stringify(R));
   if (!r.paused) fail('world pause (G.menuPause)'); if (!(r.tasks.open === r.tasks.n && r.tasks.after === r.tasks.n && (r.tasks.n === 0 || (r.tasks.chain && r.tasks.end)))) fail('shift-end tasks ' + JSON.stringify(r.tasks)); }
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 await browser.close(); server.close();

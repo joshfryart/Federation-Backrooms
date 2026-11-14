@@ -115,7 +115,9 @@ export async function uiBrowser(page, fail) {
     // P = script pause; P again resumes
     key('KeyP'); out.p = { phase: G.phase, shown: document.getElementById('pause').classList.contains('show') }; key('KeyP'); out.p.back = G.phase;
     // name tags over crew in view
-    const e = g.ents.find(x => x.simmed && x.mesh); if (e) { G.phase = 'play'; g.P.x = e.x; g.P.z = e.z + 2.2; g.P.yaw = 0; g.P.pitch = 0; g.camera.position.set(g.P.x, 1.6, g.P.z); g.camera.rotation.set(0, 0, 0); g.camera.updateMatrixWorld(); g.menus.tags.t = 0; g.menus.frame(0.016); out.tags = { shown: g.menus.tags.shown, text: document.querySelector('.ntag')?.textContent || '' }; }
+    // (someone with a clear line from 2.2 m away: rooms are full of wall props since the art batches 5-11, so the spot due south can be behind a desk)
+    let e = null, off = [0, 2.2]; for (const x of g.ents.filter(x => x.simmed && x.mesh)) { const o = [[0, 2.2], [2.2, 0], [0, -2.2], [-2.2, 0]].find(([a, b]) => !g.world.solidAt(x.x + a, x.z + b) && g.world.los(x.x + a, x.z + b, x.x, x.z)); if (o) { e = x; off = o; break; } }
+    if (e) { G.phase = 'play'; g.P.x = e.x + off[0]; g.P.z = e.z + off[1]; g.P.yaw = Math.atan2(off[0], off[1]); g.P.pitch = 0; g.camera.position.set(g.P.x, 1.6, g.P.z); g.camera.rotation.set(0, g.P.yaw, 0); g.camera.updateMatrixWorld(); g.menus.tags.t = 0; g.menus.frame(0.016); out.tags = { shown: g.menus.tags.shown, text: document.querySelector('.ntag')?.textContent || '' }; }
     // toasts
     G.say('Duty: Engineering rounds (engineering). [J]', 'comp'); out.toast = { icon: !!document.querySelector('#toast .tst svg'), text: document.querySelector('#toast .tst span')?.textContent };
     HTMLCanvasElement.prototype.requestPointerLock = rpl; return out;

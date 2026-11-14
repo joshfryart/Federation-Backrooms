@@ -10,6 +10,8 @@ import { buildChair } from './propart-stations1.js';
 import { DECOR_ENG } from './decorart-eng.js';
 import { DECOR_BRIDGE } from './decorart-bridge.js';     // batch 7: sysboard, sysboard_half (CMD-1)
 import { DECOR_SEC } from './decorart-security.js';      // batch 8: dclocker, emitterpost, camdome, badgereader
+import { installIcons, buildEmblemPlate, ROOM_DEPT, buildPlacard, PLACARD_ROOMS, buildFloorZone, ZONE_ROOMS, buildDirectory, DECOR_SIGN } from './signart.js';   // batch 10 (docs/signart.md)
+installIcons();   // U-1 / U-2: the handheld glyphs and the flight / operations badge shapes join the live ICONS / SHAPES / CATS tables (js/icons.js) before any HUD draws
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
@@ -498,7 +500,7 @@ const DECOR = {
   kit(K) { K.box(0.5, 0.38, 0.14, 0, 1.4, WHT).box(0.2, 0.06, 0.006, 0, 1.4, RD, 0.14).box(0.06, 0.2, 0.006, 0, 1.4, RD, 0.14).box(0.16, 0.03, 0.03, 0, 1.62, DK, 0.05).box(0.5, 0.02, 0.145, 0, 1.3, 0xb8c0c4); },
 };
 Object.assign(DECOR, DECOR_ENG);   // batch 3 wall kits: foamstation, hosecab, panelbox, panelopen (js/decorart-eng.js)
-Object.assign(DECOR, DECOR_BRIDGE, DECOR_SEC);   // batches 7 and 8 (js/decorart-bridge.js, js/decorart-security.js)
+Object.assign(DECOR, DECOR_BRIDGE, DECOR_SEC, DECOR_SIGN);   // batches 7, 8 and 10 (js/decorart-bridge.js, js/decorart-security.js, js/signart.js: podhatch, podbank)
 // pool entries that are PROP_ART fixtures (gas_panel, stretcher_rack) are built as single meshes by the decor pass, not as kits
 const ROOM_DECOR = {
   bridge: ['monitorB', 'monitorO', 'monitorB', 'comm'], engineering: ['gauges', 'pipes', 'toolboard', 'monitorO', 'breaker', 'pipes', 'panelopen', 'hosecab', 'dclocker'], sickbay: ['medcab', 'monitorG', 'medcab', 'kit', 'locker', 'gas_panel', 'stretcher_rack', 'gas_panel'], mess: ['menu', 'shelf', 'fountain', 'shelf'],
@@ -507,7 +509,7 @@ const ROOM_DECOR = {
   readyroom: ['picture', 'shelf', 'monitorB', 'locker'], brig: ['locker', 'monitorO', 'comm', 'extinguisher', 'emitterpost', 'camdome', 'badgereader'], armory: ['rack', 'locker', 'rack', 'extinguisher', 'camdome'], gym: ['mirror', 'fountain', 'shelf', 'extinguisher'],
   lab: ['monitorG', 'shelf', 'locker', 'medcab', 'monitorB'], laundry: ['shelf', 'pipes', 'locker', 'hose'], lounge: ['picture', 'shelf', 'fountain', 'mirror', 'monitorB'], workshop: ['toolboard', 'rack', 'toolboard', 'pipes', 'breaker', 'hose', 'panelbox'],
   plant: ['pipes', 'gauges', 'pipes', 'breaker', 'monitorO', 'hose', 'foamstation', 'hosecab', 'panelbox', 'dclocker'], morgue: ['medcab', 'locker', 'monitorG', 'kit'], datacore: ['monitorB', 'monitorO', 'comm', 'breaker', 'coil'], stores: ['rack', 'rack', 'shelf', 'locker', 'extinguisher', 'dclocker', 'coldstore_door'],
-  washroom: ['mirror', 'fountain', 'shelf', 'kit'], airlock: ['locker', 'hose', 'rack', 'extinguisher', 'comm'],
+  washroom: ['mirror', 'fountain', 'shelf', 'kit'], airlock: ['locker', 'hose', 'rack', 'extinguisher', 'comm', 'podhatch', 'podhatch'],
 };
 const kitCache = {};
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
@@ -939,7 +941,20 @@ export class World {
     };
     for (const r of d.rooms) {
       const fs = this.wallFaces.filter(f => f.room === r.type && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h);
-      if (fs.length) place(fs[Math.floor(rnd() * fs.length)], ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
+      if (fs.length) { const f = fs[Math.floor(rnd() * fs.length)]; place(f, ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
+        const e = buildEmblemPlate(ROOM_DEPT[r.type] || 'services'); e.position.set(f.px + f.dx * 0.02 - f.dy * 0.92, 2.6, f.pz + f.dy * 0.02 + f.dx * 0.92); e.rotation.y = f.ry; g.add(e); }   // G-1 department plate beside the room sign
+    }
+    // --- signage (batch 10, js/signart.js) on its own random stream: hazard placards (G-2), floor zone markings (G-3), the deck directory by the lift (G-4)
+    {
+      const srnd = mulberry32(d.deck * 7331 + d.exit[0] * 101 + d.exit[1] * 7 + 3);
+      for (const f of this.wallFaces) { const l = PLACARD_ROOMS[f.room]; if (!l || f.deco || f.sign || f.win || srnd() > 0.2) continue;
+        const m = buildPlacard(l[Math.floor(srnd() * l.length)]); m.position.set(f.px + f.dx * 0.012, 1.45, f.pz + f.dy * 0.012); m.rotation.y = f.ry; g.add(m); f.deco = true; }
+      for (const r of d.rooms) { const l = ZONE_ROOMS[r.type]; if (!l || r.type === 'airlock') continue; const open = [];
+        for (let ty = r.y + 1; ty < r.y + r.h - 1; ty++) for (let tx = r.x + 1; tx < r.x + r.w - 1; tx++) if (this.grid[ty][tx] === 0) open.push([tx, ty]);
+        for (let n = Math.min(open.length, 1 + Math.floor(srnd() * 3)); n > 0; n--) { const [tx, ty] = open.splice(Math.floor(srnd() * open.length), 1)[0], z = buildFloorZone(l[Math.floor(srnd() * l.length)]), [cx, cz] = this.center(tx, ty);
+          z.position.x = cx; z.position.z = cz; z.rotation.z = Math.floor(srnd() * 4) * Math.PI / 2; g.add(z); } }
+      const [lx, ly] = d.exit, f = this.wallFaces.find(f => !f.room && !f.deco && !f.sign && !f.win && !(f.tx + f.dx === lx && f.ty + f.dy === ly) && Math.abs(f.tx + f.dx - lx) + Math.abs(f.ty + f.dy - ly) <= 2);
+      if (f) { const b = buildDirectory(d.rooms, { deck: d.deck + 1, here: { x: lx, y: ly }, accent: '#' + new THREE.Color(ship.accent).getHexString() }); b.position.set(f.px + f.dx * 0.01, 1.5, f.pz + f.dy * 0.01); b.rotation.y = f.ry; g.add(b); f.deco = true; this.directory = b; }
     }
     const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'MAINTENANCE\nDUCT ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TUBELIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
     for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) place(f, corr[Math.floor(rnd() * corr.length)], 2.55, 1.2);
@@ -1334,6 +1349,7 @@ export class World {
     }
   }
   update(dt, t) {
+    this.directory?.userData.pulse?.(t);   // "you are here" lamp
     this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
     if (this.coneMat) this.coneMat.opacity = 0.04 * this.powerAmt * (1 - this.alertAmt * 0.5);
     if (this.coneFlickMat) this.coneFlickMat.opacity = 0.04 * this.powerAmt * this.flickerF;
