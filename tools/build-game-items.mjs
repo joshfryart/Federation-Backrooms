@@ -33,9 +33,17 @@ for (const [room, ids] of Object.entries(ROOM_SPACES)) {
 // examine text per prop kind: the inventory row that best names that prop in this room's spaces → [name, real-world equivalent]
 const PROP = { console: /console|workstation|operator station/i, chair: /command chair|captain.?s chair|\bchair\b/i, viewscreen: /view ?screen|main screen|panoramic|observation window|window/i, warpcore: /reactor|core/i,
   shuttle: /shuttle|craft/i, holocube: /holo|emitter/i, pad: /\bpad\b|platform/i, bunk: /bunk|berth|\bbed\b|cot\b/i, table: /table|bench|counter|desk/i, biobed: /bio-?bed|\bbed\b|stretcher|gurney|examination couch/i,
-  crate: /crate|container|\bcase\b|drum|pallet|\bbox\b/i, tree: /tree|planter|grow bed|plant/i, lonechair: /armchair|chair|seat/i, plant: /planter|plant/i, cart: /cart|trolley/i, replicator: /replicator/i,
+  crate: /crate|container|\bcase\b|drum|pallet|\bbox\b/i, tree: /\btrees?\b(?! (box|storage))|planter|grow bed|potted|\bplants?\b(?! control| status|room| —)/i, lonechair: /armchair|chair|seat/i, plant: /planter|plant/i, cart: /cart|trolley/i, replicator: /replicator/i,
   desk: /desk/i, cell: /cell|bunk|bars/i, weaponrack: /rack|cabinet|locker/i, treadmill: /treadmill/i, weightbench: /bench|barbell|weight/i, labbench: /bench|microscope/i, washer: /washer|washing/i, sofa: /sofa|couch|settee/i,
-  lathe: /lathe|milling|machine/i, workbench: /bench/i, tank: /tank|vessel|pump|boiler/i, drawers: /drawer|cold|refriger|mortuary/i, servers: /server|rack|stack|cabinet/i, shelving: /shelving|shelf|rack/i, suitrack: /suit|locker/i, sinkunit: /sink|basin|wash/i };
+  lathe: /lathe|milling|machine/i, workbench: /bench/i, tank: /tank|vessel|boiler|dewar/i, drawers: /drawer|cold|refriger|mortuary/i, servers: /server|rack|stack|cabinet/i, shelving: /shelving|shelf|rack/i, suitrack: /suit|locker/i, sinkunit: /sink|basin|wash/i,
+  // art batches 1-4 (js/propart-*.js)
+  helm: /\bhelm\b|flight control|conn station|pilot.?s? (station|console)/i, baycontrol: /bay control|flight deck (control|console)|launch control|traffic control|control (desk|booth|tower|console|room)|ops console/i, beampedestal: /transporter (console|control)|pedestal|beam control/i,
+  secdesk: /security (desk|console|station)|custody|duty desk|guard (desk|station)|booking/i, nursestation: /nurses?.? station|nursing station|charge desk/i, holodesk: /control (desk|booth|console)|operator (desk|station)|programme? console/i,
+  reactorstation: /reactor (control|console|station|operator)|control console|master systems/i, range: /\brange\b|stove|\bhob\b|oven|cooker|griddle/i, servery: /servery|serving (line|counter)|hot (pass|well|cupboard)|bain/i, bar: /bar counter|\bbar\b(?! stock| &| foot)|beer tap/i,
+  dishwasher: /dish ?wash|dish machine|pot ?wash|glass ?wash/i, wastebin: /\bbins?\b|waste|recycl/i, pumpskid: /\bpumps?\b/i, heatexch: /heat exchanger|exchanger|chiller|cooler\b/i, scrubber: /scrubber|co2|co₂|carbon dioxide|atmosphere processor/i,
+  fieldgen: /graviton|gravity generator|field generator|generator synchroniser/i, fieldgen_damp: /damper (field|generator)|inertial damp|field generator/i, fabricator: /fabricat|printer|industrial replicator|cnc|mill\b/i, steriliser: /sterili[sz]|autoclave|instrument wash/i,
+  surgical_table: /surgical|operating table|theatre table/i, med_dispenser: /dispens|pharmacy|medication|drug cabinet/i, exam_couch: /couch|exam(ination)? (table|bed)|treatment (table|bed)/i, autopsy_table: /autopsy|post.?mortem|dissection|mortuary table/i,
+  infusion_stand: /infusion|iv (pole|stand)|drip stand/i };
 const bulk = (r) => ({ huge: 4, large: 3, medium: 2, small: 1, tiny: 0 }[r[4]] ?? 1) + (['floor', 'built-in'].includes(r[3]) ? 2 : 0);
 out.examine = {}; out.clutter = {};
 const CYL = /cup|mug|bottle|can\b|canister|cylinder|flask|jar|tube|pen\b|pens|drum|thermos|roll|candle|vial|tin\b/i, FLAT = /pad\b|tablet|book|paper|card|tray|plate|disc|folder|manual|map|log|binder|clipboard|photo/i;
