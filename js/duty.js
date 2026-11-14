@@ -9,6 +9,7 @@
 //     .tick(dt)  .shiftEnd()  .firstTask()  .repairRows = () => rows (js/repair.js, shown on the board)
 //     .perform(loopId, quality)  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)
 //     .board()   duty + task board rows for the HUD     .ledger / .debt / .chain / .trust(person)
+//     .atJob = (job) => bool   optional (js/main.js): an ordered job's clock only runs once the person is in the job room ('ordered' / 'jobdone' events carry the job)
 import { hash, hash01 } from './clock.js';
 import { RANK_SHORT } from './crew.js';
 import { PACES } from './pace.js';
@@ -16,6 +17,7 @@ import { PACES } from './pace.js';
 export const QUALITIES = ['proper', 'rushed', 'faked', 'skipped'];
 export const Q_LABEL = { proper: 'Do it properly', rushed: 'Rush it', faked: 'Fake the log', skipped: 'Skip it' };
 export const SHIP_SEC_PER_MIN = 10 / 3;
+export const JOB_WAIT = 120;   // an ordered / delegated job's clock waits this long for the person to walk (or ride) to the job room (Duty.atJob)
 export const MISSION_ORDER = ['quiet_watch', 'survey', 'cargo_run', 'medical_relief', 'shakedown'];
 const LIVE = (p) => p && !['dead', 'corpse', 'crazed', 'evacuated'].includes(p.status);
 
@@ -69,7 +71,7 @@ export class Duty {
     for (const l of this.loops) if (l.state === 'due' && this.t - l.dueAt > l.period * 0.9) this._miss(l);   // never got to it: a gentle skip, the round comes round again
     for (const t of this.tasks) if (t.state === 'pending' && this.t >= t.at_s) { t.state = 'active'; this.emit({ type: 'task', task: t.task, id: t.id, room: t.room, first: t === this.firstTask() }); }   // open until the shift ends
     if (this.busy) { this.busy.left -= dt; if (this.place.room !== this.busy.loop.room && this.busy.loop.room !== 'any') { const l = this.busy.loop; this.busy = null; this._finish(l, 'skipped', { walkedOff: true }); } else if (this.busy.left <= 0) { const b = this.busy; this.busy = null; this._finish(b.loop, b.q); } }
-    for (const j of this.jobs.slice()) { j.left -= dt; if (j.left <= 0) { this.jobs.splice(this.jobs.indexOf(j), 1); this._jobDone(j); } }
+    for (const j of this.jobs.slice()) { if (this.atJob && !this.atJob(j) && (j.wait = (j.wait || 0) + dt) < JOB_WAIT) continue; j.left -= dt; if (j.left <= 0) { this.jobs.splice(this.jobs.indexOf(j), 1); this._jobDone(j); } }   // the clock runs once they are at the job (atJob hook, js/main.js), or after JOB_WAIT s on the way
     this.audit -= dt; if (this.audit <= 0) { this.audit = 70 + hash01('audit', this.seed, Math.floor(this.t)) * 60; this._audit(); }
   }
 
@@ -160,7 +162,7 @@ export class Duty {
     if (w.roll > w.p) { this.stats.refused++; this._bump(p, -0.03); this.emit({ type: 'refused', who: p.short, text: `${p.short}: "${lp.label}? I've got my own work, ${RANK_SHORT[this.player.rank]}."` }); return { ok: false, refused: true }; }
     const rel = 0.55 + this.trust(p) * 0.4, q = hash01('q', this.seed, p.id, Math.floor(this.t)) < rel ? 'proper' : 'rushed';
     const job = { person: p, loop: lp, q, left: Math.max(6, lp.dur * SHIP_SEC_PER_MIN * 1.6), delegateOf }; this.jobs.push(job);
-    this.emit({ type: 'ordered', who: p.short, label: lp.label, delegated: !!delegateOf }); return { ok: true, job };
+    this.emit({ type: 'ordered', who: p.short, label: lp.label, delegated: !!delegateOf, job }); return { ok: true, job };
   }
   // ask for a favour: anyone in your department (or below you) may lend a hand with your next due duty, if they like you enough
   askHelp(p) {
@@ -177,7 +179,7 @@ export class Duty {
     const own = j.delegateOf ? this.loop(j.delegateOf) : null, l = own || { ...j.loop, q: j.loop.q, sys: j.loop.sys };
     if (own) { own.state = 'idle'; own.next = this.t + own.period; own.done++; own.last = j.q; }
     const debt = (l.q[j.q] || [0, 0])[1]; this._record(l, j.q, debt * (own ? 1 : 0.5), j.person); this._bump(j.person, j.q === 'proper' ? 0.02 : -0.01);
-    this.emit({ type: 'jobdone', who: j.person.short, label: l.label, quality: j.q, delegated: !!own });
+    this.emit({ type: 'jobdone', who: j.person.short, label: l.label, quality: j.q, delegated: !!own, job: j });
   }
 
   // ---- mission task board: the player does their own tasks in the right room

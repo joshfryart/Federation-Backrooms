@@ -1,0 +1,136 @@
+// NPC walking soak (Systems Nominal): a repeatable headless run that measures how crew bodies walk. Not part of tools/test.mjs (slow);
+// later pathing iterations use it to find and size problems (docs/pathing.md has the log).
+//   node tools/soak-walk.mjs [--secs 150] [--decks 3 | --only 2,5] [--clock 6] [--seed 11] [--billet cos] [--ship 0] [--orders 12] [--sep m] [--samples] [--json]
+// Starts a nominal run as `billet` (cos = Chief of Security) with Math.random seeded (repeatable), runs `secs` of game time on each of the
+// `decks` busiest decks (each from the same fresh run) at 30 steps/s with the ship clock `clock` x faster (more schedule changes), the player hopping between the lift,
+// a walker and the busiest room every 10 s, and orders a subordinate (round robin) every `orders` s. Prints one row per deck + totals:
+//   stuck      walks whose path-field distance did not improve for > 8 s (count, body-seconds)
+//   stack      pairs of bodies closer than 0.45 m (idle-idle pair-seconds = stacked, with a walker = brushing through)
+//   clip       body inside a wall / prop (circle 0.15 m) while walking / idle and not on equipment, body-seconds
+//   osc        walkers that reverse direction (> 135 deg between 0.5 s samples) 3+ times in 10 s
+//   long       walks still running after 3 s per tile of their path + 15 s (a 1 m/s walk needs 2.5 s per tile), walks cut short (finished off their target tile), median walk seconds
+//   orders     ordered NPCs: given / reached the job room (abstract sim) / body seen in the room on this deck / never got there
+//   lift       boarders waiting in the car > 10 s, walkers queued at the car > 15 s, max boarders at once
+//   pop        bodies appearing / vanishing in the player's sight (not in a shut car), teleports (> 0.6 m in one frame)
+//   cost       path fields built per second, ms per field, step() ms mean / p99 / max
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : (process.argv[i + 1] ?? true); };
+const opt = { secs: +arg('secs', 150), decks: +arg('decks', 3), clock: +arg('clock', 6), seed: +arg('seed', 11), billet: arg('billet', 'cos'), ship: arg('ship', null), orders: +arg('orders', 12), sep: arg('sep', null), trace: process.argv.includes('--trace') };   // --sep m: override the walkers' personal space (G.walkSep, A/B)
+const JSON_OUT = process.argv.includes('--json');
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.webp': 'image/webp', '.css': 'text/css', '.json': 'application/json' };
+const server = createServer(async (req, res) => {
+  try { const p = join(ROOT, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/, '/index.html')); const b = await readFile(p); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(b); }
+  catch { res.writeHead(404); res.end(); }
+}).listen(0);
+const port = server.address().port;
+const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+let page; const errors = [];
+async function openRun() {   // a fresh page + run (also after a renderer crash, e.g. out of memory on a shared box)
+page = await browser.newPage({ viewport: { width: 640, height: 360 } });
+page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+await page.addInitScript((seed) => { let a = seed >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }, opt.seed);
+await page.goto(`http://localhost:${port}/index.html?billet=${opt.billet}&brief=0`);
+await page.evaluate(async () => { await __game.ready; __game.setQuality('low'); });
+
+return page.evaluate((o) => {
+  const g = __game, G = g.G; if (o.ship != null) G.forceShip = +o.ship; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+  G.hp = G.maxHp = 1e6; G.phase = 'play'; g.clock.rate *= o.clock; if (o.sep != null) G.walkSep = +o.sep; window.__trace = o.trace;
+  // instrument path-field builds (World.field is only called through the main.js pathField cache)
+  const proto = Object.getPrototypeOf(g.world); if (!proto.__soak) { const f0 = proto.field; proto.field = function (...a) { const t0 = performance.now(), r = f0.apply(this, a); window.__fieldN = (window.__fieldN || 0) + 1; window.__fieldMs = (window.__fieldMs || 0) + performance.now() - t0; return r; }; proto.__soak = true; }
+  const D = g.duty, S = g.sim, decks = G.shipDecks.map((d, i) => ({ deckNo: i + 1, n: S.bodies(i + 1).size })).sort((a, b) => b.n - a.n);
+  return { ship: G.ship.name, runSeed: G.runSeed, billet: G.player.billet, title: G.player.title, subs: D.subs().length, decks, roster: G.roster.people.length };
+}, opt);
+}
+const setup = await openRun();
+
+// one deck: load it, run `secs`, measure; returns the numbers for the row
+async function soakDeck(deckNo, secs, orderEvery, phase) {
+  return page.evaluate(async ({ deckNo, secs, orderEvery, phase }) => {
+    const g = __game, G = g.G, P = g.P, S = g.sim, D = g.duty; if (G.shipDeck + 1 !== deckNo) g.loadDeck(deckNo); G.phase = 'play'; if (g.haul) g.haul.t = 3;
+    const w = () => g.world, FR = 30, dt = 1 / FR; let t = 0, T0 = (window.__soakT || 0);
+    const unseen = (x, z) => Math.hypot(x - P.x, z - P.z) > 14 || !w().los(P.x, P.z, x, z);
+    const R = { stuckN: 0, stuckS: 0, stackS: 0, brushS: 0, stackPairs: 0, clipWalkS: 0, clipIdleS: 0, clipSamples: [], osc: 0, walks: 0, durs: [], long: 0, cut: 0, cutSamples: [], ordGiven: 0, ordReached: 0, ordBody: 0, ordNever: 0, ordRefused: 0, ordLate: [], boardLong: 0, queueLong: 0, maxBoard: 0, appearSeen: 0, vanishSeen: 0, popSamples: [], tele: 0, teleSamples: [], fields: 0, fieldMs: 0, stepMs: [], bodies: 0, walkersMax: 0, liftWalks: 0, replan: 0, teleSeen: 0, ordHere: 0, liftSamples: [], brush: {}, brushSamples: [], carBrush: {}, stuckSamples: [], longSamples: [] };
+    const M = new Map(), pairs = new Map(), jobs = [], subs = D.subs(); let prev = new Map(), ordI = window.__ordI || 0, nextOrder = 3, hop = 0;
+    const f0n = window.__fieldN || 0, f0ms = window.__fieldMs || 0;
+    const bodies = () => g.ents.filter(e => e.kind === 'crew' && e.simmed && e.mesh && e.person);
+    const at = (e) => [e.mesh.position.x, e.mesh.position.z];
+    for (let i = 0; i < secs * FR; i++) {
+      t += dt; G.phase = 'play'; G.hp = 1e6;
+      // the player: every 10 s hop between the lift mouth (looking in), beside a walker, and the busiest room
+      if (t >= hop) { hop = t + 10; const k = Math.floor(t / 10) % 3, car = w().car, B = bodies(); let p = null;
+        if (k === 0 && car) p = [car.x + car.dx * 3.2, car.z + car.dy * 3.2]; else if (k === 1) { const wk = B.find(e => e.walk && !e.walk.opts.point); if (wk) p = [wk.x, wk.z]; } else { const idle = B.filter(e => !e.walk); if (idle.length) { const e = idle[Math.floor(t) % idle.length]; p = [e.x, e.z]; } }
+        if (p) { const q = { x: p[0], z: p[1], y: 0 }; for (const [ox, oz] of [[1.1, 0], [-1.1, 0], [0, 1.1], [0, -1.1]]) { const r = { x: p[0] + ox, z: p[1] + oz, y: 0 }; if (!w().solidAt(r.x, r.z) && w().los(p[0], p[1], r.x, r.z)) { q.x = r.x; q.z = r.z; break; } } w().resolve(q, 0.3); P.x = q.x; P.z = q.z; P.vx = P.vz = 0; } }
+      // orders: a subordinate (round robin) is told to do their duty; due loops are delegated
+      if (subs.length && t >= nextOrder) { nextOrder = t + orderEvery; const mine = subs.filter(q => g.ents.some(e => e.simmed && e.person === q) && !D.jobs.some(j => j.person === q)), p = mine.length && ordI % 3 ? mine[ordI++ % mine.length] : subs[ordI++ % subs.length]; /* mostly someone on this deck (their body is watched) */ const due = D.loops.find(l => l.state === 'due'); const r = due && ordI % 2 ? D.delegate(p, due.id) : D.order(p, null);
+        if (r?.ok) { R.ordGiven++; jobs.push({ job: r.job, p, room: r.job.loop.room, t0: t, reached: null, body: false, on: S.where(p)?.deckNo }); } else if (r?.refused) R.ordRefused++; }
+      const open0 = w().liftOpen, t0 = performance.now(); g.step(dt, T0 + t); R.stepMs.push(performance.now() - t0);
+      const B = bodies(), now = new Map(B.map(e => [e.person.id, e])); R.bodies += B.length; R.walkersMax = Math.max(R.walkersMax, B.filter(e => e.walk).length);
+      // appear / vanish in sight
+      for (const [id, e] of now) if (!prev.has(id) && i > 0) { const [x, z] = at(e), car = w().car, inCar = car && w().tile(x, z).join() === car.tx + ',' + car.ty && !open0; if (!unseen(x, z) && !inCar) { R.appearSeen++; if (R.popSamples.length < 6) R.popSamples.push({ t: +t.toFixed(1), a: 'appear', who: e.person.short, d: +Math.hypot(x - P.x, z - P.z).toFixed(1) }); } }
+      for (const [id, e] of prev) if (!now.has(id)) { const [x, z] = M.get(id)?.pos || at(e), car = w().car, inCar = car && w().tile(x, z).join() === car.tx + ',' + car.ty && !open0; if (!unseen(x, z) && !inCar && !['dead', 'corpse'].includes(e.person.status)) { R.vanishSeen++; if (R.popSamples.length < 10) R.popSamples.push({ t: +t.toFixed(1), a: 'vanish', who: e.person.short, d: +Math.hypot(x - P.x, z - P.z).toFixed(1), board: !!e.board, liftOpen: w().liftOpen, open0, closedT: +(G.lift?.closedT || 0).toFixed(2), walk: !!e.walk, vanish: !!e.walk?.vanish }); } }
+      if (window.__trace && i % 30 === 0) { const c = w().car; for (const e of B) if (e.walk?.vanish && t - (M.get(e.person.id)?.ws ?? t) > 20) (window.__tr ||= []).push([+t.toFixed(0), e.person.short.split(' ').pop(), +e.x.toFixed(1), +e.z.toFixed(1), w().tile(e.x, e.z).join(), +(e.v || 0).toFixed(2), +(e.heading || 0).toFixed(1), w().liftOpen, +(G.lift.shutT || 0).toFixed(1), G.lift.boardN, +(G.lift.npcT || 0).toFixed(1), +Math.hypot(e.x - c.x, e.z - c.z).toFixed(1), e.walk.stuck.toFixed(1), e.ghost > 0, +(e.forceT || 0).toFixed(1)]); }
+      prev = now; let board = 0;
+      for (const e of B) {
+        const id = e.person.id, pos = at(e); let m = M.get(id); if (!m || m.ent !== e) { m = { ent: e, pos, walk: null, hist: [], revs: [], boardT: 0, queueT: 0 }; M.set(id, m); }   // a new body (re-spawned) starts a new record
+        const jump = Math.hypot(pos[0] - m.pos[0], pos[1] - m.pos[1]); if (jump > 0.6) { const seen = !unseen(pos[0], pos[1]) || !unseen(m.pos[0], m.pos[1]); R.tele++; if (seen) R.teleSeen++; if (R.teleSamples.length < 8 && seen) R.teleSamples.push({ t: +t.toFixed(1), who: e.person.short, jump: +jump.toFixed(2), walk: !!e.walk, op: !!e.op, board: !!e.board, spot: e.spot, push: !!e.pushing, rep: !!e.repairing, haul: !!e.haul, car: +Math.hypot(pos[0] - w().car.x, pos[1] - w().car.z).toFixed(2), car0: +Math.hypot(m.pos[0] - w().car.x, m.pos[1] - w().car.z).toFixed(2), open0, open: w().liftOpen, vanish: !!e.walk?.vanish, ease: !!e.ease }); }
+        m.pos = pos;
+        // walks: start / finish / stuck / long / cut short
+        if (e.walk !== m.walk) { if (m.walk && e.walk && !m.walk.opts.point && !e.walk.opts.point) R.replan++; if (m.walk) { const dur = t - m.ws; R.durs.push(dur); const [tx, ty] = w().tile(e.x, e.z); if (!e.walk && !m.walk.vanish && !m.walk.opts.point && (tx !== m.walk.tx || ty !== m.walk.ty)) { R.cut++; if (R.cutSamples.length < 5) R.cutSamples.push({ t: +t.toFixed(1), who: e.person.short, off: Math.abs(tx - m.walk.tx) + Math.abs(ty - m.walk.ty), dur: +dur.toFixed(1) }); } }
+          m.walk = e.walk; m.ws = t; m.f0 = null; m.best = 1e9; m.bestT = t; m.stuck = false; m.longN = false; if (e.walk && !e.walk.opts.point) { R.walks++; if (e.walk.vanish) R.liftWalks++; } }
+        if (e.walk && !e.walk.opts.point) {
+          const wk = e.walk, f = g.pathField(wk.tx, wk.ty, !!wk.opts.tubes), [tx, ty] = w().tile(e.x, e.z), v = f[tx + ty * w().W];
+          if (v >= 0 && v < m.best - 0.5) { m.best = v; m.bestT = t; } const near = Math.hypot(e.x - (wk.tx + 0.5) * 2.5, e.z - (wk.ty + 0.5) * 2.5) < 0.6;
+          if (t - m.bestT > 8 && !near && !(wk.vanish && v <= 1)) { R.stuckS += dt; if (!m.stuck) { m.stuck = true; R.stuckN++; const c = w().car; if (R.stuckSamples.length < 8) R.stuckSamples.push({ t: +t.toFixed(1), who: e.person.short, at: [tx, ty], to: [wk.tx, wk.ty], fv: v, vanish: !!wk.vanish, v: +(e.v || 0).toFixed(2), car: +Math.hypot(e.x - c.x, e.z - c.z).toFixed(1), open: w().liftOpen, near: B.filter(o => o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 1.2).map(o => o.person.short.split(' ').pop() + (o.board ? ':b' : o.walk ? (o.walk.vanish ? ':v' : ':w') : ':i')), wst: +(wk.stuck || 0).toFixed(1), ghost: e.ghost > 0, seen: !unseen(e.x, e.z) }); } }
+          if (m.f0 == null && v >= 0) m.f0 = v; if (t - m.ws > 3 * (m.f0 ?? 10) + 15 && !m.longN) { m.longN = true; R.long++; if (R.longSamples.length < 6) R.longSamples.push({ t: +t.toFixed(1), who: e.person.short, at: [tx, ty], to: [wk.tx, wk.ty], fv: v, best: m.best, vanish: !!wk.vanish, v: +(e.v || 0).toFixed(2), push: !!wk.opts.push, run: !!wk.opts.run, tubes: !!wk.opts.tubes, crawl: !!e.crawl, climb: !!e.climbing, haul: !!e.haul, seen: !unseen(e.x, e.z), np: wk.np }); }
+          if (wk.vanish && Math.hypot(e.x - w().car.x, e.z - w().car.z) < 3.5) { m.queueT += dt; if (m.queueT > 15 && !m.ql) { m.ql = true; R.queueLong++; const L = G.lift, c = w().car; if (R.liftSamples.length < 6) R.liftSamples.push({ t: +t.toFixed(1), who: e.person.short, d: +Math.hypot(e.x - c.x, e.z - c.z).toFixed(2), v: +(e.v || 0).toFixed(2), open: w().liftOpen, shutT: +(L.shutT || 0).toFixed(2), boardN: L.boardN, boardW: +(L.boardW || 0).toFixed(1), closedT: +(L.closedT || 0).toFixed(1), npcT: +(L.npcT || 0).toFixed(1), door: B.filter(o => !o.board && Math.abs(o.x - c.x) < 1.2 && Math.abs(o.z - c.z) < 1.2).map(o => o.person.short + (o.walk ? (o.walk.vanish ? ':v' : ':w' + (o.walk.opts.point ? 'p' : '') + (o.haul ? 'h' : '')) : ':i') + (o.walk || o.board ? '' : JSON.stringify([o.room, o.spot, o.simKey, o.op ? 'op' : '', o.haul ? 'haul' : '', o.repairing ? 'rep' : '', S.where(o.person)]))), stuckW: +(e.walk?.stuck || 0).toFixed(1), ghost: e.ghost > 0, player: +Math.hypot(P.x - c.x, P.z - c.z).toFixed(1) }); } } else { m.queueT = 0; m.ql = false; }
+          // oscillation: direction reversals between 0.5 s samples
+          if (i % 15 === 0) { m.hist.push(pos); if (m.hist.length > 3) m.hist.shift(); if (m.hist.length === 3) { const [a, b, c] = m.hist, u = [b[0] - a[0], b[1] - a[1]], v2 = [c[0] - b[0], c[1] - b[1]], lu = Math.hypot(...u), lv = Math.hypot(...v2); if (lu > 0.1 && lv > 0.1 && (u[0] * v2[0] + u[1] * v2[1]) / (lu * lv) < -0.7) { m.revs.push(t); m.revs = m.revs.filter(x => t - x < 10); if (m.revs.length >= 3 && !m.oscN) { m.oscN = true; R.osc++; } } } }
+        } else { m.hist = []; m.revs = []; m.oscN = false; }
+        if (e.board) { board++; m.boardT += dt; if (m.boardT > 10 && !m.bl) { m.bl = true; R.boardLong++; } } else { m.boardT = 0; m.bl = false; }
+        // wall / prop clipping (the mesh, with its ease offset)
+        if (!e.op && !e.repairing && !e.cb?.ai && !e.board) { const q = { x: pos[0], z: pos[1], y: 0 }; w().resolve(q, 0.15); if (Math.hypot(q.x - pos[0], q.z - pos[1]) > 0.03) { if (e.walk) R.clipWalkS += dt; else R.clipIdleS += dt; if (R.clipSamples.length < 6 && !(m.clipT > t - 5)) { m.clipT = t; R.clipSamples.push({ t: +t.toFixed(1), who: e.person.short, walk: !!e.walk, spot: e.spot, room: e.room, d: +Math.hypot(q.x - pos[0], q.z - pos[1]).toFixed(2) }); } } }
+      }
+      R.maxBoard = Math.max(R.maxBoard, board);
+      // overlap: pairs of bodies closer than 0.45 m (not riders in the car)
+      const L = B.filter(e => !e.board);
+      for (let a = 0; a < L.length; a++) for (let b = a + 1; b < L.length; b++) { const A = L[a], Bb = L[b], pa = at(A), pb = at(Bb); if (Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < 0.45) { const k = A.person.id + ':' + Bb.person.id; if (!A.walk && !Bb.walk) { R.stackS += dt; if (!pairs.has(k)) { pairs.set(k, t); R.stackPairs++; } } else { R.brushS += dt; const c = w().car, nearCar = c && Math.hypot(pa[0] - c.x, pa[1] - c.z) < 3.5, kind = nearCar ? 'car' : A.walk && Bb.walk ? 'ww' : 'wi', gh = (A.ghost > 0 || Bb.ghost > 0) ? 'g' : '', vis = !unseen(pa[0], pa[1]) ? 's' : ''; const key = kind + gh + vis; R.brush[key] = (R.brush[key] || 0) + dt; if (kind === 'car') { const ty = (e) => e.walk ? (e.walk.vanish ? 'in' : e.walk.opts.point ? 'pt' : 'out') : 'idle'; const tk = [ty(A), ty(Bb)].sort().join('-'), dc = +Math.min(Math.hypot(pa[0] - c.x, pa[1] - c.z), Math.hypot(pb[0] - c.x, pb[1] - c.z)).toFixed(1); const kk = tk + '@' + (dc < 1.25 ? 'car' : dc < 2.5 ? 'mouth' : 'near'); R.carBrush[kk] = (R.carBrush[kk] || 0) + dt; } if (kind === 'wi' && R.brushSamples.length < 8 && !(pairs.get('b' + k) > t - 5)) { pairs.set('b' + k, t); const I = A.walk ? Bb : A, Wk = A.walk ? A : Bb; R.brushSamples.push({ t: +t.toFixed(1), idle: I.person.short, spot: I.spot, room: I.room, op: !!I.op, walker: Wk.person.short, dest: Wk.walk.tx + ',' + Wk.walk.ty, ghost: Wk.ghost > 0, it: w().tile(I.x, I.z).join() }); } } } }
+      // ordered jobs: does the person get to the job room?
+      for (const j of jobs) { if (j.reached != null) continue; const wh = S.where(j.p); if (wh && !wh.transit && (wh.room === j.room || j.room === 'any')) { j.reached = t - j.t0; R.ordReached++; R.ordLate.push(+j.reached.toFixed(1)); } const e = now.get(j.p.id); if (e) j.here = true; if (e && !e.walk && e.room === j.room) { const [tx, ty] = w().tile(e.x, e.z); if (w().d.room[ty]?.[tx] === j.room) j.body = true; } }
+    }
+    for (const j of jobs) { if (j.reached == null) R.ordNever++; if (j.body) R.ordBody++; if (j.here && S.where(j.p)?.deckNo === deckNo && S.where(j.p)?.room === j.room) R.ordHere++; }
+    window.__soakT = T0 + t; window.__ordI = ordI;
+    R.fields = (window.__fieldN || 0) - f0n; R.fieldMs = (window.__fieldMs || 0) - f0ms;
+    const sm = R.stepMs.sort((a, b) => a - b), ds = R.durs.sort((a, b) => a - b);
+    return { trace: (window.__tr || []).slice(0, 80), phase, deckNo, secs, bodiesAvg: +(R.bodies / (secs * FR)).toFixed(1), walkersMax: R.walkersMax, walks: R.walks, liftWalks: R.liftWalks,
+      stuck: { n: R.stuckN, s: +R.stuckS.toFixed(1), samples: R.stuckSamples }, stack: { pairs: R.stackPairs, s: +R.stackS.toFixed(1), brushS: +R.brushS.toFixed(1), brush: Object.fromEntries(Object.entries(R.brush).map(([k, v]) => [k, +v.toFixed(1)])), samples: R.brushSamples, car: Object.fromEntries(Object.entries(R.carBrush).map(([k, v]) => [k, +v.toFixed(1)])) }, clip: { walkS: +R.clipWalkS.toFixed(1), idleS: +R.clipIdleS.toFixed(1), samples: R.clipSamples },
+      osc: R.osc, long: R.long, longSamples: R.longSamples, cut: R.cut, replan: R.replan, cutSamples: R.cutSamples, walkMed: +(ds[ds.length >> 1] || 0).toFixed(1), walkP90: +(ds[Math.floor(ds.length * 0.9)] || 0).toFixed(1),
+      orders: { given: R.ordGiven, refused: R.ordRefused, reached: R.ordReached, bodyInRoom: R.ordBody, bodyHere: R.ordHere, never: R.ordNever, late: R.ordLate },
+      lift: { samples: R.liftSamples, boardLong: R.boardLong, queueLong: R.queueLong, maxBoard: R.maxBoard }, pop: { appear: R.appearSeen, vanish: R.vanishSeen, tele: R.tele, teleSeen: R.teleSeen, samples: R.popSamples, teleSamples: R.teleSamples },
+      cost: { fieldsPerS: +(R.fields / secs).toFixed(2), msPerField: +(R.fieldMs / Math.max(1, R.fields)).toFixed(2), stepMean: +(sm.reduce((a, b) => a + b, 0) / sm.length).toFixed(2), stepP99: +sm[Math.floor(sm.length * 0.99)].toFixed(1), stepMax: +sm[sm.length - 1].toFixed(1) } };
+  }, { deckNo, secs, orderEvery, phase });
+}
+
+const rows = []; const decks = arg('only', null) ? String(arg('only')).split(',').map(Number) : setup.decks.slice(0, opt.decks).map(d => d.deckNo);   // --only 2,5 picks the decks
+console.log(`soak: ${setup.ship} runSeed ${setup.runSeed} as ${setup.title} (${setup.billet}, ${setup.subs} reports), ${setup.roster} crew; decks ${decks.join(',')} x ${opt.secs}s at clock x${opt.clock}`);
+for (const dn of decks) { let r; if (dn !== decks[0]) { await page.close().catch(() => {}); await openRun(); }   // every deck starts from the same fresh run (comparable rows; one renderer's memory at a time)
+  try { r = await soakDeck(dn, opt.secs, opt.orders, 'deck'); } catch (er) { console.log(`deck ${dn}: ${String(er.message).split('\n')[0]} -- reopening the run and retrying once (numbers restart from a fresh run)`); await page.close().catch(() => {}); await openRun(); r = await soakDeck(dn, opt.secs, opt.orders, 'deck'); } rows.push(r); if (!JSON_OUT) printRow(r); }
+function printRow(r) {
+  console.log(`deck ${r.deckNo}: bodies ~${r.bodiesAvg} (walkers max ${r.walkersMax}), walks ${r.walks} (lift ${r.liftWalks}), median ${r.walkMed}s p90 ${r.walkP90}s`);
+  console.log(`  stuck ${r.stuck.n} (${r.stuck.s} body-s)  stacked pairs ${r.stack.pairs} (${r.stack.s} pair-s, brushing ${r.stack.brushS} ${JSON.stringify(r.stack.brush)})  clip walk ${r.clip.walkS}s idle ${r.clip.idleS}s  osc ${r.osc}  slow walks ${r.long}  cut short ${r.cut}  re-planned ${r.replan}`);
+  console.log(`  orders given ${r.orders.given} refused ${r.orders.refused} reached ${r.orders.reached} body-in-room ${r.orders.bodyInRoom}/${r.orders.bodyHere} never ${r.orders.never}  late ${JSON.stringify(r.orders.late)}`);
+  console.log(`  lift: boarders >10s ${r.lift.boardLong}, queued >15s ${r.lift.queueLong}, max boarders ${r.lift.maxBoard}   pop in sight: appear ${r.pop.appear} vanish ${r.pop.vanish} teleports ${r.pop.tele} (${r.pop.teleSeen} in sight)`);
+  console.log(`  cost: fields ${r.cost.fieldsPerS}/s at ${r.cost.msPerField} ms, step ${r.cost.stepMean} ms mean / ${r.cost.stepP99} p99 / ${r.cost.stepMax} max`);
+  if (opt.trace) console.log('  trace', r.trace.map(x => JSON.stringify(x)).join('\n')); if (process.argv.includes('--samples')) console.log('  samples', JSON.stringify({ clip: r.clip.samples, cut: r.cutSamples, lift: r.lift.samples, long: r.longSamples, stuck: r.stuck.samples, carBrush: r.stack.car, pop: r.pop.samples, tele: r.pop.teleSamples }));
+}
+const sum = (f) => rows.reduce((a, r) => a + f(r), 0), tot = { walks: sum(r => r.walks), stuck: sum(r => r.stuck.n), stuckS: +sum(r => r.stuck.s).toFixed(1), stackPairs: sum(r => r.stack.pairs), stackS: +sum(r => r.stack.s).toFixed(1), clipWalkS: +sum(r => r.clip.walkS).toFixed(1), clipIdleS: +sum(r => r.clip.idleS).toFixed(1), osc: sum(r => r.osc), long: sum(r => r.long), cut: sum(r => r.cut),
+  ordGiven: sum(r => r.orders.given), ordReached: sum(r => r.orders.reached), ordNever: sum(r => r.orders.never), boardLong: sum(r => r.lift.boardLong), queueLong: sum(r => r.lift.queueLong), appear: sum(r => r.pop.appear), vanish: sum(r => r.pop.vanish), tele: sum(r => r.pop.tele), teleSeen: sum(r => r.pop.teleSeen), fieldsPerS: +(sum(r => r.cost.fieldsPerS) / rows.length).toFixed(2), stepP99: Math.max(...rows.map(r => r.cost.stepP99)) };
+if (JSON_OUT) console.log(JSON.stringify({ setup, rows, tot })); else console.log('TOTAL', JSON.stringify(tot));
+if (errors.length) console.log('page errors:', errors.slice(0, 5).join(' | '));
+await browser.close(); server.close();
