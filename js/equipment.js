@@ -76,7 +76,7 @@ export const EQUIPMENT = {
   locker: { name: 'locker', props: ['shelving', 'drawers', 'suitrack', 'weaponrack', 'crate'], stance: 'stand', box: [-0.8, 0.8, -0.4, 0.4], gap: 0.32,
     steps: [st('reach_shelf', [1.6, 2.4], { cue: 'rummage' }), st('take_item', [1, 1.4], { hold: 'smallbox' }), st('inspect_item', [2, 3]), st('reach_low', [1.8, 2.4], { hold: null }), st('check_tablet', [2.4, 3.4], { holdL: 'padd', p: 0.6 }), wait([0.4, 0.8], { holdL: null })], rest: [1.5, 3], idle: ['scratch_head', 'look_around'] },
   crate: { name: 'cargo rack', props: ['crate'], stance: 'stand', box: [-0.8, 0.8, -0.8, 0.8], gap: 0.3,
-    steps: [st('check_tablet', [2.4, 3.6], { holdL: 'padd', cue: 'beep' }), st('scan_sweep', [2.4, 3.2], { hold: 'scanner' }), wait([0.4, 0.8], { hold: null, holdL: null }), st('reach_low', [1.8, 2.6], { cue: 'strap' }), st('turn_valve', [2, 3], { p: 0.4, cue: 'strap' }), st('wipe_surface', [2.4, 3], { p: 0.3 })], rest: [1.5, 3], idle: ['rub_neck', 'look_around'] },
+    steps: [st('check_tablet', [2.4, 3.6], { holdL: 'padd', cue: 'beep' }), st('scan_sweep', [2.4, 3.2], { hold: 'tag_scanner' }), wait([0.4, 0.8], { hold: null, holdL: null }), st('reach_low', [1.8, 2.6], { cue: 'strap' }), st('turn_valve', [2, 3], { p: 0.4, cue: 'strap' }), st('wipe_surface', [2.4, 3], { p: 0.3 })], rest: [1.5, 3], idle: ['rub_neck', 'look_around'] },
   cart: { name: 'utility cart', props: ['cart'], stance: 'stand', box: [-0.48, 0.48, -0.3, 0.3], gap: 0.3, steps: [st('reach_low', [1.8, 2.4]), st('take_item', [1, 1.4], { hold: 'smallbox', pose: 'carry_front' }), wait([1, 2]), st('reach_low', [1.8, 2.4], { hold: null })], rest: [2, 4], idle: ['look_around'] },
   shuttle: { name: 'shuttlecraft', props: ['shuttle'], stance: 'stand', box: [-1.1, 1.65, -0.78, 0.78], gap: 0.35,
     steps: [st('check_tablet', [2.4, 3.6], { holdL: 'padd' }), st('look_up_screen', [1.6, 2.4], { holdL: null }), st('tool_work', [2.2, 3.4], { hold: 'tool', clip: 'fixing_kneeling', cue: 'clank' }), wait([0.5, 1], { hold: null }), st('wipe_surface', [2.4, 3.2], { p: 0.4 })], rest: [2, 4], idle: ['look_around', 'hands_on_hips'] },
@@ -88,7 +88,7 @@ export const EQUIPMENT = {
     steps: [st('press_panel', [1.1, 1.5], { cue: 'beep' }), st('reach_shelf', [1.6, 2.4]), st('take_item', [1, 1.4], { hold: 'zapper' }), st('inspect_item', [2, 3]), st('reach_shelf', [1.6, 2.4], { hold: null }), st('check_tablet', [2.4, 3.2], { holdL: 'padd', p: 0.6 }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['cross_arms', 'look_around'] },
   suitrack: { name: 'suit locker', props: ['suitrack'], stance: 'stand', box: [-0.75, 0.75, -0.3, 0.3], gap: 0.32, spots: [[0, 0.65, PI]], steps: [st('reach_shelf', [1.6, 2.4]), st('inspect_item', [2, 3]), st('check_tablet', [2.4, 3.4], { holdL: 'padd', cue: 'beep' }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['look_around'] },
   sinkunit: { name: 'wash basin', props: ['sinkunit', 'dishwasher'], stance: 'stand', box: [-0.78, 0.78, -0.28, 0.3], gap: 0.3, spots: [[-0.4, 0.62, PI], [0.4, 0.62, PI]], steps: [st('wipe_surface', [2.4, 3.4], { cue: 'water' }), st('look_up_screen', [1.4, 2]), st('adjust_collar', [1.3, 2])], rest: [2, 4], idle: ['look_around'] },
-  tree: { name: 'arboretum bed', props: ['tree', 'plant'], stance: 'stand', box: [-0.6, 0.6, -0.6, 0.6], gap: 0.3, steps: [st('tend_plant', [2.2, 3.2]), st('inspect_item', [2, 3], { hold: 'vial', p: 0.4 }), wait([0.4, 0.8], { hold: null }), st('tend_plant', [2.2, 3.2], { clip: 'fixing_kneeling', p: 0.5 }), st('check_tablet', [2.4, 3.4], { holdL: 'padd', p: 0.4 }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['look_around', 'small_smile'] },
+  tree: { name: 'arboretum bed', props: ['tree', 'plant'], stance: 'stand', box: [-0.6, 0.6, -0.6, 0.6], gap: 0.3, steps: [st('tend_plant', [2.2, 3.2]), st('inspect_item', [2, 3], { hold: 'pruning_shears', p: 0.4 }), wait([0.4, 0.8], { hold: null }), st('tend_plant', [2.2, 3.2], { clip: 'fixing_kneeling', p: 0.5 }), st('check_tablet', [2.4, 3.4], { holdL: 'padd', p: 0.4 }), wait([0.4, 0.8], { holdL: null })], rest: [2, 4], idle: ['look_around', 'small_smile'] },
   plant: { name: 'potted plant', props: ['plant'], stance: 'stand', box: [-0.3, 0.3, -0.3, 0.3], gap: 0.35, steps: [st('tend_plant', [2.2, 3.2]), wait([1, 2])], rest: [3, 6], idle: ['look_around'] },
   junction: { name: 'maintenance junction', props: [], stance: 'kneel', steps: [st('tool_work', [2.4, 3.6], { hold: 'tool', cue: 'clank', fx: 'sparks' }), st('inspect_item', [2, 3]), wait([1, 2]), st('tool_work', [2.4, 3.6]), wait([0.5, 1], { hold: null, clip: 'idle' }), st('check_tablet', [2.4, 3.4], { clip: 'idle', holdL: 'padd' }), wait([0.4, 0.8], { clip: 'idle', holdL: null })], rest: [1, 2.5], idle: ['rub_neck'] },
   counter: { name: 'galley servery', props: ['servery'], stance: 'stand', box: [-1.1, 1.1, -0.4, 0.62], gap: 0.3, spots: [[-0.24, -0.7, 0], [0.5, -0.7, 0]], steps: [st('wipe_surface', [2.4, 3.4]), st('take_item', [1, 1.4], { hold: 'tray', pose: 'tray' }), st('turn_away', [1.4, 2.2]), wait([0.6, 1.2], { hold: null }), st('stir_pot', [2, 3], { p: 0.4 })], rest: [2, 4], idle: ['look_around', 'check_wrist'] },
@@ -134,6 +134,79 @@ export const EQUIPMENT = {
     infusion_stand: { name: 'infusion stand', props: ['infusion_stand'], stance: 'stand', box: [-0.26, 0.26, -0.26, 0.26], gap: 0.3,
       steps: [st('look_up_screen', [1.6, 2.4]), st('press_panel', [1.1, 1.5], { cue: 'beep' }), st('take_item', [1, 1.4], { hold: 'iv_bag' }), st('reach_shelf', [1.4, 2]), wait([0.4, 0.8], { hold: null })], rest: [2, 4], idle: ['head_tilt'] },
   });
+}
+// ---- batches 5-11 (js/propart-sciences/flight/stations2/security/polish.js; docs/propart-integration.md "Batches 5-11"): one entry per placed kind, spots and boxes from the
+//      props' userData, scripts reused. The schedule spots reach them through the props lists extended at the end of this block.
+{
+  const E = EQUIPMENT, like = (base, o) => ({ ...E[base], ...o }), seated = (name, kind, box, o = {}) => like('desk', { name, props: [kind], box, spots: [[0, 0.31, PI]], standSpots: [[-0.6, 0.72, PI], [0.6, 0.72, PI]], ...o });
+  const ride = (name, kind, seat, box, spots) => ({ name, props: [kind], stance: 'sit', seat, box, gap: 0.3, spots,
+    steps: [wait([6, 10], { cue: 'whine' }), st('neck_roll', [2, 3]), wait([5, 9]), st('check_wrist', [1.2, 1.8], { p: 0.6 }), st('sigh', [1.2, 1.8], { p: 0.5 })], rest: [1.5, 3], idle: ['look_around'] });
+  Object.assign(EQUIPMENT, {
+    // sciences (batch 5)
+    growbed: like('tree', { name: 'hydroponic grow bed', props: ['growbed'], box: [-1.05, 1.05, -0.5, 0.5], spots: [[0, 0.75, PI], [-0.6, 0.75, PI], [0.6, 0.75, PI], [-0.85, 0.6, PI]] }),
+    nutrient_tanks: like('tank', { name: 'nutrient dosing tanks', props: ['nutrient_tanks'], box: [-1.15, 1.15, -0.6, 0.6], spots: [[0, 1.0, PI], [-0.72, 0.85, PI], [0.72, 0.85, PI]] }),
+    sensorstation: seated('sensor station', 'sensorstation', [-0.78, 0.78, -0.4, 0.4], { steps: [st('look_up_screen', [2.4, 4]), st('type_keys', [3, 5], { cue: 'keys' }), st('lean_in', [2.5, 4]), st('press_panel', [1.1, 1.6], { fx: 'screen', cue: 'beep' }), st('rub_eyes', [1.8, 2.4], { p: 0.2 })] }),
+    charttable: like('console', { name: 'chart table', props: ['charttable'], box: [-0.8, 0.8, -0.5, 0.5], spots: [[0, 0.95, PI], [-1.1, 0, PI / 2], [1.1, 0, -PI / 2]] }),
+    spectrometer: like('labbench', { name: 'spectrometer', props: ['spectrometer'], box: [-0.6, 0.6, -0.35, 0.35], spots: [[-0.22, 0.65, PI], [0.3, 0.65, PI]] }),
+    samplefridge: like('locker', { name: 'sample fridge', props: ['samplefridge'], box: [-0.4, 0.4, -0.4, 0.4], spots: [[0, 0.75, PI]] }),
+    fumehood: like('labbench', { name: 'fume cupboard', props: ['fumehood'], box: [-0.78, 0.78, -0.42, 0.5], spots: [[0, 0.75, PI], [-0.4, 0.75, PI]] }),
+    // flight deck and cargo (batch 6)
+    fuelbowser: like('cart', { name: 'fuel bowser', props: ['fuelbowser'], box: [-0.5, 0.5, -1.2, 1.4], spots: [[0, -1.35, 0], [0.75, 0.25, -PI / 2], [-0.8, -0.3, PI / 2]] }),
+    hoversled: like('cart', { name: 'hover sled', props: ['hoversled'], box: [-0.5, 0.5, -0.7, 0.7], spots: [[0, -1.35, 0], [0.8, 0, -PI / 2]] }),
+    pallet: like('crate', { name: 'cargo pallet', props: ['pallet'], box: [-0.6, 0.6, -0.5, 0.5], spots: [[0, 0.95, PI], [0.95, 0, -PI / 2]] }),
+    pallet_loaded: like('crate', { name: 'loaded pallet', props: ['pallet_loaded'], box: [-0.6, 0.6, -0.5, 0.5], spots: [[0, 0.95, PI], [0.95, 0, -PI / 2]] }),
+    reachin_cooler: like('locker', { name: 'reach-in cooler', props: ['reachin_cooler'], box: [-0.7, 0.7, -0.4, 0.4], spots: [[0, 0.75, PI], [-0.35, 0.75, PI]] }),
+    // stations II (batch 7)
+    navstation: like('console', { name: 'navigation station', props: ['navstation'], box: [-0.63, 0.63, -0.48, 0.48], spots: [[0, 0.75, PI], [-0.4, 0.75, PI], [0.4, 0.75, PI]] }),
+    opsstation: seated('operations station', 'opsstation', [-0.83, 0.83, -0.4, 0.4]),
+    commsstation: seated('communications station', 'commsstation', [-0.73, 0.73, -0.4, 0.4]),
+    relayrack: like('servers', { name: 'relay rack', props: ['relayrack'], box: [-0.3, 0.3, -0.4, 0.4], spots: [[0, 0.85, PI]] }),
+    buffertank: like('tank', { name: 'pattern buffer', props: ['buffertank'], box: [-0.45, 0.45, -0.5, 0.45], spots: [[0, 0.85, PI]] }),
+    plottable: like('console', { name: 'systems plot table', props: ['plottable'], box: [-1.02, 1.02, -0.58, 0.58], spots: [[0, 0.85, PI], [-0.6, 0.85, PI], [0.6, 0.85, PI], [0, -0.85, 0], [0.6, -0.85, 0]] }),
+    // security (batch 8)
+    cellfield: like('cell', { name: 'field cell', props: ['cellfield'] }),
+    chargerack: like('weaponrack', { name: 'charging rack', props: ['chargerack'], box: [-0.46, 0.46, -0.26, 0.26], spots: [[0, 0.78, PI], [-0.3, 0.78, PI], [0.3, 0.78, PI]] }),
+    issuecounter: like('console', { name: 'issue counter', props: ['issuecounter'], box: [-0.78, 0.78, -0.4, 0.4], spots: [[0, 0.75, PI], [-0.4, 0.75, PI], [0.4, 0.75, PI]] }),
+    // polish (batch 11)
+    briefing_table: like('console', { name: 'briefing table', props: ['briefing_table'], box: [-1.25, 1.25, -0.6, 0.6], spots: [[0, 0.95, PI], [-0.7, 0.95, PI], [0.7, 0.95, PI], [-0.7, -0.95, 0], [0.7, -0.95, 0], [0, -0.95, 0], [1.55, 0, -PI / 2], [-1.55, 0, PI / 2]],
+      steps: [st('check_tablet', [2.4, 3.6], { holdL: 'padd', pose: 'hold_padd' }), wait([1, 2], { holdL: null }), st('lean_in', [2.5, 4], { pose: 'lean_on' }), st('talk_emphasis', [1.6, 2.4], { p: 0.5 }), st('nod', [0.7, 1]), st('look_up_screen', [1.8, 3], { p: 0.5 })] }),
+    platform_bed: like('bunk', { name: 'platform bed', props: ['platform_bed'], seat: 0.55, box: [-0.72, 0.72, -1.05, 1.0], spots: [[1.01, 0.1, PI / 2], [-1.01, 0.1, -PI / 2]] }),
+    workpod: like('shuttle', { name: 'work pod', props: ['workpod'], box: [-0.75, 0.75, -1.15, 1.15], spots: [[0, 1.5, PI], [0, -1.45, 0]] }),
+    maint_stand: like('workbench', { name: 'maintenance stand', props: ['maint_stand'], box: [-0.65, 0.65, -0.75, 1.0], spots: [[0, 1.25, PI]] }),
+    cargo_pad: like('pad', { name: 'cargo pad', props: ['cargo_pad'], box: [-1.15, 1.15, -1.15, 1.15], spots: [[0, 1.45, PI]] }),
+    injector_crate: like('crate', { name: 'injector crate', props: ['injector_crate'], box: [-0.45, 0.45, -0.26, 0.26], spots: [[0, 0.7, PI]] }),
+    knee_mill: like('lathe', { name: 'milling machine', props: ['knee_mill'], box: [-0.75, 0.75, -0.7, 0.7], spots: [[0, 0.55, PI], [0.6, 0.5, PI]] }),
+    drill_press: like('lathe', { name: 'drill press', props: ['drill_press'], box: [-0.25, 0.25, -0.4, 0.4], spots: [[0, 0.55, PI]] }),
+    scan_arch: like('console', { name: 'scanner arch', props: ['scan_arch'], box: [-0.65, 0.65, -0.42, 0.42], spots: [[0.9, 0.5, -PI / 2], [0, 1.1, PI]] }),
+    specimen_tank: like('labbench', { name: 'specimen tank', props: ['specimen_tank'], box: [-0.5, 0.78, -0.26, 0.26], spots: [[0, 0.6, PI]] }),
+    grapple_dummy: like('mat', { name: 'grappling dummy', props: ['grapple_dummy'], box: [-0.3, 0.3, -0.3, 0.3], spots: [[0, 0.75, PI]] }),
+    sparring_set: like('mat', { name: 'sparring mat', props: ['sparring_set'], box: [-0.5, 0.5, -1, 1], spots: [[0, 0.3, PI], [0, 0.6, 0]] }),
+    galley_trolley: like('cart', { name: 'galley trolley', props: ['galley_trolley'], box: [-0.32, 0.32, -0.4, 0.55], spots: [[0, 0.95, PI]] }),
+    dryer: like('washer', { name: 'dryer', props: ['dryer'], box: [-0.45, 0.45, -0.5, 0.5], spots: [[0, 0.8, PI]] }),
+    folding_table: like('washer', { name: 'folding table', props: ['folding_table'], box: [-0.95, 0.95, -0.42, 0.42], spots: [[0, 0.65, PI], [-0.6, 0.65, PI], [0.6, 0.65, PI]],
+      steps: [st('take_item', [1, 1.4], { hold: 'linen', pose: 'carry_front' }), st('fold_cloth', [2.4, 3.4]), st('fold_cloth', [2.4, 3.4]), wait([0.5, 1], { hold: null }), st('wipe_surface', [2, 3], { p: 0.4 })] }),
+    linen_cart: like('cart', { name: 'linen cart', props: ['linen_cart'], box: [-0.32, 0.32, -0.45, 0.5], spots: [[0, 0.8, PI]] }),
+    pool_table: like('console', { name: 'pool table', props: ['pool_table'], box: [-1.05, 1.05, -0.6, 0.6], spots: [[0, 0.95, PI], [-0.6, 0.95, PI], [0.6, 0.95, PI], [0, -0.95, 0], [1.4, 0, -PI / 2]],
+      steps: [st('lean_in', [2.4, 3.6], { pose: 'lean_on' }), st('look_around', [1.6, 2.4]), st('small_smile', [1.2, 2]), wait([2, 4]), st('lean_in', [2, 3]), st('nod', [0.7, 1], { p: 0.5 })], idle: ['hands_on_hips', 'scratch_head'] }),
+    card_table: like('console', { name: 'card table', props: ['card_table'], box: [-0.62, 0.62, -0.62, 0.62], spots: [[0, 0.9, PI], [0.78, 0.45, -PI / 2 - PI / 6], [-0.78, 0.45, PI / 2 + PI / 6], [0.78, -0.45, -PI / 2 + PI / 6], [-0.78, -0.45, PI / 2 - PI / 6], [0, -0.9, 0]],
+      steps: [st('inspect_item', [2, 3]), st('small_smile', [1.2, 2]), wait([2, 4]), st('take_item', [1, 1.4], { hold: 'glass' }), st('sip', [1.6, 2.4], { pose: 'hold_cup' }), wait([0.5, 1], { hold: null }), st('shrug', [1, 1.6], { p: 0.4 })], idle: ['eyebrow_raise', 'small_smile'] }),
+    arcade: like('console', { name: 'arcade cabinet', props: ['arcade'], box: [-0.38, 0.38, -0.42, 0.42], spots: [[0, 0.85, PI], [-0.2, 0.85, PI], [0.2, 0.85, PI]],
+      steps: [st('press_panel', [1.1, 1.6], { cue: 'beep' }), st('type_keys', [3, 5]), st('lean_in', [2, 3]), st('type_keys', [3, 5], { cue: 'beep' }), st('small_smile', [1.2, 2], { p: 0.5 }), st('shake_head', [1, 1.6], { p: 0.4 })] }),
+    feedstock_silo: like('tank', { name: 'feedstock silo', props: ['feedstock_silo'], box: [-0.8, 0.8, -0.55, 0.62], spots: [[-0.42, 0.85, PI], [0.42, 0.85, PI]] }),
+    exercise_bike: ride('exercise bike', 'exercise_bike', 0.98, [-0.3, 0.3, -0.55, 0.55], [[0, -0.09, PI]]),
+    rower: ride('rowing machine', 'rower', 0.4, [-0.3, 0.3, -1.2, 1.25], [[0, 0.29, PI]]),
+    dumbbell_rack: like('mat', { name: 'dumbbell rack', props: ['dumbbell_rack'], box: [-0.62, 0.62, -0.28, 0.28], spots: [[0, 0.7, PI]],
+      steps: [st('reach_low', [1.6, 2.2], { cue: 'clunk' }), st('curl_weights', [2.4, 3.4], { hold: 'dumbbell', holdL: 'dumbbell', cue: 'groan' }), st('curl_weights', [2.4, 3.4]), st('reach_low', [1.6, 2.2], { hold: null, holdL: null }), st('stretch', [2.6, 3.4], { p: 0.4 })] }),
+    airlock_doors: like('suitrack', { name: 'airlock', props: ['airlock_doors'], box: [-1.25, 1.25, -0.85, 0.85], spots: [[0, 1.45, PI], [0.5, 1.4, PI]] }),
+  });
+  // the exercise mat was a stand-in (SVC-11): it is a real prop now
+  Object.assign(E.mat, { props: ['mat', 'sparring_set', 'grapple_dummy'], box: [-0.5, 0.5, -1, 1], spots: [[0, 0, PI], [0, 0.3, 0]] });
+  // schedule spots that name the old kinds also find the new hardware in their room
+  const add = (k, ...kinds) => { E[k].props = [...E[k].props, ...kinds.filter(x => !E[k].props.includes(x))]; };
+  add('console', 'charttable', 'navstation', 'plottable', 'issuecounter'); add('desk', 'sensorstation', 'opsstation', 'commsstation'); add('labbench', 'spectrometer', 'fumehood', 'specimen_tank');
+  add('workbench', 'spectrometer', 'fumehood'); add('tank', 'nutrient_tanks', 'buffertank', 'feedstock_silo'); add('servers', 'relayrack'); add('tree', 'growbed'); add('crate', 'pallet', 'pallet_loaded', 'injector_crate');
+  add('cart', 'fuelbowser', 'hoversled', 'galley_trolley', 'linen_cart'); add('cell', 'cellfield'); add('weaponrack', 'chargerack'); add('lathe', 'knee_mill', 'drill_press'); add('washer', 'dryer', 'folding_table');
+  add('bunk', 'platform_bed'); add('pad', 'cargo_pad', 'shuttle'); add('shuttle', 'workpod'); add('locker', 'samplefridge', 'reachin_cooler', 'chargerack');
 }
 // schedule spots that are not prop kinds (assets/data/comms.json `day` blocks) -> an entry above; anything else -> 'post'
 export const SPOT_ALIAS = { captain_chair: 'chair', 'command chair': 'chair', readyroom: 'desk', serving_line: 'counter', sink: 'sinkunit', door: 'post', corridor: 'post', lift: 'post' };
@@ -252,6 +325,14 @@ export const ITEMS = {
   stretcher: { name: 'folding stretcher', w: 6, two: true, pose: 'tray', load: true },   // two-handed: tickHeld puts its centre between the hands
   iv_bag: { name: 'IV fluid bag', w: 0.5, pose: 'hold_r', hand: 'r' }, kidney_dish: { name: 'kidney dish', w: 0.3, pose: 'hold_r', hand: 'r' }, bandage: { name: 'bandage roll', w: 0.1, pose: 'hold_r', hand: 'r', gift: 0.03 },
   forceps: { name: 'surgical forceps', w: 0.05, pose: 'hold_r', hand: 'r' },
+  // batches 5-11 (js/itemart-sciences/flight/stations2/security/polish.js; ids = model kinds)
+  soil_meter: { name: 'soil meter', w: 0.3, pose: 'hold_r', hand: 'r' }, pruning_shears: { name: 'pruning shears', w: 0.25, pose: 'hold_r', hand: 'r' }, harvest_tote: { name: 'harvest tote', w: 5, two: true, pose: 'carry_front', load: true, gift: 0.05 },
+  wheel_chocks: { name: 'wheel chocks', w: 3, pose: 'hold_r', hand: 'r', load: true }, tiedown_strap: { name: 'tie-down strap', w: 0.6, pose: 'hold_r', hand: 'r' }, ratchet_strap: { name: 'ratchet strap', w: 1.2, pose: 'hold_r', hand: 'r', load: true },
+  tag_scanner: { name: 'tag scanner', w: 0.4, pose: 'hold_r', hand: 'r' }, coil_cartridge: { name: 'emitter coil cartridge', w: 3, two: true, pose: 'carry_front', load: true },
+  patch_plate: { name: 'hull patch plate', w: 4, two: true, pose: 'carry_front', load: true }, pipe_clamp: { name: 'pipe repair clamp', w: 1.2, pose: 'hold_r', hand: 'r', tool: 1.08 }, seal_gauge: { name: 'seal gauge', w: 0.6, pose: 'hold_r', hand: 'r' },
+  breather: { name: 'emergency breather', w: 0.4, pose: 'hold_r', hand: 'r', gift: 0.05 }, cuffs: { name: 'restraint cuffs', w: 0.3, pose: 'hold_r', hand: 'r' },
+  tether: { name: 'safety tether', w: 0.8, pose: 'hold_r', hand: 'r' }, headset: { name: 'comms headset', w: 0.2, pose: 'hold_r', hand: 'r' },
+  light_panel: { name: 'light panel', w: 1.5, two: true, pose: 'tray', load: true }, injector_spare: { name: 'spare plasma injector', w: 6, two: true, pose: 'carry_front', load: true },
 };
 export const ITEM_IDS = Object.keys(ITEMS);
 // player speed multiplier for carrying an item (crates slow you, small things do not)
@@ -275,7 +356,7 @@ export const HAULERS = {
   galley: { cart: 'cargo', carry: 'tray', to: ['mess', 'stores', 'lounge'] }, cook: { cart: null, carry: 'tray', to: ['mess', 'lounge'] }, rep: { cart: 'cargo', to: ['mess', 'stores', 'workshop'] },
   nurse: { cart: 'med', to: ['sickbay', 'lab', 'morgue', 'stores'] }, medtech: { cart: 'med', to: ['sickbay', 'lab', 'morgue'] }, doc: { cart: 'med', to: ['sickbay', 'morgue', 'lab'] },
   eps: { cart: 'tool', to: ['engineering', 'plant', 'workshop'] }, ttech: { cart: 'tool', to: ['transporter', 'workshop', 'engineering'] }, env: { cart: 'tool', to: ['plant', 'engineering', 'arboretum'] },
-  reactor: { cart: 'tool', to: ['engineering', 'workshop'] }, bot: { cart: null, carry: 'smallbox', to: ['arboretum', 'lab'] }, lab: { cart: null, carry: 'smallbox', to: ['lab', 'stores'] },
+  reactor: { cart: 'tool', to: ['engineering', 'workshop'] }, bot: { cart: null, carry: 'harvest_tote', to: ['arboretum', 'lab'] }, lab: { cart: null, carry: 'smallbox', to: ['lab', 'stores'] },
 };
 // whether a held item list is consistent with hands: two-handed items fill both
 export function handsFor(id) { const it = ITEMS[id]; return !it ? [] : it.two ? ['hand_r', 'hand_l'] : [it.hand === 'l' ? 'hand_l' : 'hand_r']; }

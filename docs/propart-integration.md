@@ -105,3 +105,69 @@ Requests 1 and 2 were done by the main.js owner in d81dac1; 3-5 are open.
 * The pedestal faces the wall in the beam room by design (the chief looks over it at the pad); check that reads right.
 * Triangle counts (measured by `tools/test.mjs` `props:`): the galley props are the heaviest. Dishwasher about 6,600 (plate racks), back bar 6,400 (34 bottles), range 4,900 and bar 4,500 (three stools). Surgical table about 2,500, reactor station about 1,900, fieldgen about 1,930. A lounge (bar + back bar, about 11k) and a big sickbay (several 1,000-2,500 tri props plus four emitters) are the heaviest rooms; trim the galley bottles and plates first if they draw slowly.
 * `fieldgen` / `fieldgen_damp` sit in every engineering room (the doc asked for the damper only in rooms of 4+ interior tiles; every engineering room has 9+).
+
+# Batches 5-11
+
+Batches: `docs/propart-sciences.md` (5), `docs/propart-flight.md` (6), `docs/propart-stations2.md` (7), `docs/propart-security.md` (8), `docs/wearart.md` (9), `docs/signart.md` (10), `docs/propart-polish.md` (11).
+
+## Registry, items, examine text
+* **`js/propart.js`** imports the `kinds` of `propart-sciences`, `-flight`, `-stations2`, `-security` and `-polish` into `PROP_ART` / `PROP_BATCH`. Normalisation as before; new: every `box` is clamped to the tile (+-1.25 m; the fuel bowser's tow bar reached 1.4). `NO_CLIMB` += growbed, nutrient_tanks, charttable, spectrometer, samplefridge, fumehood, fuelbowser, hoversled, reachin_cooler, navstation, opsstation, commsstation, relayrack, buffertank, chargerack, cellfield, issuecounter, shuttle_cradle. `PROP_ART_FIXTURES` += coldstore_door, bay_door (wall pieces), padmark, shuttle_cradle (children of the shuttle), warpcore_detail (child of the core), catwalk, ship_ladder (not placed).
+* **`PROP_KINDS`** (`js/world.js`) += the 46 placed kinds (list there). `models.html?set=props` shows them through `PROP_GALLERY` (119 kinds); the new DECOR kits show in the decor set.
+* **Wall kits**: `DECOR_BRIDGE` (sysboard, sysboard_half) and `DECOR_SEC` (dclocker, emitterpost, camdome, badgereader) merged into `DECOR`. Pools: corridor + dclocker, camdome, badgereader; brig + emitterpost, camdome, badgereader; armory + camdome; engineering, plant + dclocker; stores + dclocker, coldstore_door (PROP_ART wall piece). camdome, coldstore_door and emitterpost become a vent grille under a low ceiling.
+* **Items** (`js/itemart.js`): `DEFS` += `DEFS_SCIENCES`, `DEFS_FLIGHT`, `DEFS_STATIONS2`, `DEFS_SECURITY`, `DEFS_WEAR` (without its `headset`: batch 11's headset is kept, one kind per id), `DEFS_POLISH`. KW order: medical, galley, three override rows (trauma/rib/pinking shears, scissors, snips -> `snips`; ratchet spanners, crimping tool -> `wrench`; scrub brush -> `smallbox`), security, flight, stations2, sciences, wear (minus headset), polish (minus meter), the tricorder row, polish `meter`, then the generic rows. Checked against `ship-items.json`: about 500 clutter names now get batch models (gloves 101, tape 77, meter 39, tether 24, stool 22, lamp 22, cuffs 19 ...).
+* **`ITEMS`** (`js/equipment.js`), ids = model kinds: soil_meter, pruning_shears, harvest_tote (two-handed), wheel_chocks, tiedown_strap, ratchet_strap, tag_scanner, coil_cartridge (two), patch_plate (two), pipe_clamp (tool 1.08), seal_gauge, breather, cuffs, tether, headset, light_panel (two, tray pose), injector_spare (two, 6 kg). The clutter-only kinds (stool, lamp, meter, snips, tape, frame, folded wear) have no `ITEMS` row. Hooks from the docs: the `tree` script holds `pruning_shears`, the `crate` script scans with `tag_scanner`, `HAULERS.bot.carry = 'harvest_tote'`.
+* **Examine text**: `tools/build-game-items.mjs` `PROP` += a row per new kind; `assets/data/ship-items.json` rebuilt (only `examine` changed).
+
+## Equipment (`js/equipment.js`)
+One entry per placed kind (second block after the batch 1-4 one), reusing scripts: seated `sensorstation`, `opsstation`, `commsstation` -> `desk` (seat 0.48, spot `[0, 0.31, PI]`, standSpots); `charttable`, `navstation`, `plottable`, `issuecounter`, `scan_arch`, `arcade`, `briefing_table`, `pool_table`, `card_table` -> `console` (standing; the last four with their own steps); `growbed` -> `tree`; `nutrient_tanks`, `buffertank`, `feedstock_silo` -> `tank`; `spectrometer`, `fumehood`, `specimen_tank` -> `labbench`; `samplefridge`, `reachin_cooler` -> `locker`; `fuelbowser`, `hoversled`, `galley_trolley`, `linen_cart` -> `cart`; `pallet`, `pallet_loaded`, `injector_crate` -> `crate`; `relayrack` -> `servers`; `cellfield` -> `cell`; `chargerack` -> `weaponrack`; `platform_bed` -> `bunk` (seat 0.55, side spots); `workpod` -> `shuttle`; `maint_stand` -> `workbench`; `cargo_pad` -> `pad`; `knee_mill`, `drill_press` -> `lathe`; `dryer`, `folding_table` -> `washer`; `grapple_dummy`, `sparring_set`, `dumbbell_rack` -> `mat`; `exercise_bike` (seat 0.98), `rower` (0.4) a small seated "ride" script; `airlock_doors` -> `suitrack`.
+`mat` is no longer a stand-in: props `['mat', 'sparring_set', 'grapple_dummy']`, box `[-0.5, 0.5, -1, 1]`. The old spot lists also reach the new kinds: console += charttable, navstation, plottable, issuecounter; desk += the three seated stations; labbench / workbench += spectrometer, fumehood (labbench also specimen_tank); tank, servers, tree, crate, cart, cell, weaponrack, lathe, washer, bunk, locker likewise; `pad` += cargo_pad and `shuttle` (the 43 `shuttlebay/pad` duties now walk to the shuttle on its cradle); `shuttle` += workpod.
+
+## Room placements (`js/gen.js`)
+New `ringPut` options: `only: 'corner'`, `free` (reserve no front tile: small props reached from the side), `along` (long axis along the wall), `ok(x, y)` (ring tile filter). New helpers `anyPut(r, interior, kind, o)` (safePut on any free interior tile, `near` / `min` / `rot`) and `has(r, kind)`. **Every seed's layout changed again** (more props per room, more `prnd` rolls; the main stream is untouched, but blocked tiles move chips, exit and tubes).
+
+| room | placed (batch) |
+|---|---|
+| bridge | `navstation` behind the forward starboard console (interior, rot 0); `opsstation`, `commsstation`, `sensorstation` on the side / aft walls (never the forward wall). `sysboard` (two aft wall tiles, centred) or `sysboard_half` (one) in the world decor pass |
+| engineering | `plottable` near the reactor station (interior, else a wall); `injector_crate` in a corner; every `warpcore` gets a `warpcore_detail` child (world.js) |
+| shuttlebay | `shuttle` now always long axis on x with both end tiles reserved; world.js raises its meshes by the cradle's `craftLift` (0.25 m), adds `shuttle_cradle` and `padmark` as children and sets its box to the cradle (+-1.6 -> clamped 1.15). One corner `crate` became `pallet_loaded`. `workpod`, `maint_stand` (near the shuttle) on interior tiles; `fuelbowser` and `hoversled` (near a door) along the walls. `bay_door` on the two-tile wall face farthest from the doorways (world.js, skipped when no free pair) |
+| transporter | up to two `buffertank`s in corners |
+| cargo | loose `crate`s are 45 % crate, 30 % `pallet_loaded`, 25 % `pallet`; `hoversled` by a door; `cargo_pad` on a wall |
+| arboretum | `growbed` rows on every other interior row (long axis x, at most 6 per room), trees on the walkway rows (30 %) and in two corners (one tree guaranteed: `SYSTEMS.hydro` is hosted on a tree); `nutrient_tanks` on a wall; `specimen_tank` (half the rooms) |
+| lab | `charttable` at the centre (rot along the long side); consoles / lab benches as before elsewhere; walls: `spectrometer`, `sensorstation`, `fumehood`, `samplefridge` (corner), `specimen_tank` |
+| brig | half the cells are `cellfield`; `scan_arch` along the wall by the door |
+| armory | `issuecounter` by the door, `chargerack` in a corner, then the old desk and workbench |
+| gym | checkerboard of `sparring_set` (always first), treadmill, exercise_bike, rower, weightbench, mat; `dumbbell_rack` on a wall; a missing treadmill / bike goes on a wall; `grapple_dummy` in a corner |
+| laundry | `dryer`, `folding_table` (corner allowed), `linen_cart` (corner) |
+| lounge | `arcade` on a wall after the bar; `pool_table` at the centre (3+ interior tiles), `card_table` (5+); the sofa pattern fills the rest |
+| mess | `feedstock_silo` on a wall; `galley_trolley` in a corner of big galleys |
+| readyroom | `briefing_table` at the centre, the desk moves to a wall |
+| quarters | `platform_bed` instead of the bunk in about 30 % |
+| workshop | every other lathe is a `knee_mill`; `drill_press` on a wall |
+| datacore | every other `servers` is a `relayrack`; `commsstation` on a wall |
+| stores | `reachin_cooler`, `feedstock_silo`, `injector_crate` (corner); `coldstore_door` wall piece via the pool |
+| airlock | `airlock_doors` on the ring (+z into the room: the inner door faces the room, the outer one the hull wall) |
+
+Measured over 320 levels (`tools/test.mjs` `room props:`, threshold 60 % of rooms): bridge navstation 39/39, opsstation 38/39, commsstation 29/39, sensorstation 26/39; engineering plottable 68/68, injector_crate 38/68; shuttlebay workpod 63/65, maint_stand 62/65, fuelbowser 46/65, hoversled 17/65; arboretum growbed / tree / nutrient_tanks 17/17; lab charttable 53/53, spectrometer 50/53, samplefridge 25/53, sensorstation 24/53, fumehood 2/53; brig cellfield 23/40, scan_arch 26/40; armory issuecounter 40/51, chargerack 20/51; gym sparring_set 26/26, dumbbell_rack 23/26; laundry dryer 59/70; lounge arcade 33/47, pool_table 17/47; readyroom briefing_table 75/75; datacore commsstation 60/69, relayrack 15/69; airlock airlock_doors 101/127; transporter buffertank in 100 of 246 rooms (beampedestal 201/246, was 240/284). Most rooms are 3x3 with doorways on most edge tiles, so the edge ring has one or two free tiles: the wall props further down each list are the ones that miss.
+
+## Deviations from the batch docs
+* Not placed: `catwalk`, `ship_ladder` (no tall rooms), `galley_trolley` as a cart, the `makeCart` variants for bowser / sled / trolley / linen cart (they are floor props; `CARTS` unchanged). `padmark` / `shuttle_cradle` are children of the `shuttle` prop, not floor props (the cradle spans two tiles). `airlock_doors` is a floor prop on the airlock's edge ring (blocks its tile), not a centre fixture: the `suitrack` keeps the centre and the chamber needs a hull wall behind it.
+* `navstation` does not replace the forward starboard console: `crew.js` hosts `alert` on that console. The sensor station goes on a bridge wall (no generic science console exists to replace).
+* SYSTEMS hosts are unchanged (no `growbed` hydro host, no `chargerack` armory host, no `buffertank` / `relayrack` hosts): same reason as request 3 above.
+* `briefing_table`, `card_table`, `pool_table` users stand: the props have no chairs, a seated script would sit them on air.
+* `platform_bed` is rolled per cabin (30 %), not per senior billet: gen.js does not know who lives where.
+* Every `servers` stack is not replaced: every other one becomes a `relayrack`. The `transporter` gets no `cargo_pad` (3x3 rooms have no ring space left); it goes to cargo.
+* `cellfield.userData.field` opacity is not driven by lock state; `buffertank.userData.sight` is not animated.
+* Wearables (batch 9) and signage (batch 10): see the end of this section.
+
+## Requests to the main.js / haul.js / sim owner (batches 5-11)
+6. **Path tests**: every seed's layout changed again. Rooms hold more props (most 3x3 rooms now have 1-3 wall props); `tools/test-walk.mjs` / `tools/soak-walk.mjs` baselines that depend on a seed's layout may need re-baselining.
+7. **Carts**: `fuelbowser`, `hoversled`, `galley_trolley`, `linen_cart` carry `userData.handle` / `use.push` like `makeCart`; if `haul.js` should push them, map them in `CARTS` (deck `cargo_sled`, `fuel_and_stores`, galley).
+8. **Field cells**: `cellfield` (brig) exposes `userData.field` (a material, opacity 0.14 live, 0 down); set it from the cell's locked state if there is one.
+9. **Pattern buffer glow**: `buffertank.userData.sight` (MeshBasicMaterial) can pulse while the transporter runs.
+10. **Stretcher / tote / coil**: as request 4, the new two-handed items (`harvest_tote`, `coil_cartridge`, `patch_plate`, `light_panel`, `injector_spare`) exist in `ITEMS` but no interaction hands them out.
+
+## Open issues / needs a human eye (batches 5-11)
+* The shuttle on its cradle: the cradle reaches 1.6 m along x, past the tile; the end tiles are kept free so nothing stands there, and the collision box grows to 1.15 m. Check the shuttle's skids against the cradle pads (0.25 m lift).
+* The bay door (5.2 m) and systems board (3.6 m) sit on two wall tiles; check that nothing else hangs within 0.1 m at the shared edge (both faces are marked used).
+* Seated stations on bridge walls face the wall (operator side into the room); the bridge looks busier. The gym exercise bike seat (0.98 m) and rower (0.4 m) were not checked with `sitting_idle`.
+* Arboretum triangle budget: up to 6 grow beds (2,526 tris each, about 15k per room).

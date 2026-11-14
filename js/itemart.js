@@ -16,6 +16,12 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DEFS_GALLEY, KW_GALLEY } from './itemart-galley.js';     // batch 2: ladle, stockpot, fryingpan
 import { DEFS_MEDICAL, KW_MEDICAL } from './itemart-medical.js';  // batch 4: stretcher, iv_bag, forceps, kidney_dish, bandage
+import { DEFS_SCIENCES, KW_SCIENCES } from './itemart-sciences.js';     // batch 5: soil_meter, pruning_shears, harvest_tote
+import { DEFS_FLIGHT, KW_FLIGHT } from './itemart-flight.js';           // batch 6: wheel_chocks, tiedown_strap, ratchet_strap, tag_scanner
+import { DEFS_STATIONS2, KW_STATIONS2 } from './itemart-stations2.js';  // batch 7: coil_cartridge
+import { DEFS_SECURITY, KW_SECURITY } from './itemart-security.js';     // batch 8: patch_plate, pipe_clamp, seal_gauge, breather, cuffs
+import { DEFS_WEAR, KW_WEAR } from './wearart.js';                      // batch 9: folded coverall / scrubs / apron, skull cap, gloves, suit bag, half mask (its headset row is replaced by batch 11's)
+import { DEFS_POLISH, KW_POLISH } from './itemart-polish.js';           // batch 11: tether, headset, light_panel, injector_spare, stool, lamp, meter, snips, tape, frame
 
 const PI = Math.PI;
 const HAS_DOM = typeof document !== 'undefined';
@@ -332,6 +338,7 @@ def('crowbar', 'pry bar', 'tool', (g, M) => {
 }, { lie: true });
 
 Object.assign(DEFS, DEFS_GALLEY, DEFS_MEDICAL);   // art batches keep their rows in their own files (docs/propart-galley.md, docs/propart-medical.md)
+{ const { headset: _wearHeadset, ...wear } = DEFS_WEAR; Object.assign(DEFS, DEFS_SCIENCES, DEFS_FLIGHT, DEFS_STATIONS2, DEFS_SECURITY, wear, DEFS_POLISH); }   // batches 5-11; one headset (batch 11's, OPS-7)
 
 export const ITEM_KINDS = Object.keys(DEFS);
 export const ITEM_INFO = Object.fromEntries(ITEM_KINDS.map(k => [k, { name: DEFS[k].name, cls: DEFS[k].cls, frame: DEFS[k].base ? 'base' : 'grip', lie: !!DEFS[k].lie }]));
@@ -363,6 +370,7 @@ export function buildInstanced(kind, placements, opts = {}) {
   proto.traverse(m => { if (!m.isMesh) return; const gg = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()); gg.applyMatrix4(m.matrixWorld); for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); (byMat.get(m.material) || byMat.set(m.material, []).get(m.material)).push(gg); });
   const ims = [], A = new THREE.Matrix4(), B = new THREE.Matrix4(), O = new THREE.Object3D();
   for (const [material, list] of byMat) {
+    if (list.some(gg => !gg.attributes.uv)) for (const gg of list) gg.deleteAttribute('uv');   // batch parts built without uvs (canvas-free) share a material with uv'd ones: merge without
     const merged = list.length > 1 ? mergeGeometries(list, false) : list[0]; const im = new THREE.InstancedMesh(merged, material, placements.length); im.castShadow = im.receiveShadow = true; im.frustumCulled = false;
     placements.forEach((p, i) => { O.position.set(p.x, p.y, p.z); O.rotation.set(0, p.ry || 0, 0); O.scale.setScalar(p.s || 1); O.updateMatrix(); im.setMatrixAt(i, O.matrix); }); im.instanceMatrix.needsUpdate = true; ims.push(im); group.add(im);
   }
@@ -391,7 +399,11 @@ const KW = [
   [/box|carton|parts|spares|kit\b|bagged|pack\b|set\b|stock|refill|supply|supplies|bundle/i, 'smallbox'],
   [/spare|part\b|module|unit\b|assembly|bracket|valve|pump|filter|gear|motor|actuator|emitter|node|panel|insert|fitting|bearing|gasket|nozzle|piston|sensor/i, 'part'],
 ];
-KW.unshift(...KW_MEDICAL, ...KW_GALLEY);   // before the generic rows: 'dressing', 'clamp', 'tubing', 'pot', 'pan' would otherwise match crate_med / tool / hose / canister first
+KW.unshift(...KW_MEDICAL, ...KW_GALLEY,
+  [/trauma shears|rib shears|pinking shears|scissors|tin snips|\bsnips\b/i, 'snips'], [/ratchet(ing)? spanners?|ratchets, \d|crimping tool/i, 'wrench'], [/scrub brush/i, 'smallbox'],   // ahead of the batch rows that would take them ('shears', 'ratchet', 'scrubs')
+  ...KW_SECURITY, ...KW_FLIGHT, ...KW_STATIONS2, ...KW_SCIENCES, ...KW_WEAR.filter(r => r[1] !== 'headset'), ...KW_POLISH.filter(r => r[1] !== 'meter'),
+  ...KW.splice(0, 1),                                                                                   // the tricorder row stays ahead of the batch 11 'meter' row ('survey meter')
+  ...KW_POLISH.filter(r => r[1] === 'meter'));   // batches 5-11 (docs/propart-integration.md "Batches 5-11"); all before the generic rows; medical and galley first ('clamp', 'tape', 'dressing', 'pot', 'pan')
 const BY_SHAPE = [['smallbox', 'case', 'part', 'smallbox', 'crate_hazard', 'circuit'], ['canister', 'bottle', 'mug', 'canister', 'bottle', 'vial'], ['clipboard', 'padd', 'book', 'circuit', 'clipboard', 'book']];
 export function kindForName(name = '', shape = 0, hash = 0) {
   for (const [re, k] of KW) if (re.test(name)) return k;

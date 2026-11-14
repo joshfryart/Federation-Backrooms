@@ -10,14 +10,22 @@ import { kinds as STATIONS1 } from './propart-stations1.js';
 import { kinds as GALLEY } from './propart-galley.js';
 import { kinds as PLANT } from './propart-plant.js';
 import { kinds as MEDICAL } from './propart-medical.js';
+import { kinds as SCIENCES } from './propart-sciences.js';     // batch 5 (docs/propart-sciences.md)
+import { kinds as FLIGHT } from './propart-flight.js';         // batch 6 (docs/propart-flight.md)
+import { kinds as STATIONS2 } from './propart-stations2.js';   // batch 7 (docs/propart-stations2.md)
+import { kinds as SECURITY } from './propart-security.js';     // batch 8 (docs/propart-security.md)
+import { kinds as POLISH } from './propart-polish.js';         // batch 11 (docs/propart-polish.md)
 
-export const PROP_ART = { ...STATIONS1, ...GALLEY, ...PLANT, ...MEDICAL };
+export const PROP_ART = { ...STATIONS1, ...GALLEY, ...PLANT, ...MEDICAL, ...SCIENCES, ...FLIGHT, ...STATIONS2, ...SECURITY, ...POLISH };
 // which batch a kind came from (gallery labels, tests)
-export const PROP_BATCH = Object.fromEntries([[STATIONS1, 'stations1'], [GALLEY, 'galley'], [PLANT, 'plant'], [MEDICAL, 'medical']].flatMap(([k, b]) => Object.keys(k).map(n => [n, b])));
+export const PROP_BATCH = Object.fromEntries([[STATIONS1, 'stations1'], [GALLEY, 'galley'], [PLANT, 'plant'], [MEDICAL, 'medical'], [SCIENCES, 'sciences'], [FLIGHT, 'flight'], [STATIONS2, 'stations2'], [SECURITY, 'security'], [POLISH, 'polish']].flatMap(([k, b]) => Object.keys(k).map(n => [n, b])));
 // pieces that are not floor props on their own tile (wall / ceiling fixtures and add-ons): placed by the world.js decor pass or as children
-export const PROP_ART_FIXTURES = new Set(['stretcher_rack', 'gas_panel', 'holo_emitter', 'morgue_tray']);
+//   batches 5-11: coldstore_door and bay_door (wall pieces), padmark + shuttle_cradle (under / on the shuttle), warpcore_detail (on the core), catwalk + ladder (no tall rooms yet)
+export const PROP_ART_FIXTURES = new Set(['stretcher_rack', 'gas_panel', 'holo_emitter', 'morgue_tray', 'coldstore_door', 'bay_door', 'padmark', 'shuttle_cradle', 'warpcore_detail', 'catwalk', 'ship_ladder']);
 // floor props whose `top` must not be climbable: something hangs over the surface or the top is a thin pole / a chair back
-const NO_CLIMB = new Set(['range', 'surgical_table', 'infusion_stand', 'autopsy_table', 'scrubber', 'fabricator', 'taskchair', 'taskchair_plain', 'barstool', 'barback']);
+const NO_CLIMB = new Set(['range', 'surgical_table', 'infusion_stand', 'autopsy_table', 'scrubber', 'fabricator', 'taskchair', 'taskchair_plain', 'barstool', 'barback',
+  'growbed', 'nutrient_tanks', 'charttable', 'spectrometer', 'samplefridge', 'fumehood', 'fuelbowser', 'hoversled', 'reachin_cooler', 'navstation', 'opsstation', 'commsstation', 'relayrack', 'buffertank',
+  'chargerack', 'cellfield', 'issuecounter', 'shuttle_cradle']);   // batches 5-8: LED bars, sashes, repeater arms, hose reels and push handles over the surface (cradle: the shuttle sits on it)
 // footprints for batches that only give `size` [x, y|z, ...]: half extents (m)
 const BOX = {
   pumpskid: [-0.65, 0.65, -0.25, 0.25], heatexch: [-1, 1, -0.45, 0.45], scrubber: [-0.45, 0.45, -0.35, 0.35], fieldgen: [-1.1, 1.1, -0.8, 0.8], fieldgen_damp: [-1.1, 1.1, -0.8, 0.8], fabricator: [-0.95, 0.95, -0.5, 0.5],
@@ -31,6 +39,7 @@ export function buildPropArt(kind, m = {}, h = {}) {
   if (u.spots && !Array.isArray(u.spots)) { u.use = { ...(u.use || {}), ...u.spots }; u.spots = Object.values(u.spots).filter(s => s?.pos && Number.isFinite(s.ry)).map(s => [s.pos[0], s.pos[2], s.ry]); if (!u.spots.length) delete u.spots; }
   if (NO_CLIMB.has(kind)) delete u.top;
   if (!u.box && BOX[kind]) u.box = BOX[kind].slice();
+  if (u.box) u.box = u.box.map(v => Math.max(-1.25, Math.min(1.25, v)));   // a floor prop owns one 2.5 m tile (the fuel bowser's tow bar reaches 1.4 m)
   if (u.seat && typeof u.seat === 'object') u.seatPoint = u.seat, u.seat = u.seat.y;   // stations: pelvis point -> seat height
   u.propArt = PROP_BATCH[kind];
   return a;
