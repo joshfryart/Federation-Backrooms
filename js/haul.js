@@ -25,7 +25,7 @@ export function opStart(e) {
   if (e.returnTo) { H.play('idle', { fade: 0.25 }); H.standing = true; e.walking = false; return true; }   // stepped aside (dodge): wait, the walk back to the spot starts the use script
   const def = equipFor(e.spot), W = C.world; let goal = { x: e.x, z: e.z, yaw: e.mesh.rotation.y, y: def.y || 0 };
   const fa = e.faceAt || (e.opProp && Math.hypot(e.opProp[0] - e.x, e.opProp[1] - e.z) < 2.6 ? e.opProp : null); e.opProp = fa; e.faceAt = null;   // the mesh is turned here (opHook), not by the generic face-the-spot code
-  if (fa) { const [tx, ty] = W.tile(fa[0], fa[1]), p = W.d.props.find(q => q.tx === tx && q.ty === ty); if (p) { const [cx, cz] = W.center(tx, ty); goal = standPoint(def, { cx, cz, rot: p.rot || 0 }, { x: e.x, z: e.z }, C.ents.filter(o => o !== e && o.opGoal).map(o => [o.opGoal.x, o.opGoal.z])); } }
+  if (fa) { const [tx, ty] = W.tile(fa[0], fa[1]), p = W.d.props.find(q => q.tx === tx && q.ty === ty); if (p) { const [cx, cz] = W.center(tx, ty); goal = standPoint(def, { cx, cz, rot: p.rot || 0, kind: p.kind }, { x: e.x, z: e.z }, C.ents.filter(o => o !== e && o.opGoal).map(o => [o.opGoal.x, o.opGoal.z])); } }
   let kind = e.spot; if (def.stance === 'sit' && def.spots && !goal.spot) { kind = 'post'; goal = { x: e.x, z: e.z, yaw: goal.yaw, y: 0 }; }   // every seat taken: stand by instead of sitting on air
   wearKit(e); const tool = toolFor(e.person, equipKey(kind), C.G.runSeed);   // the billet's handheld comes out now and then (js/handhelds.js)
   e.op = new Operator(kind, e.person, C.G.runSeed, { toolSteps: tool ? toolScript(tool) : null }); e.opGoal = goal; e.opHeld = { hand_r: null, hand_l: null }; e.seatDY = null; e.seatT = 0;

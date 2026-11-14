@@ -10,7 +10,7 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
-import { makeJunction, setLamp, makeBeacon } from './sysview.js';
+import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js';
 import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
@@ -409,7 +409,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   // waiting for the lift: stand beside the doors (LIFT_WAIT) while the car is shut / cycling or someone is stepping out (arrivals first)
   let liftWait = false; const car = world.car;
   if (w.vanish && car && G.lift && toEnd < 4.2 && toEnd > 1.3) {
-    const shut = G.lift.shutT > 0 || !!G.fx?.liftLocked, out = !shut && ents.some(o => o !== e && o.fromCar > G.time - 10 && o.walk && !o.board && Math.hypot(o.x - car.x, o.z - car.z) < 2.3);   // someone who just came out of the car is still in it / its doorway
+    const shut = G.lift.shutT > 0 || !!G.fx?.liftLocked, out = !shut && ents.some(o => o !== e && o.fromCar > G.time - 8 && o.walk && !o.board && Math.hypot(o.x - car.x, o.z - car.z) < 1.8);   // someone who just came out of the car is still in it / its doorway
     const spots = (shut || out) ? liftWaitSpots(car) : null;
     if (spots?.length) {
       const free = (q, i) => !ents.some(o => o !== e && o.kind === 'crew' && o.mesh && !o.board && (o.liftWait === i || Math.hypot(o.x - q[0], o.z - q[1]) < 0.5));   // nobody stands there or has claimed it
@@ -512,7 +512,7 @@ function simBodies(dt, force = false) {
     o.person.status = 'seen';
     const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); m.position.set(cx, 0, cz); m.rotation.y = rot; m.userData.rank = o.person.short; scene.add(m);
     const ne = { kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, simKey: k }; place(ne, o, t); ents.push(ne);
-    if (out) { startWalk(ne, t[0], t[1], false, { sim: k, ...(runFor(o.person) ? { run: true } : {}) }); ne.pauseT = 0.5 + n * 1.0; ne.fromCar = G.time;   /* one after another, not all at once */ ne.mesh.userData.human?.play('idle', { fade: 0 }); } else poseFor(ne);
+    if (out) { startWalk(ne, t[0], t[1], false, { sim: k, ...(runFor(o.person) ? { run: true } : {}) }); ne.pauseT = 0.4 + n * 0.6; ne.fromCar = G.time;   /* one after another, not all at once */ ne.mesh.userData.human?.play('idle', { fade: 0 }); } else poseFor(ne);
   }
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
@@ -1350,7 +1350,7 @@ function placeRepairPoints(data) {
       const j = makeJunction(s, `JCT ${deckCode}-${String(jn).padStart(2, '0')}`, DEPT[s.dept].name, DIVISION[DEPT[s.dept].division].color);
       j.group.position.set(f.px + f.dx * 0.01, 0.85, f.pz + f.dy * 0.01); j.group.rotation.y = f.ry; scene.add(j.group);
       j.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
-      pt = { x: f.px + f.dx * 0.55, z: f.pz + f.dy * 0.55, main: false, reach: 1.6, obj: j.group, lamp: j.lamp, y: 1.25, px: f.px, pz: f.pz, where: `junction ${deckCode}-${String(jn).padStart(2, '0')}` };
+      pt = { x: f.px + f.dx * 0.55, z: f.pz + f.dy * 0.55, main: false, reach: 1.6, obj: j.group, lamp: j.lamp, door: j.door, open: 0, y: 1.25, px: f.px, pz: f.pz, where: `junction ${deckCode}-${String(jn).padStart(2, '0')}` };
       { const ox = f.tx + f.dx, oy = f.ty + f.dy; G.repair?.bindJunction(s.id, G.shipDeck + 1, [ox, oy], [f.tx, f.ty], data.room[oy]?.[ox] || 'corridor'); }   // crew sent to this system go to this very junction
     }
     if (!pt.obj) { pt.obj = makeBeacon(); pt.obj.position.set(pt.x, pt.y + 0.3, pt.z); scene.add(pt.obj); }
@@ -1393,6 +1393,7 @@ function updateShipSystems(dt, tension) {
   // faulted hardware sparks, steams and blinks
   for (const r of repairPts) {
     const st = S.status(r.sys); if (r.lamp) setLamp(r.lamp, st, t);
+    if (r.door) { const want = (rp === r && G.repairT > 0) || G.repair?.workingOn(r.sys) ? 1 : 0; if (want || r.open > 0.001) { r.open += (want - r.open) * Math.min(1, dt * 3); setJunctionDoor(r, r.open); } }   // the junction door opens while someone works at it (docs/propart-integration.md request 2)
     if (!r.lamp) { r.obj.visible = st !== 'nominal'; r.obj.rotation.y = t * 2; r.obj.material.color.set(G.repair?.workingOn(r.sys) && Math.sin(t * 6) > 0 ? 0x40e0ff : st === 'offline' ? 0xff3020 : 0xffa020); }   // cyan blink: being worked
     if (st === 'nominal') continue;
     r.fxT = (r.fxT || Math.random() * 2) - dt;

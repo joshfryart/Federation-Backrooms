@@ -78,3 +78,71 @@ Still broken / next, by measured size:
    use point, so they brush through it (`wi`, ~1-30 pair-s per deck).
 4. Not measured yet: path cost on decks with tubes (crawl), carts as obstacles (haulers shove walkers), alert / evacuation surges,
    the 14 m "unseen" radius in long corridors, the 6 % refused orders path (a refusal does nothing visible).
+
+### Iteration 2 (2026-11-14)
+
+Harness additions: `early` (body-seconds a body is still walking a schedule walk, or to the lift car, while the abstract sim already
+counts it arrived / riding), `--surge T` (at T s an evacuation surge like `evacuationStep`, all decks: 60 % of the crew in leisure rooms
+run to the shuttlebay at prio 3; prints sent / sim median arrival / bodies that stood in the room / left the deck), `carBrushS` in TOTAL
+(brushing within 3.5 m of the car), lift samples now list the door bodies' walk state, `--trace` adds the wait spot and arrivals count.
+Same soak (seed 11, USF Nova Scotia, decks 3, 4, 2, 150 s each at clock x6) and a second seed (12, with `--surge 60`), HEAD before ->
+after. Runs are chaotic (one change moves every later walk); intermediate after-runs varied by about +-50 % on the lift numbers.
+
+| | seed 11 before | seed 11 after | seed 12 + surge before | after |
+|---|---|---|---|---|
+| brushing near the lift (pair-s within 3.5 m of the car) | 205 | 26 | 167 | 20 |
+| all walker brushing (pair-s) | 220 | 31 | 160+ | 25 |
+| stuck walks (count, body-s) | 10, 41 s | 1, 0.1 s | 16, 49 s | 1, 1.6 s |
+| sim ahead of the body (`early`, body-s) | ~1500 (surge run) | 22 | 1752 | 30 |
+| lift queue > 15 s (walkers within 3.5 m of the car) | 4 | 4 | 0 | 7 |
+| boarders waiting in the car > 10 s | 0 | 1 | 0 | 1 |
+| walk median / p90 (deck 3) | 10.3 / 27 s | 8.6 / 28 s | 10.6 / 32 s | |
+| ordered NPCs not in the job room by the end of the deck | 8 of 25 (surge run) | 13 of 26 | 4 of 28 | 12 of 26 |
+| pops / teleports in sight | 1 / 2 | 1 / 0 | 0 / 1 | 0 / 3 |
+
+Ordered NPCs: the sim now takes real walk + ride + walk time (30-85 s for a cross-deck order instead of 5-20 s), so more orders given
+late in a 150 s deck are still under way when it ends. Step-time p99 is not comparable this time (other agents' browsers shared the box).
+
+Found and fixed:
+1. **The sim ran ahead of the body.** `WALK_MAX` 20 s and 1.3 m/s per tile vs bodies at ~0.93 m/s on 30-80 m walks. Now `TILE_S` = 2.5 s
+   per tile, cap 75 s; `sim.holdBody(person, transit)` (main.js `simHold`) keeps a trip open while the body on the player's deck is still
+   on that schedule walk, or (lift trips) still walking to / standing in the car: the ride only starts once the body is gone; at most
+   `HOLD_MAX` = 60 s past the estimate. With `lifts` (each deck's car tile, `G.shipDecks[i].data.exit`), a lift trip is walk to the car
+   + ride + a walk leg from the car on the new deck (`bodies()` lists the person there, walking, so the body steps out and walks in while
+   the sim agrees). Cost: cross-deck orders / repairs / evacuations now take 30-90 s of sim time instead of 5-20 (honest).
+2. **Lift mouth:** (a) walkers wait beside the doors (`LIFT_WAIT`, 6 spots in two rows on both sides, checked against walls and props,
+   claimed via `e.liftWait`) while the car is closing / locked or someone who just stepped out (`e.fromCar`, < 8 s) is still within
+   1.8 m of the car: arrivals get out first, corridor walkers get past; (b) the doors no longer shut 1.6 s after the first boarder
+   (`finish` set `shutT ||= 1.6`): carStep's rule decides (nobody else walking up, 4 s, or a full car), so a group boards together;
+   (c) the "at most 3 arrivals per cycle" check had been swallowed by a `//` comment: restored; arrivals are staggered 0.6 s apart and
+   step out through each other (ghost 0.2 s while < 1.6 m from the car); new arrivals are held back once someone has waited beside the
+   doors 3 s (turns, not a steady stream out of an unseen car); (d) personal space applies to everyone outside 1.3 m of the car centre.
+3. **Seated / working bodies:** walkers steer around and keep space from the mesh position (seat / use point), not the logical tile.
+4. **Creeping queues:** a walker that moved < 0.3 m in 4 s squeezes past (ghost 1.5 s), not only one stopped dead (not while waiting
+   for the lift).
+5. **Requests from the props agent** (docs/propart-integration.md 1-2): `opStart` passes the prop kind to `standPoint` (per-prop use
+   points), junction doors swing open while the player or a crew member works at them (`setJunctionDoor`).
+6. **Refusals:** a refused order / favour (`Duty` events now carry `person`) makes the body shake its head when in sight (< 16 m) and
+   speak the line when < 10 m (`refuseReact`); the log line no longer doubles the name.
+
+Tests: `tools/test-walk.mjs` node part (the sim holds a walk for its body and lets go after `HOLD_MAX`; lift trips end with a walk leg
+from the car tile on the new deck; a refusal carries the person) and browser part 9 (wait spots on open floor, both sides, apart; a lift
+walker waits at one while an arrival steps out; a refusal plays `shake_head`).
+
+Still broken / next, by measured size:
+1. **Lift queue time** under the x6 stress (4-7 walkers > 15 s within 3.5 m, 18 in one intermediate run with longer arrival
+   windows; the trade-off of letting arrivals out first): the car takes one batch per cycle and the player looking
+   in forces extra close / open cycles for arrivals (`L.arrive`). Ideas: board and unload in the same open-doors window (arrivals spawn
+   while boarders' doors close is the only hidden moment); a second car spot set when 6+ wait; the soak's player stands at the lift mouth
+   1/3 of the time, which real players do less.
+2. **Orders take real time now**, and nothing tells the player: a "on my way (deck 4, ~1 min)" line or nav pin for the ordered person.
+3. Boarders > 10 s in the car (0-4 per run): a stream of walkers through the doorway keeps the doors open (never shut on someone in
+   the doorway). A full car should stop taking walkers already at 1.3 m.
+4. Not measured yet: crawl tubes, carts blocking corridors (deck 4 showed a pushed cart crawling at the lift mouth), the 14 m "unseen"
+   radius in long corridors. The surge harness exists, but on this ship the shuttlebay is on another deck, so it only measures the
+   lift; try `--ship` with a shuttlebay on a busy deck.
+
+Requests to other owners (iteration 2): `TODO.md` first Handoff bullet (pathing), replace "Next: lift mouth congestion, sim walk time vs
+body walk time, brushing seated bodies." with "Iteration 2: the sim waits for the body (walk + ride + walk legs), lift walkers wait
+beside the doors and let arrivals out first, refusals show on the body. Next: lift queue time under heavy traffic, telling the player
+how long an ordered person needs, carts / tubes / long-corridor unseen radius."
