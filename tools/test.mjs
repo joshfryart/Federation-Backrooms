@@ -76,11 +76,18 @@ await combatTests(fail);
   if (low.length || stranded || exitInRoom || big5full < big5 || bigLow.length) fail('room props');
 }
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
-page.on('pageerror', e => errors.push(e.message));
-page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-await page.goto(`http://localhost:${port}/index.html?mode=madness`);
-await page.evaluate(async () => { await __game.ready; __game.setQuality('low'); });
+// one browser for the whole run; each page is its own renderer process, closed once its sections are done (memory: every newRun() builds a deck).
+// Page load + game ready get a generous timeout and ONE retry on a fresh page (logged as RETRY): a slow or crashed load is not a test result.
+// Nothing else is retried here: a section that fails, fails.
+const openPage = async (path, tag = '', viewport = { width: 640, height: 360 }, ready = async (p) => p.evaluate(async () => { await __game.ready; __game.setQuality('low'); })) => {
+  for (let attempt = 1; ; attempt++) {
+    const p = await browser.newPage({ viewport }); p.setDefaultTimeout(120000); p.setDefaultNavigationTimeout(120000);
+    const errs = []; p.on('pageerror', e => errs.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(tag + m.text()); }); p.on('crash', () => errs.push(tag + 'renderer crashed'));
+    try { await p.goto(`http://localhost:${port}/${path}`); await ready(p); p.on('pageerror', e => errors.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(tag + m.text()); }); p.on('crash', () => errors.push(tag + 'renderer crashed')); errors.push(...errs); return p; }
+    catch (e) { await p.close().catch(() => { }); if (attempt >= 2) throw e; console.log(`RETRY page load ${path}: ${String(e.message || e).split('\n')[0]}${errs.length ? ' / ' + errs[0] : ''}`); }
+  }
+};
+const page = await openPage('index.html?mode=madness');
 if (await page.evaluate(() => __game.G.mode) !== 'madness') fail('?mode=madness did not select madness mode');
 
 const gen = await page.evaluate(async () => {
@@ -115,6 +122,7 @@ const run = await page.evaluate(async () => {
     for (const c of g.world.d.chips) { const [x, z] = g.world.center(c[0], c[1]); g.P.x = x; g.P.z = z; tick(4); }
     const need = g.world.d.chips.length; if (g.G.chips < need) return { err: `deck ${deck}: chips ${g.G.chips}/${need}`, log };
     if (g.shipState.status('lifts') === 'offline') g.shipState.repair('lifts');
+    for (const r of g.repairPts) if (Math.hypot(r.x - g.world.liftPos.x, r.z - g.world.liftPos.z) < r.reach + 0.5 && g.shipState.status(r.sys) !== 'nominal') g.shipState.repair(r.sys);   // a damaged system in reach of the lift (the lift controls themselves when 'lifts' is only degraded, or a junction beside the car) turns E into hold-to-repair (js/main.js interact): the bot would press E forever
     for (let k = 0; k < 4 && g.G.phase === 'play'; k++) { g.P.clung = 0; g.P.kbx = g.P.kbz = 0; g.P.x = g.world.liftPos.x; g.P.z = g.world.liftPos.z; tick(2); key('KeyE'); tick(1); }
     await new Promise(r => setTimeout(r, 2600)); tick(4);
     for (let w = 0; w < 36 && g.G.deck === deck && g.G.phase !== 'win' && g.G.phase !== 'perk'; w++) { await new Promise(r => setTimeout(r, 500)); tick(4); }   // slow machine: keep waiting for the lift transition (up to ~20 s)
@@ -217,7 +225,8 @@ const srch = await page.evaluate(async () => {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
   for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
   for (const s of g.world.searchSites) out.kinds[s.kind] = (out.kinds[s.kind] || 0) + 1;
-  const site = g.world.searchSites.find(s => !g.ents.some(e => e.kind === 'crew' && Math.hypot(e.x - s.x - s.nx * 0.9, e.z - s.z - s.nz * 0.9) < 3)) || g.world.searchSites[0]; if (site) {   // one with nobody standing by (the prompt would offer a talk instead)
+  const stand = (s) => [s.x + s.nx * 0.9, s.z + s.nz * 0.9];   // one with nobody standing by (the prompt would offer a talk instead) and no repair point in reach (a damaged system's [Hold E] Repair outranks Search by design, js/main.js prompt order)
+  const site = g.world.searchSites.find(s => { const [x, z] = stand(s); return !g.ents.some(e => e.kind === 'crew' && Math.hypot(e.x - x, e.z - z) < 3) && !g.repairPts.some(r => Math.hypot(r.x - x, r.z - z) < r.reach + 0.3); }) || g.world.searchSites[0]; if (site) {
     P.x = site.x + site.nx * 0.9; P.z = site.z + site.nz * 0.9; P.yaw = Math.atan2(site.nx, site.nz); P.vx = P.vz = 0;   // stand in front, look at the wall
     g.step(1 / 60, 900); out.prompt = document.getElementById('prompt').textContent;
     const before = document.getElementById('msgs')?.textContent || '';
@@ -238,7 +247,7 @@ const invRun = () => page.evaluate(async () => {
   for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
   const w = g.world, pr = w.d.props.find(p => ['crate', 'table', 'bunk', 'biobed'].includes(p.kind));
   if (pr) { const [cx, cz] = w.center(pr.tx, pr.ty); for (const [ox, oz] of [[1.7, 0], [-1.7, 0], [0, 1.7], [0, -1.7]]) { P.x = cx + ox; P.z = cz + oz; P.yaw = Math.atan2(ox, oz); P.pitch = -0.6; P.vx = P.vz = 0; g.step(1 / 60, 950); g.step(1 / 60, 950.02); const t = document.getElementById('prompt').textContent; if (t && !/Search/.test(t)) { out.examine = t; out.examineKind = pr.kind; break; } } }
-  const cands = (w.clutter || []).filter(c => !g.ents.some(e => Math.hypot(e.x - c.x, e.z - c.z) < 3.5) && !(w.searchSites || []).some(s => Math.hypot(s.x - c.x, s.z - c.z) < 3) && !(g.repairPts || []).some(r => Math.hypot(r.x - c.x, r.z - c.z) < 4) && Math.hypot(w.liftPos.x - c.x, w.liftPos.z - c.z) > 4);
+  const cands = (w.clutter || []).filter(c => !g.ents.some(e => Math.hypot(e.x - c.x, e.z - c.z) < 3.5) && !(w.searchSites || []).some(s => Math.hypot(s.x - c.x, s.z - c.z) < 3) && !(g.repairPts || []).some(r => Math.hypot(r.x - c.x, r.z - c.z) < r.reach + 1) && Math.hypot(w.liftPos.x - c.x, w.liftPos.z - c.z) > 4);
   find: for (const c of cands.slice(0, 15)) for (const [ox, oz] of [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]]) {
     P.x = c.x + ox; P.z = c.z + oz; P.yaw = Math.atan2(ox, oz); P.pitch = 0; P.vx = P.vz = 0; g.step(1 / 60, 960); g.step(1 / 60, 960.02);
     const t = document.getElementById('prompt').textContent; if (t && !/\[E\]|nominal|Repair/.test(t)) { out.clutterPrompt = t; break find; } }
@@ -279,10 +288,7 @@ const propsOk = await page.evaluate(async () => {
 console.log('props:', JSON.stringify(propsOk)); if (propsOk.bad.length || propsOk.n < 56 || propsOk.art < 34) fail('prop models');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 // ---- Systems Nominal (default mode) on its own page ----
-const page2 = await browser.newPage({ viewport: { width: 640, height: 360 } });
-page2.on('pageerror', e => errors.push('nominal: ' + e.message)); page2.on('console', m => { if (m.type() === 'error') errors.push('nominal: ' + m.text()); });
-await page2.goto(`http://localhost:${port}/index.html`);
-await page2.evaluate(async () => { await __game.ready; __game.setQuality('low'); });
+const page2 = await openPage('index.html', 'nominal: ');
 const shipTest = await page2.evaluate(async () => {
   const { SHIPS } = await import('./js/ships.js'); const { genShip, shipPlan } = await import('./js/gen.js');
   const NEED = ['bridge', 'readyroom', 'engineering', 'sickbay', 'mess', 'lounge', 'gym', 'holodeck', 'lab', 'quarters', 'shuttlebay', 'cargo', 'transporter', 'armory', 'brig', 'datacore', 'arboretum', 'stores'];
@@ -345,7 +351,7 @@ const nom = await page2.evaluate(async () => {
       const tube = w.d.tubes.find(t => t.tiles.length >= 3 && t.ladder > 0) || w.d.tubes[0]; r.tubes = w.d.tubes.length;
       if (tube && es[0]) { const e = es[0], a = tube.tiles[0], b = tube.tiles[tube.tiles.length - 1], [ax, az] = w.center(a[0], a[1]); e.walk = null; e.x = ax; e.z = az; e.mesh.position.set(ax, 0, az); P.x = ax + 25; P.z = az;
         g.startWalk(e, b[0], b[1], false, { tubes: true, run: false }); const clips = new Set(); let maxY = 0, n = 0; for (; n < 2400 && e.walk; n++) { tick(1); clips.add(e.clip); maxY = Math.max(maxY, e.y || 0); } r.tube = { len: tube.tiles.length, ladder: tube.ladder, secs: +(n / 30).toFixed(1), clips: [...clips], maxY: +maxY.toFixed(2), done: !e.walk, dbg: e.walk ? { inEnts: g.ents.includes(e), wsN: e.wsN, parent: !!e.mesh.parent, vis: e.mesh.visible, haul: !!e.haul, op: !!e.op, x: +e.x.toFixed(2), z: +e.z.toFixed(2), v: +(e.v || 0).toFixed(2), stuck: +(e.walk.stuck || 0).toFixed(1), pauseT: e.pauseT || 0, ghost: e.ghost || 0, heading: e.heading, tile: w.tile(e.x, e.z), tgt: [b[0], b[1]], fieldHere: g.pathField(b[0], b[1], true)[w.tile(e.x, e.z)[0] + w.tile(e.x, e.z)[1] * w.W], tubeAxis: w.d.tubeAxis[w.tile(e.x, e.z)[0] + w.tile(e.x, e.z)[1] * w.W] } : null }; }
-      const e2 = es[1]; if (e2) { G.simT = 1e9; e2.walk = null; e2.dodgeCool = 0;   /* hold the schedule still: a body whose walk the test nulls (or whose block changes meanwhile) otherwise walks on to its sim spot, up to 40 m away (docs/pathing.md iteration 4) */ const [tx, ty] = w.tile(e2.x, e2.z), p0 = [e2.x, e2.z]; P.x = e2.x - 1.8; P.z = e2.z; P.vx = 5.4; P.vz = 0; P.sprint = true; g.dodgeCheck(e2, 0.016, 1.8); P.sprint = false; r.dodge = { started: !!e2.walk, run: !!e2.run }; { const e3 = es[2]; if (e3) { e3.walk = null; e3.dodgeCool = 0; P.x = e3.x - 1.8; P.z = e3.z; P.vx = 3.3; P.vz = 0; P.sprint = false; g.dodgeCheck(e3, 0.016, 1.8); r.walkNoScatter = !e3.walk; P.vx = 0; } } P.vx = 0; P.x += 30;
+      const e2 = es.find((x, i) => i > 0 && !x.haul && !x.op?.cart); if (e2) { G.simT = 1e9; if (g.haul) g.haul.t = 1e9; e2.walk = null; e2.dodgeCool = 0;   /* no cart job either: one starting on this body mid-check walks it off (js/haul.js, every 16-38 s) */   /* hold the schedule still: a body whose walk the test nulls (or whose block changes meanwhile) otherwise walks on to its sim spot, up to 40 m away (docs/pathing.md iteration 4) */ const [tx, ty] = w.tile(e2.x, e2.z), p0 = [e2.x, e2.z]; P.x = e2.x - 1.8; P.z = e2.z; P.vx = 5.4; P.vz = 0; P.sprint = true; g.dodgeCheck(e2, 0.016, 1.8); P.sprint = false; r.dodge = { started: !!e2.walk, run: !!e2.run }; { const e3 = es.find((x, i) => i > 0 && x !== e2); if (e3) { e3.walk = null; e3.dodgeCool = 0; P.x = e3.x - 1.8; P.z = e3.z; P.vx = 3.3; P.vz = 0; P.sprint = false; g.dodgeCheck(e3, 0.016, 1.8); r.walkNoScatter = !e3.walk; P.vx = 0; } } P.vx = 0; P.x += 30;
         for (let i = 0; i < 400 && e2.walk; i++) tick(1); r.dodge.moved = +Math.hypot(e2.x - p0[0], e2.z - p0[1]).toFixed(2); for (let i = 0; i < 900 && (e2.walk || e2.retT > 0 || e2.returnTo); i++) tick(1); r.dodge.back = +Math.hypot(e2.x - p0[0], e2.z - p0[1]).toFixed(2); G.simT = 0; }
       const ph = g.phases; ph.enabled = false; ph.index = 4; g.G.evacT = 0; g.evacuationStep(2); r.evac = g.sim.over.size; for (const p of g.roster.people) g.sim.release(p); ph.index = 0;
       out.move2 = r;
@@ -378,8 +384,8 @@ const nom = await page2.evaluate(async () => {
       out.equip = q; G.simT = 0;
     }
     { // handhelds: NPC kit on the body / in the hand, tricorder speeds a repair, improvised weapon stuns and breaks a foldable (js/handhelds.js, js/kit.js)
-      G.phase = 'play'; g.simBodies(0, true); G.simT = 1e9; const HHm = await import('./js/handhelds.js'), K = g.kit, q = { kit: !!K }, hum = (x) => x?.mesh?.userData.human;
-      const belt = (x) => HHm.loadoutFor(x.person).some(i => ['belt', 'back'].includes(HHm.HANDHELDS[i].holster)), e = g.ents.find(x => x.simmed && hum(x) && !x.walk && !x.cower && belt(x)) || g.ents.find(x => x.simmed && hum(x) && !x.walk && !x.cower); if (e) { g.opEnd(e); e.kitWorn = null; g.opStart(e); const worn = Object.values(e.kitWorn || {}); q.worn = { n: worn.length, bone: worn[0]?.holder.parent?.name || null };
+      G.phase = 'play'; g.simBodies(0, true); G.simT = 1e9; if (g.haul) g.haul.t = 1e9;   /* hold the schedule and the cart jobs: a haul job taking the picked body ends its op mid-check */ const HHm = await import('./js/handhelds.js'), K = g.kit, q = { kit: !!K }, hum = (x) => x?.mesh?.userData.human;
+      const belt = (x) => HHm.loadoutFor(x.person).some(i => ['belt', 'back'].includes(HHm.HANDHELDS[i].holster)), e = g.ents.find(x => x.simmed && hum(x) && !x.walk && !x.haul && !x.cower && belt(x)) || g.ents.find(x => x.simmed && hum(x) && !x.walk && !x.haul && !x.cower); if (e) { g.opEnd(e); e.kitWorn = null; g.opStart(e); const worn = Object.values(e.kitWorn || {}); q.worn = { n: worn.length, bone: worn[0]?.holder.parent?.name || null };
         const ok = (await import('./js/equipment.js')), op = new ok.Operator('post', e.person, 3, { toolSteps: HHm.toolScript('tricorder_sec'), toolP: 1 }); e.op = op; e.opHeld = { hand_r: null, hand_l: null }; e.opGoal = e.opGoal || { x: e.mesh.position.x, z: e.mesh.position.z, yaw: e.mesh.rotation.y, y: 0 }; let held = null; for (let i = 0; i < 30 * 40 && !held; i++) { P.x = e.x + 2.5; P.z = e.z; tick(1); if (!e.op) break; held = hum(e).held?.hand_r?.userData.id === 'tricorder_sec' ? hum(e).held.hand_r.parent?.name : null; } q.inHand = held; g.opEnd(e); }
       if (K) { const rp = g.repairPts.find(r => r.sys) || g.repairPts[0]; K.hand = -1; G.carry = null; const t0 = rp ? g.repairTime(rp) : 0; if (!K.equip('tricorder_eng')) { K.add(HHm.newInstance('tricorder_eng', 5)); } const t1 = rp ? g.repairTime(rp) : 0; q.repair = { t0: +t0.toFixed(2), t1: +t1.toFixed(2), faster: t1 < t0 * 0.8 }; const r = K.useJob(); q.repair.scan = !!r?.ok;
         const v = g.ents.find(x => x.simmed && hum(x) && !x.cower && x !== e); if (v) { if (v.op) g.opEnd(v); v.walk = null; K.add(HHm.newInstance('tricorder_sci', 9)); const inst = K.inst; P.x = v.x + 1.0; P.z = v.z; P.yaw = Math.atan2(1, 0); let hits = 0; const stuns = [];
@@ -389,7 +395,8 @@ const nom = await page2.evaluate(async () => {
     }
     { // sliding doors, clutter pick-up, terminal and talk menus
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
-      if (dr) { w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2;  w.setDoorLock(true); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.sealed = dr.open < 0.2; const q = { x: dr.f.x + (dr.f.ax ? 0.3 : 0), z: dr.f.z + (dr.f.ax ? 0 : 0.3), y: 0 }; w.resolve(q, 0.3); out.doors2.blocked = dr.f.ax ? q.x > dr.f.x + 0.3 : q.z > dr.f.z + 0.3; let pr = 0; for (let i = 0; i < 14; i++) pr = Math.max(pr, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.pried = pr >= 1 && dr.open > 0.5; w.setDoorLock(false); }
+      if (dr) { w.setDoorLock(false);   // the phases ticked above can black the deck out (a power fault seals the doors, js/main.js step): start from powered doors, the seal is tested below
+        w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2;  w.setDoorLock(true); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.sealed = dr.open < 0.2; const q = { x: dr.f.x + (dr.f.ax ? 0.3 : 0), z: dr.f.z + (dr.f.ax ? 0 : 0.3), y: 0 }; w.resolve(q, 0.3); out.doors2.blocked = dr.f.ax ? q.x > dr.f.x + 0.3 : q.z > dr.f.z + 0.3; let pr = 0; for (let i = 0; i < 14; i++) pr = Math.max(pr, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.pried = pr >= 1 && dr.open > 0.5; w.setDoorLock(false); }
       const c = w.clutter[0], n0 = w.clutter.length; out.clutter = { took: c ? w.takeClutter(c) : null, left: w.clutter.length === n0 - 1 };
       G.phase = 'play'; g.shipState.repair('computer'); g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
       const ppl = g.sim.onDeck(G.shipDeck + 1)[0]; if (ppl) { g.talkMenu({ person: ppl.person }); out.talk = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu(); }
@@ -400,13 +407,79 @@ const nom = await page2.evaluate(async () => {
   return out;
 });
 console.log('nominal:', JSON.stringify(nom));
-{ const n = nom, D = n.start.D, ok = n.start.mode === 'nominal' && n.start.deck === 1 && n.start.shipDeck === 0 && n.start.inCar && n.start.decks === D && n.start.director === null && n.start.auto === false && n.start.objective === 'none'
-    && !n.simBad && n.billet.isPlayer && n.billet.loops > 0 && n.billet.hud && n.duty.ok && n.duty.quick.after === 'doing' && n.phases.index >= 3 && n.phases.mode && n.dead.shown && n.dead.btns >= 2 && n.cont.phase === 'play' && n.cont.changed && n.cont.newIsPlayer && n.cont.oldDead === 'dead' && n.cont.hp > 0 && n.cont.same && (!n.walk.far || (n.walk.add && n.walk.closer && n.walk.inside && n.walk.arrived)) && n.move2.have > 1 && (n.move2.tubes > 0 && n.move2.tube && (n.move2.tube.done && n.move2.tube.clips.includes('crouch_fwd'))) && n.move2.dodge.started && n.move2.walkNoScatter !== false && n.move2.dodge.run && n.move2.dodge.moved > 0.6 && n.move2.dodge.back < 1.3 && n.move2.evac > 3 && n.doors2.n > 0 && n.doors2.open && n.doors2.shut && n.doors2.sealed && n.doors2.blocked && n.doors2.pried && n.clutter.took && n.clutter.left && n.term.open && n.term.rows >= 4 && (!n.talk || (n.talk.open && n.talk.rows >= 4)) && n.calm.gorns === 0 && n.calm.mad === null && n.calm.faults === 0 && n.calm.hostileEnts === 0
-    && n.doors.nearOpen && n.doors.farShut && n.walkIn.phase === 'select' && n.walkIn.rows.length === D && /^1Deck 1 — Command · Bridge/.test(n.walkIn.rows[0]) && n.cancel === 'play'
-    && n.down.to === D - 1 && n.down.secs >= 7.5 && n.down.secs <= 9 && n.down.inCar && n.down.indicator >= D - 1 && n.down.shaken
-    && n.up.to === 0 && n.up.secs >= 7.5 && n.up.inCar && n.persist !== false && n.hop.to === 1 && n.hop.secs >= 2.8 && n.hop.secs <= 4
-    && n.locked.fx && n.locked.panel === 'play' && n.unlocked === 'select';
-  if (!ok) fail('nominal ship / turbolift'); }
+{ const n = nom, D = n.start.D, checks = [
+    ["n.start.mode === 'nominal'", () => n.start.mode === 'nominal'],
+    ["n.start.deck === 1", () => n.start.deck === 1],
+    ["n.start.shipDeck === 0", () => n.start.shipDeck === 0],
+    ["n.start.inCar", () => n.start.inCar],
+    ["n.start.decks === D", () => n.start.decks === D],
+    ["n.start.director === null", () => n.start.director === null],
+    ["n.start.auto === false", () => n.start.auto === false],
+    ["n.start.objective === 'none'", () => n.start.objective === 'none'],
+    ["!n.simBad", () => !n.simBad],
+    ["n.billet.isPlayer", () => n.billet.isPlayer],
+    ["n.billet.loops > 0", () => n.billet.loops > 0],
+    ["n.billet.hud", () => n.billet.hud],
+    ["n.duty.ok", () => n.duty.ok],
+    ["n.duty.quick.after === 'doing'", () => n.duty.quick.after === 'doing'],
+    ["n.phases.index >= 3", () => n.phases.index >= 3],
+    ["n.phases.mode", () => n.phases.mode],
+    ["n.dead.shown", () => n.dead.shown],
+    ["n.dead.btns >= 2", () => n.dead.btns >= 2],
+    ["n.cont.phase === 'play'", () => n.cont.phase === 'play'],
+    ["n.cont.changed", () => n.cont.changed],
+    ["n.cont.newIsPlayer", () => n.cont.newIsPlayer],
+    ["n.cont.oldDead === 'dead'", () => n.cont.oldDead === 'dead'],
+    ["n.cont.hp > 0", () => n.cont.hp > 0],
+    ["n.cont.same", () => n.cont.same],
+    ["(!n.walk.far || (n.walk.add && n.walk.closer && n.walk.insid", () => (!n.walk.far || (n.walk.add && n.walk.closer && n.walk.inside && n.walk.arrived))],
+    ["n.move2.have > 1", () => n.move2.have > 1],
+    ["(n.move2.tubes > 0 && n.move2.tube && (n.move2.tube.done && ", () => (n.move2.tubes > 0 && n.move2.tube && (n.move2.tube.done && n.move2.tube.clips.includes('crouch_fwd')))],
+    ["n.move2.dodge.started", () => n.move2.dodge.started],
+    ["n.move2.walkNoScatter !== false", () => n.move2.walkNoScatter !== false],
+    ["n.move2.dodge.run", () => n.move2.dodge.run],
+    ["n.move2.dodge.moved > 0.6", () => n.move2.dodge.moved > 0.6],
+    ["n.move2.dodge.back < 1.3", () => n.move2.dodge.back < 1.3],
+    ["n.move2.evac > 3", () => n.move2.evac > 3],
+    ["n.doors2.n > 0", () => n.doors2.n > 0],
+    ["n.doors2.open", () => n.doors2.open],
+    ["n.doors2.shut", () => n.doors2.shut],
+    ["n.doors2.sealed", () => n.doors2.sealed],
+    ["n.doors2.blocked", () => n.doors2.blocked],
+    ["n.doors2.pried", () => n.doors2.pried],
+    ["n.clutter.took", () => n.clutter.took],
+    ["n.clutter.left", () => n.clutter.left],
+    ["n.term.open", () => n.term.open],
+    ["n.term.rows >= 4", () => n.term.rows >= 4],
+    ["(!n.talk || (n.talk.open && n.talk.rows >= 4))", () => (!n.talk || (n.talk.open && n.talk.rows >= 4))],
+    ["n.calm.gorns === 0", () => n.calm.gorns === 0],
+    ["n.calm.mad === null", () => n.calm.mad === null],
+    ["n.calm.faults === 0", () => n.calm.faults === 0],
+    ["n.calm.hostileEnts === 0", () => n.calm.hostileEnts === 0],
+    ["n.doors.nearOpen", () => n.doors.nearOpen],
+    ["n.doors.farShut", () => n.doors.farShut],
+    ["n.walkIn.phase === 'select'", () => n.walkIn.phase === 'select'],
+    ["n.walkIn.rows.length === D", () => n.walkIn.rows.length === D],
+    ["/^1Deck 1 \u2014 Command \u00b7 Bridge/.test(n.walkIn.rows[0])", () => /^1Deck 1 — Command · Bridge/.test(n.walkIn.rows[0])],
+    ["n.cancel === 'play'", () => n.cancel === 'play'],
+    ["n.down.to === D - 1", () => n.down.to === D - 1],
+    ["n.down.secs >= 7.5", () => n.down.secs >= 7.5],
+    ["n.down.secs <= 9", () => n.down.secs <= 9],
+    ["n.down.inCar", () => n.down.inCar],
+    ["n.down.indicator >= D - 1", () => n.down.indicator >= D - 1],
+    ["n.down.shaken", () => n.down.shaken],
+    ["n.up.to === 0", () => n.up.to === 0],
+    ["n.up.secs >= 7.5", () => n.up.secs >= 7.5],
+    ["n.up.inCar", () => n.up.inCar],
+    ["n.persist !== false", () => n.persist !== false],
+    ["n.hop.to === 1", () => n.hop.to === 1],
+    ["n.hop.secs >= 2.8", () => n.hop.secs >= 2.8],
+    ["n.hop.secs <= 4", () => n.hop.secs <= 4],
+    ["n.locked.fx", () => n.locked.fx],
+    ["n.locked.panel === 'play'", () => n.locked.panel === 'play'],
+    ["n.unlocked === 'select'", () => n.unlocked === 'select']];
+  const bad = checks.filter(([, f]) => { try { return !f(); } catch { return true; } }).map(([k]) => k);   // name the failing conditions
+  if (bad.length) fail('nominal ship / turbolift: ' + bad.join(' | ')); }
 { const q = nom.equip || {}; console.log('equipment:', JSON.stringify(q));   // equipment motions / carts / carry (js/haul.js)
   if (!q.haul || !q.op || q.op.steps < 3 || q.op.gest < 1 || !q.op.faced || !q.op.still || !q.held || !q.held.id || q.held.bone !== 'hand_r' || !(q.held.dist < 0.3) || !q.held.follows || !q.held.dropped) fail('equipment operator / held item ' + JSON.stringify(q.op) + JSON.stringify(q.held));
   if (q.cart && !(q.cart.phases.includes('push') && q.cart.moved > 2 && q.cart.gap < 2.2 && q.cart.wheels > 3 && q.cart.released)) fail('equipment: NPC cart haul ' + JSON.stringify(q.cart));
@@ -483,18 +556,21 @@ const rid = await page2.evaluate(async () => {
 console.log('lift riders:', JSON.stringify(rid));
 { const o = rid, ok = o.player && o.rate > 0.2 && o.rate < 0.5 && o.rides.length === 3 && o.rides.every(r => !r.err && r.inScene && r.playerSaid && r.riderSaid && r.board && r.left && r.cleared && r.phase === 'play') && o.rides[1].leftRiding && o.rides[1].leftAt === o.rides[1].riderDest && o.rides[1].deck === 0 && o.rides[2].leftRiding && o.rides[2].deck === o.rides[2].to && o.none;
   if (!ok) fail('NPC lift riders'); }
-const vpage = await browser.newPage({ viewport: { width: 900, height: 600 } }); vpage.on('pageerror', e => errors.push('voices.html: ' + e.message)); vpage.on('console', m => { if (m.type() === 'error') errors.push('voices.html: ' + m.text()); });
-await vpage.goto(`http://localhost:${port}/voices.html?ship=3&seed=2`); await vpage.waitForFunction(() => window.__ready, null, { timeout: 15000 });
+const vpage = await openPage('voices.html?ship=3&seed=2', 'voices.html: ', { width: 900, height: 600 }, (p) => p.waitForFunction(() => window.__ready, null, { timeout: 60000 }));
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
 console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && vp.chips > vp.rows * 8 && /\[/.test(vp.said) && vp.eng > 0 && vp.eng < vp.total)) fail('voices.html');
-await navBrowser(page2, fail);
-await walkBrowser(page2, fail);
-await commsHud(page2, fail);
-await uiBrowser(page2, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
-await talkBrowser(page2, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
-await combatBrowser(page2, page, fail);   // strike / grab / drag / release, witnesses, security, player HP, madness zapper (tools/test-combat.mjs)
+await vpage.close();
+// the browser sub-suites on a fresh nominal page (page2 has built dozens of decks by now); forceShip 1 as the lift-rider section above left it
+await page2.close(); const page3 = await openPage('index.html', 'nominal: '); await page3.evaluate(() => { __game.G.forceShip = 1; });
+await navBrowser(page3, fail);
+await walkBrowser(page3, fail);
+await commsHud(page3, fail);
+await uiBrowser(page3, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
+await talkBrowser(page3, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
+await combatBrowser(page3, page, fail);   // strike / grab / drag / release, witnesses, security, player HP, madness zapper (tools/test-combat.mjs)
+await page.close();
 // ---- pace, crew repair response, shift-end tasks (js/pace.js, js/repair.js, js/duty.js) ----
-const rep = await page2.evaluate(async () => {
+const rep = await page3.evaluate(async () => {
   const g = __game, G = g.G, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
   const snap = () => ({ id: g.pace.id, T: g.clock.paceT, rate: +g.clock.rate.toFixed(5), firstDue: Math.round(Math.min(...g.duty.loops.map(l => l.next))), period0: g.duty.loops[0]?.period, run: g.phases.runLength, phaseAt: g.phases.phaseAt[4], firstTask: Math.round(Math.min(...g.duty.tasks.map(t => t.at_s), 1e9)), cascadeT: g.shipState.paceT });
   G.forceShip = 0; g.pace = 'first'; g.newRun(); hide(); out.first = snap(); g.pace = 'crunch'; g.newRun(); hide(); out.crunch = snap(); g.pace = 'standard'; g.newRun(); hide(); g.setQuality('low'); out.std = snap();
