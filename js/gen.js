@@ -82,44 +82,124 @@ export function generate(deck, seed, opts = {}) {
     rooms.push({ type, x: x0, y: y0, w, h, big: !!big });
   }
 
-  // props (mark blocked tiles = 2)
+  // props (mark blocked tiles = 2). Props draw from their own random stream, so layout changes here do not reshuffle tubes, chips or the exit.
+  const prnd = mulberry32((seed ^ 0x5bd1e995) >>> 0);
   const props = [];
   const put = (tx, ty, kind, extra = {}) => {
-    grid[ty][tx] = 2; props.push({ kind, tx, ty, rot: extra.rot ?? Math.floor(rnd() * 4) * Math.PI / 2, ...extra });
+    grid[ty][tx] = 2; const p = { kind, tx, ty, rot: extra.rot ?? Math.floor(prnd() * 4) * Math.PI / 2, ...extra }; props.push(p); return p;
   };
+  const faceTo = (dx, dy) => Math.atan2(dx, dy);   // prop rot that turns its +z (front / operator side) toward grid direction (dx, dy)
+  const inRect = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  const reserved = new Set();                        // tiles kept clear: in front of wall props, along a field generator's long sides
+  const isStart = (x, y) => x === s0[0] && y === s0[1];
+  const doorsOf = (r) => { const out = []; for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (grid[y][x] === 0 && DIRS.some(([dx, dy]) => !inRect(r, x + dx, y + dy) && grid[y + dy]?.[x + dx] === 0)) out.push([x, y]); return out; };
+  const reachIn = (r, from) => { const seen = new Set([from[0] + ',' + from[1]]), q = [from]; while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy, k = nx + ',' + ny; if (!inRect(r, nx, ny) || grid[ny][nx] !== 0 || seen.has(k)) continue; seen.add(k); q.push([nx, ny]); } } return seen; };
+  // block (x, y) only if every open tile of the room that a door reached before still reaches it (the room stays one walkable piece, doors stay clear)
+  // and every prop of the room that had a reachable side still has one (someone can still walk up to use it)
+  const safePut = (r, x, y, kind, extra = {}) => {
+    if (grid[y]?.[x] !== 0 || isStart(x, y) || reserved.has(x + ',' + y)) return null;
+    const doors = doorsOf(r); if (!doors.length || doors.some(([a, b]) => a === x && b === y)) return null;
+    const side = (S, px, py) => DIRS.some(([dx, dy]) => S.has((px + dx) + ',' + (py + dy)));
+    const before = reachIn(r, doors[0]), mine = props.filter(p => inRect(r, p.tx, p.ty) && side(before, p.tx, p.ty));
+    grid[y][x] = 2; const after = reachIn(r, doors[0]); grid[y][x] = 0;
+    return after.size === before.size - 1 && side(after, x, y) && mine.every(p => side(after, p.tx, p.ty)) ? put(x, y, kind, extra) : null;
+  };
+  // against the room wall, on its edge ring (props normally stand on interior tiles only): o.face 'in' (+z into the room, default) or 'out' (+z to the wall:
+  // the operator stands between the prop and the wall, looking over it into the room); o.door: prefer two tiles from a doorway; o.corner: corners allowed
+  const ringPut = (r, kind, o = {}) => {
+    const doors = doorsOf(r); if (!doors.length) return null; const cands = [];
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      if (x !== r.x && y !== r.y && x !== r.x + r.w - 1 && y !== r.y + r.h - 1) continue;
+      const out = DIRS.filter(([dx, dy]) => !inRect(r, x + dx, y + dy)); if (out.some(([dx, dy]) => grid[y + dy]?.[x + dx] === 0)) continue;   // a doorway
+      if (out.length > 1 && !o.corner) continue;
+      const [ox, oy] = out.length > 1 ? [out[0][0] + out[1][0], out[0][1] + out[1][1]] : out[0], ix = -Math.sign(ox), iy = out.length > 1 ? 0 : -Math.sign(oy);   // corners face along one wall
+      const dd = Math.min(...doors.map(([a, b]) => Math.abs(a - x) + Math.abs(b - y)));
+      cands.push({ x, y, ix: out.length > 1 ? ix : -ox, iy: out.length > 1 ? iy : -oy, s: (o.door ? Math.abs(dd - 2) : dd <= 1 ? 3 : 0) + prnd() * 1.5 });
+    }
+    cands.sort((a, b) => a.s - b.s);
+    for (const c of cands) {
+      if (grid[c.y + c.iy]?.[c.x + c.ix] === undefined) continue;
+      const rot = o.face === 'out' ? faceTo(-c.ix, -c.iy) : faceTo(c.ix, c.iy), p = safePut(r, c.x, c.y, kind, { rot, wall: true, ...(o.extra || {}) });
+      if (p) { reserved.add((c.x + c.ix) + ',' + (c.y + c.iy)); p.front = [c.x + c.ix, c.y + c.iy]; return p; }
+    }
+    return null;
+  };
+  // an interior prop turned toward an open neighbour (the walkable side), preferring the direction (px, py)
+  const faceOpen = (x, y, px = 0, py = 1) => { const o = DIRS.filter(([dx, dy]) => grid[y + dy]?.[x + dx] === 0).sort((a, b) => (b[0] * px + b[1] * py) - (a[0] * px + a[1] * py))[0]; return o ? faceTo(o[0], o[1]) : 0; };
   for (const r of rooms) {
     const ix0 = r.x + 1, iy0 = r.y + 1, ix1 = r.x + r.w - 2, iy1 = r.y + r.h - 2;
     const cx = r.x + (r.w >> 1), cy = r.y + (r.h >> 1);
     const interior = [];
     if (r.w >= 5 || r.h >= 5) { for (let y = iy0; y <= iy1; y++) for (let x = ix0; x <= ix1; x++) interior.push([x, y]); }
     else interior.push([cx, cy]);
+    const freeIn = () => interior.filter(([x, y]) => grid[y][x] === 0 && !reserved.has(x + ',' + y));
     switch (r.type) {
-      case 'bridge': put(cx, cy, 'chair'); put(ix0, iy0, 'console'); put(ix1, iy0, 'console'); put(cx, iy0, 'viewscreen', { rot: 0 }); break;
-      case 'engineering': put(cx, cy, 'warpcore'); put(ix0, iy0, 'console'); put(ix1, iy1, 'console'); break;
-      case 'shuttlebay': put(cx, cy, 'shuttle'); put(ix0, iy0, 'crate'); put(ix1, iy1, 'crate'); break;
-      case 'holodeck': put(cx, cy, 'holocube'); break;
-      case 'transporter': put(cx, cy, 'pad'); break;
-      case 'quarters': put(cx, cy, 'bunk'); break;
-      case 'mess':
-        if (r.big) { for (const [x, y] of interior) { if (y === iy0) { if ((x - ix0) % 2 === 0) put(x, y, 'replicator', { rot: 0 }); } else if ((x - ix0) % 2 === 0 && (y - iy0) % 2 === 0) put(x, y, 'table', { rot: 0 }); } }   // serving line along one wall, tables in rows
-        else for (const [x, y] of interior) if ((x + y) % 2 === 0 || r.w < 5) put(x, y, 'table');
-        break;
-      case 'sickbay': for (const [x, y] of interior) if (rnd() < 0.7 || (x === cx && y === cy)) put(x, y, 'biobed'); break;
-      case 'cargo': for (const [x, y] of interior) if (rnd() < 0.65) put(x, y, 'crate'); break;
-      case 'arboretum': for (const [x, y] of interior) if (rnd() < 0.8) put(x, y, 'tree'); break;
+      case 'bridge': put(cx, cy, 'chair', { rot: 0 }); put(ix0, iy0, 'helm', { rot: 0 }); put(ix1, iy0, 'console', { rot: 0 }); put(cx, iy0, 'viewscreen', { rot: 0 }); break;   // helm forward port (FLT-1), facing the viewscreen
+      case 'engineering': {
+        put(cx, cy, 'warpcore'); put(ix0, iy0, 'console'); put(ix1, iy1, 'console');
+        put(cx, cy - 1, 'reactorstation', { rot: Math.PI }); reserved.add(cx + ',' + (cy - 2));   // ENG-3 beside the core, its back to it: the operator looks over the desk at the core
+        // ENG-6 field generators (2.2 m long): away from the core, both ends of the long axis clear
+        const gens = interior.length >= 4 ? ['fieldgen', 'fieldgen_damp'] : ['fieldgen'];
+        for (const k of gens) {
+          let done = false;
+          for (const [x, y] of freeIn().sort(() => prnd() - 0.5)) {
+            if (Math.abs(x - cx) + Math.abs(y - cy) < 2) continue;
+            for (const [ax, ay] of prnd() < 0.5 ? [[1, 0], [0, 1]] : [[0, 1], [1, 0]]) {
+              const ends = [[x + ax, y + ay], [x - ax, y - ay]]; if (!ends.every(([ex, ey]) => grid[ey]?.[ex] === 0)) continue;
+              if (safePut(r, x, y, k, { rot: ax ? 0 : Math.PI / 2 })) { for (const [ex, ey] of ends) reserved.add(ex + ',' + ey); done = true; break; }
+            }
+            if (done) break;
+          }
+        }
+        if (interior.length >= 15) { for (const k of ['desk', 'workbench']) { const t = freeIn().find(([x, y]) => Math.abs(x - cx) + Math.abs(y - cy) >= 2); if (t) safePut(r, t[0], t[1], k, { rot: faceOpen(t[0], t[1], cx - t[0], cy - t[1]) }); } }   // big layout: CE desk and a bench (asset-gaps 11.8)
+        break; }
+      case 'shuttlebay': put(cx, cy, 'shuttle'); put(ix0, iy0, 'crate'); put(ix1, iy1, 'crate'); ringPut(r, 'baycontrol', { door: true }); ringPut(r, 'workbench'); break;
+      case 'holodeck': put(cx, cy, 'holocube'); ringPut(r, 'holodesk'); break;
+      case 'transporter': put(cx, cy, 'pad'); ringPut(r, 'beampedestal', { face: 'out' }); ringPut(r, 'workbench'); break;   // OPS-1 with its back to the pad: the chief looks over it at the pad
+      case 'quarters': put(cx, cy, 'bunk'); ringPut(r, 'desk'); break;
+      case 'mess': {   // SVC-1 range against a wall, SVC-2 servery in front of it (staff side to the range), SVC-13 dishwasher on another wall
+        const rg = ringPut(r, 'range');
+        if (rg && interior.length > 1 && interior.some(([x, y]) => x === rg.front[0] && y === rg.front[1])) { reserved.delete(rg.front.join(',')); put(rg.front[0], rg.front[1], 'servery', { rot: rg.rot }); }
+        else ringPut(r, 'servery');
+        if (r.big) { for (const [x, y] of interior) { if (grid[y][x] !== 0) continue; if (y === iy0) { if ((x - ix0) % 2 === 0) safePut(r, x, y, 'replicator', { rot: 0 }); } else if ((x - ix0) % 2 === 0 && (y - iy0) % 2 === 0) safePut(r, x, y, 'table', { rot: 0 }); } }   // serving line along one wall, tables in rows
+        else for (const [x, y] of interior) if (grid[y][x] === 0 && ((x + y) % 2 === 0 || r.w < 5)) safePut(r, x, y, 'table') || (interior.length === 1 && put(x, y, 'table'));
+        if (interior.length > 1) ringPut(r, 'dishwasher');
+        if (r.big) ringPut(r, 'wastebin', { corner: true });
+        break; }
+      case 'sickbay': {
+        if (interior.length >= 9) {   // two biobeds beside the centre bed, the medical kit round them, one side of the centre left open
+          const sg = prnd() < 0.5 ? 1 : -1;
+          for (const [dx, dy, k] of [[0, 0, 'biobed'], [-1, 0, 'biobed'], [1, 0, 'biobed'], [0, -1, 'nursestation'], [-1, -1, 'surgical_table'], [1, -1, 'exam_couch'], [-1, 1, 'steriliser'], [1, 1, 'med_dispenser']]) {
+            const x = cx + dx, y = cy + dy * sg; if (grid[y][x] !== 0) continue;
+            put(x, y, k, k === 'nursestation' ? { rot: faceTo(0, sg) } : k === 'steriliser' || k === 'med_dispenser' ? { rot: faceTo(0, sg) } : k === 'surgical_table' || k === 'exam_couch' ? { rot: prnd() < 0.5 ? 0 : Math.PI } : {});
+          }
+          ringPut(r, 'infusion_stand', { corner: true });
+        } else {
+          for (const [x, y] of interior) if (prnd() < 0.7 || (x === cx && y === cy)) put(x, y, 'biobed');
+          ringPut(r, 'nursestation');
+          if (interior.length > 1) { ringPut(r, 'exam_couch'); ringPut(r, 'med_dispenser'); }
+        }
+        break; }
+      case 'cargo': for (const [x, y] of interior) if (prnd() < 0.65) put(x, y, 'crate'); ringPut(r, 'console', { door: true }); ringPut(r, 'workbench', { door: true }); break;
+      case 'arboretum': for (const [x, y] of interior) if (prnd() < 0.8) put(x, y, 'tree'); break;
       // rooms from the ship inventory: laid out from the existing prop kinds (a 3×3 room gets one centrepiece, bigger ones a pattern)
       case 'readyroom': put(cx, cy, 'desk'); break;
-      case 'brig': for (const [x, y] of interior) if ((x + y) % 2 === 0 && rnd() < 0.8) put(x, y, 'cell'); break;
-      case 'armory': put(cx, cy, 'weaponrack'); break;
+      case 'brig': for (const [x, y] of interior) if ((x + y) % 2 === 0 && prnd() < 0.8) put(x, y, 'cell'); ringPut(r, 'secdesk', { door: true }); break;   // SEC-1 by the entrance
+      case 'armory': put(cx, cy, 'weaponrack'); ringPut(r, 'desk'); ringPut(r, 'workbench'); break;
       case 'gym': for (const [x, y] of interior) if ((x + y) % 3 === 0) put(x, y, (x * 2 + y) % 2 ? 'treadmill' : 'weightbench'); break;
       case 'lab': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : 'labbench'); break;
       case 'laundry': put(cx, cy, 'washer'); break;
-      case 'lounge': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x * 3 + y) % 4 === 0 ? 'table' : (x + 2 * y) % 3 === 0 ? 'lonechair' : 'sofa'); break;
-      case 'workshop': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'lathe' : 'workbench'); break;
-      case 'plant': for (const [x, y] of interior) if ((x + y) % 3 === 0) put(x, y, (x + y) % 2 ? 'console' : 'tank'); break;
-      case 'morgue': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'drawers' : 'biobed'); break;
+      case 'lounge': ringPut(r, 'bar'); for (const [x, y] of interior) if (grid[y][x] === 0 && (x + y) % 2 === 0) safePut(r, x, y, (x * 3 + y) % 4 === 0 ? 'table' : (x + 2 * y) % 3 === 0 ? 'lonechair' : 'sofa'); break;   // SVC-3 bar (+ back bar) on one wall
+      case 'workshop': {
+        for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'lathe' : (x + y) % 8 === 2 ? 'fabricator' : 'workbench');
+        if (!props.some(p => p.kind === 'fabricator' && inRect(r, p.tx, p.ty))) { const wb = props.find(p => p.kind === 'workbench' && inRect(r, p.tx, p.ty)); if (wb) wb.kind = 'fabricator'; else ringPut(r, 'fabricator'); }   // at least one ENG-7 per shop
+        break; }
+      case 'plant': { const PLANT = ['pumpskid', 'heatexch', 'scrubber', 'tank', 'console', 'pumpskid'];   // ENG-1/4/5 among the old vessels and consoles, on a diagonal grid
+        let i = Math.floor(prnd() * 3); for (const [x, y] of interior) if ((x + y) % 2 === 0 || interior.length === 1) { const k = PLANT[i++ % PLANT.length]; put(x, y, k, k === 'heatexch' || k === 'pumpskid' ? { rot: prnd() < 0.5 ? 0 : Math.PI } : {}); }
+        break; }
+      case 'morgue': put(cx, cy, 'autopsy_table', { rot: prnd() < 0.5 ? 0 : Math.PI }); for (const [x, y] of interior) if (grid[y][x] === 0 && (x + y) % 2 === 0) put(x, y, 'drawers'); ringPut(r, 'drawers'); break;   // MED-7; drawers get a pulled-out tray in world.js
       case 'datacore': for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : 'servers'); break;
-      case 'stores': for (const [x, y] of interior) if (rnd() < 0.7) put(x, y, (x + y) % 3 === 0 ? 'cart' : (x + y) % 2 ? 'shelving' : 'crate'); break;
+      case 'stores': for (const [x, y] of interior) if (prnd() < 0.7) put(x, y, (x + y) % 3 === 0 ? 'cart' : (x + y) % 2 ? 'shelving' : 'crate'); ringPut(r, 'desk'); break;
       case 'airlock': put(cx, cy, 'suitrack'); break;
       case 'washroom': put(cx, cy, 'sinkunit'); break;
     }
@@ -183,10 +263,11 @@ export function generate(deck, seed, opts = {}) {
 
   // exit: dead-end far away
   let exitCands = openTiles.filter(([x, y]) => dist(x, y) >= maxD * 0.6 && openNeighbors(x, y) === 1 && !room[y][x]);
-  if (!exitCands.length) exitCands = openTiles.filter(([x, y]) => dist(x, y) >= maxD * 0.5 && openNeighbors(x, y) === 1);
+  if (!exitCands.length) exitCands = openTiles.filter(([x, y]) => dist(x, y) >= maxD * 0.5 && openNeighbors(x, y) === 1 && !room[y][x]);   // the lift car never opens inside a room (wall props can leave dead-end pockets there)
+  if (!exitCands.length) exitCands = openTiles.filter(([x, y]) => dist(x, y) >= maxD * 0.25 && openNeighbors(x, y) === 1 && !room[y][x]);
   let exit;
   if (exitCands.length) exit = exitCands[Math.floor(rnd() * exitCands.length)];
-  else exit = openTiles.slice().sort((a, b) => dist(b[0], b[1]) - dist(a[0], a[1]))[0];
+  else exit = openTiles.slice().sort((a, b) => (room[a[1]][a[0]] ? 1 : 0) - (room[b[1]][b[0]] ? 1 : 0) || dist(b[0], b[1]) - dist(a[0], a[1]))[0];
   if (opts.require && openNeighbors(exit[0], exit[1]) !== 1) {   // Systems Nominal: the tubelift car is the exit tile, so it must be a dead end
     const de = openTiles.filter(([x, y]) => openNeighbors(x, y) === 1 && !room[y][x] && !(x === start[0] && y === start[1])).sort((a, b) => dist(b[0], b[1]) - dist(a[0], a[1]));
     if (de.length) exit = de[Math.floor(rnd() * Math.min(3, de.length))];
