@@ -10,8 +10,8 @@ How crew bodies walk on the player's deck: `js/sim.js` (abstract schedule, `bodi
 then for each of the 3 busiest decks (each from the same fresh run) steps the game 150 s at 30 steps/s with the ship clock 6x faster
 (6x more schedule changes and lift trips than real play: a stress test). The player hops every 10 s between the lift mouth (looking
 into the car), beside a walker and the busiest room. Every 12 s a subordinate gets an order or a due duty is delegated (mostly
-someone whose body is on the deck). Options: `--secs --decks --only 2,5 --clock --seed --billet --ship --orders --sep --samples
---trace --json`. Each row prints:
+someone whose body is on the deck; a due duty goes to one of the 3 nearest subordinates in turn). Options: `--secs --decks --only 2,5
+--clock --seed --billet --ship --orders --sep --surge T --alert red@T --samples --trace --lifttrace a,b --json`. Each row prints:
 
 | metric | meaning |
 |---|---|
@@ -24,9 +24,13 @@ someone whose body is on the deck). Options: `--secs --decks --only 2,5 --clock 
 | orders | given / refused / reached the job room (abstract sim) / body seen standing in it on this deck / never got there |
 | lift | boarders waiting in the car > 10 s, walkers queued at the car > 15 s, most boarders at once |
 | pop | bodies appearing / vanishing in the player's sight (not in a shut car), teleports > 0.6 m in a frame (in sight) |
+| lift cars | cars that left with boarders, people per car, seconds from starting the walk to the lift until gone, and from reaching the lift (within 6 m or at a wait spot) until gone (median / p90 / max) |
+| alert | `--alert red@T`: people sent to stations (stood there / left the deck / never), orders under way when it was raised / given during it and how many never got there |
 | cost | path fields built per second and ms each, `step()` ms mean / p99 / max |
 
-Step times are noisy when other headless browsers share the machine; compare rows from the same run. The harness reopens the page
+`--lifttrace 60,110` prints the car every 0.5 s in that window: doors, shutT, boarders, boardW, closedT, npcT, people waiting at spots,
+called forward, walking up, arrivals stepping out, player distance, arrival pending, held. Step times are noisy when other headless
+browsers share the machine; compare rows from the same run. The harness reopens the page
 and retries a deck once if the renderer crashes (out of memory on a shared box).
 
 ## Pathing log
@@ -329,3 +333,151 @@ logs), every `npc walking` check passed (parts 12 and 13 included). Run 3 printe
 Requests to other owners (iteration 4): js/main.js has uncommitted `dressCrew` hunks from the art agent (import + two call sites); this
 iteration committed main.js without them (index built from HEAD + the pathing hunks), so they are still in the working tree for that agent
 to commit together with js/actors.js.
+
+### Iteration 5 (2026-11-14, final)
+
+Before = e354e13 (iteration 4), after = e354e13 + this iteration's `js/main.js` (c5cfd92 + the follow-up commit), both measured in
+clean worktrees (no uncommitted art work) with this iteration's harness, same seeds, 150 s per deck at clock x6. Six configurations,
+three ships: USF Nova Scotia (seed 11, seed 11 + red alert at 60 s, seed 12 + surge at 60 s), USF Manitoba (`--ship 4 --surge 60`, and
+seed 13 + surge 60 + red alert at 90 s, which also lands on Manitoba) and USF Ontario (`--ship 0 --seed 14 --surge 60 --alert red@90`).
+Runs are chaotic (one change moves every later walk; the surge picks its people with `Math.random`, so the after-runs sent 9 instead of
+6 on one Manitoba deck and 5 + 4 instead of 2 + 0 on the other): read single cells with +-50 % on the lift numbers.
+
+| | NS s11 before | after | NS s11 red before | after | Manitoba surge before | after | NS s12 surge before | after | MB s13 surge + red before | after | Ontario s14 surge + red before | after |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| red alert: orders under way when raised that never got there | | | 11 of 11 | 3 of 11 | | | | | 14 of 14 | 9 of 15 | 8 of 8 | 3 of 8 |
+| red alert: orders given during it that never got there | | | 13 of 15 | 12 of 15 | | | | | 15 of 15 | 10 of 13 | 7 of 9 | 5 of 8 |
+| all orders never in the job room by the end of the deck | 16 of 29 | 16 of 29 | 24 of 27 | 15 of 27 | 17 of 32 | 19 of 32 | 9 of 21 | 10 of 22 | 29 of 37 | 19 of 35 | 15 of 27 | 8 of 25 |
+| far pops (14-30 m in clear sight) | 1 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| pops / teleports in sight | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 1 / 1 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| lift cars (people per car) | 35 (2.0) | 33 (2.1) | 26 (2.7) | 27 (2.5) | 34 (2.4) | 30 (2.7) | 32 (2.3) | 31 (2.4) | 29 (2.9) | 23 (3.5) | 32 (3.1) | 24 (4.0) |
+| at the lift until gone, p90 of the worst deck (s) | 22.7 | 24.0 | 18.1 | 18.1 | 39.6 | 44.1 | 23.2 | 24.0 | 15.9 | 14.7 | 23.2 | 23.9 |
+| lift queue > 15 s (within 3.5 m of the car) | 1 | 0 | 0 | 0 | 3 | 1 | 2 | 0 | 0 | 0 | 0 | 0 |
+| most waiting at once (in the line) | 9 (4) | 9 (4) | 10 (6) | 10 (6) | 11 (6) | 12 (7) | 10 (6) | 8 (3) | 10 (6) | 8 (4) | 13 (9) | 11 (6) |
+| lift walkers < 0.45 m apart (pair-s) | 3.9 | 4.3 | 15.2 | 12.0 | 30.2 | 42.2 | 13.4 | 3.1 | 26.1 | 10.4 | 23.3 | 34.3 |
+| stuck walks (count, body-s) | 2, 0.7 | 2, 2.9 | 1, 0.4 | 0, 0 | 9, 18 | 7, 23.1 | 4, 4.8 | 2, 4.6 | 1, 0.3 | 0, 0 | 6, 8.9 | 4, 1.4 |
+| walker brushing, all / near the lift (pair-s) | 16.8 / 7 | 29.7 / 20.6 | 24.5 / 4.5 | 21.8 / 4.3 | 76.7 / 21.7 | 89.1 / 24.5 | 42.4 / 26.5 | 32 / 12.2 | 56 / 12.4 | 48.7 / 8.5 | 57.9 / 21.2 | 67.8 / 21.8 |
+| sim ahead of the body (`early`, body-s) | 28.8 | 60.2 | 20.3 | 20.3 | 100.3 | 173.5 | 5.6 | 16.6 | 0 | 0 | 0 | 1.7 |
+| boarders waiting in the car > 10 s | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Sums over the six: red-alert orders under way that never got there 33 of 33 -> 15 of 34; all orders never there 110 of 173 -> 87 of 170
+(the no-alert configurations unchanged within noise: the rest are cross-deck orders given in the last 60-90 s of a deck); far pops 6 -> 0;
+in-sight pops / teleports 1 / 1 -> 0 / 0; queue > 15 s 6 -> 1; stuck walks 23 (33.1 body-s) -> 15 (32.0 body-s); lift walkers < 0.45 m
+apart 112 -> 106 pair-s; people per car 2.53 -> 2.77 (466-476 people left by lift either way); time at the lift unchanged (p90 15-44 s).
+Worse: `early` 155 -> 272 body-s (see known limits 5).
+
+Found and fixed:
+1. **Orders stalled under red alert** (owner decision: crew already carrying an accepted player order finish walking to it; stations only
+   pull idle or off-post crew). `alertStations` skips anyone with an active prio-2 `ordered` override and a live Duty job (`onOrder`);
+   `orderWalk` releases a prio-3 `stations` override (and drops the person from `G.stations.sent`) when the player orders someone during
+   the alert; once the job is done (`orderEnd` releases prio 2) the next `alertStations` tick sends them to their station. Evacuation
+   (prio 3 `evacuating`) still beats orders. Orders under way when the alert came: 33 of 33 never got there -> 15 of 34; orders given
+   during the alert now behave like any other late order (seed 11: deck 3 outcomes identical with and without the alert).
+2. **Lift throughput (one car per deck: no stairs, no second lift; Jefferies tubes stay on their deck, so there is nothing to divert to).**
+   A `--lifttrace` of the Manitoba surge deck showed three wastes, fixed: (a) arrivals spawning in an open, unseen car dropped boarders
+   who were still walking in and, by "let arrivals out first", sent the whole called group (8) back to the line for 5-15 s: arrivals now
+   wait while a carful is boarding or called forward (`liftGo`), and come behind the doors that shut on them; (b) when arrivals step out,
+   called people further than 2.6 m from the car stop where they are (standing still, facing the car, not ghosting) instead of going back
+   to a spot; (c) the doors could reopen on boarders before the car had gone (shutT ran out while someone stood in the doorway): shut doors
+   with boarders stay shut until `closedT > 1.2`. Also the car holds 8 (two more spots 0.5 m inside the doors, `CAR_SLOTS`) and waits up to
+   7 s instead of 4 for people called from the line who are still walking up (`liftCalled`), so they are not cut off as the doors shut.
+   Result: people per car +10 % (2.53 -> 2.77, up to 4-5 on surge decks), queue > 15 s 6 -> 1, but the time each person spends at the lift
+   is unchanged: boarding is single file through the doorway at about one person a second, so a carful of 7-8 takes 6-7 s to get in,
+   whatever the car holds. A 6-spot variant of the same code measured the same within noise (Manitoba stuck 48 body-s, Ontario 14).
+3. **Far pops** (lift arrivals / cut-short lift walks 14-30 m away in a clear line of sight): `hiddenFar` (> 30 m or no line of sight)
+   gates (a) arrivals spawning in an open car (every car spot, not only its centre: one arrival appeared on a side spot round a corner in
+   sight, 10.5 m away) and (b) a lift walk that is cut short (20 s without progress / 30 s blocked) and so vanishes. A car seen down a long
+   corridor now cycles shut, the arrivals appear behind its doors and walk out. 6 -> 0 far pops, 1 -> 0 in-sight appear.
+4. **Harness**: delegation picks one of the 3 nearest subordinates in turn (`(ordI >> 1) % 3`) instead of always the nearest (whose
+   trust dropped with each refusal); new rows `lift cars` (cars, people per car, time to leave / time at the lift) and the alert's
+   order counts; `--lifttrace a,b`.
+
+Tests: `tools/test-walk.mjs` browser part 14 (red alert: someone already ordered keeps the `ordered` override and is not sent to a
+station; an order given during the alert takes a person off station; once the job is done the stations call picks them up; cleared =
+nobody left on `stations`), part 10 now allows 9 boarders (8 spots + one in the doorway).
+
+`node tools/test.mjs` (with the art agent's work in the tree): 4 runs, a random ship each, every
+`npc walking` check passed every time (part 14 ran in runs 3-4: `alertOrders` all true); run 1 failed `bot run` (madness mode: "deck 7
+did not advance", no pathing code runs there; the art agent's uncommitted tree at the time), run 2 combat knock-down, run 3 combat
+knock-down + `parkour` (`sys.points` 11 < 20 on USF Alberta: ship systems, not walking) + `fixture search` (the player stood at a degraded
+system, so the prompt was the repair one), run 4 combat grab / drag (`grabbed` false). None printed OK; all failures are in the known
+flake list or outside pathing. The standalone browser walk part (scratch runner calling `walkBrowser`) passed 5 of 5.
+
+Requests to other owners (iteration 5): none. The art commit b9bf0b7 landed during this iteration; the soak numbers above are on
+e354e13 + pathing only, so a re-soak on HEAD will differ cell by cell (layouts change with any prop / decor commit).
+
+## Closing summary (iterations 1-5)
+
+Iteration 1 baseline vs iteration 5, same soak (seed 11, USF Nova Scotia, decks 3, 4, 2, 150 s each at clock x6). The layouts changed in
+between (art batches moved props and room edges) and the harness grew, so this compares behaviour, not identical decks; the rows the
+iteration 1 harness did not have use the first iteration that measured them.
+
+| | iteration 1 (before) | iteration 5 (after) |
+|---|---|---|
+| ordered NPCs who never reached the job room | 17 of 25 (orders moved nobody; the 8 "reached" were already there) | 16 of 29: 13 got there, the rest are cross-deck orders given in the last 60-90 s (late 33-82 s); the player hears the ETA and "X is at the job" |
+| orders during red alert (seed 11, red at 60 s) | (iteration 4: 19 of 23 stalled) | orders under way: 3 of 11 never there; no-alert and alert runs give the same outcomes on deck 3 |
+| boarders waiting in the lift car > 10 s | 18 | 0 |
+| most boarders in the car at once | 15, all on one spot | 8, on separate spots >= 0.58 m apart |
+| walker overlap (pairs < 0.45 m, pair-s) | 671 (529 at the lift) | 29.7 (20.6 within 3.5 m of the car) |
+| stuck walks (count, body-s) | 8, 12 s | 2, 2.9 s |
+| lift queue > 15 s | 2 | 0 |
+| pops / teleports in sight | 1 / 1 | 0 / 0 |
+| far pops 14-30 m (iteration 3: 9 on seed 11, 18-21 on Manitoba) | 9 | 0 (0 on all six configurations) |
+| sim ahead of the body (iteration 2: ~1500 body-s on a surge run) | ~1500 | 60 (0-174 on the six) |
+| stacked idle pairs (iteration 3, Manitoba: 34 pairs, 417 pair-s) | 34, 417 pair-s | 1, 0.9 pair-s (Manitoba 2, 8.1) |
+| red alert moves people (iteration 4) | 0 sent | 11 sent, priority 3, staggered, released on clear |
+| path fields / step() p99 | 0.22 / s, 8.5 ms | 0.18 / s, 11.2 ms (busy box; < 0.2 ms per field) |
+
+What the crew do now: they walk every schedule change on the player's deck (path field, look-ahead steering, right-hand passing,
+personal space, squeeze past when blocked, never through walls); the abstract sim waits for the body (walk + ride + walk legs);
+crowded rooms share tiles 0.62 m apart; the lift has door spots and a line further back, boards a carful at a time and unloads arrivals
+behind shut doors; orders and delegation walk the person to the job (ETA told, "at the job" reported); refusals show on the body; red
+alert sends off-post crew to stations without stealing ordered crew; nothing appears or vanishes in sight up to 30 m.
+
+### Known limits
+
+1. **One lift car per deck is the throughput ceiling.** Boarding is single file at about one person a second; a deck-wide surge keeps
+   8-13 people waiting and the worst p90 at the lift is 40-45 s on Manitoba at x6 clock. No stairs or second lift exist (generator owner:
+   a second car on big decks, or sending some evacuees by Jefferies tube between decks, would need new ship geometry).
+2. **Lift crowding**: lift walkers stand < 0.45 m apart for 3-42 pair-s per 3-deck soak (mostly the called group converging on the
+   doorway and the line on narrow corridors); stuck walks near the lift on surge decks (Manitoba 7 walks, 23 body-s).
+3. **The player blocks the lift mouth**: walkers never squeeze past the player, so standing in a one-tile corridor in front of the car
+   stops the lift traffic (the soak's lift hop does this 1/3 of the time: 10 s gaps with 3-4 people waiting). Nobody asks "excuse me".
+4. **Standing in the car** holds the doors; after 5 s boarders step back out and wait until the player leaves.
+5. **Sim ahead of the body (`early`)** 0-174 body-s per soak: `HOLD_MAX` (60 s) lets the sim count a lift rider as gone while the body
+   is still in a long line, and arrivals now held behind a boarding carful start their walk leg later than the sim. Harmless on screen
+   (the body still walks), but the abstract position is up to a minute early on surge decks.
+6. **Orders take real time**: cross-deck orders take 30-90 s (walk, ride, walk), so about half of the soak's orders are still under way
+   at the end of a 150 s deck; refused orders (about 1 in 4 with low trust) only shake the head.
+7. **Carts**: walkers pass through parked carts (0-4 body-s per soak) and are held up behind pushed ones (up to 9-27 body-s).
+8. **Off-screen shortcuts**: a walk end snaps to the tile centre and cut-short walks finish out of sight (14-36 jumps per deck, none in
+   sight); beyond 30 m in a clear line of sight nothing is measured (no fade at range).
+9. **Chaotic measurements**: every change moves every later walk; compare several seeds, not single cells. Step-time p99 depends on
+   other browsers on the box.
+10. Off the player's deck the sim is abstract: no queues, no lift capacity, no collisions.
+
+### Human play-test checklist
+
+Play as Chief of Security (`?billet=cos`) on a busy ship (Manitoba: `G.forceShip = 4` before a new run) unless a line says otherwise.
+- [ ] Walk a busy deck at a shift change: people walk (never slide or appear) to new rooms, keep to the right, step round each other and
+      round seated people, never stand inside each other or inside walls / props; nobody turns back and forth.
+- [ ] Mess / lounge at a meal: a packed room spreads people over the tiles and between the tables, nobody stacked.
+- [ ] Stand by the lift for a minute (beside the doors, not in front): people wait beside the doors and in two files further back, the
+      middle free; a carful goes in front first, the doors shut, arrivals step out on the next opening; the doors never cycle empty while
+      people walk up; up to 8 stand in the car on separate spots.
+- [ ] Stand in front of the lift doors in its corridor: note how long people wait behind you (known limit 3) and whether it feels wrong.
+- [ ] Step into the open car and do not choose a deck for 5+ s while people want to board: they step back out ("We'll take the next
+      one."), wait, and board once you step out.
+- [ ] Watch the lift from far down a long corridor (15-30 m): nobody appears in the open car or vanishes in the corridor; arrivals come
+      out of the doors after the car cycles.
+- [ ] J menu: order a subordinate on another deck; the log gives an ETA ("about a minute"), then "X is at the job"; check that it feels
+      right. Delegate a due duty: the list starts with whoever is nearest, with "~30 s" / "~2 min" / "there".
+- [ ] Get an order refused: the person shakes their head in sight and says the line when close.
+- [ ] Red alert (F4 debug cycle, or a crisis): off-duty crew run to their stations, many by lift, in a line; someone you ordered just
+      before keeps walking to the job and goes to their station after it; ordering someone during the alert takes them off station;
+      clearing the alert sends everyone back to their schedule.
+- [ ] Evacuation (the collapse): crew run to the shuttlebay / transporter, crawling through tubes when quicker; the lift line holds.
+- [ ] Watch someone sit at a bar / bunk / console from a few metres, and push a cart past seated people: no jumps.
+- [ ] Push a cart through a corridor while crew walk by: they currently pass through parked carts (known limit 7); report if it looks bad.
+- [ ] Repairs: crew walk (run when urgent) to the broken hardware on your deck, work there, and go back.
+- [ ] Change decks by lift several times: the deck you arrive on has people where the sim says, none appearing in sight.
