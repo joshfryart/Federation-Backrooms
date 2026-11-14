@@ -1,0 +1,64 @@
+<!doctype html><meta charset="utf-8"><title>Medical art viewer — Starfarers: The Backdecks</title>
+<style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
+#l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.75;line-height:1.6}#l a{color:#9cf;margin-right:10px;text-decoration:none}
+.tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000;text-align:center}</style>
+<canvas id="c"></canvas><div id="l"><a href="?set=props">props</a><a href="?set=wall">wall / ceiling pieces</a><a href="?set=items">items</a><a href="?set=hand">items in hand</a><br>drag to orbit · wheel to zoom · ?only=surgical_table,exam_couch · ?cam=x,y,z,tx,ty,tz · ?spin=0 · ?ref=0 (no 1.75 m capsule) · ?scale=1 (items life size, default 3)</div>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { kinds, META } from './js/propart-medical.js';
+import { DEFS_MEDICAL, buildMedicalItem } from './js/itemart-medical.js';
+const q = new URLSearchParams(location.search); const set = q.get('set') || 'props', only = q.get('only') ? q.get('only').split(',') : null, spinOn = q.get('spin') !== '0';
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.1;
+const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.55; }
+const key = new THREE.DirectionalLight(0xfff0d8, 2.4); key.position.set(3, 6, 6); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -12, right: 12, top: 8, bottom: -4 }); s.add(key);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), new THREE.MeshStandardMaterial({ color: 0x2a3040, roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x8c95a3, roughness: 0.8 });
+const capMat = new THREE.MeshStandardMaterial({ color: 0xd8a040, roughness: 0.6, transparent: true, opacity: 0.55 });
+const list = [];
+const cap = () => { const c = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.35, 4, 12), capMat); c.position.y = 0.875; return c; };   // 1.75 m
+function add(name, mesh, w, opt = {}) {
+  if (only && !only.includes(opt.id || name)) return;
+  const root = new THREE.Group(); const pivot = new THREE.Group(); pivot.add(mesh); root.add(pivot);
+  if (opt.wall) { const wl = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 3.2, 0.06), wallMat); wl.position.set(0, 1.6, -0.03); root.add(wl); }
+  if (opt.ceil) { const c = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.06, 2.4), wallMat); c.position.set(0, 3.23, 0); root.add(c); }
+  if (q.get('ref') !== '0') { const c = cap(); c.position.x = (opt.refX ?? w / 2 + 0.3); c.position.z = opt.refZ ?? 0; root.add(c); }
+  list.push({ name, root, pivot, w: w + (q.get('ref') !== '0' ? 0.7 : 0), spin: opt.spin && spinOn, tris: mesh.userData.tris });
+}
+const WIDTH = { steriliser: 1.8, surgical_table: 2.0, med_dispenser: 1.0, exam_couch: 1.9, autopsy_table: 2.2, infusion_stand: 1.0, stretcher_rack: 1.0, holo_emitter: 0.8, gas_panel: 1.5, morgue_tray: 1.8 };
+if (set === 'props') {
+  for (const k of ['steriliser', 'surgical_table', 'med_dispenser', 'exam_couch', 'autopsy_table', 'infusion_stand']) { const m = kinds[k](); add(`${k} · ${META[k].id} (${m.userData.tris} tris)`, m, WIDTH[k], { spin: true, id: k }); }
+} else if (set === 'wall') {
+  for (const k of ['stretcher_rack', 'gas_panel', 'holo_emitter']) { const m = kinds[k](); add(`${k} · ${META[k].id} (${m.userData.tris} tris)`, m, WIDTH[k], { wall: k !== 'holo_emitter', ceil: k === 'holo_emitter', id: k, refX: -(WIDTH[k] / 2 + 0.3), refZ: 0.5 }); }
+  { // morgue tray on a stand-in of the existing `drawers` prop (1.6 x 1.1 x 0.9)
+    const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 0.9), new THREE.MeshStandardMaterial({ color: 0x8f959e, metalness: 0.8, roughness: 0.4 })); body.position.y = 0.55; g.add(body);
+    for (let rr = 0; rr < 2; rr++) for (let c = 0; c < 3; c++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.46, 0.02), new THREE.MeshStandardMaterial({ color: 0xb9bec6, metalness: 0.5, roughness: 0.5 })); p.position.set(-0.52 + c * 0.52, 0.06 + rr * 0.52 + 0.23, 0.46); g.add(p); }
+    const m = kinds.morgue_tray(); g.add(m); g.userData.tris = m.userData.tris; add(`morgue_tray · MED-11 (${m.userData.tris} tris, stand-in drawers)`, g, 1.8, { spin: true, id: 'morgue_tray' }); }
+} else {
+  const sc = +(q.get('scale') || 3); const order = [['stretcher', {}], ['stretcher', { open: true }], ['iv_bag', {}], ['forceps', {}], ['kidney_dish', {}], ['bandage', {}]];
+  for (const [k, o] of order) { const m = buildMedicalItem(k, { ...o, frame: set === 'hand' ? 'grip' : undefined }); if (!m) continue; const w = new THREE.Group(); m.scale.setScalar(o.open ? sc * 0.7 : sc); w.add(m); w.userData.tris = m.userData.tris; if (!(m.userData.frame === 'base')) w.position.y = 0.8;
+    add(`${k}${o.open ? ' (open)' : ''} (${m.userData.tris} tris, ${m.userData.size.map(v => v.toFixed(2)).join(' x ')} m)`, w, o.open ? 1.8 : 0.9, { spin: true, id: k + (o.open ? '_open' : ''), refX: o.open ? 1.4 : 0.8 }); }
+}
+let x = 0; const total = list.reduce((a, l) => a + l.w, 0);
+for (const l of list) { l.root.position.x = x + l.w / 2 - total / 2; x += l.w; l.root.traverse(o => { if (o.isMesh && !o.material?.transparent) { o.castShadow = true; o.receiveShadow = true; } }); s.add(l.root);
+  l.el = document.createElement('div'); l.el.className = 'tag'; l.el.textContent = l.name; document.body.appendChild(l.el); }
+const C = (q.get('cam') || '').split(',').map(Number); let tgt = new THREE.Vector3(C[3] || 0, C[4] ?? 1.0, C[5] || 0), yaw = 0.35, pitch = 0.2, dist = Math.max(5, total * 1.15);
+if (C.length >= 3 && q.get('cam')) { const p = new THREE.Vector3(C[0], C[1], C[2]).sub(tgt); dist = p.length(); yaw = Math.atan2(p.x, p.z); pitch = Math.asin(p.y / dist); }
+let drag = false; addEventListener('pointerdown', () => drag = true); addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => { if (drag) { yaw -= e.movementX * 0.006; pitch = Math.max(-0.2, Math.min(1.3, pitch + e.movementY * 0.005)); } });
+addEventListener('wheel', e => { dist *= e.deltaY > 0 ? 1.1 : 0.9; });
+addEventListener('resize', () => { r.setSize(innerWidth, innerHeight, false); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+const clock = new THREE.Clock(); const v = new THREE.Vector3(); const yawAt = +(q.get('yaw') || 0);
+function frame() {
+  requestAnimationFrame(frame); const dt = Math.min(0.05, clock.getDelta());
+  for (const l of list) { if (l.spin) l.pivot.rotation.y += dt * 0.4; else l.pivot.rotation.y = yawAt; }
+  cam.position.set(tgt.x + Math.sin(yaw) * Math.cos(pitch) * dist, tgt.y + Math.sin(pitch) * dist, tgt.z + Math.cos(yaw) * Math.cos(pitch) * dist); cam.lookAt(tgt);
+  for (const l of list) { v.set(l.root.position.x, -0.08, 0.5).project(cam); l.el.style.left = (v.x * 0.5 + 0.5) * innerWidth + 'px'; l.el.style.top = (-v.y * 0.5 + 0.5) * innerHeight + 'px'; }
+  r.render(s, cam);
+}
+frame(); window.__ready = true;
+</script>
