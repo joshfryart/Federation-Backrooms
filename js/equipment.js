@@ -185,6 +185,7 @@ export const ITEMS = {
   padd: { name: 'PADD', w: 0.3, pose: 'hold_padd', hand: 'l' },
   tool: { name: 'hydrospanner', w: 0.9, pose: 'hold_r', tool: 1.12, hand: 'r' },
   toolbox: { name: 'toolbox', w: 5, pose: 'hold_r', tool: 1.25, hand: 'r', load: true },
+  toolbag: { name: 'tool bag', w: 4, pose: 'hold_r', tool: 1.25, hand: 'r', load: true },
   medkit: { name: 'medkit', w: 2.5, pose: 'hold_r', heal: true, hand: 'r', load: true },
   scanner: { name: 'medical scanner', w: 0.5, pose: 'hold_r', hand: 'r' },
   vial: { name: 'sample vial', w: 0.1, pose: 'hold_r', hand: 'r' },
@@ -196,7 +197,7 @@ export const ITEMS = {
   crate: { name: 'supply crate', w: 14, two: true, pose: 'carry_front', load: true },
   hose: { name: 'hose coil', w: 6, pose: 'hold_r', hand: 'r', load: true },
   // handheld job equipment models (js/handhelds.js says what each does and how it hits)
-  tricorder: { name: 'tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_med: { name: 'medical tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_sec: { name: 'security tricorder', w: 0.5, pose: 'hold_r', hand: 'r' },
+  tricorder: { name: 'tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_eng: { name: 'engineering tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_sci: { name: 'science tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_med: { name: 'medical tricorder', w: 0.5, pose: 'hold_r', hand: 'r' }, tricorder_sec: { name: 'security tricorder', w: 0.5, pose: 'hold_r', hand: 'r' },
   badge: { name: 'comm badge', w: 0.02, pose: null, hand: 'r' }, phaser1: { name: 'type-1 phaser', w: 0.3, pose: 'hold_r', hand: 'r' }, phaser2: { name: 'type-2 phaser', w: 0.7, pose: 'hold_r', hand: 'r' },
   rifle: { name: 'phaser rifle', w: 3.2, pose: 'hold_r', hand: 'r' }, hypospray: { name: 'hypospray', w: 0.2, pose: 'hold_r', hand: 'r' }, dermal: { name: 'dermal regenerator', w: 0.3, pose: 'hold_r', hand: 'r' },
   scalpel: { name: 'laser scalpel', w: 0.05, pose: 'hold_r', hand: 'r' }, wrench: { name: 'spanner', w: 0.6, pose: 'hold_r', hand: 'r' }, torch: { name: 'plasma torch', w: 1.8, pose: 'hold_r', hand: 'r' },

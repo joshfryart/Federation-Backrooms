@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SEARCHABLE, clutterFor } from './items.js';
+import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -862,9 +863,9 @@ export class World {
     // loose clutter from the ship inventory: small things on the floor near walls and on tables (look at one for its name; see nearestClutter in js/main.js)
     this.clutter = [];
     {
-      const shapes = [new THREE.BoxGeometry(1, 1, 1), new THREE.CylinderGeometry(0.5, 0.5, 1, 10), new THREE.BoxGeometry(1, 1, 1)], lists = [[], [], []];
+      const lists = {};
       const ph = (str) => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
-      const add = (it, x, y, z, k) => { const h = ph(it[0]), sz = [[0.12 + h * 0.16, 0.08 + h * 0.12, 0.1 + h * 0.14], [0.07 + h * 0.05, 0.12 + h * 0.14, 0.07 + h * 0.05], [0.26, 0.025, 0.2]][it[2]]; const rec = { x, y: y + sz[1] / 2, z, name: it[0], real: it[1], gone: false }; lists[it[2]].push({ x, y: y + sz[1] / 2, z, sx: sz[0], sy: sz[1], sz: sz[2], ry: rndv() * 6.28, h, rec });
+      const add = (it, x, y, z, k) => { const h = ph(it[0]), kind = kindForName(it[0], it[2], h); const rec = { x, y: y + 0.05, z, name: it[0], real: it[1], kind, gone: false }; (lists[kind] ||= []).push({ x, y, z, ry: rndv() * 6.28, s: 1, rec });
         this.clutter.push(rec); };
       for (const r of d.rooms) {
         const pool = clutterFor(r.type); if (!pool.length) continue;
@@ -872,8 +873,7 @@ export class World {
         const n = Math.min(tiles.length, 3 + Math.floor(r.w * r.h / 9)); for (let i = 0; i < n; i++) { const [tx, ty] = tiles.splice(Math.floor(rndv() * tiles.length), 1)[0]; const it = pool[Math.floor(rndv() * pool.length)]; add(it, (tx + 0.5 + (rndv() - 0.5) * 0.7) * TS, 0, (ty + 0.5 + (rndv() - 0.5) * 0.7) * TS, 0); }
         for (const p of d.props) if (p.kind === 'table' && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h && rndv() < 0.7) { const [cx, cz] = this.center(p.tx, p.ty); add(pool[Math.floor(rndv() * pool.length)], cx + (rndv() - 0.5) * 0.7, 0.78, cz + (rndv() - 0.5) * 0.7, 0); }
       }
-      const cm = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.2 });
-      shapes.forEach((geo, k) => { const l = lists[k]; if (!l.length) return; const im = new THREE.InstancedMesh(geo, cm, l.length); l.forEach((c, i) => { c.rec.inst = { im, i }; dummy.position.set(c.x, c.y, c.z); dummy.rotation.set(0, c.ry, 0); dummy.scale.set(c.sx, c.sy, c.sz); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, new THREE.Color().setHSL(c.h, k === 2 ? 0.08 : 0.35, k === 2 ? 0.75 : 0.45)); }); im.castShadow = im.receiveShadow = true; g.add(im); });
+      for (const kind in lists) { const l = lists[kind], r = buildInstanced(kind, l); if (!r) continue; l.forEach((c, i) => { c.rec.inst = { hide: () => r.hide(i) }; }); g.add(r.group); }   // generated clutter models (js/itemart.js)
       dummy.scale.set(1, 1, 1); dummy.rotation.set(0, 0, 0);
     }
     // lift
@@ -1268,7 +1268,7 @@ export class World {
   }
 
   // pick a piece of clutter up: hide its instance and drop it from the look list
-  takeClutter(c) { if (c.gone) return false; c.gone = true; if (c.inst) { const d = new THREE.Object3D(); d.scale.set(0, 0, 0); d.updateMatrix(); c.inst.im.setMatrixAt(c.inst.i, d.matrix); c.inst.im.instanceMatrix.needsUpdate = true; } const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
+  takeClutter(c) { if (c.gone) return false; c.gone = true; c.inst?.hide(); const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
   // doors part for the player (and anyone in `who`, [{x, z, w}]) within reach and close again behind them. Sealed doors (doorLock) stay shut
   // for everyone; a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player pried)
   slideDoors(dt, px, pz, who = [], onOpen = null) {

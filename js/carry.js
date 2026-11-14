@@ -7,6 +7,7 @@
 //   rollCart(cart, dist)  spin the wheels;  cartLoad(cart, id) / cartUnload(cart) -> id;  cartHandle(cart) world point the pusher holds
 import * as THREE from 'three';
 import { ITEMS, CARTS, handsFor } from './equipment.js';
+import { buildItem } from './itemart.js';
 
 const M = {};
 function mats() {
@@ -26,6 +27,7 @@ const cyl = (r0, r1, h, m, x = 0, y = 0, z = 0, seg = 12) => { const o = new THR
 
 // ---- item meshes. Local frame: +y up (when the item rests on a surface), origin at the grip; ud.rest = height of the origin above a surface
 export function makeItemMesh(id) {
+  { const a = buildItem(id); if (a) return a; }   // generated models (js/itemart.js); the legacy boxes below are the fallback
   const m = mats(), g = new THREE.Group(); g.name = 'item:' + id; g.userData.item = id; let rest = 0;
   switch (id) {
     case 'cup': g.add(cyl(0.042, 0.036, 0.1, m.white, 0, 0, 0)); g.add(cyl(0.037, 0.037, 0.005, m.brown, 0, 0.046, 0)); { const h = new THREE.Mesh(new THREE.TorusGeometry(0.026, 0.007, 6, 12), m.white); h.position.set(0.05, 0, 0); g.add(h); } rest = 0.05; break;
