@@ -50,9 +50,14 @@ export async function walkTests(fail) {
     const other = Object.keys(plan3).find(k => plan3[k].length && plan3[k].every(x => x.deckNo !== q.deckNo)), same = Object.keys(plan3).find(k => k !== q.room && plan3[k].some(x => x.deckNo === q.deckNo) && s3.site(p, k, q.deckNo, { room: k }).deckNo === q.deckNo);
     est = { here: s3.estimate(p, q.room), same: same ? +s3.estimate(p, same).toFixed(1) : null, other: other ? +s3.estimate(p, other).toFixed(1) : null };
     ck(est.here === 0 && (est.same == null || (est.same >= 3 && est.same <= WALK_MAX)) && (est.other == null || est.other > 3.5 + 1) && (est.same == null || est.other == null || est.other > est.same - WALK_MAX), 'sim.estimate ' + JSON.stringify(est)); }
+  // pathing iteration 4: Duty.byDistance (the delegate menu lists subordinates nearest first, by sim.estimate; people already on a job last)
+  let near = null; { const subs = duty.subs(), room = Object.keys(plan).find(k => plan[k].length > 0 && k !== 'quarters'), list = duty.byDistance(subs, room), free = list.filter(x => !duty.jobs.some(j => j.person === x.person)), etas = free.map(x => x.eta), busy = subs.find(q => !duty.jobs.some(j => j.person === q)) || subs[0];
+    const fake = { person: busy, loop: { id: 'x', room }, left: 60 }; duty.jobs.push(fake); const list2 = duty.byDistance(subs, room); duty.jobs.splice(duty.jobs.indexOf(fake), 1);
+    near = { n: list.length, room, onJob: list.length - free.length, busyAfter: list.slice(free.length).every(x => duty.jobs.some(j => j.person === x.person)), sorted: etas.every((v, i) => i === 0 || (etas[i - 1] ?? 1e9) <= (v ?? 1e9)), first: etas[0] != null ? +etas[0].toFixed(1) : null, last: etas.length ? +(etas[etas.length - 1] ?? -1).toFixed(1) : null, busyLast: list2[list2.length - 1]?.person === busy, noRoom: duty.byDistance(subs, null).map(x => x.person).join() === subs.join() };
+    ck(near.n === subs.length && near.sorted && near.busyAfter && near.busyLast && near.noRoom, 'Duty.byDistance ' + JSON.stringify(near)); }
   let refusal = null; { const evs2 = []; duty.on(ev => evs2.push(ev)); for (const s of duty.subs()) for (let k = 0; k < 60 && !evs2.some(e => e.type === 'refused'); k++) { duty.t += 5; const r = duty.order(s, null); if (r.ok) duty.jobs.splice(duty.jobs.indexOf(r.job), 1); }
     const ev = evs2.find(e => e.type === 'refused'); refusal = ev ? !!ev.person && ev.person.short === ev.who : 'none'; ck(refusal !== false, 'a refusal carries the person'); }
-  return { walkers, riders, maxEta: +maxEta.toFixed(1), order, hold, est, refusal };
+  return { walkers, riders, maxEta: +maxEta.toFixed(1), order, hold, est, near, refusal };
 }
 
 export async function walkBrowser(page, fail) {
@@ -144,6 +149,22 @@ export async function walkBrowser(page, fail) {
         for (const p of ppl) { const t = g.simTileFor(p, { room: rm.type, spot: 'corridor', tx: rm.x, ty: rm.y }); if (!t) continue; const [cx, cz] = w.center(t[0], t[1]), x = cx + (t.off?.[0] || 0), z = cz + (t.off?.[1] || 0); pos.push([x, z]); const f = { kind: 'crew', simmed: true, person: p, room: rm.type, x, z, mesh: null }; fakes.push(f); g.ents.push(f); }
         for (const f of fakes) g.ents.splice(g.ents.indexOf(f), 1); let minD = 9; for (let i = 0; i < pos.length; i++) for (let j = i + 1; j < pos.length; j++) minD = Math.min(minD, Math.hypot(pos[i][0] - pos[j][0], pos[i][1] - pos[j][1]));
         out.fullRoom = { room: rm.type, tiles: rm.w * rm.h, n: pos.length, minD: +minD.toFixed(2) }; } }
+    // 12) pathing iteration 4: a crowd leaving by lift while the player stands in the open car without using its panel: once the player has held
+    //     the car 5 s the boarders step back out ("We'll take the next one."), everyone waits beside the doors or in the line further back (apart,
+    //     nobody left in the car), and once the player steps out they all board and go, nobody > 10 s in the car
+    { const other = Object.keys(G.plan).map(k => G.plan[k].find(s => s.deckNo !== here)).find(Boolean), type = Object.keys(G.plan).find(k => G.plan[k].includes(other)), ppl = idle().slice(0, 10).map(e => e.person), L = G.lift, nd = g.liftWaitSpots().length;
+      const said = []; const say0 = G.say; G.say = (m, c) => { said.push(String(m)); return say0(m, c); };
+      for (const p of ppl) S.redirect(p, type, 'door', 600, 'ordered', { prio: 2, site: other }); let boarded = false, n = 0;
+      for (; n < 60 * 30 && !boarded; n++) { P.x = car.x + car.dx * 3.2; P.z = car.z + car.dy * 3.2; P.vx = P.vz = 0; tick(1); boarded = g.ents.some(e => e.board && e.simmed); }
+      let inCar = 0, minGap = 9, line = 0, waitN = 0, loose = 0, held = false; for (let k = 0; k < 25 * 30; k++) { P.x = car.x - car.dx * 0.55; P.z = car.z - car.dy * 0.55; P.vx = P.vz = 0; L.armed = false; tick(1); held = held || !!L.held;
+        if (k > 9 * 30) { inCar = Math.max(inCar, g.ents.filter(e => e.simmed && (e.board || (w.tile(e.x, e.z).join() === car.tx + ',' + car.ty))).length); const Wt = g.ents.filter(e => e.simmed && e.walk?.vanish && !e.board && (e.v || 0) < 0.05 && Math.hypot(e.x - car.x, e.z - car.z) < 9); waitN = Math.max(waitN, Wt.length); line = Math.max(line, Wt.filter(e => e.liftWait >= nd).length); loose = Math.max(loose, Wt.filter(e => e.liftWait == null).length);
+          for (let i = 0; i < Wt.length; i++) for (let j = i + 1; j < Wt.length; j++) minGap = Math.min(minGap, Math.hypot(Wt[i].x - Wt[j].x, Wt[i].z - Wt[j].z)); } }
+      let maxWait = 0, gone = 0; const wait = new Map(); P.x = car.x + car.dx * 12; P.z = car.z + car.dy * 12; { const q = { x: P.x, z: P.z, y: 0 }; w.resolve(q, 0.3); P.x = q.x; P.z = q.z; }
+      for (let k = 0; k < 150 * 30 && gone < ppl.length; k++) { P.vx = P.vz = 0; tick(1); for (const e of g.ents.filter(e => e.board && e.simmed)) { wait.set(e.person, (wait.get(e.person) || 0) + 1 / 30); maxWait = Math.max(maxWait, wait.get(e.person)); } gone = ppl.filter(p => !body(p)).length; }
+      G.say = say0; out.liftHeld = { n: ppl.length, nd, line: g.liftQueueSpots().length, boarded, held, stepOut: said.some(t => /next one/.test(t)), inCar, waitN, inLine: line, loose, minGap: +minGap.toFixed(2), gone, maxWait: +maxWait.toFixed(1) }; for (const p of ppl) S.release(p); }
+    // 13) pathing iteration 4: red alert sends the crew who are off their post to their station (first block of their day, sim priority 3); cleared = released
+    { const A = g.alerts; if (A) { A.raise('red', { source: 'debug', reason: 'test' }); tick(12 * 30); const sent = g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations'), ok = sent.every(p => S.overrideOf(p).room === S.data.billets[p.billet].day[0][2] && S.overrideOf(p).prio === 3);
+      const mine = sent.filter(p => body(p)), moving = mine.filter(p => body(p).walk?.opts.sim).length; A.clear('red'); tick(3 * 30); out.stations = { sent: sent.length, ok, here: mine.length, moving, left: g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations').length }; } }
     out.bodies = { n: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, sim: S.bodies(here).size };
     return out;
   });
@@ -161,6 +182,8 @@ export async function walkBrowser(page, fail) {
   const LW = r.liftWait; if (!(LW && LW.spots >= 2 && LW.apart && LW.floor && LW.sides === 2 && LW.waited !== false && LW.minD > 0.45 && (LW.shake === 'shake_head' || LW.shake === 'none'))) fail('npc lift waiting spots / refusal shake ' + JSON.stringify(LW));
   const OW = r.oneWindow; if (!(OW && OW.gone === OW.n && OW.arrived !== false && OW.emptyShut === 0 && OW.maxBoard <= 7 && OW.maxWait < 10)) fail('npc lift: board and arrive in one cycle while watched, full car ' + JSON.stringify(OW));
   const FR = r.fullRoom; if (FR && !(FR.n > 0 && FR.minD >= 0.4)) fail('npc full room: people spread over the tiles ' + JSON.stringify(FR));
+  const LH = r.liftHeld; if (!(LH && LH.held && (!LH.boarded || LH.stepOut) && LH.inCar === 0 && LH.minGap >= 0.45 && LH.gone === LH.n && LH.maxWait < 10 && (LH.waitN <= LH.nd || LH.inLine > 0 || LH.line === 0))) fail('npc lift: held by the player in the car, crowd waits beside the doors and in a line, then boards ' + JSON.stringify(LH));
+  const ST = r.stations; if (ST && !(ST.sent > 0 && ST.ok && ST.left === 0)) fail('npc red alert: crew go to their stations, released on clear ' + JSON.stringify(ST));
   if (!(r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim ' + JSON.stringify(r.bodies));
   return r;
 }

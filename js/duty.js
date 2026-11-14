@@ -7,7 +7,7 @@
 //   pickBillet(roster, seed, forceBillet)  -> a random living crew member becomes the player
 //   new Duty({ player, roster, clock, sim, duties, shipState, say, seed, mission, pace })
 //     .tick(dt)  .shiftEnd()  .firstTask()  .repairRows = () => rows (js/repair.js, shown on the board)
-//     .perform(loopId, quality)  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)
+//     .perform(loopId, quality)  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)  .byDistance(people, room) nearest first (sim.estimate)
 //     .board()   duty + task board rows for the HUD     .ledger / .debt / .chain / .trust(person)
 //     .atJob = (job) => bool   optional (js/main.js): an ordered job's clock only runs once the person is in the job room ('ordered' / 'jobdone' events carry the job;
 //                              'atjob' fires once when they get there after walking / riding more than 3 s)
@@ -171,6 +171,12 @@ export class Duty {
     if (p.dept !== this.player.dept && !this.subs().includes(p)) return { ok: false, why: `${p.short} has no reason to help you.` };
     const w = this.willObey(p); if (w.roll > w.p - 0.2) { this._bump(p, -0.02); this.emit({ type: 'refused', who: p.short, person: p, text: `${p.short}: "Sorry, I can't spare the time right now."` }); return { ok: false, refused: true }; }
     return this.delegate(p, l.id);
+  }
+  // who can get to `room` soonest (sim.estimate: walk / lift legs; docs/pathing.md iteration 4): [{ person, eta }] nearest first, people
+  // already busy with a job last. The J menu lists subordinates in this order with their ETA, so the player can pick someone close by.
+  byDistance(people, room) {
+    const est = (p) => (room && this.sim?.estimate ? this.sim.estimate(p, room) : null), busy = (p) => this.jobs.some(j => j.person === p);
+    return people.map((p, i) => ({ person: p, eta: est(p), i })).sort((a, b) => (busy(a.person) - busy(b.person)) || ((a.eta ?? 1e9) - (b.eta ?? 1e9)) || a.i - b.i).map(({ person, eta }) => ({ person, eta }));
   }
   delegate(p, loopId) {
     const l = this.loop(loopId); if (!l || l.state === 'doing') return { ok: false, why: 'cannot delegate that now' };
