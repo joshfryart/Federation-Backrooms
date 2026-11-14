@@ -46,6 +46,28 @@ import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation clos
 await talkTests(fail);
 import { combatTests, combatBrowser } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 await combatTests(fail);
+// room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
+{
+  const { generate, genShip } = await import(new URL('../js/gen.js', import.meta.url)), { SHIPS, deckOptions } = await import(new URL('../js/ships.js', import.meta.url));
+  const WANT = { bridge: ['helm'], engineering: ['reactorstation', 'fieldgen'], shuttlebay: ['baycontrol'], transporter: ['beampedestal'], holodeck: ['holodesk'], brig: ['secdesk'], sickbay: ['nursestation'],
+    mess: ['range', 'servery'], lounge: ['bar'], plant: ['pumpskid', 'heatexch', 'scrubber'], workshop: ['fabricator'], morgue: ['autopsy_table'], quarters: ['desk'] };
+  const rooms = {}, has = {}, D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]]; let levels = 0, stranded = 0, big5 = 0, big5full = 0, exitInRoom = 0;
+  for (let i = 0; i < 320; i++) {
+    const ship = SHIPS[i % SHIPS.length], sd = i % ship.decks, d = generate(sd, i * 4057 + 17, deckOptions(ship, sd, { require: i % 2 === 0 })); levels++;
+    const W = d.W, seen = new Uint8Array(W * d.H), q = [d.start]; seen[d.start[0] + d.start[1] * W] = 1;
+    while (q.length) { const [x, y] = q.pop(); for (const [a, b] of D4) { const nx = x + a, ny = y + b; if (nx < 0 || ny < 0 || nx >= W || ny >= d.H || seen[nx + ny * W] || d.grid[ny][nx] !== 0) continue; seen[nx + ny * W] = 1; q.push([nx, ny]); } }
+    if (d.room[d.exit[1]][d.exit[0]]) exitInRoom++;
+    for (const r of d.rooms) {
+      rooms[r.type] = (rooms[r.type] || 0) + 1; const inR = d.props.filter(p => p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h);
+      for (const k of new Set(inR.map(p => p.kind))) has[r.type + '/' + k] = (has[r.type + '/' + k] || 0) + 1;
+      for (const p of inR) if (p.wall && !D4.some(([a, b]) => seen[p.tx + a + (p.ty + b) * W])) stranded++;   // wall-placed props always keep a reachable side
+      if (r.type === 'sickbay' && r.w >= 5 && r.h >= 5) { big5++; if (['surgical_table', 'exam_couch', 'steriliser', 'med_dispenser'].every(k => inR.some(p => p.kind === k))) big5full++; }
+    }
+  }
+  const low = []; for (const [room, ks] of Object.entries(WANT)) for (const k of ks) { const n = rooms[room] || 0, h = has[room + '/' + k] || 0; if (n >= 4 && h < n * (room === 'plant' ? 0.25 : 0.6)) low.push(`${room}/${k} ${h}/${n}`); }
+  console.log(`room props: ${levels} levels, ${Object.keys(has).length} room/prop pairs, wall props stranded ${stranded}, big sickbays with the medical set ${big5full}/${big5}, lift in a room ${exitInRoom}${low.length ? ', too rare: ' + low.join('; ') : ''}`);
+  if (low.length || stranded || exitInRoom || big5full < big5) fail('room props');
+}
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 page.on('pageerror', e => errors.push(e.message));
@@ -218,11 +240,27 @@ const invRun = () => page.evaluate(async () => {
 let inv = await invRun(); for (let a = 0; a < 3 && !(inv.examine && inv.clutterPrompt && !/\[E\](?! Take)/.test(inv.clutterPrompt)); a++) inv = await invRun();   // random layouts: the look-at probe can miss on one ship, so retry on fresh runs
 console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.newRooms.length >= 12 && inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
 const propsOk = await page.evaluate(async () => {
-  const { PROP_KINDS, buildProp } = await import('./js/world.js'), bad = [];
-  for (const k of PROP_KINDS) { try { const g = buildProp(k); if (!g || !g.children.length) bad.push(k); } catch (e) { bad.push(k + ': ' + e.message); } }
-  return { n: PROP_KINDS.length, bad };
+  const { PROP_KINDS, PROP_GALLERY, PROP_ART_FIXTURES, buildProp } = await import('./js/world.js'), { PROP_ART } = await import('./js/propart.js'), bad = []; let maxTris = 0, art = 0;
+  const tris = (o) => { let n = 0; o.traverse(m => { if (m.isMesh) n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return Math.round(n); };
+  for (const k of PROP_GALLERY) { try { const g = buildProp(k); if (!g || !g.children.length) { bad.push(k); continue; }
+    if (!PROP_ART[k]) continue; art++; const u = g.userData, n = tris(g); maxTris = Math.max(maxTris, n);
+    if (n < 100 || n > 8000) bad.push(`${k}: ${n} tris`);   // galley props run 4,500-6,600 (stools, bottles, plate racks), the rest under 2,600
+    if (u.top !== undefined && !(u.top > 0 && u.top < 2.5)) bad.push(`${k}: top ${u.top}`);
+    if (PROP_KINDS.includes(k)) {   // floor props gen.js places: a footprint for collision, use points for crew, seat height on seated ones
+      if (!(Array.isArray(u.box) && u.box.length === 4 && u.box[0] < u.box[1] && u.box[2] < u.box[3] && Math.max(-u.box[0], u.box[1], -u.box[2], u.box[3]) <= 1.25)) bad.push(`${k}: box ${JSON.stringify(u.box)}`);
+      if (!(u.spots?.length || u.use)) bad.push(`${k}: no spots/use`);
+      if (u.spots && !u.spots.every(sp => sp.length === 3 && sp.every(Number.isFinite))) bad.push(`${k}: spots`);
+      if (g.getObjectByName('chair') && !(u.seat > 0.3)) bad.push(`${k}: seated station without a seat height`);
+    } else if (!PROP_ART_FIXTURES.has(k) && !u.box && !u.seat && !u.size) bad.push(`${k}: no footprint`);
+  } catch (e) { bad.push(k + ': ' + e.message); } }
+  { const { makeJunction } = await import('./js/sysview.js'), j = makeJunction({ id: 'coolant', name: 'Coolant & Plumbing' }, 'JCT 01-01', 'Engineering', 0xc8a020); if (!j.lamp || !j.door || j.lamp.parent !== j.door || j.group.userData.insert !== 'manifold') bad.push('junction: lamp/door/insert'); }
+  { const { buildItem, kindForName } = await import('./js/itemart.js'), { ITEMS } = await import('./js/equipment.js');   // batch items: built, in ITEMS, named by keyword
+    for (const k of ['ladle', 'stockpot', 'fryingpan', 'stretcher', 'iv_bag', 'forceps', 'kidney_dish', 'bandage']) { const it = buildItem(k); if (!it || !ITEMS[k] || it.userData.tris > 1000) bad.push('item ' + k); }
+    if (!ITEMS.stretcher.two) bad.push('stretcher not two-handed');
+    for (const [nm, k] of [['soup ladle', 'ladle'], ['stock pot, 40 L', 'stockpot'], ['frying pan', 'fryingpan'], ['saline bag', 'iv_bag'], ['gauze dressing roll', 'bandage'], ['folding stretcher', 'stretcher']]) if (kindForName(nm) !== k) bad.push(`kindForName ${nm} -> ${kindForName(nm)}`); }
+  return { n: PROP_KINDS.length, gallery: PROP_GALLERY.length, art, maxTris, bad };
 });
-console.log('props:', JSON.stringify(propsOk)); if (propsOk.bad.length || propsOk.n < 32) fail('prop models');
+console.log('props:', JSON.stringify(propsOk)); if (propsOk.bad.length || propsOk.n < 56 || propsOk.art < 34) fail('prop models');
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 // ---- Systems Nominal (default mode) on its own page ----
 const page2 = await browser.newPage({ viewport: { width: 640, height: 360 } });
