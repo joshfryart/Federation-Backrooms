@@ -195,7 +195,7 @@ const MOOD_LINES = {
 };
 const GOSSIP_TYPE = {
   'close-friend': (g) => `${g.family}? One of the best. We ${g.reason}.`, friend: (g) => `${g.family}? Good sort — we ${g.reason}.`, 'old-shipmate': (g) => `${g.family} and I go way back. We ${g.reason}.`,
-  rival: (g) => `${g.family}. Don't get me started — ${g.reason}.`, feud: (g) => `Keep ${g.family} away from me. ${cap(g.reason)}.`,
+  rival: (g) => `${g.family}. Don't get me started. We ${g.reason}.`, feud: (g) => `Keep ${g.family} away from me. ${cap(g.reason)}.`,
   spouse: (g) => `${g.family}? We share quarters. Don't tell them I said they snore.`, romance: (g) => `${g.family}? Ask them about the arboretum. That is all I am saying.`,
   mentor: (g) => `${g.family} taught me half of what I know.`, protege: (g) => `${g.family} is coming along nicely. Sharp.`,
 };

@@ -7,6 +7,9 @@
 //   graph.friendsOf(p)  groupsOf(p)  affinity(a, b)  seekTargets(p, ctx)  preferredCompany(p, activity)  describe(p)  talkLine(p, asker)
 //   graph.meetingFor(p, shipHour)  isFree(p, shipHour)  anchorOf(p)  quartersOf(p)  companionOf(p)     (read by js/sim.js)
 //   graph.trustBias(player, p)  (js/duty.js initial trust)    graph.onTrustEvent(a, b, delta) / tick(dt) / events()    toJSON() / SocialGraph.fromJSON(j)
+//   graph.hooks  [{ kind, people, text, secret }]  story hooks dealt with the graph (triangle, crush, exes, feud, camps, lineage, passed-over, secret, ...)
+//   graph.rumours(p, { n, asker })  what p would pass on    aboutYou(p, you)  p's line about their history with you    playerBrief(you)  who your character already knows
+//   graph.storyOf(a, b)  one sentence explaining the tie
 // People are roster ids (or person objects). Same seed + same roster + same plan = identical graph (clock.js hash, never Math.random).
 import { hash, hash01, WATCHES, WATCH_START } from './clock.js';
 import { SHIPS } from './ships.js';
@@ -41,7 +44,7 @@ export const BILLET_PAIR = {          // specific billet pairs who work shoulder
 };
 export const PROFILE_REL = {          // docs/crew-sim/<billet>.json `relationships[].kind` (compiled into comms.json as `rel`)
   friend: { bonus: 0.18, why: 'get on well' }, mess_partner: { bonus: 0.14, why: 'share a mess table' }, confidant: { bonus: 0.16, why: 'trade confidences' },
-  mentor: { bonus: 0.12, why: 'one taught the other the job' }, rival: { bonus: -0.05, why: 'never agree on how the job is done' },
+  mentor: { bonus: 0.12, why: 'learned the job at the same console' }, rival: { bonus: -0.05, why: 'never agree on how the job is done', friendWhy: 'argue about how the job is done and rather enjoy it' },
 };
 export const RANK_MIX = {
   crossTier: -0.10, crossTierSameDept: -0.03,   // officer (rank >= 1) with enlisted: officers' mess vs crew lounge
@@ -96,18 +99,26 @@ export const REL_TYPES = {
   acquaintance: { sym: true, val: 0.2, pri: 1, label: 'acquaintance' },
 };
 export const ATTITUDES = {            // one-way colouring on top of the base relation
-  wary: { dv: -0.35, label: 'wary of' }, 'in-awe': { dv: 0.2, label: 'in awe of' }, 'owes-favour': { dv: 0.05, inverse: 'is-owed', label: 'owes a favour to' }, 'is-owed': { dv: 0.05, inverse: 'owes-favour', label: 'is owed a favour by' },
+  wary: { dv: -0.35, label: 'wary of' }, 'in-awe': { dv: 0.2, label: 'in awe of' }, 'sweet-on': { dv: 0.3, label: 'sweet on' }, resents: { dv: -0.4, label: 'resents' }, 'owes-favour': { dv: 0.05, inverse: 'is-owed', label: 'owes a favour to' }, 'is-owed': { dv: 0.05, inverse: 'owes-favour', label: 'is owed a favour by' },
 };
 export const LIMITS = {
   strongCap: 8, friendMin: 0.3, closeMin: 0.58, closeMinMedical: 0.48, crossRankMax: 3, crossRankChance: 0.85, offworkMax: 2,
-  coupleRate: 0.065, rivalRate: 0.05, maxRivals: 2, newcomers: [1, 3], oldShipmates: [1, 3], debtors: [5, 9], beloved: [8, 14], distrust: [6, 10], cliquePer: 10,
+  coupleRate: 0.065, rivalRate: 0.07, maxRivals: 2, mentorGap: 3, crushRate: 0.035, triangles: [0, 2], exes: [1, 2], passedOver: [2, 4], campSize: 5, newcomers: [1, 3], oldShipmates: [1, 3], debtors: [5, 9], beloved: [8, 14], distrust: [6, 10], cliquePer: 10,
 };
 const STRONG = new Set(Object.keys(REL_TYPES).filter(k => REL_TYPES[k].strong));
 const BREAK_RE = /meal|coffee|break|tea|breakfast|wash/;
 const NOT_FREE_RE = /sleep|handover|walk_to|pre_watch|pre_duty|prep_for|watch_brief|get_ready|wake/;
+export const TRUST_ATT = { wary: -0.05, resents: -0.09, 'sweet-on': 0.06, 'in-awe': 0.04, 'owes-favour': 0.03 };   // trustBias: extra for a one-way attitude towards the player
+// reason lines read after "we …" (talk menu: "Okafor? Good sort — we <reason>.")
 const MEET_WHY = ['hit it off during a damage-control drill', 'were stuck in a tubelift together for an hour once', 'came aboard on the same transport', 'bonded over bad replicator coffee', 'grew up in the same province', 'sat together at the last promotion party', 'covered for each other once and never mentioned it', 'argue happily about the same awful holo-novel', 'shared a bunk room on their first posting', 'both play the same card game badly'];
-const RIVAL_WHY = ['both want the same promotion', 'keep score on every drill', 'each thinks the other cuts corners', 'competed for the same posting', 'one wrote the other up once'];
-const FEUD_WHY = ['split up last year; neither asked for a transfer', 'one blames the other for an accident on the last cruise', 'a reprimand that ended up on the wrong record', 'a bet that was never paid'];
+const RIVAL_WHY = [   // [line, needs] — needs: 'peer' same department and within one rank step, 'gap' different rank, '' anyone
+  ['both want the same promotion', 'peer'], ['keep score on every drill', ''], ['each think the other cuts corners', ''], ['competed for the same posting', 'peer'], ['have a write-up between us that neither will withdraw', 'gap'],
+  ['disagree about whose fault the last inspection was', ''], ['have not agreed on a single procedure since the refit', 'peer'], ['both think the other got the easy watch', ''],
+];
+const FEUD_WHY = ['one blames the other for an accident on the last cruise', 'a reprimand that ended up on the wrong record', 'a bet that was never paid', 'something said at a wake that cannot be unsaid', 'a transfer request one of them quietly blocked', 'a commendation only one of them got for work they both did'];
+const EX_WHY = ['split up last year; neither asked for a transfer', 'were together for two cruises and are civil about it now, mostly', 'called it off before the last refit and still share a mess table', 'ended it badly and have to stand the same briefings'];
+const CRUSH_WHY = ['keeps finding reasons to pass their station', 'always has a spare seat at the mess table, just in case', 'learned their watch rota by heart', 'laughs a little too quickly at their jokes'];
+const cap1 = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 const SECRET_WHY = ['keep it quiet — different ranks', 'nobody is supposed to know', 'keep it off the duty roster'];
 
 const clamp = (x, a = -1, b = 1) => Math.max(a, Math.min(b, x));
@@ -176,11 +187,12 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
 
   // ---- groups
   const groups = [], gOf = P.map(() => []), gSet = new Map();   // per person: their groups; per group: member set
+  const booked = P.map(() => new Uint8Array(48));   // half-hour slots already taken by a gathering: later groups meet around them, so one person's circles do not all fall in the same hour
   const meetWindow = (ids, dur, tag) => {
     const slots = Math.max(1, Math.round(dur * 2)); let best = null;
     for (let s0 = 0; s0 < 48; s0++) {
-      let c = 0; for (const id of ids) { let ok = true; for (let k = 0; k < slots; k++) if (!I[id].free[(s0 + k) % 48]) { ok = false; break; } if (ok) c++; }
-      const sc = c + R('meet', tag, s0) * 0.5; if (c >= 2 && (!best || sc > best.sc)) best = { sc, c, s0 };
+      let c = 0, clear = 0; for (const id of ids) { let ok = true, cl = true; for (let k = 0; k < slots; k++) { const q = (s0 + k) % 48; if (!I[id].free[q]) { ok = false; break; } if (booked[id][q]) cl = false; } if (ok) { c++; if (cl) clear++; } }
+      const sc = clear + 0.3 * (c - clear) + R('meet', tag, s0) * 0.5; if (c >= 2 && (!best || sc > best.sc)) best = { sc, c, s0 };
     }
     if (!best) return null;
     const from = best.s0 / 2, wc = {}; for (const id of ids) if (I[id].free[best.s0]) wc[I[id].w] = (wc[I[id].w] || 0) + 1;
@@ -191,7 +203,7 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
     members = [...new Set(members)].sort((a, b) => a - b); if (members.length < 2) return null;
     const g = { id: 'g' + groups.length, kind, name, members, leader: o.leader ?? members.slice().sort((a, b) => I[b].ext - I[a].ext || a - b)[0], room: o.room || null, spot: o.spot || null, activity: o.activity || kind.replace(/-/g, '_'), site: null, meet: null, cohesion: o.cohesion ?? 0.5 };
     if (g.room && hasRoom(g.room) && o.dur !== 0) g.meet = meetWindow(members, o.dur || 1, g.id);
-    if (g.meet) Object.assign(g.meet, { room: g.room, spot: g.spot, activity: g.activity });
+    if (g.meet) { Object.assign(g.meet, { room: g.room, spot: g.spot, activity: g.activity }); const s0 = Math.round(g.meet.from * 2), k = Math.round((g.meet.to - g.meet.from) * 2); for (const m of members) for (let q = 0; q < k; q++) if (I[m].free[(s0 + q) % 48]) booked[m][(s0 + q) % 48]++; }
     groups.push(g); gSet.set(g, new Set(members)); for (const m of members) gOf[m].push(g); return g;
   };
   const byWatch = (f) => WATCHES.map(w => [w, I.filter(x => x.w === w && f(x)).map(x => x.id)]);
@@ -253,12 +265,12 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
   const why = (a, b) => {
     const gs = gOf[a].filter(g => gSet.get(g).has(b)).sort((x, y) => (GROUP_PRIORITY[y.kind] || 0) - (GROUP_PRIORITY[x.kind] || 0));
     const g = gs[0], h = hintOf(I[a], I[b]);
-    if (g && (g.kind === 'hobby' || g.kind === 'rec-regulars' || g.kind === 'confidant-circle')) return `regulars at ${ACTIVITIES[g.activity]?.phrase || g.name.toLowerCase()}`;
+    if (g && (g.kind === 'hobby' || g.kind === 'rec-regulars' || g.kind === 'confidant-circle')) return `are regulars at ${ACTIVITIES[g.activity]?.phrase || g.name.toLowerCase()}`;
     if (g && g.kind === 'route-crew') return `work the ${g.name.toLowerCase().replace(/^\w+ /, '')} together on ${I[a].w} watch`;
-    if (h && R('hintwhy', a, b) < 0.6) return PROFILE_REL[h].why;
-    if (I[a].p.dept === I[b].p.dept && I[a].w === I[b].w) return I[a].p.dept === 'medical' ? 'confide in each other after hard shifts' : `same ${I[a].p.dept} watch (${I[a].w})`;
+    if (h && R('hintwhy', a, b) < 0.6) return PROFILE_REL[h].friendWhy || PROFILE_REL[h].why;
+    if (I[a].p.dept === I[b].p.dept && I[a].w === I[b].w) return I[a].p.dept === 'medical' ? 'confide in each other after hard shifts' : `stand the same ${I[a].p.dept} watch (${I[a].w})`;
     if (I[a].w === I[b].w && overlap(I[a].off, I[b].off) && R('offwhy', a, b) < 0.7) return `keep running into each other in the ${[...I[a].off].find(r => I[b].off.has(r))} after ${I[a].w} watch`;
-    if (qDeck(a) === qDeck(b) && R('nbr', a, b) < 0.5) return `neighbours on deck ${qDeck(a)}`;
+    if (qDeck(a) === qDeck(b) && R('nbr', a, b) < 0.5) return `are neighbours on deck ${qDeck(a)}`;
     return MEET_WHY[RI('meet', a, b) % MEET_WHY.length];
   };
   const setRel = (a, b, type, o = {}) => {
@@ -272,11 +284,15 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
     mk(a, b, type); mk(b, a, T.inverse || type); return true;
   };
   const setAtt = (a, b, att, reason) => {
-    if (a === b) return; if (!get(a, b)) setRel(a, b, 'acquaintance', { strength: 0.2, reason });
-    const r = get(a, b); if (!r || r.attitude) return; r.attitude = att; r.valence = r3(clamp(r.valence + ATTITUDES[att].dv)); if (reason) r.areason = reason;
+    if (a === b) return false; if (!get(a, b)) setRel(a, b, 'acquaintance', { strength: 0.25 });
+    const r = get(a, b); if (!r || r.attitude) return false; r.attitude = att; r.valence = r3(clamp(r.valence + ATTITUDES[att].dv)); if (reason) r.areason = reason;
     const inv = ATTITUDES[att].inverse; if (inv) { const q = get(b, a); if (q && !q.attitude) { q.attitude = inv; q.valence = r3(clamp(q.valence + ATTITUDES[inv].dv)); } }
+    return true;
   };
+  const hooks = [], fam = (i) => P[i].family, hook = (kind, people, text, secret = false) => hooks.push({ kind, people, text, secret });   // story hooks the game can surface (graph.hooks)
   const chain = (a, b) => P[a].reportsTo === b || P[b].reportsTo === a;
+  const above = (a, b) => { for (let x = P[a].reportsTo, k = 0; x != null && k < 8; x = P[x]?.reportsTo, k++) if (x === b) return true; return false; };   // b is somewhere up a's reporting line
+  const inLine = (a, b) => above(a, b) || above(b, a);
   const crossRank = (a, b) => I[a].officer !== I[b].officer || Math.abs(P[a].rank - P[b].rank) >= 2;
   const crossCount = (a) => xc[a], outside = (a) => oc[a];
   const T = I.map(x => x.loner ? (R('lt', x.id) < 0.5 ? 0 : 1) : clamp(Math.round(1 + x.ext * 5 + (R('ft', x.id) - 0.5) * 1.5) - (x.newcomer ? 2 : 0), 1, 7));
@@ -288,7 +304,7 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
   {
     const want = Math.max(1, Math.round(n * LIMITS.coupleRate + (R('ncouple') - 0.5) * 2)), cand = [];
     for (const [s, a, b] of allPairs) {
-      if (I[a].loner || I[b].loner || chain(a, b) || Math.abs(P[a].rank - P[b].rank) > 3) continue;
+      if (I[a].loner || I[b].loner || inLine(a, b) || P[a].billet === 'co' || P[b].billet === 'co' || Math.abs(P[a].rank - P[b].rank) > 3) continue;
       const sc = s + (I[a].w === I[b].w ? 0.25 : 0) + 0.12 * (has(a, 'social:flirty') + has(b, 'social:flirty')) + (FR(3, a, b) - 0.5) * 0.5; if (sc > 0.45) cand.push([sc, a, b]);
     }
     cand.sort((x, y) => y[0] - x[0] || x[1] - y[1] || x[2] - y[2]);
@@ -305,9 +321,9 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
   // mentors (b mentors a: relation(a, b).type === 'mentor')
   const hasMentor = new Array(n).fill(false);
   for (const s of I) {
-    if (s.p.rank < 2) continue; let k = has(s.id, 'social:mentor') || has(s.id, 'workstation:mentors-juniors') ? 1 + (R('mw2', s.id) < 0.3) : R('mw', s.id) < 0.2 ? 1 : 0;
-    const cand = I.filter(x => x.p.dept === s.p.dept && x.p.rank < s.p.rank && !hasMentor[x.id] && x.id !== partner[s.id])
-      .map(x => [aff(s.id, x.id) + (P[x.id].reportsTo === s.id || P[P[x.id].reportsTo]?.reportsTo === s.id ? 0.2 : 0) + (hintOf(s, x) === 'mentor' ? 0.25 : 0) + R('mc', s.id, x.id) * 0.2, x.id]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+    const keen = has(s.id, 'social:mentor') || has(s.id, 'workstation:mentors-juniors'); if (s.p.rank < 2 && !(s.p.rank === 1 && keen)) continue; let k = has(s.id, 'social:mentor') || has(s.id, 'workstation:mentors-juniors') ? 1 + (R('mw2', s.id) < 0.3) : R('mw', s.id) < 0.2 ? 1 : 0;
+    const cand = I.filter(x => x.p.dept === s.p.dept && x.p.rank < s.p.rank && s.p.rank - x.p.rank <= LIMITS.mentorGap && !hasMentor[x.id] && x.id !== partner[s.id])
+      .map(x => [aff(s.id, x.id) + (x.w === s.w ? 0.15 : 0) + (P[x.id].reportsTo === s.id || P[P[x.id].reportsTo]?.reportsTo === s.id ? 0.2 : 0) + (hintOf(s, x) === 'mentor' ? 0.25 : 0) + R('mc', s.id, x.id) * 0.2, x.id]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
     if (!k && cand[0] && hintOf(s, I[cand[0][1]]) === 'mentor' && R('mh', s.id) < 0.5) k = 1;
     for (const [, j] of cand) { if (k <= 0) break; if (setRel(j, s.id, 'mentor', { reason: P[j].reportsTo === s.id ? 'took them under their wing on joining the department' : 'teaches them the tricks of the trade', strength: 0.55 + 0.3 * R('ms', j) })) { hasMentor[j] = true; k--; } }
   }
@@ -336,7 +352,7 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
     if (!OFFWORK_BILLETS.has(P[a].billet)) continue; const r = R('offt', a), want = I[a].loner ? 0 : r < 0.15 ? 0 : r < 0.65 ? 1 : 2;
     const cand = I.filter(x => x.p.dept !== P[a].dept && !get(a, x.id) && !x.loner && cnt[x.id] < CAP && x.id !== a)
       .map(x => [aff(a, x.id) + (x.w === I[a].w ? 0.2 : 0) + overlap(I[a].off, x.off) * 0.08, x.id]).sort((p, q) => q[0] - p[0] || p[1] - q[1]);
-    for (const [s, b] of cand) { if (outside(a) >= want || cnt[a] >= CAP) break; if (s >= 0.1 && (!OFFWORK_BILLETS.has(P[b].billet) || outside(b) < LIMITS.offworkMax)) setRel(a, b, 'friend', { reason: I[a].w === I[b].w && overlap(I[a].off, I[b].off) ? `off-watch friends; meet in the ${[...I[a].off].find(x => I[b].off.has(x))}` : why(a, b) }); }
+    for (const [s, b] of cand) { if (outside(a) >= want || cnt[a] >= CAP) break; if (s >= 0.1 && (!OFFWORK_BILLETS.has(P[b].billet) || outside(b) < LIMITS.offworkMax)) setRel(a, b, 'friend', { reason: I[a].w === I[b].w && overlap(I[a].off, I[b].off) ? `meet in the ${[...I[a].off].find(x => I[b].off.has(x))} off watch` : why(a, b) }); }
   }
   // old shipmates: served together before this posting
   {
@@ -345,8 +361,10 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
       if (setRel(a, b, 'old-shipmate', { strength: 0.55 + 0.3 * R('os', a, b), since: Math.max(I[a].tenure, I[b].tenure) + Math.round(365 * (1 + R('oy', a, b) * 6)), reason: `served together aboard the ${sh} before either came to the ${shipName}` })) made++; }
   }
   // rivals and the odd feud
+  const feuds = [];
   {
     const want = Math.max(1, Math.round(n * LIMITS.rivalRate)), rc = new Array(n).fill(0), cand = [];
+    const rivalWhy = (a, b) => { const peer = P[a].dept === P[b].dept && Math.abs(P[a].rank - P[b].rank) <= 1, gap = P[a].rank !== P[b].rank, l = RIVAL_WHY.filter(([, need]) => !need || (need === 'peer' ? peer : gap)); return l[RI('rw', a, b) % l.length][0]; };
     for (const [, a, b] of allPairs) {
       if (pos(get(a, b)) || partner[a] === b) continue;
       const h = hintOf(I[a], I[b]), sc = (P[a].dept === P[b].dept ? 0.3 : 0) + (Math.abs(P[a].rank - P[b].rank) <= 1 ? 0.15 : 0) + (P[a].billet === P[b].billet ? 0.25 : 0) + 0.25 * (has(a, 'social:rival-minded') + has(b, 'social:rival-minded')) + (h === 'rival' ? 0.35 : 0) + (FR(4, a, b) - 0.5) * 0.4;
@@ -354,9 +372,52 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
     }
     cand.sort((x, y) => y[0] - x[0] || x[1] - y[1] || x[2] - y[2]); const rivals = [];
     for (const [, a, b, h] of cand) { if (rivals.length >= want) break; if (rc[a] >= LIMITS.maxRivals || rc[b] >= LIMITS.maxRivals) continue;
-      if (setRel(a, b, 'rival', { strength: 0.4 + 0.4 * R('rs', a, b), reason: h === 'rival' && R('rh', a, b) < 0.5 ? PROFILE_REL.rival.why : RIVAL_WHY[RI('rw', a, b) % RIVAL_WHY.length] })) { rc[a]++; rc[b]++; rivals.push([a, b]); } }
+      if (setRel(a, b, 'rival', { strength: 0.4 + 0.4 * R('rs', a, b), reason: h === 'rival' && R('rh', a, b) < 0.5 ? PROFILE_REL.rival.why : rivalWhy(a, b) })) { rc[a]++; rc[b]++; rivals.push([a, b]); } }
     const nf = R('nfeud') < 0.3 ? 2 : 1; rivals.sort((x, y) => R('feud', x[0], x[1]) - R('feud', y[0], y[1]));
-    for (const [a, b] of rivals.slice(0, nf)) setRel(a, b, 'feud', { strength: 0.75 + 0.2 * R('fs', a, b), reason: FEUD_WHY[RI('fw', a, b) % FEUD_WHY.length] });
+    for (const [a, b] of rivals.slice(0, nf)) if (setRel(a, b, 'feud', { strength: 0.75 + 0.2 * R('fs', a, b), reason: FEUD_WHY[RI('fw', a, b) % FEUD_WHY.length] })) feuds.push([a, b]);
+  }
+  // ---- drama on top of the plain ties: exes, one-sided interest and triangles, passed-over promotions, camps around a feud, mentor lines
+  {
+    const pick = (lim, ...k) => lim[0] + RI(...k) % (lim[1] - lim[0] + 1), weak = (a, b) => { const r = get(a, b); return !r || (!pos(r) && REL_TYPES[r.type].val > 0 && !r.attitude); };
+    // exes: were a couple, still aboard the same ship
+    let made = 0; const nEx = pick(LIMITS.exes, 'nex'), isEx = new Array(n).fill(false);
+    for (const [sc, a, b] of allPairs) {
+      if (made >= nEx || sc < 0.3) break; if (FR(5, a, b) > 0.04 || isEx[a] || isEx[b] || I[a].loner || I[b].loner || I[a].newcomer || I[b].newcomer || inLine(a, b) || P[a].billet === 'co' || P[b].billet === 'co' || Math.abs(P[a].rank - P[b].rank) > 2 || partner[a] === b || !weak(a, b)) continue;
+      const sour = R('exsour', a, b) < 0.5, reason = EX_WHY[sour ? (RI('exw', a, b) % 2 ? 3 : 0) : 1 + RI('exw', a, b) % 2], since = Math.round(Math.min(I[a].tenure, I[b].tenure) * (0.6 + 0.4 * R('exs', a, b)));
+      if (!(sour ? setRel(a, b, 'rival', { strength: 0.5 + 0.3 * R('exr', a, b), valence: -0.3, reason, since }) : setRel(a, b, 'friend', { strength: 0.45, valence: 0.35, reason, since }))) continue;
+      for (const [x, y] of [[a, b], [b, a]]) get(x, y).history = 'ex'; isEx[a] = isEx[b] = true; made++;
+      hook('exes', [a, b], `${fam(a)} and ${fam(b)} ${reason}.${partner[a] >= 0 || partner[b] >= 0 ? ` ${fam(partner[a] >= 0 ? partner[a] : partner[b])} would rather the subject did not come up.` : ''}`);
+    }
+    // one-sided interest; a few of them aimed at somebody who is already spoken for
+    const nCrush = Math.max(1, Math.round(n * LIMITS.crushRate)), nTri = Math.min(nCrush, pick(LIMITS.triangles, 'ntri') + (R('tri2') < 0.5 ? 1 : 0)), targeted = new Array(n).fill(false);
+    const admirers = I.filter(x => !x.loner && partner[x.id] < 0 && x.p.billet !== 'co').sort((x, y) => R('crush', x.id) - 0.3 * x.tags.has('social:flirty') - (R('crush', y.id) - 0.3 * y.tags.has('social:flirty')) || x.id - y.id).slice(0, nCrush * 3);
+    let crushes = 0, tris = 0;
+    for (const x of admirers) {
+      if (crushes >= nCrush) break; const a = x.id, wantTri = tris < nTri;
+      const b = nb[a].find(b => aff(a, b) >= 0.25 && I[b].w === I[a].w && !targeted[b] && (partner[b] >= 0) === wantTri && P[b].billet !== 'co' && !inLine(a, b) && Math.abs(P[a].rank - P[b].rank) <= 2 && !isEx[b] && !get(a, b)?.attitude && (get(a, b)?.valence ?? 0) >= 0 && FR(6, a, b) < 0.5);
+      if (b === undefined || !setAtt(a, b, 'sweet-on', CRUSH_WHY[RI('cw', a, b) % CRUSH_WHY.length])) continue;
+      targeted[b] = true; crushes++; const c = partner[b];
+      if (c < 0) { hook('crush', [a, b], `${fam(a)} is sweet on ${fam(b)} and thinks nobody can tell.`); continue; }
+      tris++; const rel = get(b, c), seen = !pos(get(c, a)) && R('seen', a, c) < 0.7 && setAtt(c, a, 'wary', `has seen how ${fam(a)} looks at ${fam(b)}`);
+      hook('triangle', [a, b, c], !rel.visible ? `${fam(a)} is sweet on ${fam(b)}, and has no idea ${fam(b)} is already spoken for.` : `${fam(a)} is sweet on ${fam(b)}. ${fam(b)} ${rel.type === 'spouse' ? 'shares quarters with' : 'is seeing'} ${fam(c)}, ${seen ? 'who has noticed' : 'who has not noticed yet'}.`);
+    }
+    // passed over: longer aboard, one stripe short
+    const po = []; for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) if (P[a].dept === P[b].dept && P[b].rank === P[a].rank + 1 && P[a].rank >= 1 && I[a].tenure > I[b].tenure && !I[a].newcomer && !pos(get(a, b)) && partner[a] !== b && !get(a, b)?.attitude) po.push([R('po', a, b), a, b]);
+    po.sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]); const nPo = pick(LIMITS.passedOver, 'npo'), poA = new Set(), poB = new Set(); made = 0;
+    for (const [, a, b] of po) { if (made >= nPo) break; if (poA.has(a) || poB.has(b)) continue; if (!setAtt(a, b, 'resents', `was up for the stripe ${fam(b)} got`)) continue; poA.add(a); poB.add(b); made++; hook('passed-over', [a, b], `${fam(a)} was up for the stripe ${fam(b)} got, and has not forgotten.`); }
+    // camps: the people around each side of a feud take that side
+    for (const [a, b] of feuds) {
+      const side = (x, y) => [...out[x].values()].filter(r => pos(r) && r.b !== y && !pos(get(r.b, y)) && !I[r.b].loner).sort((p, q) => q.strength - p.strength || p.b - q.b).slice(0, LIMITS.campSize - 1).map(r => r.b);
+      const sa = side(a, b), sb = side(b, a).filter(m => !sa.includes(m)); if (!sa.length || !sb.length) continue;
+      for (const [lead, foe, mem] of [[a, b, sa], [b, a, sb]]) {
+        addGroup('faction', `${fam(lead)}'s side`, [lead, ...mem], { leader: lead, cohesion: 0.5, activity: 'taking_sides' });
+        for (const m of mem) if (R('side', m, foe) < 0.6 && (get(m, foe)?.valence ?? 0) < 0.5) setAtt(m, foe, 'wary', `took ${fam(lead)}'s side against ${fam(foe)}`);
+      }
+      hook('camps', [a, b, ...sa, ...sb], `${fam(a)} and ${fam(b)} are not speaking, and ${P[a].dept === P[b].dept ? `half of ${P[a].dept}` : 'half the mess'} has picked a side.`);
+    }
+    for (const [a, b] of feuds) hook('feud', [a, b], `${fam(a)} and ${fam(b)} do not share a table. ${cap1(get(a, b).reason)}.`);
+    // mentor lines: who taught whom, three deep
+    made = 0; const tops = new Set(); for (let a = 0; a < n && made < 2; a++) { const m1 = [...out[a].values()].find(r => r.type === 'mentor'), m2 = m1 && [...out[m1.b].values()].find(r => r.type === 'mentor'); if (m2 && !tops.has(m1.b)) { tops.add(m1.b); made++; hook('lineage', [m2.b, m1.b, a], `${fam(m2.b)} trained ${fam(m1.b)}, and ${fam(m1.b)} is training ${fam(a)}. You can hear it in how all three call a fault.`); } }
   }
   // chain-of-command friction and hero worship
   for (let a = 0; a < n; a++) {
@@ -386,6 +447,12 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
     const k = LIMITS.distrust[0] + RI('disk') % (LIMITS.distrust[1] - LIMITS.distrust[0] + 1);
     I.filter(x => x.id !== distrusted && partner[x.id] !== distrusted && !pos(get(x.id, distrusted))).sort((x, y) => R('disp', x.id) - R('disp', y.id)).slice(0, k).forEach(x => setAtt(x.id, distrusted, 'wary', `nobody quite trusts ${P[distrusted].family}`));
   }
+  for (const g of groups) if (g.kind === 'couple') { const [a, b] = g.members, r = get(a, b); if (r && !r.visible) hook('secret', [a, b], `${fam(a)} and ${fam(b)} keep turning up in the ${g.room || 'mess'} at the same hour. Draw your own conclusions.`, true); }
+  if (fixer >= 0) hook('favour', [fixer], `Need something that is not on the manifest? ${fam(fixer)} keeps a book. It will cost you a favour.`);
+  if (beloved >= 0) hook('beloved', [beloved], `Nobody aboard has a bad word for ${fam(beloved)}.`);
+  if (distrusted >= 0) hook('distrusted', [distrusted], `Count your tools after ${fam(distrusted)} has been by. That is all I will say.`);
+  for (const x of I) if (x.newcomer) hook('newcomer', [x.id], `${fam(x.id)} came aboard ${sinceText(x.tenure)} ago and has not found a table yet.`);
+  for (let a = 0; a < n; a++) for (const r of out[a].values()) if (r.type === 'old-shipmate' && a < r.b) hook('old-shipmates', [a, r.b], `${fam(a)} and ${fam(r.b)} ${r.reason}. Ask either of them about it and lose an hour.`);
   // weak ties: colleagues around the bridge, acquaintances by affinity
   const bridgeIds = I.filter(x => x.bridge).map(x => x.id), headIds = I.filter(x => x.head).map(x => x.id);
   for (const a of bridgeIds) { for (const b of bridgeIds) if (a < b) setRel(a, b, 'colleague', { strength: 0.35 + 0.3 * aff(a, b), reason: 'stand bridge watches together' }); for (const b of headIds) if (a !== b) setRel(a, b, 'colleague', { strength: 0.3 + 0.2 * aff(a, b), reason: 'department head at the bridge briefings' }); }
@@ -443,15 +510,15 @@ export function generateSocial(roster, { seed = 1, plan = null, data = null, clo
       loner: x.loner, newcomer: x.newcomer, gossip: x.tags.has('social:gossip'), fixer: a === fixer, beloved: a === beloved, distrusted: a === distrusted, tenure: x.tenure, strong, ties: mine.length, partner: partner[a], seek, avoid };
   });
   return new SocialGraph({
-    version: 1, seed, ship: shipName, people: P.map(p => ({ id: p.id, short: p.short, family: p.family, title: p.title, billet: p.billet, dept: p.dept, rank: p.rank })),
-    groups, out, profiles, anchor, companion, lead, quarters, free: I.map(x => x.free.join('')), aff: A,
+    version: 2, seed, ship: shipName, people: P.map(p => ({ id: p.id, short: p.short, family: p.family, title: p.title, billet: p.billet, dept: p.dept, rank: p.rank })),
+    groups, out, profiles, anchor, companion, lead, quarters, free: I.map(x => x.free.join('')), aff: A, hooks,
   });
 }
 
 // ============================================================== the graph
 export class SocialGraph {
   constructor(S) {
-    Object.assign(this, S); this.n = this.people.length; this.t = 0; this.log = []; this.acc = new Map(); this._seen = 0;
+    Object.assign(this, S); this.hooks = this.hooks || []; this.n = this.people.length; this.t = 0; this.log = []; this.acc = new Map(); this._seen = 0;
     this._groupsOf = this.people.map(() => []); for (const g of this.groups) for (const m of g.members) this._groupsOf[m]?.push(g);
     for (const l of this._groupsOf) l.sort((a, b) => (GROUP_PRIORITY[b.kind] || 0) - (GROUP_PRIORITY[a.kind] || 0) || (a.id < b.id ? -1 : 1));
   }
@@ -481,7 +548,7 @@ export class SocialGraph {
     if (best) return { group: best.id, kind: best.kind, room: best.meet.room, spot: best.meet.spot, activity: best.meet.activity, site: best.site };
     const L = this.leadOf(id); return follow && L !== id ? this.meetingFor(L, hour, false) : null;
   }
-  _attends(g, id) { return hash01('attend', this.seed, g.id, id) < 0.45 + 0.5 * g.cohesion; }
+  _attends(g, id) { return g.members.length <= 2 || id === g.leader || hash01('attend', this.seed, g.id, id) < 0.6 + 0.4 * g.cohesion; }   // pairs and the host always turn up
   leadOf(p) { return this.lead?.[idOf(p)] ?? idOf(p); }
   // who p would walk over to: ctx = { present: [ids or people], activity }
   seekTargets(p, ctx = {}) {
@@ -496,7 +563,7 @@ export class SocialGraph {
     return [...set.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([m]) => m);
   }
   // js/duty.js: how warmly b starts out towards a (the player)
-  trustBias(a, b) { const r = this.relation(idOf(b), idOf(a)); if (!r) return 0; return clamp(r.valence * (0.1 + 0.25 * r.strength) + (r.attitude === 'wary' ? -0.05 : 0), -0.25, 0.25); }
+  trustBias(a, b) { const r = this.relation(idOf(b), idOf(a)); if (!r) return 0; return clamp(r.valence * (0.1 + 0.25 * r.strength) + (TRUST_ATT[r.attitude] || 0), -0.25, 0.25); }
   groupLabel(g) { return `${g.name}${g.room ? ` (${g.room}${g.meet ? `, ${hhmm(g.meet.from)}–${hhmm(g.meet.to)}` : ''})` : ''}`; }
   // human-readable lines for the debug page / UI
   describe(p) {
@@ -510,7 +577,8 @@ export class SocialGraph {
     const fr = by(['close-friend', 'friend', 'old-shipmate']); if (fr.length) L.push(`Friends: ${fr.map(r => `${nm(r.b)} (${r.type === 'friend' ? '' : REL_TYPES[r.type].label + '; '}${r.reason}, ${sinceText(r.since)})`).join('; ')}`);
     const gs = this.groupsOf(id).filter(g => !['department-cell', 'watch-mess', 'officers-table'].includes(g.kind)); if (gs.length) L.push(`Groups: ${gs.map(g => this.groupLabel(g)).join('; ')}`);
     for (const r of by(['feud', 'rival'])) L.push(`${r.type === 'feud' ? 'Feud' : 'Rival'}: ${nm(r.b)} — ${r.reason}`);
-    for (const att of Object.keys(ATTITUDES)) { const l = T.filter(r => r.attitude === att); if (l.length) L.push(`${ATTITUDES[att].label[0].toUpperCase() + ATTITUDES[att].label.slice(1)}: ${l.map(r => nm(r.b)).join(', ')}`); }
+    const ex = T.filter(r => r.history === 'ex'); if (ex.length) L.push(`Used to be with: ${ex.map(r => nm(r.b)).join(', ')}`);
+    for (const att of Object.keys(ATTITUDES)) { const l = T.filter(r => r.attitude === att); if (l.length) L.push(`${ATTITUDES[att].label[0].toUpperCase() + ATTITUDES[att].label.slice(1)}: ${l.map(r => nm(r.b) + (r.areason ? ` (${r.areason})` : '')).join(', ')}`); }
     if (pr.seek.length) L.push(`Seeks out: ${pr.seek.map(nm).join(', ')}`); if (pr.avoid.length) L.push(`Avoids: ${pr.avoid.map(nm).join(', ')}`);
     return L;
   }
@@ -525,10 +593,71 @@ export class SocialGraph {
     const g = this.groupsOf(id).find(g => ['hobby', 'rec-regulars', 'clique', 'confidant-circle'].includes(g.kind) && g.meet);
     if (g) bits.push(`I never miss ${g.kind === 'clique' ? 'the crowd' : ACTIVITIES[g.activity]?.phrase || g.name.toLowerCase()} in the ${g.room} — ${hhmm(g.meet.from)} hours.`);
     if (pr.loner && bits.length < 2) bits.unshift('Honestly? I keep to myself.');
-    if (mine && REL_TYPES[mine.type].strong && mine.valence > 0) bits.push('And you, obviously.');
     const foe = T.find(r => r.type === 'feud'); if (foe && foe.b !== you && h(2) % 2) bits.push(`Just keep me away from ${fam(foe.b)}.`);
     if (!bits.length) bits.push(pr.newcomer ? "I'm still new aboard. Haven't really found my people yet." : 'Whoever is on my watch, I suppose.');
-    return bits.slice(0, 3).join(' ');
+    const yours = mine ? (REL_TYPES[mine.type].strong && mine.valence > 0 && h(3) % 2 ? 'And you, obviously.' : this.aboutYou(id, you)) : null;   // their history with the asker closes the answer
+    return yours ? bits.slice(0, 2).concat(yours).join(' ') : bits.slice(0, 3).join(' ');
+  }
+  // p's one line about their history with you (the player's dealt character), or null if there is none worth a line
+  aboutYou(p, you) {
+    const id = idOf(p), u = idOf(you), r = this.relation(id, u); if (!r || id === u) return null;
+    const pick = (l) => l[hash('you', this.seed, id, u) % l.length];
+    if (r.attitude === 'sweet-on') return pick(['Oh — nobody in particular. Why, who is asking?', 'Is that an invitation? No. Of course not. Forget I said it.']);
+    if (r.attitude === 'resents') return pick(['You got the stripe. I got the extra watches. Let us leave it there.', 'You would know who I spend time with if you had come up the long way.']);
+    if (r.type === 'feud') return pick(['You know exactly how things stand between us.', 'Not with you. We both know why.']);
+    if (r.history === 'ex') return pick(['You of all people know the answer to that.', 'Not with you. Not any more. We agreed.']);
+    if (r.type === 'rival') return `You and I ${r.reason}. That has not changed.`;
+    if (r.attitude === 'wary') return pick(['I will be straight with you: I watch what I say around you.', 'No offence. I would rather keep this to duty matters.']);
+    if (r.type === 'spouse') return pick(['You know where I will be after watch. Same as you.', 'You. You are asking me that across our own breakfast table.']);
+    if (r.type === 'romance') return r.visible ? 'You, when the rota allows. It rarely does.' : 'Careful. Not here.';
+    if (r.type === 'mentor') return pick(['You taught me half of what I know. I am still working on the other half.', 'You, when you have the patience for my questions.']);
+    if (r.type === 'protege') return pick(['You are coming along. Do not let it go to your head.', 'You, most days. Somebody has to check your work.']);
+    if (r.type === 'old-shipmate') return `We ${r.reason}. Long time now.`;
+    if (r.type === 'close-friend') return pick(['You are asking me? You have heard every story I have.', `You. We ${r.reason} — you were there.`]);
+    if (r.type === 'friend') return `You, for one — we ${r.reason}.`;
+    if (r.attitude === 'owes-favour') return 'I still owe you one. I have not forgotten.';
+    if (r.attitude === 'is-owed') return 'You still owe me one. I have not forgotten either.';
+    if (r.attitude === 'in-awe') return pick(['I read your whole service record before I came aboard. Sorry. That sounded strange.', 'Honestly? I would follow you into a plasma fire.']);
+    return null;
+  }
+  // one sentence that explains the tie between two people (debug page, logs, briefing)
+  storyOf(a, b) {
+    const i = idOf(a), j = idOf(b), r = this.relation(i, j); if (!r) return null; const f = (x) => this.people[x].family, L = REL_TYPES[r.type].label;
+    const base = r.type === 'mentor' ? `${f(j)} mentors ${f(i)}: ${r.reason}` : r.type === 'protege' ? `${f(i)} mentors ${f(j)}: ${r.reason}` : r.type === 'spouse' || r.type === 'romance' ? `${f(i)} and ${f(j)}: ${r.reason}` : `${f(i)} and ${f(j)} (${L}) ${r.reason}`;
+    const q = this.relation(j, i), one = (x, y, t) => t.attitude && !ATTITUDES[t.attitude].inverse ? ` ${f(x)} ${t.attitude === 'resents' ? 'resents' : 'is ' + ATTITUDES[t.attitude].label} ${f(y)}${t.areason ? ` (${t.areason})` : ''}.` : t.attitude === 'owes-favour' ? ` ${f(x)} owes ${f(y)} a favour.` : '';
+    return `${base}, ${sinceText(r.since)} now.${r.history === 'ex' ? ' They used to be a couple.' : ''}${one(i, j, r)}${q ? one(j, i, q) : ''}`;
+  }
+  // what p would pass on if asked for the news: hooks about other people that p is placed to know (never about p or the asker;
+  // secrets only from a gossip or someone close to those involved). Stable per seed and person.
+  rumours(p, { n = 2, asker = null } = {}) {
+    const id = idOf(p), you = asker == null ? -1 : idOf(asker), gossip = !!this.profiles[id]?.gossip;
+    const near = (h) => h.people.slice(0, 3).some(x => this.relation(id, x)), close = (h) => h.people.slice(0, 3).some(x => { const r = this.relation(id, x); return r && STRONG.has(r.type) && r.valence > 0; });
+    return this.hooks.map((h, i) => [h, i]).filter(([h]) => !h.people.includes(id) && !h.people.slice(0, 3).includes(you) && (h.secret ? gossip || close(h) : gossip || near(h)))
+      .sort((x, y) => hash01('rumour', this.seed, id, x[1]) - hash01('rumour', this.seed, id, y[1]) || x[1] - y[1]).slice(0, n).map(([h]) => h);
+  }
+  // who the player's dealt character already knows: [{ kind, id, text }] for a briefing card / log, strongest first (kind: partner, friend,
+  // mentor, protege, shipmate, ex, rival, feud, admirer, cool, debt)
+  playerBrief(you, max = 7) {
+    const u = idOf(you), f = (x) => this.people[x].short, L = [], add = (kind, id, text, w) => L.push({ kind, id, text, w });
+    for (const r of this.ties(u)) {
+      const q = this.relation(r.b, u), s = r.strength;
+      if (r.type === 'spouse') add('partner', r.b, `${f(r.b)} is your partner. You share quarters.`, 3);
+      else if (r.type === 'romance') add('partner', r.b, `You and ${f(r.b)} are seeing each other${r.visible ? '' : '. Nobody is supposed to know'}.`, 3);
+      else if (r.type === 'feud') add('feud', r.b, `You and ${f(r.b)} are not on speaking terms: ${r.reason}.`, 2.5);
+      else if (r.history === 'ex') add('ex', r.b, `You and ${f(r.b)} ${r.reason}.`, 2.4);
+      else if (r.type === 'rival') add('rival', r.b, `You and ${f(r.b)} ${r.reason}.`, 2.2);
+      else if (r.type === 'mentor') add('mentor', r.b, `${f(r.b)} taught you the job and still checks your work.`, 2);
+      else if (r.type === 'protege') add('protege', r.b, `You are bringing ${f(r.b)} along.`, 1.6 + s * 0.2);
+      else if (r.type === 'close-friend') add('friend', r.b, `${f(r.b)} is a close friend: you ${r.reason}.`, 1.9 + s * 0.2);
+      else if (r.type === 'old-shipmate') add('shipmate', r.b, `You and ${f(r.b)} ${r.reason}.`, 1.7);
+      else if (r.type === 'friend') add('friend', r.b, `${f(r.b)} is a friend: you ${r.reason}.`, 1 + s * 0.5);
+      if (q?.attitude === 'sweet-on') add('admirer', r.b, `${f(r.b)} is sweet on you. You may not have noticed.`, 1.8);
+      else if (q?.attitude === 'resents') add('cool', r.b, `${f(r.b)} ${q.areason ? q.areason.replace(/the stripe .* got$/, 'the stripe you got') : 'resents you'}.`, 2.1);
+      else if (q?.attitude === 'wary' && q.type !== 'feud') add('cool', r.b, `${f(r.b)} is wary of you.`, 1.5);
+      else if (q?.attitude === 'owes-favour') add('debt', r.b, `${f(r.b)} owes you a favour.`, 0.9);
+      if (r.attitude === 'owes-favour') add('debt', r.b, `You owe ${f(r.b)} a favour.`, 1.2);
+    }
+    return L.sort((a, b) => b.w - a.w || a.id - b.id).slice(0, max).map(({ kind, id, text }) => ({ kind, id, text }));
   }
   // ---- slow dynamics over a run: witnessed events nudge opinions; enough of them make or break ties
   onTrustEvent(a, b, delta, why = 'what happened aboard', _spread = true) {
@@ -550,16 +679,17 @@ export class SocialGraph {
   tick(dt) { this.t += dt; if (Math.floor(this.t / 10) !== Math.floor((this.t - dt) / 10)) for (const [k, v] of this.acc) { const w = v * 0.97; if (Math.abs(w) < 0.01) this.acc.delete(k); else this.acc.set(k, w); } const fresh = this.log.slice(this._seen); this._seen = this.log.length; return fresh; }
   events() { return this.log.slice(); }
   stats() {
-    const types = {}, kinds = {}; for (const l of this.out) for (const r of l.values()) { if (r.a < r.b || !REL_TYPES[r.type].sym) types[r.type] = (types[r.type] || 0) + 1; if (r.attitude && r.a < r.b) types[r.attitude] = (types[r.attitude] || 0) + 1; }
-    for (const g of this.groups) kinds[g.kind] = (kinds[g.kind] || 0) + 1; return { people: this.n, groups: this.groups.length, kinds, types, loners: this.profiles.filter(p => p.loner).length };
+    const types = {}, kinds = {}; for (const l of this.out) for (const r of l.values()) { if (r.a < r.b || !REL_TYPES[r.type].sym) types[r.type] = (types[r.type] || 0) + 1; if (r.attitude) types[r.attitude] = (types[r.attitude] || 0) + 1; }
+    for (const g of this.groups) kinds[g.kind] = (kinds[g.kind] || 0) + 1; const hooks = {}; for (const h of this.hooks) hooks[h.kind] = (hooks[h.kind] || 0) + 1;
+    return { people: this.n, groups: this.groups.length, kinds, types, hooks, loners: this.profiles.filter(p => p.loner).length };
   }
   toJSON() {
-    const rels = []; for (const l of this.out) for (const r of l.values()) rels.push([r.a, r.b, r.type, r.attitude, r.strength, r.valence, r.since, r.reason, r.visible ? 1 : 0, r.shared, r.areason || null]);
-    return { version: this.version, seed: this.seed, ship: this.ship, people: this.people, groups: this.groups, rels, profiles: this.profiles, anchor: this.anchor, companion: this.companion, lead: this.lead, quarters: this.quarters, free: this.free };
+    const rels = []; for (const l of this.out) for (const r of l.values()) rels.push([r.a, r.b, r.type, r.attitude, r.strength, r.valence, r.since, r.reason, r.visible ? 1 : 0, r.shared, r.areason || null, r.history || null]);
+    return { version: this.version, seed: this.seed, ship: this.ship, people: this.people, groups: this.groups, rels, profiles: this.profiles, anchor: this.anchor, companion: this.companion, lead: this.lead, quarters: this.quarters, free: this.free, hooks: this.hooks };
   }
   static fromJSON(j) {
     const out = j.people.map(() => new Map());
-    for (const [a, b, type, attitude, strength, valence, since, reason, visible, shared, areason] of j.rels) { const r = { a, b, type, attitude, strength, valence, since, reason, visible: !!visible, shared }; if (areason) r.areason = areason; out[a].set(b, r); }
-    return new SocialGraph({ ...j, groups: JSON.parse(JSON.stringify(j.groups)), out, aff: null });
+    for (const [a, b, type, attitude, strength, valence, since, reason, visible, shared, areason, history] of j.rels) { const r = { a, b, type, attitude, strength, valence, since, reason, visible: !!visible, shared }; if (areason) r.areason = areason; if (history) r.history = history; out[a].set(b, r); }
+    return new SocialGraph({ ...j, groups: JSON.parse(JSON.stringify(j.groups)), hooks: JSON.parse(JSON.stringify(j.hooks || [])), out, aff: null });
   }
 }

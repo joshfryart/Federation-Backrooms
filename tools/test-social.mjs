@@ -13,7 +13,9 @@ export async function socialTests(fail) {
   const STRONG = new Set(Object.keys(S.REL_TYPES).filter(k => S.REL_TYPES[k].strong));
   const keyOf = (roster) => { const k = {}; for (const [b, l] of Object.entries(roster.byBillet)) l.forEach((p, i) => { k[p.id] = b + i; }); return k; };
   const edges = (x) => { const k = keyOf(x.roster), s = new Set(); for (const l of x.g.out) for (const r of l.values()) if (STRONG.has(r.type) && r.a < r.b) s.add([k[r.a], k[r.b]].sort().join('~') + ':' + r.type); return s; };
-  const stats = { ships: 0, graphs: 0, cargoSeeds: 0, cargoOut: 0, bridgeRatio: [], xrank: [0, 0], offOfficer: [0, 0], ms: [], dist: [] };
+  const stats = { ships: 0, graphs: 0, cargoSeeds: 0, cargoOut: 0, bridgeRatio: [], xrank: [0, 0], offOfficer: [0, 0], ms: [], dist: [], convene: [0, 0], coupleMeet: [0, 0], tri: 0, camps: 0, cool: [0, 0], brief: [0, 0], oneWay: 0, hooks: 0 };
+  const WE = /^(are|were|get|share|trade|keep|work|hit|came|bonded|grew|sat|covered|argue|shared|both|served|confide|stand|meet|learned|split|called|ended)\b/, BAD = /undefined|NaN|\[object|null/;
+  const HOOK_KINDS = new Set(['exes', 'triangle', 'crush', 'passed-over', 'camps', 'feud', 'lineage', 'secret', 'favour', 'beloved', 'distrusted', 'newcomer', 'old-shipmates']);
   for (const ship of SHIPS) {
     const plan = G.shipPlan(ship, 1); stats.ships++; const times = [];
     for (let seed = 1; seed <= 10; seed++) {
@@ -54,6 +56,37 @@ export async function socialTests(fail) {
       const cargo = P.filter(p => p.billet === 'cargo'); stats.cargoSeeds++;
       if (cargo.some(c => [...g.out[c.id].values()].some(r => STRONG.has(r.type) && P[r.b].dept !== 'services'))) stats.cargoOut++;
       for (const c of cargo) ck([...g.out[c.id].values()].filter(r => STRONG.has(r.type) && P[r.b].dept !== 'services' && r.type === 'friend').length <= S.LIMITS.offworkMax + 1, `${tag}: cargo handler with too many outside friends`);
+      // --- shapes: reasons read after "we ...", one-way attitudes, no romance up or down a reporting line, mentors within reach
+      const above = (a, b) => { for (let x = P[a].reportsTo, k = 0; x != null && k < 8; x = P[x]?.reportsTo, k++) if (x === b) return true; return false; };
+      for (let a = 0; a < n; a++) for (const r of g.out[a].values()) {
+        if (['friend', 'close-friend', 'old-shipmate'].includes(r.type)) ck(WE.test(r.reason), `${tag}: ${r.type} reason does not read after "we": ${r.reason}`);
+        if (r.attitude) { ck(S.ATTITUDES[r.attitude], `${tag}: unknown attitude ${r.attitude}`); if (!S.ATTITUDES[r.attitude].inverse && g.relation(r.b, a).attitude !== r.attitude) stats.oneWay++; }
+        if (r.type === 'spouse' || r.type === 'romance') ck(!above(a, r.b) && !above(r.b, a) && P[a].billet !== 'co', `${tag}: couple ${P[a].billet}/${P[r.b].billet} inside a reporting line`);
+        if (r.type === 'mentor') ck(P[r.b].rank > P[a].rank && P[r.b].rank - P[a].rank <= S.LIMITS.mentorGap && P[r.b].dept === P[a].dept, `${tag}: mentor ${P[r.b].billet} -> ${P[a].billet} out of reach`);
+        if (r.attitude === 'sweet-on') ck(g.profiles[a].partner !== r.b && !above(a, r.b) && !above(r.b, a), `${tag}: crush on a partner or inside a reporting line`);
+        if (r.attitude === 'resents') ck(P[r.b].dept === P[a].dept && P[r.b].rank === P[a].rank + 1, `${tag}: passed-over tie between the wrong people`);
+        if (r.history) ck(r.history === 'ex' && g.relation(r.b, a).history === 'ex' && g.profiles[a].partner !== r.b, `${tag}: ex history not mutual`);
+      }
+      // --- gatherings actually convene: at some half hour of the window two members choose this group
+      const peak = new Map(); for (let s = 0; s < 48; s++) { const c = new Map(); for (const p of P) { const m = g.meetingFor(p, s / 2 + 0.25, false); if (m) c.set(m.group, (c.get(m.group) || 0) + 1); } for (const [k, v] of c) peak.set(k, Math.max(peak.get(k) || 0, v)); }
+      for (const gr of g.groups) if (gr.meet) { const ok = (peak.get(gr.id) || 0) >= 2; stats.convene[1]++; if (ok) stats.convene[0]++; if (gr.kind === 'couple') { stats.coupleMeet[1]++; if (ok) stats.coupleMeet[0]++; } }
+      // --- story hooks: well formed, in range, about real people; a triangle is an admirer, a partnered target and the partner
+      const hk = {}; for (const h of g.hooks) {
+        hk[h.kind] = (hk[h.kind] || 0) + 1; stats.hooks++;
+        ck(HOOK_KINDS.has(h.kind) && typeof h.text === 'string' && h.text.length > 12 && !BAD.test(h.text) && h.people.length && h.people.every(m => m >= 0 && m < n) && typeof h.secret === 'boolean', `${tag}: bad hook ${JSON.stringify(h)}`);
+        if (h.kind === 'triangle') { const [a, b, c] = h.people; ck(g.relation(a, b)?.attitude === 'sweet-on' && g.profiles[b].partner === c && a !== c, `${tag}: triangle hook is not a triangle`); }
+        if (h.kind === 'camps') { const [a, b] = h.people, fa = g.groups.find(x => x.kind === 'faction' && x.leader === a && x.activity === 'taking_sides'), fb = g.groups.find(x => x.kind === 'faction' && x.leader === b && x.activity === 'taking_sides'); ck(g.relation(a, b)?.type === 'feud' && fa && fb && !fa.members.some(m => fb.members.includes(m)), `${tag}: camps overlap or lack a feud`); }
+      }
+      for (const k of ['exes', 'feud', 'favour', 'beloved', 'distrusted', 'newcomer']) ck(hk[k] >= 1, `${tag}: no ${k} hook`);
+      ck((hk.triangle || 0) <= 3 && (hk.exes || 0) <= S.LIMITS.exes[1] && (hk['passed-over'] || 0) <= S.LIMITS.passedOver[1] && (hk.feud || 0) <= 2 && (hk.lineage || 0) <= 2, `${tag}: too much drama ${JSON.stringify(hk)}`);
+      if (hk.triangle) stats.tri++; if (hk.camps) stats.camps++;
+      // --- any crew member can be dealt as the player: lines about them never break, rumours never name the teller or the asker
+      for (const p of P) {
+        const brief = g.playerBrief(p); stats.brief[1]++; if (brief.length) stats.brief[0]++; ck(brief.length <= 7 && brief.every(x => x.text && !BAD.test(x.text) && x.id !== p.id && g.relation(p, x.id)), `${tag}: playerBrief ${p.billet}`);
+        stats.cool[1]++; if (P.some(q => q !== p && g.trustBias(p, q) < -0.02)) stats.cool[0]++;
+        for (const h of g.rumours(p, { n: 3, asker: P[(p.id + 1) % n] })) ck(!h.people.includes(p.id) && !h.people.slice(0, 3).includes((p.id + 1) % n) && (!h.secret || g.profiles[p.id].gossip || h.people.some(x => STRONG.has(g.relation(p, x)?.type))), `${tag}: rumour ${h.kind} told by the wrong person`);
+      }
+      const you = P[seed % n]; for (const q of P) { const y = g.aboutYou(q, you), r = g.relation(q, you); ck(y === null || (typeof y === 'string' && y.length > 8 && !BAD.test(y)), `${tag}: aboutYou`); if (r && STRONG.has(r.type)) ck(y, `${tag}: no aboutYou line for a ${r.type}`); ck(!BAD.test(g.talkLine(q, you)), `${tag}: talkLine to the player`); if (r) ck(!BAD.test(g.storyOf(q, you)), `${tag}: storyOf`); }
       // UI text
       const d = g.describe(P[3]); ck(Array.isArray(d) && d.length >= 1 && d.every(l => typeof l === 'string'), `${tag}: describe`); ck(typeof g.talkLine(P[5], P[0]) === 'string' && g.talkLine(P[5], P[0]).length > 5, `${tag}: talkLine`);
     }
@@ -62,6 +95,12 @@ export async function socialTests(fail) {
   ck(stats.bridgeRatio.every(r => r > 2), `bridge circle density not above 2x baseline: min ${Math.min(...stats.bridgeRatio).toFixed(2)}`);
   ck(stats.cargoOut >= stats.cargoSeeds * 0.8, `cargo handlers lack outside friends in too many runs (${stats.cargoOut}/${stats.cargoSeeds})`);
   ck(stats.xrank[0] >= stats.xrank[1] * 0.7, `too few officers keep a cross-rank friend (${stats.xrank[0]}/${stats.xrank[1]})`);
+  ck(stats.convene[0] >= stats.convene[1] * 0.9, `too many gatherings never convene (${stats.convene[0]}/${stats.convene[1]})`);
+  ck(stats.coupleMeet[0] >= stats.coupleMeet[1] * 0.85, `couples miss their own time together (${stats.coupleMeet[0]}/${stats.coupleMeet[1]})`);
+  ck(stats.tri >= stats.graphs * 0.5 && stats.camps >= stats.graphs * 0.7, `too few triangles / camps (${stats.tri}, ${stats.camps} of ${stats.graphs})`);
+  ck(stats.brief[0] >= stats.brief[1] * 0.95, `too many billets with nobody they already know (${stats.brief[0]}/${stats.brief[1]})`);
+  ck(stats.cool[0] >= stats.cool[1] * 0.12 && stats.cool[0] <= stats.cool[1] * 0.4, `share of billets somebody starts cool towards out of range (${stats.cool[0]}/${stats.cool[1]})`);
+  ck(stats.oneWay >= stats.graphs * 15, `too few one-way attitudes (${stats.oneWay})`);
   ck(stats.offOfficer[0] / stats.offOfficer[1] > 0.6, `officers do not mostly mix with officers (${stats.offOfficer[0]}/${stats.offOfficer[1]})`);
 
   // determinism, seed variety, JSON round trip, dynamics
@@ -72,6 +111,9 @@ export async function socialTests(fail) {
   ck(jd > 0.5, `seeds 7 and 8 share too many strong ties (Jaccard distance ${jd.toFixed(2)})`);
   const rt = S.SocialGraph.fromJSON(JSON.parse(JSON.stringify(a1.g))); ck(JSON.stringify(rt.toJSON()) === JSON.stringify(a1.g.toJSON()), 'toJSON/fromJSON round trip differs');
   ck(rt.describe(4).join('|') === a1.g.describe(4).join('|'), 'describe differs after fromJSON');
+  ck(rt.hooks.length === a1.g.hooks.length && rt.hooks.length >= 6 && JSON.stringify(rt.playerBrief(9)) === JSON.stringify(a1.g.playerBrief(9)) && JSON.stringify(rt.rumours(9)) === JSON.stringify(a1.g.rumours(9)), 'hooks / playerBrief / rumours differ after fromJSON');
+  ck(JSON.stringify(a1.g.hooks) !== JSON.stringify(b.g.hooks), 'seeds 7 and 8 deal the same story hooks');
+  { const pl = a1.roster.people.find(p => a1.g.ties(p).some(r => r.type === 'rival' || r.type === 'feud')), foe = pl && a1.g.ties(pl).find(r => r.type === 'rival' || r.type === 'feud'); if (ck(foe, 'a rival to talk to')) ck(a1.g.talkLine(foe.b, pl).includes(a1.g.aboutYou(foe.b, pl)), 'talkLine does not close on the history with the asker'); }
   const P0 = a1.roster.people, x = P0.find(p => !a1.g.relation(p.id, 0) && p.id !== 0 && a1.g.profiles[p.id].strong < 7);
   if (ck(x, 'someone without a tie to the captain')) { for (let i = 0; i < 8; i++) { a1.g.onTrustEvent(x, P0[0], 0.06, 'test'); a1.g.tick(1); } ck(['friend', 'acquaintance'].includes(a1.g.relation(x, 0)?.type) && a1.g.relation(0, x), 'trust events did not create a tie'); ck(a1.g.events().length >= 1, 'no social events logged'); }
 
@@ -98,6 +140,6 @@ export async function socialTests(fail) {
     ck(fr.every(f => D.trust(f) > plain.trust(f)), 'friends of the player do not start warmer');
     ck(foes.length && foes.every(f => D.trust(f) < plain.trust(f)), 'rivals of the player do not start cooler');
   }
-  return { graphs: stats.graphs, medianMs: stats.ms, bridgeVsBaseline: +Math.min(...stats.bridgeRatio).toFixed(1), cargoOut: `${stats.cargoOut}/${stats.cargoSeeds}`, crossRank: `${stats.xrank[0]}/${stats.xrank[1]}`, seedDistance: stats.dist, friendsTogether: stats.together };
+  return { graphs: stats.graphs, medianMs: stats.ms, bridgeVsBaseline: +Math.min(...stats.bridgeRatio).toFixed(1), cargoOut: `${stats.cargoOut}/${stats.cargoSeeds}`, crossRank: `${stats.xrank[0]}/${stats.xrank[1]}`, seedDistance: stats.dist, friendsTogether: stats.together, convene: `${stats.convene[0]}/${stats.convene[1]}`, coupleMeet: `${stats.coupleMeet[0]}/${stats.coupleMeet[1]}`, triangleRuns: stats.tri, campRuns: stats.camps, hooksPerRun: +(stats.hooks / stats.graphs).toFixed(1), billetsWithBrief: `${stats.brief[0]}/${stats.brief[1]}`, billetsSomeoneCool: `${stats.cool[0]}/${stats.cool[1]}`, oneWayPerRun: +(stats.oneWay / stats.graphs).toFixed(1) };
 }
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) { const errs = []; const r = await socialTests(m => errs.push(m)); console.log(errs.length ? errs.slice(0, 40).join('\n') + (errs.length > 40 ? `\n... ${errs.length} failures` : '') : 'social OK ' + JSON.stringify(r)); process.exit(errs.length ? 1 : 0); }

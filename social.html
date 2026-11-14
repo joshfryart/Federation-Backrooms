@@ -22,7 +22,7 @@ table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px
 <p>Every run's crew gets its own social life (js/social.js, docs/social.md): mess tables, department cells, route crews, hobby groups, cliques, couples, mentors, rivals, feuds, gossip, a favour book, the one everyone likes and the one nobody trusts. Ties come from who works, eats and sleeps near whom (department, watch, duty rooms, deck, rank) plus seeded chemistry. Matrix: rows/columns sorted by department then watch; green = positive tie (brighter = stronger), red = negative, gold = partner. Click a cell or a name.</p>
 <div class="ctl"><label>Seed <input id="seed" type="number" style="width:90px"></label><button id="go">Deal</button><label>Groups <select id="kind"><option value="">all but tables</option><option value="*">all</option></select></label><button id="dump">Download JSON</button><span id="stats" style="font-family:var(--f-m);font-size:11px;color:#9fb0c6"></span></div>
 <div class="grid"><div><canvas id="mx" width="560" height="560"></canvas><h2>Strongest ties</h2><table><thead><tr><th>Pair</th><th>Tie</th><th>Why</th></tr></thead><tbody id="ties"></tbody></table></div>
-<div><h2>Person</h2><div class="card" id="who">Click someone.</div><h2>Groups</h2><div class="groups" id="groups"></div></div></div>
+<div><h2>Person</h2><div class="card" id="who">Click someone.</div><h2>Story hooks</h2><div class="card" id="hooks"></div><h2>Groups</h2><div class="groups" id="groups"></div></div></div>
 <script type="module">
 import { SHIPS } from './js/ships.js';
 import { makeComplement, DEPARTMENTS, DIVISION, DEPT } from './js/crew.js';
@@ -55,6 +55,7 @@ cv.onclick = (e) => { const r = cv.getBoundingClientRect(), x = Math.floor((e.cl
 const all = []; for (const l of g.out) for (const r of l.values()) if (r.a < r.b && (REL_TYPES[r.type].strong || r.type === 'feud' || r.type === 'rival')) all.push(r);
 all.sort((a, b) => Math.abs(b.valence) * b.strength - Math.abs(a.valence) * a.strength || a.a - b.a);
 $('ties').innerHTML = all.slice(0, 40).map(r => `<tr><td>${chip(r.a)} ${chip(r.b)}</td><td class="${r.valence < 0 ? 'neg' : 'pos'}">${REL_TYPES[r.type].label}${r.visible ? '' : ' (secret)'} · ${r.strength.toFixed(2)}</td><td>${esc(r.reason)}</td></tr>`).join('');
+$('hooks').innerHTML = g.hooks.map(h => `<div><small>${h.kind}${h.secret ? ' (secret)' : ''}</small> ${esc(h.text)} ${h.people.slice(0, 3).map(chip).join('')}</div>`).join('') || 'none';
 // groups
 const drawGroups = () => { const k = $('kind').value, tables = ['department-cell', 'watch-mess', 'officers-table'];
   $('groups').innerHTML = g.groups.filter(x => k === '*' || (k ? x.kind === k : !tables.includes(x.kind))).map(x => `<div class="card"><h4>${esc(x.name)}</h4><small>${x.kind} · cohesion ${x.cohesion.toFixed(2)}${x.room ? ` · ${x.room}` : ''}${x.site ? ` deck ${x.site.deckNo}` : ''}${x.meet ? ` · ${hhmm(x.meet.from)}–${hhmm(x.meet.to)} (${x.meet.watch} +${x.meet.local[0]}h)` : ''}</small><div>${x.members.map(chip).join('')}</div></div>`).join(''); };
@@ -63,8 +64,8 @@ $('kind').onchange = drawGroups; drawGroups();
 function show(a, b = null) {
   const p = P[a], pr = g.profile(a), rel = b != null && b !== a ? g.relation(a, b) : null;
   $('who').innerHTML = `<h4>${esc(p.full)} — ${esc(p.title)}</h4>` + g.describe(a).map(l => `<div>${esc(l)}</div>`).join('') +
-    (rel ? `<div><b>${esc(p.short)} → ${esc(P[b].short)}:</b> ${REL_TYPES[rel.type].label}${rel.attitude ? ' + ' + rel.attitude : ''} · strength ${rel.strength} · valence ${rel.valence} · ${esc(rel.reason)}${rel.shared.length ? ' · shares ' + rel.shared.join(', ') : ''}</div>` : b != null && b !== a ? `<div>No tie to ${esc(P[b].short)} (affinity ${g.affinity(a, b).toFixed(2)})</div>` : '') +
-    `<div>All groups (incl. tables): ${g.groupsOf(a).map(x => esc(x.name)).join(' · ')}</div><div>Would seek out now: ${g.seekTargets(a).slice(0, 5).map(t => chip(t.id)).join('')}</div><div class="say">"${esc(g.talkLine(a))}"</div>`;
+    (rel ? `<div><b>${esc(p.short)} → ${esc(P[b].short)}:</b> ${REL_TYPES[rel.type].label}${rel.attitude ? ' + ' + rel.attitude : ''} · strength ${rel.strength} · valence ${rel.valence} · ${esc(rel.reason)}${rel.shared.length ? ' · shares ' + rel.shared.join(', ') : ''}</div><div>${esc(g.storyOf(a, b))}</div>${g.aboutYou(a, b) ? `<div class="say">to ${esc(P[b].family)}: "${esc(g.aboutYou(a, b))}"</div>` : ''}` : b != null && b !== a ? `<div>No tie to ${esc(P[b].short)} (affinity ${g.affinity(a, b).toFixed(2)})</div>` : '') +
+    `<div>All groups (incl. tables): ${g.groupsOf(a).map(x => esc(x.name)).join(' · ')}</div><div>Would seek out now: ${g.seekTargets(a).slice(0, 5).map(t => chip(t.id)).join('')}</div><div class="say">"${esc(g.talkLine(a))}"</div><div><b>If dealt as the player:</b> ${g.playerBrief(a).map(x => esc(x.text)).join(' ') || 'nobody to speak of'}</div><div><b>Passes on:</b> ${g.rumours(a, { n: 3 }).map(h => esc(h.text)).join(' ') || 'nothing'}</div>`;
   document.querySelectorAll('.pc').forEach(e => e.classList.toggle('sel', +e.dataset.p === a));
 }
 document.addEventListener('click', (e) => { const t = e.target.closest('.pc'); if (t) show(+t.dataset.p); });
