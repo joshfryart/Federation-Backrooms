@@ -67,7 +67,8 @@ export async function walkBrowser(page, fail) {
       if (pair && rm) { const [a, b] = pair, o = { room: rm.r.type, spot: rm.spot, tx: rm.r.x + (rm.r.w >> 1), ty: rm.r.y + (rm.r.h >> 1), free: true }, tb = g.simTileFor(b, o), [bx, bz] = w.center(tb[0], tb[1]);
         const fake = { kind: 'crew', simmed: true, person: b, room: o.room, spot: o.spot, x: bx, z: bz, simProp: tb.prop, mesh: null }; g.ents.push(fake); const ta = g.simTileFor(a, o); g.ents.splice(g.ents.indexOf(fake), 1);
         const alone = g.simTileFor(a, { ...o, free: false });
-        out.friends = { prop: !!tb.prop, same: !!ta && ta.prop === tb.prop, apart: ta[0] !== tb[0] || ta[1] !== tb[1], inRect: inRect(ta, rm.r), alone: !!alone }; } }
+        const room = tb.prop ? [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const x = tb.prop.tx + dx, y = tb.prop.ty + dy; return (x !== tb[0] || y !== tb[1]) && d.grid[y]?.[x] === 0 && !w.isTube(x, y) && d.room[y][x] === o.room && inRect([x, y], rm.r) && !g.ents.some(q => { if (!q.simmed || q.board || q.walk?.vanish) return false; const [qx, qy] = q.walk && !q.walk.opts.point ? [q.walk.tx, q.walk.ty] : w.tile(q.x, q.z); return qx === x && qy === y; }); }) : false;   // another free tile at the friend's furniture
+        out.friends = { prop: !!tb.prop, room, same: !!ta && ta.prop === tb.prop, apart: ta[0] !== tb[0] || ta[1] !== tb[1], inRect: inRect(ta, rm.r), alone: !!alone }; } }
     out.bodies = { n: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, sim: S.bodies(here).size };
     return out;
   });
@@ -78,7 +79,7 @@ export async function walkBrowser(page, fail) {
   if (!(A && A.appeared && A.inCar && A.shutAtSpawn && !A.lost && A.jump < 0.6 && A.inRoom)) fail('npc arrives by lift ' + JSON.stringify(A));
   if (!(S && (!S.door || (S.shut && S.pried && S.through)))) fail('npc at a sealed door ' + JSON.stringify(S));
   if (r.inst && !r.inst.every(Boolean)) fail('npc room instance ' + JSON.stringify(r.inst));
-  if (F && !(F.inRect && F.apart && (!F.prop || F.same))) fail('npc sits with friends ' + JSON.stringify(F));
+  if (F && !(F.inRect && F.apart && (!F.prop || !F.room || F.same))) fail('npc sits with friends ' + JSON.stringify(F));
   if (!(r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim ' + JSON.stringify(r.bodies));
   return r;
 }
