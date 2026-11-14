@@ -73,7 +73,7 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 ## 2. ENVIRONMENT
 - [x] Wall/ceiling variety: ribbed bulkheads, window frames, hanging cables, conduit, hazard thresholds, burnt panels, dropped ceiling tiles. Still open: vents with fans, ceiling texture variants.
 - [x] Per-ship material identity (corridor wall/floor by hull class) and room-specific floor/wall materials.
-- [ ] Doors: actual sliding doors (open/close) instead of static frames; sealed-door rows are decals only.
+- [x] Doors: sliding leaves (`World.slideDoors`) done. Blackout (nominal) seals them: solid for the player (`World.resolve`), hold E ~3 s to pry (`pryDoor`), stays open 15 s. Still open: NPC paths ignore sealed doors, red-alert lockdown, door sounds per material.
 - [ ] Taller/unusual rooms (atrium, shuttlebay with high ceiling) — walls are fixed at 3.2 m, only low ceilings are supported today.
 - [ ] Real windows to space with parallax starfield/planet; viewscreen on the bridge should animate.
 - [x] Lighting: AO baked into the generated sets, room-specific light colours, emergency lamps, vent light shafts. Still open: emergency lamps do not cast real light in a blackout (glow and halo only).

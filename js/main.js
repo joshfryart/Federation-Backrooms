@@ -1115,6 +1115,11 @@ function step(dt, t) {
   if (NOM()) G.nav?.frame(dt);   // route tick 0.12 s inside; minimap / compass 30 Hz; floor chevrons + beacon
 
   // environment flicker / lights
+  world.setDoorLock(NOM() && world.powerTarget === 0);   // blackout seals the doors; hold E to pry one open
+  { const sd = NOM() && keys.KeyE && P.grounded && !(P.clung > 0) ? world.pryDoor(P.x, P.z, dt) : -1;
+    if (sd >= 0) { noiseNow = Math.max(noiseNow, 7); G.pryT = (G.pryT || 0) - dt; if (G.pryT <= 0) { G.pryT = 0.5; sound.noise?.(0.2, 0.08, 400, 1, 'bandpass'); } if (sd >= 1) G.say('You force the door open.', 'good'); }
+    else if (NOM() && world.sealedDoorNear(P.x, P.z)) { if (!(G.sealMsgT > 0)) { G.say('Door sealed (no power). Hold E to pry it open.', 'warn'); G.sealMsgT = 6; } }
+    if (G.sealMsgT > 0) G.sealMsgT -= dt; }
   world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z })), (d) => { if (d < 9) { sound.noise?.(0.14, Math.max(0.02, 0.1 - d * 0.01), 1800, 1, 'bandpass'); } });
   lamp.position.set(P.x, 2.4, P.z);
   flickT -= dt;

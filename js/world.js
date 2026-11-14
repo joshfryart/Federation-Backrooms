@@ -582,6 +582,7 @@ export class World {
         if (prop && (p.y || 0) >= this.topAt(x, y) - 0.03) continue;   // standing on / passing over a climbable prop
         const half = prop ? TS * 0.36 : TS / 2; push(cx, cz, half, half);
       }
+      if (this.doorLock && this.doors) for (const d of this.doors) { if (d.open > 0.5 || Math.abs(d.f.x - p.x) > TS || Math.abs(d.f.z - p.z) > TS) continue; d.f.ax ? push(d.f.x, d.f.z, 0.06, (TS - 0.52) / 2) : push(d.f.x, d.f.z, (TS - 0.52) / 2, 0.06); }   // sealed doors (power out) are solid
     }
   }
 
@@ -1211,6 +1212,11 @@ export class World {
   setFancy(on) { this.cones.visible = on; }
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
+  setDoorLock(on) { if (this.doorLock === on) return; this.doorLock = on; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }
+  // nearest sealed door within reach of (px, pz), or null
+  sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
+  // hold E at a sealed door: ~3 s to force it, then it stays open 15 s. Returns progress 0..1 (or -1 when nothing to pry)
+  pryDoor(px, pz, dt) { const d = this.sealedDoorNear(px, pz); if (!d) return -1; d.prying = true; d.pry = (d.pry || 0) + dt; if (d.pry >= 3) { d.pried = 15; d.pry = 0; return 1; } return d.pry / 3; }
 
   setLiftOpen(open, keepWalkable = false) {
     this.liftStatus.material.color.set(open ? 0x40ff70 : 0xff3030);
@@ -1266,8 +1272,9 @@ export class World {
   slideDoors(dt, px, pz, who = [], onOpen = null) {
     if (!this.doors) return; const k = Math.min(1, dt * 7);
     for (const d of this.doors) {
-      const dx = d.f.x - px, dz = d.f.z - pz; let near = dx * dx + dz * dz < 2.7 * 2.7;
-      if (!near) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
+      if (d.pried > 0) d.pried -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
+      const dx = d.f.x - px, dz = d.f.z - pz; const sealed = this.doorLock && !(d.pried > 0); let near = !sealed && dx * dx + dz * dz < 2.7 * 2.7;
+      if (!near && !sealed) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
       if (near && !d.near && dx * dx + dz * dz < 14 * 14) onOpen?.(Math.hypot(dx, dz)); d.near = near;
       const target = near ? 1 : 0; if (Math.abs(d.open - target) < 0.002) continue; d.open += (target - d.open) * k;
       const o = d.open * (d.hw - 0.04); d.L.position.z = -d.hw / 2 - o; d.R.position.z = d.hw / 2 + o;
