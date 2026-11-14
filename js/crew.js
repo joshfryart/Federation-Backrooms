@@ -122,7 +122,7 @@ export function hardwareSites(data) {
   for (const s of SYSTEMS) {
     if (s.host === 'junction') continue;
     if (s.host === 'lift') { out.push({ sys: s.id, tx: data.exit[0], ty: data.exit[1], kind: 'lift' }); continue; }
-    const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : [kind];
+    const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : kind === 'console' ? ['console', 'helm'] : [kind];   // the bridge's forward-port console is the FLT-1 helm station (js/gen.js)
     const p = data.props.find(p => kinds.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !out.some(o => o.tx === p.tx && o.ty === p.ty));
     if (p) out.push({ sys: s.id, tx: p.tx, ty: p.ty, kind: p.kind });
   }

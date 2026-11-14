@@ -134,7 +134,7 @@ export function generate(deck, seed, opts = {}) {
     else interior.push([cx, cy]);
     const freeIn = () => interior.filter(([x, y]) => grid[y][x] === 0 && !reserved.has(x + ',' + y));
     switch (r.type) {
-      case 'bridge': put(cx, cy, 'chair', { rot: 0 }); put(ix0, iy0, 'helm', { rot: 0 }); put(ix1, iy0, 'console', { rot: 0 }); put(cx, iy0, 'viewscreen', { rot: 0 }); break;   // helm forward port (FLT-1), facing the viewscreen
+      case 'bridge': put(cx, cy, 'chair', { rot: 0 }); put(ix1, iy0, 'console', { rot: 0 }); put(ix0, iy0, 'helm', { rot: 0 }); put(cx, iy0, 'viewscreen', { rot: 0 }); break;   // helm forward port (FLT-1), facing the viewscreen; the console comes first so crew.js hosts alert on it and helm on the helm
       case 'engineering': {
         put(cx, cy, 'warpcore'); put(ix0, iy0, 'console'); put(ix1, iy1, 'console');
         put(cx, cy - 1, 'reactorstation', { rot: Math.PI }); reserved.add(cx + ',' + (cy - 2));   // ENG-3 beside the core, its back to it: the operator looks over the desk at the core
