@@ -623,7 +623,8 @@ function setupDuty() {
     else if (ev.type === 'consequence') g(`${ev.name} is ${ev.status} — neglected maintenance.`, 'warn');
     else if (ev.type === 'missed' && !ev.shiftEnd) g(`Missed: ${ev.task}. ${ev.neglect}`, 'warn');
     else if (ev.type === 'jobdone') { g(`${ev.who} finished ${ev.label} (${ev.quality}).`, 'good'); if (ev.job) orderEnd(ev.job); }
-    else if (ev.type === 'ordered') { g(`${ev.who} takes the job: ${ev.label}.`, 'comp'); if (ev.job) orderWalk(ev.job); }
+    else if (ev.type === 'ordered') { if (ev.job) orderWalk(ev.job); g(`${ev.who} takes the job: ${ev.label}.${ev.job ? orderEta(ev.job) : ''}`, 'comp'); }
+    else if (ev.type === 'atjob') g(`${ev.who} is at the job: ${ev.label}.`, 'comp');
   });
 }
 // a refused order / favour shows on the body when it is in sight on this deck: a head shake, and the line spoken aloud when close
@@ -635,6 +636,13 @@ function refuseReact(p, text) {
 // ordered / delegated jobs (js/duty.js): the person goes to the job room (sim priority 2, activity 'ordered': walks there on this deck, rides
 // the lift from another) and the job's clock only runs once they are there (Duty.atJob); done = released back to their schedule
 function orderWalk(j) { const p = j.person, l = j.loop; if (!G.sim || !l?.room || !G.plan?.[l.room]) return; G.sim.redirect(p, l.room, l.spot || 'door', j.left + JOB_WAIT + 60, 'ordered', { prio: 2 }); }
+// how long an ordered person needs to get to the job (the sim's walk / lift estimate): told to the player with the order, since a
+// cross-deck order takes 30-90 s of real walking and riding (docs/pathing.md iteration 3)
+function orderEta(j) {
+  const S = G.sim, l = j.loop; if (!S?.estimate || !l?.room || !G.plan?.[l.room]) return ''; const s = S.estimate(j.person, l.room); if (s == null) return '';
+  const wh = S.where(j.person), deck = wh?.deckNo && wh.deckNo !== G.shipDeck + 1 ? ` from deck ${wh.deckNo}` : wh?.transit && wh.deckNo == null ? ' from the lift' : '';
+  return s < 4 ? ' "On it."' : ` "On my way${deck}, ${s < 25 ? 'a few seconds' : s < 50 ? 'half a minute' : s < 100 ? 'about a minute' : 'a couple of minutes'}."`;
+}
 function orderAt(j) { const p = j.person, l = j.loop, S = G.sim; if (!S || !l?.room || !G.plan?.[l.room]) return true; const wh = S.where(p); if (!wh || wh.transit || wh.room !== l.room) return false; const e = ents.find(x => x.simmed && x.person === p); if (!e) return wh.deckNo !== G.shipDeck + 1;   /* on the player's deck: wait for the body (it steps out of the lift / appears) */ return (!e.walk && !!e.simKey?.startsWith(l.room + '|')); }   // a body on this deck has walked all the way in (simBodies re-plans every 1.5 s)
 function orderEnd(j) { const p = j.person, S = G.sim; if (!S || S.overrideAt(p, 2)?.activity !== 'ordered') return; S.release(p, 2); const next = G.duty?.jobs.find(x => x.person === p); if (next) orderWalk(next); }
 function nomTick(dt) {

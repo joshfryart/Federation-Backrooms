@@ -9,6 +9,7 @@
 //   sim.onDeck(deckNo)      [{ person, room, spot, activity, tx, ty }] people standing on that deck right now
 //   sim.bodies(deckNo)      Map id -> { person, room, spot, activity, tx, ty, free, walking } for the body layer: everyone standing on the deck
 //                           plus those walking between two rooms of it (already listed at their destination); lift riders are on neither deck
+//   sim.estimate(p, room)   seconds to get to that room from here (walk / lift legs as tick() plans them), 0 = there already
 //   sim.setPlayer(p)        the player is not simulated
 //   sim.redirect(p, room, spot, secs, activity, { prio, site })  priority overrides (evac 3 / orders 2 / repair 1); overrideOf(p), release(p[, prio])
 //   Pace (js/pace.js): schedule blocks follow ShipClock.localHour, so the clock's pace rate stretches the schedule; transits stay real seconds.
@@ -80,6 +81,17 @@ export class CrewSim {
   bodies(deckNo) {
     const out = new Map(); for (const s of this.st.values()) { const t = s.transit; if (s.deckNo !== deckNo || t?.lift || DEAD.has(s.person.status)) continue; const a = t ? { ...t, tx: t.to.tx, ty: t.to.ty } : s; out.set(s.person.id, { person: s.person, room: a.room, spot: a.spot, activity: a.activity, tx: a.tx, ty: a.ty, free: !!a.free, walking: !!t }); }
     return out;
+  }
+  // seconds this person needs to get to `room` from where they are now (the same walk / lift estimate tick() uses; 0 = already there,
+  // null = unknown): js/main.js tells the player how long an ordered person will take ("about a minute")
+  estimate(p, room, site = null) {
+    const s = this.st.get(p.id); if (!s) return null; const t = s.transit, dest = site || this.site(p, room, t?.to?.deckNo ?? s.deckNo, { room });
+    if (!t && s.room === room && dest.deckNo === s.deckNo) return 0;
+    const at = t ? (t.lift ? { deckNo: t.to.deckNo, tx: this.lifts?.[t.to.deckNo - 1]?.[0] ?? t.to.tx, ty: this.lifts?.[t.to.deckNo - 1]?.[1] ?? t.to.ty } : { deckNo: s.deckNo, tx: t.to.tx, ty: t.to.ty }) : s;
+    const pre = t ? Math.max(0, t.eta) : 0, walk = (ax, ay, bx, by) => Math.min(WALK_MAX, Math.max(3, (Math.abs(bx - ax) + Math.abs(by - ay)) * TILE_S || WALK_TIME));
+    if (dest.deckNo === at.deckNo) return pre + walk(at.tx, at.ty, dest.tx, dest.ty);
+    const L0 = this.lifts?.[at.deckNo - 1], L1 = this.lifts?.[dest.deckNo - 1];
+    return pre + (L0 ? walk(at.tx, at.ty, L0[0], L0[1]) : 0) + LIFT_BASE + LIFT_PER_DECK * Math.abs(dest.deckNo - at.deckNo) + 1 + (L1 ? walk(L1[0], L1[1], dest.tx, dest.ty) : 0);
   }
   inTransit() { return [...this.st.values()].filter(s => s.transit).map(s => ({ person: s.person, from: s.transit.from, to: s.transit.to, lift: s.transit.lift })); }
   // the person is removed from the abstract sim (died, or became the player)

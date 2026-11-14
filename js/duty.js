@@ -9,7 +9,8 @@
 //     .tick(dt)  .shiftEnd()  .firstTask()  .repairRows = () => rows (js/repair.js, shown on the board)
 //     .perform(loopId, quality)  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)
 //     .board()   duty + task board rows for the HUD     .ledger / .debt / .chain / .trust(person)
-//     .atJob = (job) => bool   optional (js/main.js): an ordered job's clock only runs once the person is in the job room ('ordered' / 'jobdone' events carry the job)
+//     .atJob = (job) => bool   optional (js/main.js): an ordered job's clock only runs once the person is in the job room ('ordered' / 'jobdone' events carry the job;
+//                              'atjob' fires once when they get there after walking / riding more than 3 s)
 import { hash, hash01 } from './clock.js';
 import { RANK_SHORT } from './crew.js';
 import { PACES } from './pace.js';
@@ -71,7 +72,7 @@ export class Duty {
     for (const l of this.loops) if (l.state === 'due' && this.t - l.dueAt > l.period * 0.9) this._miss(l);   // never got to it: a gentle skip, the round comes round again
     for (const t of this.tasks) if (t.state === 'pending' && this.t >= t.at_s) { t.state = 'active'; this.emit({ type: 'task', task: t.task, id: t.id, room: t.room, first: t === this.firstTask() }); }   // open until the shift ends
     if (this.busy) { this.busy.left -= dt; if (this.place.room !== this.busy.loop.room && this.busy.loop.room !== 'any') { const l = this.busy.loop; this.busy = null; this._finish(l, 'skipped', { walkedOff: true }); } else if (this.busy.left <= 0) { const b = this.busy; this.busy = null; this._finish(b.loop, b.q); } }
-    for (const j of this.jobs.slice()) { if (this.atJob && !this.atJob(j) && (j.wait = (j.wait || 0) + dt) < JOB_WAIT) continue; j.left -= dt; if (j.left <= 0) { this.jobs.splice(this.jobs.indexOf(j), 1); this._jobDone(j); } }   // the clock runs once they are at the job (atJob hook, js/main.js), or after JOB_WAIT s on the way
+    for (const j of this.jobs.slice()) { if (this.atJob && !this.atJob(j) && (j.wait = (j.wait || 0) + dt) < JOB_WAIT) continue; if (!j.there) { j.there = true; if (j.wait > 3) this.emit({ type: 'atjob', who: j.person.short, person: j.person, label: j.loop.label, job: j, waited: j.wait }); } j.left -= dt; if (j.left <= 0) { this.jobs.splice(this.jobs.indexOf(j), 1); this._jobDone(j); } }   // the clock runs once they are at the job (atJob hook, js/main.js), or after JOB_WAIT s on the way
     this.audit -= dt; if (this.audit <= 0) { this.audit = 70 + hash01('audit', this.seed, Math.floor(this.t)) * 60; this._audit(); }
   }
 
