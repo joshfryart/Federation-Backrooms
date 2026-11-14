@@ -56,6 +56,7 @@ await combatTests(fail);
     arboretum: ['growbed', 'nutrient_tanks', 'tree'], lab: ['charttable', 'spectrometer'], armory: ['issuecounter'], gym: ['sparring_set', 'dumbbell_rack'], laundry: ['dryer'], lounge: [...WANT.lounge, 'arcade'],
     readyroom: ['briefing_table'], datacore: ['commsstation'], workshop: [...WANT.workshop, 'drill_press'], airlock: ['airlock_doors'] });
   const rooms = {}, has = {}, D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]]; let levels = 0, stranded = 0, big5 = 0, big5full = 0, exitInRoom = 0;
+  const BIGSET = { lab: ['charttable', 'spectrometer', 'fumehood', 'sensorstation'], shuttlebay: ['workpod', 'maint_stand'], gym: ['sparring_set', 'dumbbell_rack', 'exercise_bike', 'rower'], lounge: ['bar', 'pool_table', 'card_table', 'arcade'], datacore: ['relayrack', 'commsstation'], workshop: ['knee_mill', 'drill_press'] }, bigN = {}, bigFull = {};   // 5x5+ rooms get the batch 5-11 set
   for (let i = 0; i < 320; i++) {
     const ship = SHIPS[i % SHIPS.length], sd = i % ship.decks, d = generate(sd, i * 4057 + 17, deckOptions(ship, sd, { require: i % 2 === 0 })); levels++;
     const W = d.W, seen = new Uint8Array(W * d.H), q = [d.start]; seen[d.start[0] + d.start[1] * W] = 1;
@@ -65,12 +66,14 @@ await combatTests(fail);
       rooms[r.type] = (rooms[r.type] || 0) + 1; const inR = d.props.filter(p => p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h);
       for (const k of new Set(inR.map(p => p.kind))) has[r.type + '/' + k] = (has[r.type + '/' + k] || 0) + 1;
       for (const p of inR) if (p.wall && !D4.some(([a, b]) => seen[p.tx + a + (p.ty + b) * W])) stranded++;   // wall-placed props always keep a reachable side
+      if (BIGSET[r.type] && r.w >= 5 && r.h >= 5) { bigN[r.type] = (bigN[r.type] || 0) + 1; if (BIGSET[r.type].every(k => inR.some(p => p.kind === k))) bigFull[r.type] = (bigFull[r.type] || 0) + 1; }
       if (r.type === 'sickbay' && r.w >= 5 && r.h >= 5) { big5++; if (['surgical_table', 'exam_couch', 'steriliser', 'med_dispenser'].every(k => inR.some(p => p.kind === k))) big5full++; }
     }
   }
   const low = []; for (const [room, ks] of Object.entries(WANT)) for (const k of ks) { const n = rooms[room] || 0, h = has[room + '/' + k] || 0; if (n >= 4 && h < n * (room === 'plant' ? 0.25 : 0.6)) low.push(`${room}/${k} ${h}/${n}`); }
-  console.log(`room props: ${levels} levels, ${Object.keys(has).length} room/prop pairs, wall props stranded ${stranded}, big sickbays with the medical set ${big5full}/${big5}, lift in a room ${exitInRoom}${low.length ? ', too rare: ' + low.join('; ') : ''}`);
-  if (low.length || stranded || exitInRoom || big5full < big5) fail('room props');
+  const bigLow = Object.keys(bigN).filter(t => (bigFull[t] || 0) < bigN[t] * 0.9).map(t => `${t} ${bigFull[t] || 0}/${bigN[t]}`);
+  console.log(`room props: ${levels} levels, ${Object.keys(has).length} room/prop pairs, wall props stranded ${stranded}, big sickbays with the medical set ${big5full}/${big5}, big rooms with their set ${Object.keys(bigN).map(t => t + ' ' + (bigFull[t] || 0) + '/' + bigN[t]).join(' ')}, lift in a room ${exitInRoom}${low.length ? ', too rare: ' + low.join('; ') : ''}${bigLow.length ? ', big rooms short: ' + bigLow.join('; ') : ''}`);
+  if (low.length || stranded || exitInRoom || big5full < big5 || bigLow.length) fail('room props');
 }
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });

@@ -137,6 +137,8 @@ export function generate(deck, seed, opts = {}) {
     return null;
   };
   const has = (r, kind) => props.some(p => p.kind === kind && inRect(r, p.tx, p.ty));
+  // on a wall if the edge ring has room, else (rooms of more than one interior tile whose ring is all doorways) on a free interior tile
+  const wallPut = (r, interior, kind, o = {}) => ringPut(r, kind, o) || (interior.length > 1 ? anyPut(r, interior, kind) : null);
   for (const r of rooms) {
     const ix0 = r.x + 1, iy0 = r.y + 1, ix1 = r.x + r.w - 2, iy1 = r.y + r.h - 2;
     const cx = r.x + (r.w >> 1), cy = r.y + (r.h >> 1);
@@ -210,34 +212,34 @@ export function generate(deck, seed, opts = {}) {
       case 'arboretum': {   // SCI-1 grow beds in rows (long axis x, every other row a walkway), trees at the rim, SCI-6 dosing tanks on a wall
         let beds = 0; for (const [x, y] of interior) if ((y - iy0) % 2 === 0 && beds < 6 && prnd() < 0.9) { if (safePut(r, x, y, 'growbed', { rot: prnd() < 0.5 ? 0 : Math.PI })) beds++; } else if ((y - iy0) % 2 === 1 && prnd() < 0.3) safePut(r, x, y, 'tree');
         for (let i = 0; i < 2; i++) ringPut(r, 'tree', { only: 'corner', free: true }); if (!has(r, 'tree')) anyPut(r, interior, 'tree') || ringPut(r, 'tree');   // SYSTEMS.hydro is hosted on a tree
-        ringPut(r, 'nutrient_tanks'); if (prnd() < 0.5) ringPut(r, 'specimen_tank');
+        wallPut(r, interior, 'nutrient_tanks'); if (prnd() < 0.5) ringPut(r, 'specimen_tank');
         break; }
       // rooms from the ship inventory: laid out from the existing prop kinds (a 3×3 room gets one centrepiece, bigger ones a pattern)
       case 'readyroom': put(cx, cy, 'briefing_table', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); ringPut(r, 'desk'); break;   // CMD-2 at the centre, the desk on a wall
       case 'brig': for (const [x, y] of interior) if ((x + y) % 2 === 0 && prnd() < 0.8) put(x, y, prnd() < 0.5 ? 'cellfield' : 'cell');   // SEC-2 field cells among the barred ones
         ringPut(r, 'secdesk', { door: true }); ringPut(r, 'scan_arch', { door: true, along: true }); break;   // SEC-1 and the SEC-6 scanner arch by the entrance
-      case 'armory': put(cx, cy, 'weaponrack'); ringPut(r, 'issuecounter', { door: true }); ringPut(r, 'chargerack', { only: 'corner', free: true }); ringPut(r, 'desk'); ringPut(r, 'workbench'); break;   // SEC-7, SEC-3
+      case 'armory': put(cx, cy, 'weaponrack'); wallPut(r, interior, 'issuecounter', { door: true }); ringPut(r, 'chargerack', { only: 'corner', free: true }); ringPut(r, 'desk'); ringPut(r, 'workbench'); break;   // SEC-7, SEC-3
       case 'gym': {   // SVC-11 sparring mat first (the 'mat' spot), then the machines (SVC-18) on a checkerboard; rack and dummy on the walls
         const G = ['sparring_set', 'treadmill', 'exercise_bike', 'rower', 'weightbench', 'mat']; let i = 0;
         for (const [x, y] of interior) if ((x + y) % 2 === (cx + cy) % 2 && safePut(r, x, y, G[i % G.length], { rot: prnd() < 0.5 ? 0 : Math.PI })) i++;
-        ringPut(r, 'dumbbell_rack'); for (const k of ['treadmill', 'exercise_bike']) if (!has(r, k)) ringPut(r, k, { along: k === 'treadmill' }); ringPut(r, 'grapple_dummy', { only: 'corner', free: true });
+        wallPut(r, interior, 'dumbbell_rack'); for (const k of ['treadmill', 'exercise_bike']) if (!has(r, k)) ringPut(r, k, { along: k === 'treadmill' }); ringPut(r, 'grapple_dummy', { only: 'corner', free: true });
         break; }
       case 'lab': for (const [x, y] of interior) if (x === cx && y === cy) put(x, y, 'charttable', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); else if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : 'labbench');   // SCI-3 chart table at the centre
-        for (const k of ['spectrometer', 'sensorstation', 'fumehood']) ringPut(r, k); ringPut(r, 'samplefridge', { only: 'corner', free: true }); ringPut(r, 'specimen_tank'); break;   // SCI-4, SCI-8, SCI-2, SCI-9, SCI-5 on the walls
-      case 'laundry': put(cx, cy, 'washer'); ringPut(r, 'dryer'); ringPut(r, 'folding_table', { corner: true, free: true }); ringPut(r, 'linen_cart', { only: 'corner', free: true }); break;   // SVC-15
-      case 'lounge': ringPut(r, 'bar'); ringPut(r, 'arcade');   // SVC-3 bar (+ back bar) on one wall, SVC-16 games
+        for (const k of ['spectrometer', 'sensorstation', 'fumehood']) wallPut(r, interior, k); ringPut(r, 'samplefridge', { only: 'corner', free: true }); ringPut(r, 'specimen_tank'); break;   // SCI-4, SCI-8, SCI-2, SCI-9, SCI-5 on the walls
+      case 'laundry': put(cx, cy, 'washer'); wallPut(r, interior, 'dryer'); ringPut(r, 'folding_table', { corner: true, free: true }); ringPut(r, 'linen_cart', { only: 'corner', free: true }); break;   // SVC-15
+      case 'lounge': ringPut(r, 'bar'); wallPut(r, interior, 'arcade');   // SVC-3 bar (+ back bar) on one wall, SVC-16 games
         if (interior.length >= 3) safePut(r, cx, cy, 'pool_table', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); if (interior.length >= 5) anyPut(r, interior, 'card_table', { min: [cx, cy, 2] });
         for (const [x, y] of interior) if (grid[y][x] === 0 && (x + y) % 2 === 0) safePut(r, x, y, (x * 3 + y) % 4 === 0 ? 'table' : (x + 2 * y) % 3 === 0 ? 'lonechair' : 'sofa'); break;
       case 'workshop': { let lathes = 0;   // ENG-14: every other lathe a knee mill, a drill press on the wall
         for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? (lathes++ % 2 ? 'knee_mill' : 'lathe') : (x + y) % 8 === 2 ? 'fabricator' : 'workbench');
         if (!props.some(p => p.kind === 'fabricator' && inRect(r, p.tx, p.ty))) { const wb = props.find(p => p.kind === 'workbench' && inRect(r, p.tx, p.ty)); if (wb) wb.kind = 'fabricator'; else ringPut(r, 'fabricator'); }   // at least one ENG-7 per shop
-        ringPut(r, 'drill_press'); break; }
+        wallPut(r, interior, 'drill_press'); break; }
       case 'plant': { const PLANT = ['pumpskid', 'heatexch', 'scrubber', 'tank', 'console', 'pumpskid'];   // ENG-1/4/5 among the old vessels and consoles, on a diagonal grid
         let i = Math.floor(prnd() * 3); for (const [x, y] of interior) if ((x + y) % 2 === 0 || interior.length === 1) { const k = PLANT[i++ % PLANT.length]; put(x, y, k, k === 'heatexch' || k === 'pumpskid' ? { rot: prnd() < 0.5 ? 0 : Math.PI } : {}); }
         break; }
       case 'morgue': put(cx, cy, 'autopsy_table', { rot: prnd() < 0.5 ? 0 : Math.PI }); for (const [x, y] of interior) if (grid[y][x] === 0 && (x + y) % 2 === 0) put(x, y, 'drawers'); ringPut(r, 'drawers'); break;   // MED-7; drawers get a pulled-out tray in world.js
       case 'datacore': { let n = 0; for (const [x, y] of interior) if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : n++ % 2 ? 'relayrack' : 'servers');   // OPS-4 relay racks among the stacks
-        ringPut(r, 'commsstation'); break; }
+        wallPut(r, interior, 'commsstation'); break; }
       case 'stores': for (const [x, y] of interior) if (prnd() < 0.7) put(x, y, (x + y) % 3 === 0 ? 'cart' : (x + y) % 2 ? 'shelving' : 'crate'); ringPut(r, 'desk');
         ringPut(r, 'reachin_cooler'); ringPut(r, 'feedstock_silo'); ringPut(r, 'injector_crate', { only: 'corner', free: true }); break;   // SVC-5 cooler (the walk-in door is a wall piece, world.js), SVC-17, ENG-13
       case 'airlock': put(cx, cy, 'suitrack'); ringPut(r, 'airlock_doors'); break;   // R-2 chamber against the hull wall, inner door into the room
