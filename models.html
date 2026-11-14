@@ -2,7 +2,7 @@
 <style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
 #l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.75;line-height:1.6}#l a{color:#9cf;margin-right:10px;text-decoration:none}
 .tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000}</style>
-<canvas id="c"></canvas><div id="l"><a href="?set=crew">crew</a><a href="?set=enemies">enemies</a><a href="?set=misc">items &amp; creatures</a><a href="?set=props">props</a><a href="?set=decor">wall fixtures</a><a href="?set=carry">carts &amp; held items</a><br>drag to orbit · wheel to zoom · ?clip=walk|jog|sprint|dance|death01|sitting_idle… · ?only=name</div>
+<canvas id="c"></canvas><div id="l"><a href="?set=crew">crew</a><a href="?set=enemies">enemies</a><a href="?set=misc">items &amp; creatures</a><a href="?set=props">props</a><a href="?set=decor">wall fixtures</a><a href="?set=carry">carts &amp; held items</a><a href="?set=items">item art</a><a href="?set=itemhand">item art in hand</a><a href="?set=itemclutter">item art clutter</a><br>drag to orbit · wheel to zoom · ?clip=walk|jog|sprint|dance|death01|sitting_idle… · ?only=name</div>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -15,6 +15,7 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { makeItemMesh, makeCart, holdItem, dropItem, tickHeld, rollCart } from './js/carry.js';
 import { ITEM_IDS, Operator } from './js/equipment.js';
 import { toBones, ambient } from './js/movement.js';
+import { buildItem, buildInstanced, ITEM_KINDS, ITEM_INFO, kindForName } from './js/itemart.js';
 const q = new URLSearchParams(location.search); const set = q.get('set') || 'crew', only = q.get('only'), clip = q.get('clip');
 const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
 r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.1;
@@ -43,6 +44,15 @@ if (set === 'crew') {
   for (const k of ['chip', 'battery', 'medkit']) { const m = makeItem(k); add(k, m, (dt) => { m.rotation.y += dt; }, 0.8); }
   add('Furble', makeTribble(), null, 0.8); const f2 = makeTribble(); f2.scale.setScalar(2.5); add('Furble (close)', f2, null, 1.3);
   const vm = makeViewmodel(); if (vm) { vm.group.position.y = 1.2; vm.group.scale.setScalar(3); add('Zapper (viewmodel ×3)', vm.group, null, 2); }
+} else if (set === 'items') {   // js/itemart.js: every kind on a turntable. ?g=0.. page (8 per page, ?g=all for everything), ?scale=1 for life size, ?frame=grip to see the hand frame
+  const per = 8, pg = q.get('g') || '0', sc = +(q.get('scale') || 2.2), kinds = q.get('kinds') ? q.get('kinds').split(',') : pg === 'all' ? ITEM_KINDS : ITEM_KINDS.slice(+pg * per, +pg * per + per);
+  for (const k of kinds) { const m = buildItem(k, { frame: q.get('frame') || 'base' }); if (!m) continue; const w = new THREE.Group(); m.scale.setScalar(sc); w.add(m); const sz = m.userData.size; add(`${k} (${m.userData.tris} tris)`, w, (dt) => { w.rotation.y += dt * (q.get('spin') ? +q.get('spin') : 0.5); }, Math.max(0.4, Math.max(sz[0], sz[2], q.get('frame') === 'grip' ? sz[1] : 0) * sc + 0.15)); }
+} else if (set === 'itemclutter') {   // the instanced path used for world.clutter: 3 copies per kind
+  let i = 0; for (const k of ITEM_KINDS) { const pl = []; for (let n = 0; n < 3; n++) pl.push({ x: 0, y: 0, z: (n - 1) * 0.4, ry: n * 1.3, s: 1 }); const r = buildInstanced(k, pl); r.group.scale.setScalar(+(q.get('scale') || 2)); add(k, r.group, null, 0.5); if (++i >= (+q.get('n') || 100)) break; }
+} else if (set === 'itemhand') {   // handheld ids held in the right hand (holdItem takes the mesh): checks the grip frame
+  for (const id of (q.get('kinds') ? q.get('kinds').split(',') : ['tricorder_sci', 'tricorder_med', 'tricorder_eng', 'tricorder_sec', 'hypospray', 'dermal', 'scalpel', 'wrench', 'tool', 'torch', 'flashlight', 'hook', 'crowbar', 'phaser1', 'phaser2', 'rifle', 'zapper', 'mop', 'extinguisher', 'toolbox', 'medkit', 'toolbag', 'padd', 'mug'])) {
+    const m = makeHuman({ kind: 'crew_m', uniform: DIVISIONS[id.length % 3] }); if (!m) continue; const H = m.userData.human; H.play(q.get('pose') || 'idle'); holdItem(H, buildItem(id, { frame: 'grip' }), id === 'padd' ? 'hand_l' : 'hand_r');
+    add(id, m, (dt, t) => { H.update(dt); tickHeld(H); }, 0.9); }
 } else if (set === 'props') { for (const k of PROP_KINDS) add(k, buildProp(k), null, 2.6); }
 else if (set === 'decor') { for (const k of DECOR_KINDS) add(k, buildDecor(k), null, 2.3); }
 else if (set === 'carry') {   // carts (wheels roll), held items in a hand, and NPCs running equipment use scripts (js/carry.js, js/equipment.js)

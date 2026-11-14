@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { textures } from './world.js';
 import { pbr } from './assets.js';
+import { buildItem } from './itemart.js';
 // generated normal + roughness (+AO) from tools/build-textures.mjs, when loaded; repeat set per use
 const withSet = (mat, set, rx = 1, ry = rx, ns = 1) => { const p = pbr(set); if (!p) return mat; const rep = (t) => { const c = t.clone(); c.needsUpdate = true; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(rx, ry); return c; }; mat.normalMap = rep(p.n); mat.normalScale = new THREE.Vector2(ns, ns); mat.roughnessMap = rep(p.r); mat.roughness = 1; return mat; };
 
@@ -386,8 +387,16 @@ export function makeTribble() {
 // =====================================================================
 //  ITEMS
 // =====================================================================
+const ITEM_ART = { chip: [5, 0x40ffa0, 0.42, 0.14], battery: [1.9, 0x40c8ff, 0.3, 0.12], medkit: [1.35, 0xff6060, 0.32, 0.08] };   // [scale, halo colour, halo radius, halo opacity]: pickups are drawn bigger than life
 export function makeItem(kind) {
   const g = new THREE.Group();
+  const art = ITEM_ART[kind]; let body = null;
+  if (art) { try { body = buildItem(kind, { frame: 'base', scale: art[0] }); } catch (e) { console.warn('itemart', kind, e); } }
+  if (body) {   // js/itemart.js models (falls back to the old boxes below if a kind has no model)
+    body.position.y = -body.userData.size[1] * art[0] / 2; g.add(body);
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(art[2], 10, 8), new THREE.MeshBasicMaterial({ color: art[1], transparent: true, opacity: art[3], depthWrite: false })));
+    g.position.y = 0.9; return g;
+  }
   if (kind === 'chip') {
     const pcb = canvasTex(128, 128, (c, s) => { c.fillStyle = '#0c3b2a'; c.fillRect(0, 0, s, s); c.strokeStyle = '#d8b24a'; c.lineWidth = 2; for (let i = 0; i < 14; i++) { c.beginPath(); c.moveTo(Math.random() * s, Math.random() * s); c.lineTo(Math.random() * s, Math.random() * s); c.stroke(); } c.fillStyle = '#40ffa0'; c.fillRect(48, 48, 32, 32); });
     g.add(mk(new THREE.BoxGeometry(0.34, 0.04, 0.34), new THREE.MeshStandardMaterial({ map: pcb, emissive: 0x20ff90, emissiveMap: pcb, emissiveIntensity: 0.9, roughness: 0.4 })));
