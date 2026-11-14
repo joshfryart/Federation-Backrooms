@@ -138,6 +138,12 @@ export async function walkBrowser(page, fail) {
         const B = g.ents.filter(e => e.board && e.simmed); maxBoard = Math.max(maxBoard, B.length); for (const e of B) { wait.set(e.person, (wait.get(e.person) || 0) + 1 / 30); maxWait = Math.max(maxWait, wait.get(e.person)); }
         gone = ppl.filter(p => !body(p)).length; if (away && body(away)) arrived = true; }
       out.oneWindow = { n: ppl.length, gone, arrived: away ? arrived : null, shuts, emptyShut, maxBoard, maxWait: +maxWait.toFixed(1) }; for (const p of ppl) S.release(p); if (away) S.release(away); }
+    // 11) a full room (iteration 3: 17 crew at a 12-tile mess all stood on one spot): more people than tiles share the least crowded tiles, apart
+    { const rm = d.rooms.filter(r => r.type !== 'jefferies' && r.w * r.h <= 20).sort((a, b) => a.w * a.h - b.w * b.h)[0], fakes = [], pos = [];
+      if (rm) { const ppl = g.roster.people.filter(p => !p.isPlayer && !body(p)).slice(0, rm.w * rm.h + 6);
+        for (const p of ppl) { const t = g.simTileFor(p, { room: rm.type, spot: 'corridor', tx: rm.x, ty: rm.y }); if (!t) continue; const [cx, cz] = w.center(t[0], t[1]), x = cx + (t.off?.[0] || 0), z = cz + (t.off?.[1] || 0); pos.push([x, z]); const f = { kind: 'crew', simmed: true, person: p, room: rm.type, x, z, mesh: null }; fakes.push(f); g.ents.push(f); }
+        for (const f of fakes) g.ents.splice(g.ents.indexOf(f), 1); let minD = 9; for (let i = 0; i < pos.length; i++) for (let j = i + 1; j < pos.length; j++) minD = Math.min(minD, Math.hypot(pos[i][0] - pos[j][0], pos[i][1] - pos[j][1]));
+        out.fullRoom = { room: rm.type, tiles: rm.w * rm.h, n: pos.length, minD: +minD.toFixed(2) }; } }
     out.bodies = { n: g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, sim: S.bodies(here).size };
     return out;
   });
@@ -154,6 +160,7 @@ export async function walkBrowser(page, fail) {
   const CC = r.carCycle; if (!(CC && CC.boarded >= Math.min(2, CC.n) && CC.gone === CC.n && CC.minGap >= 0.4 && CC.maxWait < 10)) fail('npc lift boarders spread out and the car cycles ' + JSON.stringify(CC));
   const LW = r.liftWait; if (!(LW && LW.spots >= 2 && LW.apart && LW.floor && LW.sides === 2 && LW.waited !== false && LW.minD > 0.45 && (LW.shake === 'shake_head' || LW.shake === 'none'))) fail('npc lift waiting spots / refusal shake ' + JSON.stringify(LW));
   const OW = r.oneWindow; if (!(OW && OW.gone === OW.n && OW.arrived !== false && OW.emptyShut === 0 && OW.maxBoard <= 7 && OW.maxWait < 10)) fail('npc lift: board and arrive in one cycle while watched, full car ' + JSON.stringify(OW));
+  const FR = r.fullRoom; if (FR && !(FR.n > 0 && FR.minD >= 0.4)) fail('npc full room: people spread over the tiles ' + JSON.stringify(FR));
   if (!(r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim ' + JSON.stringify(r.bodies));
   return r;
 }
