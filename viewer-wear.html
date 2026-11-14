@@ -1,0 +1,71 @@
+<!doctype html><meta charset="utf-8"><title>Wear art viewer — Starfarers: The Backdecks</title>
+<style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
+#l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.8;line-height:1.6;max-width:70vw}#l a{color:#9cf;margin-right:10px;text-decoration:none}
+.tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000;text-align:center}</style>
+<canvas id="c"></canvas><div id="l"><a href="?set=outfits">outfits</a><a href="?set=moving">outfits walking</a><a href="?set=suit">pressure suit</a><a href="?set=head">headgear</a><a href="?set=lie">lying</a><a href="?set=don">donning</a><a href="?set=items">stowed items</a><br>drag to orbit · wheel to zoom · ?clip=walk (outfits) · ?only=coverall · ?cam=x,y,z,tx,ty,tz · ?spin=0 · ?yaw=0.4 · ?body=crew_f</div>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { loadModels } from './js/assets.js';
+import { makeHuman, DIVISIONS } from './js/humans.js';
+import { wearOutfit, wearHeadgear, applyLie, LIE_POSES, GESTURES_WEAR, Donner, buildWearItem, WEAR_ITEM_KINDS, OUTFITS } from './js/wearart.js';
+const q = new URLSearchParams(location.search); const set = q.get('set') || 'outfits', only = q.get('only') ? q.get('only').split(',') : null, spinOn = q.get('spin') === '1';
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.1;
+const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.7; }
+const key = new THREE.DirectionalLight(0xfff0d8, 2.4); key.position.set(3, 6, 6); key.castShadow = true; key.shadow.mapSize.set(q.get('static') === '1' ? 1024 : 2048, q.get('static') === '1' ? 1024 : 2048); Object.assign(key.shadow.camera, { left: -12, right: 12, top: 8, bottom: -4 }); s.add(key);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), new THREE.MeshStandardMaterial({ color: 0x2a3040, roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
+await loadModels();
+const list = [], ticks = [], tagEls = [], clip = q.get('clip') || 'idle', bodyQ = q.get('body');
+const slot = (name, obj, w, upd) => { const e = { name, obj, w, upd }; list.push(e); return e; };
+const human = (kind, o = {}) => { const h = makeHuman({ kind, seed: o.seed ?? 11, uniform: o.uniform ?? DIVISIONS[2], rank: 2, name: o.label || 'CREW' }); if (!h) return null; const H = h.userData.human; H.play(o.clip || clip, { fade: 0 }); H.update(o.clip === 'walk' ? 0.37 : 0.016); return h; };
+const stat = (n, w) => `${n} (${w.tris} tris)`;
+if (set === 'outfits' || set === 'moving') {
+  const mv = set === 'moving', c = mv ? 'walk' : clip;
+  const rows = [['crew_m', 'coverall', {}], ['crew_f', 'coverall', {}], ['crew_f2', 'scrubs', {}], ['crew_m', 'scrubs', {}], ['crew_f', 'whites', {}], ['crew_heavy', 'whites', {}], ['crew_m', 'whites', { apron: false, cap: false }], ['crew_f2', 'coverall', { color: 0xc9722a }]];
+  for (const [k, o, opt] of rows) { const h = human(bodyQ || k, { clip: c }); if (!h) continue; if (only && !only.includes(k) && !only.includes(o)) continue; const w = wearOutfit(h, o, opt); const H = h.userData.human; if (q.get('rest') === '1') { H.mixer.stopAllAction(); H.inner.traverse(o => { if (o.isSkinnedMesh && o.material.name === 'body') o.skeleton.pose(); }); } slot(w ? `${bodyQ || k} · ${o}${opt.color ? ' alt' : ''} · ${w.tris} tris` : `${k} ${o} FAILED`, h, 1.5, (dt) => H.update(dt)); }
+} else if (set === 'suit') {
+  for (const [k, hel] of [['suit', false], ['suit', true]]) { const h = makeHuman({ kind: 'suit', seed: 3, kit: false }); const H = h.userData.human; H.play('idle', { fade: 0 }); H.update(0.016); const w = wearOutfit(h, 'suit', { color: [0xa3231c, 0xc79a1e, 0x2456a6][list.length % 3], helmetShown: hel }); slot(`pressure suit${hel ? ' + helmet' : ''} · ${w.tris} tris`, h, 1.3, (dt) => H.update(dt)); }
+  for (const c of [0xa3231c, 0x2456a6]) { const h = makeHuman({ kind: 'suit', seed: 4, kit: false }); const H = h.userData.human; H.play('idle', { fade: 0 }); H.update(0.016); const w = wearOutfit(h, 'suit', { color: c }); slot(`band ${c.toString(16)} · ${w.tris} tris`, h, 1.3, (dt) => H.update(dt)); }
+} else if (set === 'head') {
+  const combos = [['crew_m', 'mask'], ['crew_f', 'hood'], ['crew_m', 'headset'], ['crew_f2', 'headset'], ['crew_f', 'cap'], ['crew_heavy', 'mask']];
+  for (const [k, g] of combos) { const h = human(k); const w = wearHeadgear(h, g); slot(`${k} · ${g} · ${w.tris} tris`, h, 0.9, (dt) => h.userData.human.update(dt)); }
+} else if (set === 'lie') {
+  const mat = () => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 2.0), new THREE.MeshStandardMaterial({ color: 0x6a7a96, roughness: 0.9 })); b.position.y = 0.47; g.add(b); const f = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.42, 2.1), new THREE.MeshStandardMaterial({ color: 0x3a3f4a, metalness: 0.6, roughness: 0.5 })); f.position.y = 0.21; g.add(f); return g; };
+  [['supine', 'crew_m'], ['left', 'crew_f'], ['right', 'crew_f2'], ['supine', 'crew_heavy']].forEach(([mode, k], i) => { const g = new THREE.Group(); g.add(mat()); const h = human(k); g.add(h); const H = h.userData.human; let t = 0; applyLie(h, mode, { top: 0.52, t }); h.position.z = 0.3;
+    slot(`${k} · lying ${mode}`, g, 1.6, (dt) => { t += dt; applyLie(h, mode, { top: 0.52, t }); h.position.z = 0.3; H.update(dt); }); });
+} else if (set === 'don') {
+  for (const [id, kind, n] of [['don_suit', 'coverall', 5], ['don_hood', 'hood', 4]]) {
+    const dur = GESTURES_WEAR[id].dur[0];
+    for (let i = 0; i < n; i++) { const h = human(id === 'don_suit' ? 'crew_m' : 'crew_f'); const w = id === 'don_suit' ? wearOutfit(h, 'coverall', {}) : wearHeadgear(h, 'hood'); const d = new Donner(h, id, w); d.update(0); const t = dur * (i + 0.5) / n; d.update(t); h.userData.human.update(0.001);
+      slot(`${id} ${t.toFixed(2)}s`, h, 1.1, null); } }
+} else {
+  const kinds = WEAR_ITEM_KINDS; const sc = +(q.get('scale') || 3);
+  for (const k of kinds) { const m = buildWearItem(k, { frame: 'base' }); if (!m) continue; const w = new THREE.Group(); m.scale.setScalar(sc); w.add(m); slot(`${k} (${m.userData.tris} tris, ${m.userData.size.map(v => v.toFixed(2)).join(' x ')} m)`, w, 0.5 * sc + 0.45, null); list[list.length - 1].spin = true; }
+}
+let x = 0; const total = list.reduce((a, l) => a + l.w, 0);
+for (const l of list) { l.root = new THREE.Group(); l.pivot = new THREE.Group(); l.pivot.add(l.obj); l.root.add(l.pivot); l.root.position.x = x + l.w / 2 - total / 2; x += l.w; l.root.traverse(o => { if (o.isMesh && !o.material?.transparent) { o.castShadow = true; o.receiveShadow = false; } }); s.add(l.root);
+  l.el = document.createElement('div'); l.el.className = 'tag'; l.el.textContent = l.name; document.body.appendChild(l.el); }
+const tall = ['outfits', 'moving', 'suit', 'don'].includes(set);
+const C = (q.get('cam') || '').split(',').map(Number); const closeUp = set === 'head';
+let tgt = new THREE.Vector3(C[3] || 0, C[4] ?? (closeUp ? 1.55 : set === 'items' ? 0.15 : set === 'lie' ? 0.7 : 0.95), C[5] || 0), yaw = +(q.get('yaw') || 0.25), pitch = closeUp ? 0.05 : 0.12, dist = closeUp ? Math.max(1.3, total * 0.62) : set === 'items' ? Math.max(3, total * 0.75) : Math.max(4, total * (tall ? 0.85 : 1.2));
+if (q.get('focus') && list[0]) { list[0].root.updateMatrixWorld(true); const b = list[0].obj.getObjectByName(q.get('focus')); if (b) { b.getWorldPosition(tgt); dist = +(q.get('d') || 0.6); } }
+if (C.length >= 3 && q.get('cam')) { const p = new THREE.Vector3(C[0], C[1], C[2]).sub(tgt); dist = p.length(); yaw = Math.atan2(p.x, p.z); pitch = Math.asin(p.y / dist); }
+let drag = false; addEventListener('pointerdown', () => drag = true); addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => { if (drag) { yaw -= e.movementX * 0.006; pitch = Math.max(-0.2, Math.min(1.3, pitch + e.movementY * 0.005)); } });
+addEventListener('wheel', e => { dist *= e.deltaY > 0 ? 1.1 : 0.9; });
+addEventListener('resize', () => { r.setSize(innerWidth, innerHeight, false); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+const clock = new THREE.Clock(); const v = new THREE.Vector3();
+const STATIC = q.get('static') === '1';
+function frame() {
+  if (!STATIC) requestAnimationFrame(frame); const dt = Math.min(0.05, clock.getDelta());
+  for (const l of list) { if (l.upd) l.upd(dt); if (l.spin || spinOn) l.pivot.rotation.y += dt * 0.4; }
+  cam.position.set(tgt.x + Math.sin(yaw) * Math.cos(pitch) * dist, tgt.y + Math.sin(pitch) * dist, tgt.z + Math.cos(yaw) * Math.cos(pitch) * dist); cam.lookAt(tgt);
+  for (const l of list) { v.set(l.root.position.x, -0.08, 0.3).project(cam); l.el.style.left = (v.x * 0.5 + 0.5) * innerWidth + 'px'; l.el.style.top = (-v.y * 0.5 + 0.5) * innerHeight + 'px'; }
+  r.render(s, cam);
+}
+frame(); window.__ready = true; window.__tris = list.map(l => l.name);
+</script>

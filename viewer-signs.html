@@ -1,0 +1,73 @@
+<!doctype html><meta charset="utf-8"><title>Sign art viewer — Starfarers: The Backdecks</title>
+<style>html,body{margin:0;background:#0b0e16;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
+#l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.8;line-height:1.6;max-width:75vw;z-index:2}#l a{color:#9cf;margin-right:10px;text-decoration:none}
+.tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000;text-align:center}
+#sheet{display:none;padding:60px 24px 40px;max-width:1100px;margin:0 auto}#sheet h2{font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:#9db2c8;margin:26px 0 10px;font-weight:600}
+.grid{display:flex;flex-wrap:wrap;gap:14px}figure{margin:0;width:104px;text-align:center;background:#141a28;border:1px solid #2a3142;border-radius:8px;padding:12px 6px 8px}figure svg{color:#e6edf5}figcaption{font-size:11px;margin-top:8px;color:#c6d0dc;line-height:1.35}figcaption small{color:#7f8ca0}
+#syms{display:flex;flex-wrap:wrap;gap:10px}#syms div{width:104px;text-align:center;font-size:11px;color:#c6d0dc;background:#141a28;border:1px solid #2a3142;border-radius:8px;padding:8px 4px}#syms canvas{width:64px;height:64px}</style>
+<div id="l"><a href="?set=3d&view=wall">wall decals</a><a href="?set=3d&view=floor">floor zones</a><a href="?set=3d&view=pod">pod hatches</a><a href="?set=3d&view=dir">directory</a><a href="?set=icons">icon sheet</a><br>drag to orbit · wheel to zoom · ?cam=x,y,z,tx,ty,tz · ?spin=0</div>
+<canvas id="c"></canvas><div id="sheet"></div>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { iconSvg, badgeSvg, CATS } from './js/icons.js';
+import { installIcons, buildEmblemPlate, buildPlacard, buildFloorZone, buildDirectory, DECOR_SIGN, EMBLEM_DEPTS, PLACARD_KINDS, ZONE_KINDS, PLACARDS, ZONES, EMBLEMS, drawPropSymbol, PROP_SYMBOLS, PROP_NAME_X, iconSheetHtml } from './js/signart.js';
+installIcons();
+const q = new URLSearchParams(location.search), set = q.get('set') || '3d', view = q.get('view') || 'wall';
+const $ = (id) => document.getElementById(id);
+if (set === 'icons') {
+  $('c').style.display = 'none'; $('sheet').style.display = 'block'; $('sheet').innerHTML = iconSheetHtml(iconSvg, badgeSvg) + '<h2>U-3 deck-plan symbols (props of batches 1 to 4)</h2><div id="syms"></div>';
+  for (const k of Object.keys(PROP_SYMBOLS)) { const d = document.createElement('div'), c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#0d1018'; g.fillRect(0, 0, 128, 128); g.translate(64, 64); drawPropSymbol(g, k, 100); d.appendChild(c); d.append(PROP_NAME_X[k] || k); $('syms').appendChild(d); }
+  window.__ready = true;
+} else {
+const r = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 0.95;
+const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.4; }
+const key = new THREE.DirectionalLight(0xfff0d8, 1.3); key.position.set(2, 6, 8); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); Object.assign(key.shadow.camera, { left: -14, right: 14, top: 8, bottom: -4 }); s.add(key);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: 0x4a4f5a, roughness: 0.85 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
+const wall = new THREE.Mesh(new THREE.BoxGeometry(24, 3.2, 0.1), new THREE.MeshStandardMaterial({ color: 0x8c95a3, roughness: 0.8 })); wall.position.set(0, 1.6, -0.05); wall.receiveShadow = true; s.add(wall);
+// mirror of the Kit class in js/world.js (that one is not exported)
+class Kit {
+  constructor() { this.solid = []; this.glow = []; }
+  _add(geo, x, y, z, col, glow) { geo.translate(x, y, z); const c = Array.isArray(col) ? new THREE.Color(col[0], col[1], col[2]) : new THREE.Color(col), n = geo.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } geo.setAttribute('color', new THREE.BufferAttribute(a, 3)); (glow ? this.glow : this.solid).push(geo); return this; }
+  box(w, h, d, x, y, col, z0 = 0, glow = false, rz = 0) { const g = new THREE.BoxGeometry(w, h, d); if (rz) g.rotateZ(rz); return this._add(g, x, y, z0 + d / 2, col, glow); }
+  cyl(r, h, x, y, col, z0 = 0, axis = 'y', glow = false, seg = 10) { const g = new THREE.CylinderGeometry(r, r, h, seg); if (axis === 'z') g.rotateX(Math.PI / 2); else if (axis === 'x') g.rotateZ(Math.PI / 2); return this._add(g, x, y, z0 + (axis === 'z' ? h / 2 : r), col, glow); }
+  cone(r, h, x, y, col, z0 = 0, rx = 0, rz = 0) { const g = new THREE.ConeGeometry(r, h, 6); g.rotateX(rx); g.rotateZ(rz); return this._add(g, x, y, z0 + r, col, false); }
+  done() { const m = (l) => l.length ? mergeGeometries(l, false) : null; return { solid: m(this.solid), glow: m(this.glow) }; }
+}
+const kitM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }), kitG = new THREE.MeshBasicMaterial({ vertexColors: true });
+const decor = (name) => { const K = new Kit(); DECOR_SIGN[name](K); const d = K.done(), g = new THREE.Group(); if (d.solid) g.add(new THREE.Mesh(d.solid, kitM)); if (d.glow) g.add(new THREE.Mesh(d.glow, kitG)); g.traverse(o => { if (o.isMesh) o.castShadow = true; }); return g; };
+const tris = (o) => { let n = 0; o.traverse(m => { if (m.isMesh) n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return Math.round(n); };
+const tags = [], tag = (txt, x, y, z) => { const d = document.createElement('div'); d.className = 'tag'; d.textContent = txt; document.body.appendChild(d); tags.push([d, new THREE.Vector3(x, y, z)]); };
+const cap = (x, z = 0.6) => { const c = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.35, 4, 10), new THREE.MeshStandardMaterial({ color: 0x66aa88, roughness: 0.7, transparent: true, opacity: 0.55 })); c.position.set(x, 0.875, z); s.add(c); };
+// --- wall: emblem plates (G-1) above, placards (G-2) below
+EMBLEM_DEPTS.forEach((d, i) => { const m = buildEmblemPlate(d); m.position.set(-1.75 + i * 0.5, 2.3, 0); s.add(m); if (i === 0) tag(`emblem plate · ${tris(m)} tris`, -1.75 + 3.5 / 2, 2.0, 0.1); });
+PLACARD_KINDS.forEach((k, i) => { const m = buildPlacard(k); m.position.set(-1.25 + i * 0.5, 1.55, 0.002); s.add(m); }); tag('hazard placards · 2 tris each', 0, 1.25, 0.1);
+// --- directory (G-4) with a sample deck
+const rooms = [{ type: 'bridge', x: 6, y: 1, w: 5, h: 4 }, { type: 'readyroom', x: 11, y: 1, w: 3, h: 3 }, { type: 'engineering', x: 1, y: 6, w: 7, h: 7 }, { type: 'sickbay', x: 9, y: 6, w: 3, h: 5 }, { type: 'mess', x: 13, y: 6, w: 3, h: 5 }, { type: 'transporter', x: 6, y: 14, w: 3, h: 3 },
+  { type: 'lab', x: 10, y: 12, w: 4, h: 4 }, { type: 'brig', x: 15, y: 1, w: 3, h: 4 }, { type: 'shuttlebay', x: 1, y: 14, w: 5, h: 5 }, { type: 'quarters', x: 15, y: 12, w: 3, h: 6 }, { type: 'cargo', x: 10, y: 17, w: 5, h: 3 }];
+const dir = buildDirectory(rooms, { deck: 3, here: { x: 8, y: 5 }, accent: '#e8892b' }); dir.position.set(-3.6, 1.5, 0); s.add(dir); tag(`deck directory · ${dir.userData.tris} tris`, -3.6, 0.95, 0.1); cap(-3.6 + 1.0);
+// --- pod hatches (R-1)
+const bank = decor('podbank'); bank.position.set(3.6, 0, 0); s.add(bank); tag(`podbank · ${tris(bank)} tris`, 3.6, 0.0, 0.1); const hh = decor('podhatch'); hh.position.set(6.4, 0, 0); s.add(hh); tag(`podhatch · ${tris(hh)} tris`, 6.4, 0.0, 0.1); cap(5.0);
+// --- floor zones (G-3)
+ZONE_KINDS.forEach((k, i) => { const m = buildFloorZone(k); m.position.set(-6.5 + i * 2.7, 0.012, 3.4); s.add(m); const e = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), new THREE.MeshBasicMaterial({ color: 0x5a6070, transparent: true, opacity: 0.18 })); e.rotation.x = -Math.PI / 2; e.position.set(-6.5 + i * 2.7, 0.006, 3.4); s.add(e); tag(k, -6.5 + i * 2.7, 0, 4.8); });
+const V = { wall: [0.2, 1.9, 10.5, 0.2, 1.7, 0], floor: [0, 7.5, 9.5, 0, 0, 3.4], pod: [4.5, 1.6, 6, 4.5, 1.4, 0], dir: [-3.6, 1.6, 3.2, -3.6, 1.5, 0] }[view] || [-0.2, 1.9, 7.5, -0.2, 1.6, 0];
+const C = (q.get('cam') ? q.get('cam').split(',').map(Number) : V); const tgt = new THREE.Vector3(C[3], C[4], C[5]); const p0 = new THREE.Vector3(C[0], C[1], C[2]).sub(tgt); let dist = p0.length(), yaw = Math.atan2(p0.x, p0.z), pitch = Math.asin(p0.y / dist);
+let drag = false; addEventListener('pointerdown', () => drag = true); addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => { if (drag) { yaw -= e.movementX * 0.006; pitch = Math.max(-0.2, Math.min(1.45, pitch + e.movementY * 0.005)); } });
+addEventListener('wheel', e => { dist *= e.deltaY > 0 ? 1.1 : 0.9; });
+addEventListener('resize', () => { r.setSize(innerWidth, innerHeight, false); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+const clock = new THREE.Clock(), v = new THREE.Vector3(), STATIC = q.get('static') === '1';
+function frame() {
+  if (!STATIC) requestAnimationFrame(frame); const t = clock.getElapsedTime(); dir.userData.pulse(t);
+  cam.position.set(tgt.x + Math.sin(yaw) * Math.cos(pitch) * dist, tgt.y + Math.sin(pitch) * dist, tgt.z + Math.cos(yaw) * Math.cos(pitch) * dist); cam.lookAt(tgt);
+  for (const [d, p] of tags) { v.copy(p).project(cam); d.style.left = (v.x * 0.5 + 0.5) * innerWidth + 'px'; d.style.top = (-v.y * 0.5 + 0.5) * innerHeight + 'px'; }
+  r.render(s, cam);
+}
+frame(); window.__ready = true;
+}
+</script>
