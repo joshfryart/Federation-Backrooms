@@ -37,6 +37,7 @@ import { Kit } from './kit.js';   // handheld job equipment / improvised weapons
 import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / hold / shove / strike, security response, armory (js/combat.js rules, docs/combat.md)
 import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
+import { briefNotes, rumourFor } from './socialui.js';   // run-start crew notes + rumours (docs/social.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
@@ -705,6 +706,7 @@ function talkMenu(e) {
     { label: 'Ask about their duty', run: () => { const l = DUTIES.billets?.[pr.billet]?.loops?.[0]; say(l ? `Mostly ${l.label.toLowerCase()}, every so often. ${DUTIES.billets[pr.billet].rules?.[0] ? '' : ''}` : 'Keeping the ship running.'); } },
     { label: 'Ask how they feel about you', run: () => say(mood === 'warm' ? 'You pull your weight. That counts for a lot here.' : mood === 'cold' ? 'I hear things. Make sure they are not true.' : 'Fine, I suppose. Ask me again later.') },
     { label: 'Ask who they hang out with', run: () => say(G.social ? G.social.talkLine(pr, me) : 'Whoever is on my watch, I suppose.') },   // js/social.js
+    { label: 'Any news?', run: () => { const r = rumourFor(G.social, pr, me, t); say(r.text || r.none); } },   // js/socialui.js: a rumour from social.hooks, gated by trust, never repeated
   ];
   if (D.subs().includes(pr)) opts.push({ label: 'Order them to do their duty', run: () => { const r = D.order(pr, null); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
   else opts.push({ label: 'Ask for a hand with your duty', run: () => { const r = D.askHelp(pr); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
@@ -768,7 +770,7 @@ function newRun() {
   setupDuty();
   hideScreens(); fade(0);
   loadDeck(1);
-  if (NOM() && G.duty && !navigator.webdriver && new URLSearchParams(location.search).get('brief') !== '0') { G.phase = 'briefing'; document.exitPointerLock?.(); G.hud2.showBriefing(makeBriefing(G.player, G.roster, G.mission, DUTIES, MISSIONS), () => { G.phase = 'play'; requestLock(); }); return; }
+  if (NOM() && G.duty && !navigator.webdriver && new URLSearchParams(location.search).get('brief') !== '0') { G.phase = 'briefing'; document.exitPointerLock?.(); G.hud2.showBriefing(makeBriefing(G.player, G.roster, G.mission, DUTIES, MISSIONS), () => { G.phase = 'play'; requestLock(); }); briefNotes(G.hud2, G.social, G.player); return; }
   requestLock();
   G.phase = 'play';
 }
