@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { textures } from './world.js';
+import { pbr } from './assets.js';
+// generated normal + roughness (+AO) from tools/build-textures.mjs, when loaded; repeat set per use
+const withSet = (mat, set, rx = 1, ry = rx, ns = 1) => { const p = pbr(set); if (!p) return mat; const rep = (t) => { const c = t.clone(); c.needsUpdate = true; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(rx, ry); return c; }; mat.normalMap = rep(p.n); mat.normalScale = new THREE.Vector2(ns, ns); mat.roughnessMap = rep(p.r); mat.roughness = 1; return mat; };
 
 const mk = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; return m; };
 const cap = (r, len, seg = 10) => new THREE.CapsuleGeometry(r, len, 4, seg);
@@ -29,10 +32,12 @@ function gMats() {
   });
   scales.wrapS = scales.wrapT = THREE.RepeatWrapping;
   const rep = (t, x, y) => { const c = t.clone(); c.needsUpdate = true; c.repeat.set(x, y); c.wrapS = c.wrapT = THREE.RepeatWrapping; return c; };
+  // generated scute normal/roughness (assets/textures/scales_*) replaces the canvas bump when it loaded
+  const gornSet = (m) => { if (!pbr('scales')) return m; m.bumpMap = null; return withSet(m, 'scales', 3, 3, 1.4); };
   gornMats = {
-    skin: new THREE.MeshStandardMaterial({ color: 0x6f8040, map: scales, bumpMap: scales, bumpScale: 2.2, roughness: 0.52, metalness: 0.05 }),
-    belly: new THREE.MeshStandardMaterial({ color: 0xb2a965, map: scales, bumpMap: scales, bumpScale: 1.5, roughness: 0.6 }),
-    dark: new THREE.MeshStandardMaterial({ color: 0x3a4520, map: scales, bumpMap: scales, bumpScale: 2, roughness: 0.6 }),
+    skin: gornSet(new THREE.MeshStandardMaterial({ color: 0x6f8040, map: scales, bumpMap: scales, bumpScale: 2.2, roughness: 0.52, metalness: 0.05 })),
+    belly: gornSet(new THREE.MeshStandardMaterial({ color: 0xb2a965, map: scales, bumpMap: scales, bumpScale: 1.5, roughness: 0.6 })),
+    dark: gornSet(new THREE.MeshStandardMaterial({ color: 0x3a4520, map: scales, bumpMap: scales, bumpScale: 2, roughness: 0.6 })),
     eye: new THREE.MeshStandardMaterial({ color: 0xd88a10, emissive: 0xff7a08, emissiveIntensity: 0.55, roughness: 0.08, metalness: 0.0 }),
     pupil: new THREE.MeshBasicMaterial({ color: 0x120a00 }),
     tooth: new THREE.MeshStandardMaterial({ color: 0xe9e1c0, roughness: 0.3 }),
@@ -420,8 +425,8 @@ function spiderMats() {
   });
   marks.wrapS = marks.wrapT = THREE.RepeatWrapping;
   return spM = {
-    skin: new THREE.MeshStandardMaterial({ color: 0x2a1418, roughness: 0.25, metalness: 0.1 }),
-    flesh: new THREE.MeshStandardMaterial({ color: 0xffffff, map: marks, roughness: 0.3 }),
+    skin: withSet(new THREE.MeshStandardMaterial({ color: 0x2a1418, roughness: 0.25, metalness: 0.1 }), 'flesh', 2, 2, 1.2),
+    flesh: withSet(new THREE.MeshStandardMaterial({ color: 0xffffff, map: marks, roughness: 0.3 }), 'flesh', 1.5, 1.5, 1),
     eye: new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 1.3, roughness: 0.1 }),
     fang: new THREE.MeshStandardMaterial({ color: 0xd8d0b0, roughness: 0.3 }),
     joint: new THREE.MeshStandardMaterial({ color: 0x5a2228, roughness: 0.35 }),

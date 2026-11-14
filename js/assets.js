@@ -65,9 +65,9 @@ export class Anim {
 // PBR texture sets: CC0 scans (ambientCG) and the project's own generated sets (tools/build-textures.mjs), see CREDITS.md.
 // Missing files just leave the procedural fallback in place.
 const pbrSets = {};
-export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil', 'wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass'];
+export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil', 'wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime'];
 // generated sets pack ambient occlusion / roughness / metalness into the R / G / B channels of <name>_r.webp
-export const ORM_SETS = new Set(['wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass']);
+export const ORM_SETS = new Set(['wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime']);
 export function loadTextures(names = PBR_SETS) {
   const tl = new THREE.TextureLoader();
   const one = (url, srgb) => new Promise(res => tl.load(url, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, () => res(null)));

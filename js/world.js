@@ -1144,7 +1144,8 @@ export class World {
       const lamp = inst(new Kit().box(0.02, 0.05, 1.3, 0, 0, 0xffffff, -0.65).done().solid, m.kitGlow, fr.flatMap(f => [-1, 1].map(s => ({ f, s }))), ({ f, s }, o) => { o.position.set(f.x + (f.ax ? s * 0.16 : 0), WH - 0.13, f.z + (f.ax ? 0 : s * 0.16)); o.rotation.y = f.ax ? 0 : Math.PI / 2; return new THREE.Color(ROOM_LIGHT[f.room] || 0xffffff).multiplyScalar(1.7); });
       if (lamp) lamp.receiveShadow = false;
       // sliding door leaves: two panels per doorway that part when someone walks up (World.slideDoors, driven by main.js)
-      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }), hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
+      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.roughness = 1; dm.metalness = 1; dm.color.set(0xb0b8c4); } }
+        const hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
         this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false }; }); }
     }
     // --- window frames with depth and a glass pane

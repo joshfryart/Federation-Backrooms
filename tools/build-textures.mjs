@@ -313,6 +313,52 @@ const SETS = {
     }
   } },
 
+  // reptile hide (Gronk): overlapping scutes in staggered rows, finer on the belly side, dark seams, speckled tone
+  scales: { N: 512, mean: 0.62, contrast: 1.05, nStrength: 4.2, aoK: 6, aoBake: 0.9, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 6, 4, 121), sp = vnoise(N, 90, 123, 90), W = 18;
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, row = Math.floor(v * W), uu = fract(u * W + (row % 2) * 0.5) - 0.5, vv = fract(v * W) - 0.5;
+      const d = Math.hypot(uu * 1.15, vv * 1.1 - 0.08), sc = sstep(0.85, 0.15, d), edge = sstep(0.5, 0.7, d);
+      H[i] = 0.25 + 0.65 * sc + (n[i] - 0.5) * 0.05; A[i] = 0.62 + (n[i] - 0.5) * 0.3 + (sp[i] - 0.5) * 0.12 - edge * 0.3 + (vv < -0.1 ? 0.06 : 0); R[i] = clamp(0.45 + edge * 0.35 + (sp[i] - 0.5) * 0.15); M[i] = 0;
+    }
+  } },
+  // raw flesh / chitin (Crawler): veined, glossy and wet, with pitted plates
+  flesh: { N: 512, mean: 0.55, contrast: 1.1, nStrength: 3.6, aoK: 7, aoBake: 0.8, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 5, 5, 131), w = fbm(N, 14, 4, 133), vn = fbm(N, 10, 3, 135);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, ridge = 1 - Math.abs(vn[i] - 0.5) * 2, vein = sstep(0.86, 0.97, ridge), pit = sstep(0.72, 0.9, w[i]);
+      H[i] = 0.5 + (n[i] - 0.5) * 0.35 - vein * -0.12 - pit * 0.16; A[i] = 0.58 + (n[i] - 0.5) * 0.25 - pit * 0.2 + vein * 0.12; R[i] = clamp(0.28 + pit * 0.4 + (w[i] - 0.5) * 0.2); M[i] = 0;
+    }
+  } },
+  // uniform cloth: fine plain weave with slubs and light fraying; used as normal / roughness on garments
+  cloth: { N: 512, mean: 0.7, contrast: 0.6, nStrength: 2.4, aoK: 3, aoBake: 0.3, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 20, 3, 141), slub = vnoise(N, 4, 143, 220), slub2 = vnoise(N, 220, 145, 4);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, wx = Math.sin(px / N * 128 * Math.PI * 2) * 0.5 + 0.5, wy = Math.sin(py / N * 128 * Math.PI * 2) * 0.5 + 0.5, over = ((px >> 2) + (py >> 2)) & 1;
+      const t = over ? wx : wy, sl = Math.max(sstep(0.78, 0.95, slub[i]), sstep(0.78, 0.95, slub2[i]));
+      H[i] = 0.42 + 0.3 * t + sl * 0.08; A[i] = 0.7 + (n[i] - 0.5) * 0.12 - (1 - t) * 0.08 + sl * 0.05; R[i] = clamp(0.88 - sl * 0.1); M[i] = 0;
+    }
+  } },
+  // hull plate: large welded panels, rivet rows, scorch and micrometeorite pitting; for exteriors and heavy doors
+  hull: { N: 1024, mean: 0.58, contrast: 1.0, nStrength: 3.4, aoK: 8, outR: 512, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 7, 5, 151), pits = vnoise(N, 120, 153, 120), scorch = fbm(N, 4, 4, 155), tone = vnoise(N, 4, 157, 4);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, pu = fract(u * 4), pv = fract(v * 2), e = Math.min(pu, 1 - pu, pv, 1 - pv), riv = Math.hypot(fract(u * 32) - 0.5, fract(v * 16) - 0.5);
+      const panel = Math.floor(u * 4) * 3 + Math.floor(v * 2), pt = sstep(0.8, 0.95, pits[i]);
+      let h = 0.55 + (n[i] - 0.5) * 0.06 - pt * 0.12, a = 0.58 + ((panel * 0.37) % 1 - 0.5) * 0.08 + (n[i] - 0.5) * 0.14 - sstep(0.62, 0.85, scorch[i]) * 0.25, r = 0.5 + sstep(0.6, 0.9, n[i]) * 0.2 + pt * 0.2, m = 0.7;
+      if (e < 0.012) { h = 0.3; a *= 0.5; r = 0.8; } else if (e < 0.04 && riv < 0.12) { h = 0.85; a += 0.1; r = 0.35; }
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
+  // grime overlay: soft dirt, oil streaks and fingerprints in AO / roughness; mean-grey albedo so it only darkens
+  grime: { N: 512, mean: 0.6, contrast: 1.0, nStrength: 0.9, aoK: 4, aoBake: 0.5, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 5, 6, 161), st = vnoise(N, 40, 163, 3), fp = fbm(N, 28, 3, 165);
+    for (let i = 0; i < N * N; i++) {
+      const streak = sstep(0.6, 0.92, st[i]) * (0.5 + n[i]), smudge = sstep(0.55, 0.8, fp[i]);
+      H[i] = 0.5 + (n[i] - 0.5) * 0.06 - streak * 0.02; A[i] = 0.7 - streak * 0.3 - smudge * 0.12 - sstep(0.5, 0.85, n[i]) * 0.2; R[i] = clamp(0.55 + streak * 0.3 + smudge * 0.25); M[i] = 0;
+    }
+  } },
+
 };
 
 async function procedural(OUT = 'assets/textures', only = []) {
