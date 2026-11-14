@@ -324,7 +324,7 @@ Human play-test list (iteration 4):
 `node tools/test.mjs` (run with the art agent's uncommitted working tree, a random ship each run): run 1 crashed the renderer (out of
 memory, three browsers on the box); run 2 failed only `combat: player HP / stagger / knock-down` (the fighter stands 1.4 m from the player
 for 12 s without striking, `walk` false, schedule held by the test: grapple.js approach / reach, the same signature as iteration 3's
-logs), every `npc walking` check passed (parts 12 and 13 included).
+logs), every `npc walking` check passed (parts 12 and 13 included). Run 3 printed OK.
 
 Requests to other owners (iteration 4): js/main.js has uncommitted `dressCrew` hunks from the art agent (import + two call sites); this
 iteration committed main.js without them (index built from HEAD + the pathing hunks), so they are still in the working tree for that agent
