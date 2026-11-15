@@ -196,7 +196,7 @@ const park = await page.evaluate(async () => {
     r.climb = c; }
   // ship systems: break life support, walk to its repair point on this deck, hold E until it is fixed
   { const S = g.shipState; for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; reset(); g.G.hp = 100; g.G.phase = 'play';
-    S.damage('life', 0.9); tick(2); const fx = g.G.fx; const rp = g.repairPts.find(p => p.sys === 'life');
+    g.G.mad.t = 1e9; g.G.mad.pending = null; S.damage('life', 0.9); tick(2);   /* no new madman mid-repair: being mauled while holding E cost 100 HP and the repair */ const fx = g.G.fx; const rp = g.repairPts.find(p => p.sys === 'life');
     r.sys = { status: S.status('life'), suffocate: fx.suffocate, points: g.repairPts.length, junctions: g.repairPts.filter(p => !p.main).length };
     if (rp) { P.x = rp.x; P.z = rp.z; const hp0 = g.G.hp; window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })); let i = 0; for (; i < 60 * 15 && S.status('life') !== 'nominal'; i++) { g.G.phase = 'play'; tick(1); } window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
       r.sys.repaired = S.status('life') === 'nominal'; r.sys.secs = +(i / 60).toFixed(1); r.sys.hpLost = +(hp0 - g.G.hp).toFixed(1); }
@@ -581,7 +581,7 @@ const rep = await page3.evaluate(async () => {
   // a system serviced on this deck breaks: a crew member is dispatched, walks to it (body), works (marker), patches it to ~0.85 and reports on the comm bus
   const here = G.shipDeck + 1, sys = ['helm', 'alert', 'lifts', 'computer', 'sensors'].find(s => g.repair.site(s)?.deckNo === here) || Object.keys(g.repair.sites).find(s => g.repair.sites[s].deckNo === here);
   const ev = []; g.repair.on(e => ev.push(e.type)); g.shipState.damage(sys, 0.5); let walked = false, posed = false, marker = false, lead = null, maxProg = 0, body = false;
-  for (let i = 0; i < 2600 && !ev.includes('done'); i++) { tick(1); const j = [...g.repair.jobs.values()][0]; if (j?.lead) lead = j.lead.person; if (lead) { const e = g.ents.find(x => x.simmed && x.person === lead); if (e) body = true; if (e?.walk) walked = true; if (e?.repairing?.npc) posed = true; if (e?.repMark) marker = true; } if (j) maxProg = Math.max(maxProg, j.need ? j.progress / j.need : 0); }
+  for (let i = 0; i < 6000 && !ev.includes('done'); i++) { tick(1);   /* up to 600 s: a patch can fail its roll (js/repair.js verify), wait 40-70 s for a part, fail twice and escalate before it holds */ const j = [...g.repair.jobs.values()][0]; if (j?.lead) lead = j.lead.person; if (lead) { const e = g.ents.find(x => x.simmed && x.person === lead); if (e) body = true; if (e?.walk) walked = true; if (e?.repairing?.npc) posed = true; if (e?.repMark) marker = true; } if (j) maxProg = Math.max(maxProg, j.need ? j.progress / j.need : 0); }
   out.repair = { sys, events: [...new Set(ev)], lead: lead?.short || null, hp: +g.shipState.hp(sys).toFixed(2), walked, posed, marker, body, maxProg: +maxProg.toFixed(2), secs: +t.toFixed(0), report: g.comms.log.some(m => /patched/.test(m.text)), heading: g.comms.log.some(m => /heading to/.test(m.text)), released: lead ? !g.sim.overridden(lead) : null };
   // world pause: nothing ticks while a menu is open
   const st0 = g.sim.t, dt0 = g.duty.t; G.menuPause = true; tick(30); out.paused = g.sim.t === st0 && g.duty.t === dt0; G.menuPause = false;
