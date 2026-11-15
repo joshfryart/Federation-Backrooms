@@ -29,5 +29,5 @@ Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **
 - `crew.html` — ship's company: chain of command, department loadouts, Break/Repair any system and see its effects.
 - `ships.html` — fleet schematics (profile + deck plans for all ten ships).
 - `models.html` — model viewer (`?set=crew|enemies|misc|props`, `?clip=<name>`, drag to orbit).
-- `node tools/test.mjs` — headless smoke test (needs Playwright + Chromium): checks the level generator and plays a bot run through every deck.
+- `node tools/test.mjs` — headless smoke test (needs Playwright + Chromium): checks the level generator and plays a bot run through every deck. Prints `OK` or `FAIL <check>` lines; a page that fails to load (or crashes while loading) is retried once on a fresh page and logged as `RETRY page load …` — sections themselves are never retried. Known causes of past flakes: `TODO.md` (test-suite reliability).
 - `tools/build-*.mjs` — offline scripts that re-pack the upstream CC0 assets (not needed to run the game).
