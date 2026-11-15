@@ -6,7 +6,7 @@ import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, dressCrew, prewarmOutfits } from './actors.js';
 import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
-import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
@@ -53,8 +53,10 @@ const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder a
 
 // ---------------- renderer ----------------
 const canvas = $('view');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+// ?test=1 (tools/test.mjs pages): cheap renderer (no antialias, pixel ratio 1, no shadow maps). The gate's one high-quality smoke render loads without it.
+const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !TEST_MODE, powerPreference: 'high-performance' });
+renderer.setPixelRatio(TEST_MODE ? 1 : Math.min(window.devicePixelRatio, 1.5));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 80);
 scene.add(camera);
@@ -62,7 +64,7 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi)
 const lamp = new THREE.PointLight(0xfff0d0, 9, 14, 1.8); scene.add(lamp);
 const torch = new THREE.SpotLight(0xfff6e0, 22, 30, 0.5, 0.65, 1.7); torch.position.set(0.15, -0.1, 0); camera.add(torch);
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.enabled = !TEST_MODE; renderer.shadowMap.type = THREE.PCFShadowMap;
 torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.camera.near = 0.2; torch.shadow.camera.far = 30; torch.shadow.bias = -0.0004; torch.shadow.normalBias = 0.04;
 let post = null;
 // the first-person viewmodel lives in its own scene (own lights, drawn over the world) so it never clips walls or gets blown out by the torch
@@ -122,7 +124,7 @@ const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(loc
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
 function setQuality(q) {
-  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
+  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
   const el = $('qsel'); if (el) el.value = q;
 }
 
@@ -174,8 +176,8 @@ function updateHUD() {
 // ---------------- level loading ----------------
 function clearLevel() {
   if (world) { scene.remove(world.group); world.dispose(); }
-  for (const g of gorns) scene.remove(g.mesh);
-  for (const e of ents) scene.remove(e.mesh);
+  for (const g of gorns) { scene.remove(g.mesh); releaseHuman(g.mesh); }
+  for (const e of ents) { scene.remove(e.mesh); releaseHuman(e.mesh); }   // bone textures (js/humans.js releaseHuman)
   for (const r of repairPts) if (r.obj) scene.remove(r.obj);
   gorns = []; ents = []; repairPts = [];
 }
@@ -261,9 +263,9 @@ function loadDeck(n) {
   $('shipcls').textContent = ship.cls + '-class';
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
-  if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; setTimeout(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
+  if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; later(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
   else G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
-  if (n === 1 && !NM) setTimeout(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
+  if (n === 1 && !NM) later(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
 }
 
 function spawnThreats(data, n, rnd) {
@@ -531,7 +533,7 @@ function simHold(p, t) {
   if (t.lift ? t.from.deckNo !== here : t.to.deckNo !== here) return false; const e = ents.find(x => x.simmed && x.person === p); if (!e) return false;
   return t.lift ? true : !!e.walk?.opts.sim && !e.walk.vanish;   // leaving: still walking to / standing in the car; on this deck: still on a schedule walk
 }
-const dropBody = (e) => { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); };
+const dropBody = (e) => { scene.remove(e.mesh); releaseHuman(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); };
 function simBodies(dt, force = false) {
   G.simT = (G.simT || 0) - dt; if (!force && G.simT > 0) return; G.simT = 1.5; if (!world || !G.sim || G.phase === 'ride' || G.phase === 'select') { if (!force) return; }
   const here = G.sim.bodies(G.shipDeck + 1), L = G.lift, car = world.car, have = new Set(ents.filter(e => e.person).map(e => e.person)), busy = (e) => e.cower || e.haul || e.repairing || e.cb?.ai || e.stunT > 0;
@@ -807,7 +809,7 @@ let DUTIES = { billets: {} };
 async function loadDuties() { try { DUTIES = await (await fetch('./assets/data/duties.json')).json(); } catch (e) { console.warn('duties not loaded', e); } return DUTIES; }
 
 function newRun() {
-  Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: Math.floor(Math.random() * 1e6) });
+  Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: G.forceSeed ?? Math.floor(Math.random() * 1e6) });   // G.forceSeed: tools/test.mjs seed-set smoke runs
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
   G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p); G.portraits?.clear();   // portraits are cached by person id: a new crew needs new faces
@@ -842,7 +844,7 @@ document.addEventListener('pointerlockchange', () => {
 function completeDeck() {
   G.phase = 'lift'; sound.lift(); fade(1, 900);
   G.hp = Math.min(G.maxHp, G.hp + 20);
-  setTimeout(() => {
+  later(() => {
     if (G.deck >= winDeck() && !G.endless) {
       document.exitPointerLock?.();
       $('winstats').innerHTML = `${winDeck()} decks of the ${G.ship.name} · ${G.tribbles} furbles rescued · ${G.stuns} hostiles stunned<br>Time on shift ${fmtTime(G.time)}`;
@@ -884,7 +886,7 @@ function die(by, line = null) {
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
   $('deathline').textContent = line || pick(DEATH_LINES);
   $('stats').innerHTML = [['Last known position', `Deck ${deckReached} · ${ship.name}`], ['Registry', ship.reg], ['Cause', by?.name || 'Unknown'], ['Furbles rescued', G.tribbles], ['Hostiles stunned', G.stuns], ['Time on shift', fmtTime(G.time)], ['Best run', `Deck ${G.best}`]].map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('');
-  setTimeout(() => showScreen('dead'), 2400);
+  later(() => showScreen('dead'), 2400);
 }
 
 // callbacks used by Gorn AI
@@ -1014,7 +1016,7 @@ function interact() {
       if (G.fx.evac && !NOM()) {   // transporters up: beam them to safety
         G.say(`${who}: ${line} — Transporter room, one to beam out!`, 'npc'); if (pr) pr.status = 'evacuated';
         for (let i = 0; i < 40; i++) sparks.add(near.x + (Math.random() - 0.5) * 0.6, Math.random() * 1.9, near.z + (Math.random() - 0.5) * 0.6, 0, 0.4 + Math.random(), 0, BEAM, 0.9);
-        sound.tone(880, 0.9, 'sine', 0.06, 600); setTimeout(() => { scene.remove(near.mesh); const i = ents.indexOf(near); if (i >= 0) ents.splice(i, 1); }, 650); giveLoot();
+        sound.tone(880, 0.9, 'sine', 0.06, 600); later(() => { scene.remove(near.mesh); const i = ents.indexOf(near); if (i >= 0) ents.splice(i, 1); }, 650); giveLoot();
       } else { G.say(`${who}: ${line}`, 'npc'); if (pr) pr.status = 'alive'; if (Math.random() < 0.6) giveLoot(); }
     } else if (near.kind === 'body') { const pr = near.person; if (pr && pr.status !== 'dead') pr.status = 'dead'; G.say(pr ? `${pr.full}, ${pr.title} (${DEPT[pr.dept].name}). Dead. You take what they had.` : 'You search the crewman\'s body…', 'npc'); giveLoot(true); }
     else if (near.kind === 'emh' && !G.fx.emh) { G.say('The emitter crackles. No hologram. (Medical Hologram offline)', 'warn'); near.used = false; }
@@ -1026,7 +1028,7 @@ function interact() {
   if (site) {
     site.used = true; sound.pickup();
     const r = searchFixture(site.room, site.kind);
-    if (r) { G.say(r.text, 'npc'); if (r.loot === 'heal') { G.hp = Math.min(G.maxHp, G.hp + 15); setTimeout(() => G.say('Found a hypospray (+15 health)', 'good'), 900); sound.heal(); } else if (r.loot === 'cell') { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 900); } }
+    if (r) { G.say(r.text, 'npc'); if (r.loot === 'heal') { G.hp = Math.min(G.maxHp, G.hp + 15); later(() => G.say('Found a hypospray (+15 health)', 'good'), 900); sound.heal(); } else if (r.loot === 'cell') { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); later(() => G.say('Found a zapper power cell (+1)', 'good'), 900); } }
     else G.say(`${fixtureName(site.kind)}: nothing useful.`, 'npc');
     updateHUD(); return;
   }
@@ -1069,8 +1071,8 @@ function lookedPropObj() {
 }
 function giveLoot(forced) {
   const r = Math.random();
-  if (r < 0.45) { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 1200); }
-  else if (r < 0.8 || forced) { G.hp = Math.min(G.maxHp, G.hp + 25); setTimeout(() => G.say('Found a hypospray (+25 health)', 'good'), 1200); sound.heal(); }
+  if (r < 0.45) { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); later(() => G.say('Found a zapper power cell (+1)', 'good'), 1200); }
+  else if (r < 0.8 || forced) { G.hp = Math.min(G.maxHp, G.hp + 25); later(() => G.say('Found a hypospray (+25 health)', 'good'), 1200); sound.heal(); }
 }
 function nearest(r, pred) {
   let best = null, bd = r;
@@ -1118,7 +1120,11 @@ function buildViewmodel() {
   gunVM.rotation.set(0.05, 0.1, 0); gunVM.userData.baseRx = 0.05; gunVM.scale.setScalar(0.9);
   vmScene.add(gunVM); vmScene.environment = scene.environment; vmScene.environmentIntensity = 0.25; updateHUD();
 }
+G.testMode = TEST_MODE;
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
+// game timers: setTimeout normally; under the test clock (G.manual, tools/test.mjs) they wait for __game.advance() game time instead of the wall clock
+let manT = 0; const timers = [];
+function later(fn, ms) { if (G.manual) timers.push({ at: manT + ms / 1000, fn }); else setTimeout(fn, ms); }
 function step(dt, t) {
   if (NOM() && G.menuPause) return;   // a menu / wheel / panel / map is open: the whole world holds still (js/menus.js keeps the UI alive)
   if (shot > 0) shot -= dt;
@@ -1219,7 +1225,7 @@ function step(dt, t) {
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
   }
-  function remove(e) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
+  function remove(e) { scene.remove(e.mesh); releaseHuman(e.mesh); ents.splice(ents.indexOf(e), 1); }
 
   // prompt
   let prompt = '';
@@ -1568,9 +1574,9 @@ function boardLift(person, dest, delay = 0) {   // person is (now) in the car; t
 function leaveRider() {
   const r = G.lift.rider; if (!r || r.left) return; r.left = true; G.liftLog.push(`leave:${r.person.id}:${r.destIdx + 1}`);
   const th = (r.person.tags || []).includes('lift:says-thanks') && TAG_EFFECTS['lift:says-thanks'].leave; if (th) speak(r.person, th[r.person.id % th.length]);
-  if (r.mesh) scene.remove(r.mesh); r.mesh = null; r.h = null;
+  if (r.mesh) { scene.remove(r.mesh); releaseHuman(r.mesh); } r.mesh = null; r.h = null;
 }
-function clearRider() { const r = G.lift?.rider; if (r?.mesh) scene.remove(r.mesh); if (r) { r.mesh = null; r.h = null; } if (G.lift) G.lift.rider = null; }
+function clearRider() { const r = G.lift?.rider; if (r?.mesh) { scene.remove(r.mesh); releaseHuman(r.mesh); } if (r) { r.mesh = null; r.h = null; } if (G.lift) G.lift.rider = null; }
 function riderStep(dt) {
   const r = G.lift?.rider; if (!r) return; r.clock += dt; if (r.h) { r.h.update(dt); liveFace(r.h, G.time, r.person.id * 3.1); }
   for (const e of r.events) if (!e.done && r.clock >= e.t) { e.done = true; e.fn(); }
@@ -1733,26 +1739,39 @@ function dyingStep(dt, t) {
 }
 function frame() {
   requestAnimationFrame(frame);
-  const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; elapsed += dt; const t = elapsed;
+  const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (G.manual) return;   // test clock (tools/test.mjs): nothing runs on the wall clock (world, UI frame incl. portrait warm-up, drawing); tests drive __game.step / advance / menus.frame / renderOnce
+  elapsed += dt; tickWorld(dt, elapsed); G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
+  if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
+  // auto-downgrade if the machine struggles
+  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
+  render(dt, elapsed);
+}
+function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
   if (G.phase === 'play' && world) step(dt, t);
   else if ((G.phase === 'ride' || G.phase === 'select') && world) liftStep(dt, t);
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
   else if (G.phase === 'talk' && world) G.talk.step(dt, t);   // conversation close-up: only the speaker, the camera and the talk UI run (js/talk.js)
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
-  G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
-  if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
-  // auto-downgrade if the machine struggles
-  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
+}
+function render(dt, t) {
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
     post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
   } else { renderer.render(scene, camera); renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true; }
 }
+// test clock: advance(dt) = one frame of game time without drawing (step / liftStep / dyingStep / talk / idle world as frame() picks), plus the game timers now due
+function advance(dt = 1 / 30, t) {   // t: the caller's own clock (tests pass the t they give step()); default the frame clock
+  scene.updateMatrixWorld(); elapsed += dt; tickWorld(dt, t ?? elapsed);
+  if (G.talk?.active && G.phase !== 'talk') G.talk.abort();
+  runTimers(dt);
+}
+function runTimers(dt) { manT += dt; for (let i = 0; i < timers.length; i++) if (timers[i].at <= manT) { const { fn } = timers.splice(i--, 1)[0]; fn(); } }   // game timers due under the test clock
 
 // expose for debugging/tests
 const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); prewarmOutfits(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)

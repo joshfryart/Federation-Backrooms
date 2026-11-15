@@ -7,7 +7,7 @@
 //   PT.get(person) -> url | null      PT.url(person) -> url or placeholder      PT.img(person, px, cls) -> '<img …>'
 //   PT.tick(max = 2)                  PT.renderNow(person) -> url (synchronous; tests)      PT.clear()
 import * as THREE from 'three';
-import { makeHuman } from './humans.js';
+import { makeHuman, releaseHuman } from './humans.js';
 
 import { DEPT_COL, DEPT_LETTER, deptCol } from './icons.js';
 export { DEPT_COL, DEPT_LETTER, deptCol };
@@ -63,7 +63,7 @@ export class Portraits {
       R.setRenderTarget(prevT); R.setClearColor(prevC, prevA); R.autoClear = prevAuto; R.shadowMap.autoUpdate = prevShadow;
       const url = this._encode(); this.cache.set(k, url); this.stats.rendered++; this._patch(k, url); return url;
     } catch (e) { console.warn('portrait failed', e); this.failed.add(k); return null; }
-    finally { if (g) { this.scene.remove(g); g.traverse(o => { if (o.isMesh && o.material?.dispose) o.material.dispose(); }); }   /* materials are per-human clones; geometry/textures stay shared with the cache */ this.stats.ms += performance.now() - t0; }
+    finally { if (g) { this.scene.remove(g); releaseHuman(g); g.traverse(o => { if (o.isMesh && o.material?.dispose) o.material.dispose(); }); }   /* materials are per-human clones; geometry/textures stay shared with the cache */ this.stats.ms += performance.now() - t0; }
   }
   // flip Y, grey-world white balance (half strength, sampled on the centre where the face is), soft vignette, then a data URL
   _encode() {

@@ -268,6 +268,9 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
  *       bloody (0..1), pale (0..1), slime (bool), tint (hex multiply on everything), shadow (blob), rnd,
  *       person (roster member: fixes the look per person and puts their name on the plate), seed, name, kit (false = no badges/belt)
  */
+// a human taken out of the scene for good: free its skeletons' bone textures (SkeletonUtils.clone gives every body its own Skeleton, and each one
+// uploads a bone DataTexture that nothing else frees: ~10-20 GPU textures leaked per body / portrait). Safe on a mesh that is shown again: three.js rebuilds the texture.
+export function releaseHuman(obj) { if (!obj?.traverse) return; const seen = new Set(); obj.traverse(o => { const sk = o.isSkinnedMesh && o.skeleton; if (sk && !seen.has(sk)) { seen.add(sk); sk.dispose(); } }); }
 export function makeHuman(opts = {}) {
   const per = opts.person; let seed = opts.seed;
   if (seed === undefined && per) { seed = (per.id + 1) * 7919; for (const ch of (per.family || '') + (per.given || '')) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619); }

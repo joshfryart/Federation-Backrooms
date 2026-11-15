@@ -261,7 +261,7 @@ export class Menus {
     if (G.phase !== 'play' && this.UI.frozen && G.phase !== 'paused' && G.phase !== 'talk') { this.view.hide(); this.UI.stack.length = 0; this.UI.wheel = null; }   // lift / death / end: no layers survive
     this.sync(); this.gamepad();
     if (this.hold && !this.hold.opened && performance.now() - this.hold.t0 > HOLD_MS) this.holdTimeout();
-    this.portraits.tick(this.UI.frozen ? 2 : 1); this.warmPortraits(dt);
+    if (!G.testMode) { this.portraits.tick(this.UI.frozen ? 2 : 1); this.warmPortraits(dt); }   /* ?test=1 (tools/test.mjs): no background portraits (~1 s and ~100+ MB of browser-process memory each on SwiftShader); cards show the silhouette, renderNow still works */
     this.tags.update(dt, { camera: this.c.camera, ents: this.c.ents || [], P: this.c.P, world: this.c.world, show: G.phase === 'play' && !this.UI.frozen && !G.nav?.mapOpen });
     if (G.menuPause) G.hud2?.update(dt);   // the board keeps redrawing while the world holds still
     if ((this._bt = (this._bt || 0) - dt) <= 0) { this._bt = 0.2; this.renderBelt(); }
