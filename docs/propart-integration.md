@@ -185,3 +185,44 @@ Measured over 320 levels (`tools/test.mjs` `room props:`, threshold 60 % of room
 * The bay door (5.2 m) and systems board (3.6 m) sit on two wall tiles; check that nothing else hangs within 0.1 m at the shared edge (both faces are marked used).
 * Seated stations on bridge walls face the wall (operator side into the room); the bridge looks busier. The gym exercise bike seat (0.98 m) and rower (0.4 m) were not checked with `sitting_idle`.
 * Arboretum triangle budget: up to 6 grow beds (2,526 tris each, about 15k per room).
+
+# Wiring pass (batches 1-11 leftovers)
+Requests 3, 4 and 7-11 above, the open items of "Batches 5-11", and the request-3 deviation (system hosts) are wired. Tests: `tools/test-wiring.mjs` (unit half in `node tools/test.mjs` next to the equipment tests, browser half after the combat block).
+
+## Clothes cache (`js/wearart.js`, `js/actors.js`)
+* `wearOutfit` / `wearHeadgear` build a garment once per **body kind + outfit + opts** (`WEAR_CACHE`). The geometry is stored in the space of the human's `inner` group (the GLB scene, before the per-person height / build scale) with bone inverses in the same space, which depend only on the body kind; every later human of that kind gets new `SkinnedMesh`es on the shared geometry and materials, bound to its own bones (the skeleton applies its scale). Fit was checked on three people per body kind in the walk pose (same distances to the garment as an uncached build). `remove()` no longer disposes geometry (it is shared).
+* `prewarmOutfits()` (`js/actors.js`, called once in main.js when loading finishes) builds the three duty outfits and the headset / mask for all four crew bodies, one per idle callback.
+* Measured (swiftshader, 17 dressed crew from the roster, time inside `dressCrew`): before 565 / 587 ms (14-100 ms each); after, cold cache 256 ms (only the 7 first-of-kind builds, 19-55 ms; the rest 0.1 ms); after the prewarm 3 ms in total (0-1.2 ms each); the test sees 0.8 ms.
+
+## System hosts (`js/crew.js`)
+`SYSTEMS` hosts: coolant `pumpskid@plant`, life `scrubber`, gravity `fieldgen`, dampers `fieldgen_damp`, comms `relayrack`, armory `chargerack`; hydro (`tree`) prefers a `growbed`, then a tree, then a plant. `HOST_LABEL` has the new labels; a deck without the hardware keeps a junction (unchanged fallback); `js/repair.js` `repairSites` picks the hardware nearest the home deck as before (no edit there). Transport stays on the `pad` (the pattern buffers are in only ~40 % of transporter rooms). `WORK_SPOTS` (main.js fidget state) += `tank`, `servers`, `weaponrack`, `tree`. Repair points: 21 on every deck of four ships checked (all decks), and of ships 0 and 5 in the test (parkour wants >= 20). The deck-plans page (`tools/artifact`) gets badge codes CM / LS / CL / GV / ID / AR for the re-hosted systems.
+
+## Art carts (`js/equipment.js` `CARTS`, `js/carry.js` `makeCart`)
+`CARTS.sled` (hoversled), `bowser` (fuelbowser), `trolley` (galley_trolley, turned round: its bar is at +z), `linen` (linen_cart, turned round). `art`, `grip` (centre to push bar), `top`, `cap`, `slots`. `makeCart` builds the prop once per kind and clones it (shared geometry); the art is merged per material, so `wheels` are four empty pivots (the wheels do not visibly turn; the sled has none). Haulers: `deck` -> sled, `galley` -> trolley, new `pilot` -> bowser (shuttlebay / cargo only). Every art cart passed the NPC haul (go / grab / push / release, moved 6-27 m, pusher gap 0.9-1.5 m) with the hauler forced to it. Not done: nobody pushes the linen cart (no billet runs the laundry); the static bowser / sled / trolley floor props stay props (a hauler wheels out a fresh cart beside them, like the other carts); the 2.4 m bowser's ends can cross a wall at a corner (centre-only collision in `cartFollow`, js/haul.js).
+
+## Wear glue (`js/wearglue.js`; main.js: one import line, `wearWalk` in the walk branch, `wearStep` after `fidgetStep`)
+* Only for simmed bodies inside the 22 m skinning range (never off-screen); `e.x / e.z` are never moved.
+* Headsets on `comms`, `helm`, `sensor` billets. Breathers: a half mask while `fire` or `contamination` is up on this deck (`don_hood` gesture when standing, straight on while walking), removed on all-clear.
+* Suit locker: `EQUIPMENT.suitrack` (and `airlock_doors`) has a `wait` step with `fx: 'don_suit'`; the glue plays the K-4 suit gesture (`Donner`) and the clear hood appears at the swap point (a stand-in for the suit helmet: swapping to the `suit` body mid-script was not attempted). Once per visit; off when they leave. `GESTURES_WEAR` is merged into `GESTURES`.
+* Sleepers: spot `bunk` with the sim block `sleep` -> the use script ends, the body lies supine on the bed it faced (`applyLie`, bunk top 0.52 head toward local -x, platform bed 0.55 head toward -z), eyes shut, one sleeper per bed (a second keeps sitting); `clearLie` + the use script again when the block ends, `clearLie` before any walk.
+* Not done: biobed patients (no patient state); per-alert `hood` instead of mask; the pressure suit body (W-1).
+
+## Animations (`js/world.js` `update`, main.js sets `world.shipState`)
+Field-cell planes (`userData.field`, one shared material) shimmer 0.07-0.17 opacity, flicker when `security` is degraded, 0 when offline or in a blackout (no per-cell lock state exists). Pattern-buffer sight glass (`userData.sight`) breathes cyan, flickers degraded, dim offline. Pod hatch bank (`podbank`, R-1) in airlocks: on a pair of free wall faces, else on one (2.3 m fits a 2.5 m face; 3x3 airlocks rarely keep two side by side), in 9 of 12 airlocks sampled, with four lamps (two status lamps, two arrow strips) that breathe green and blink amber on alert. The directory lamp pulsed already.
+
+## Icons and deck-plan symbols
+`HH_ICON` (js/menus.js, now exported) uses `HH_MAP` first when the glyph is installed: dermal regen, scalpel, plasma torch, extinguisher, mop, cargo hook, crowbar, phaser rifle. U-3: `PROP_SYMBOLS` / `PROP_NAME_X` / `drawPropSymbol` moved to `js/propsymbols.js` (no three.js; `js/signart.js` re-exports them) so `tools/artifact/build-deck-plans.sh` bundles them; the template's default prop branch draws them and the tooltips use the names. New symbols: growbed, relayrack, chargerack, buffertank, cellfield (nutrient tanks alias the buffer). The game has no in-game prop map, so only the deck-plans page shows them. Department -> badge category (flight / operations shapes) is still not mapped.
+
+## Stretcher (`js/world.js` decor pass)
+A `stretcher_rack` (userData.item) registers a clutter record ("Folded stretcher"): the normal `[E] Take` prompt and `takeClutter` give `ITEMS.stretcher` (two-handed) and hide the folded stretcher's 15 parts. Every sickbay also gets one bracket on a wall face the decor passes left free (rare: sickbay walls are mostly taken). `classifyItem` maps stretcher names (not clamps / alcoves / doors) to `stretcher`.
+
+## Layout changes
+Airlock rooms with a pod hatch bank lose one or two wall faces for the random decor pass, and sickbays may lose one to the bracket: wall fixtures (and search sites) in those rooms move. Prop layouts and the main random stream are unchanged.
+
+## Play-test list
+* Sleepers: pose on bunks and platform beds (pelvis a little off the mattress centre, legs angled); a second person on the same bunk sits.
+* Breather donning in a fire alert (mask on the face, the gesture reads?), hood as helmet at the suit locker.
+* Fuel bowser pushed round corners (ends through walls), trolley / linen cart handle height (0.85 / 1.16 m with the push clip).
+* Pod hatch bank on a single face next to corner fixtures; lamp colours; field-cell shimmer brightness.
+* Stretcher pickup prompt and the empty bracket; a carried stretcher in the hands.
+* Belt icons for the eight new glyphs at 16 px.
