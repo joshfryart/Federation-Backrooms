@@ -338,7 +338,7 @@ export const ITEM_IDS = Object.keys(ITEMS);
 // player speed multiplier for carrying an item (crates slow you, small things do not)
 export const carrySlow = (id) => { const w = ITEMS[id]?.w || 0; return w <= 3 ? 1 : Math.max(0.72, 1 - (w - 3) * 0.02); };
 // which carry item a loose clutter name (ship inventory) is, by keywords; null = a generic small item
-const KEYWORDS = [[/tool ?box|tool ?kit|tool ?case/i, 'toolbox'], [/med ?kit|first.?aid|trauma kit|medical kit|hypospray|dermal|bandage|medpac/i, 'medkit'], [/spanner|wrench|driver|pliers|probe|torch|cutter|hammer|calibrat|tool/i, 'tool'],
+const KEYWORDS = [[/\bstretcher\b(?!.*\b(clamp|alcove|door|recess)\b)/i, 'stretcher'], [/tool ?box|tool ?kit|tool ?case/i, 'toolbox'], [/med ?kit|first.?aid|trauma kit|medical kit|hypospray|dermal|bandage|medpac/i, 'medkit'], [/spanner|wrench|driver|pliers|probe|torch|cutter|hammer|calibrat|tool/i, 'tool'],
   [/padd|tablet|data ?pad|clipboard|manual|log ?book/i, 'padd'], [/mug|cup|coffee|tea\b|flask|thermos/i, 'cup'], [/glass|bottle|synthehol|wine|drink/i, 'glass'], [/tray|plate|meal|bowl|food|soup/i, 'tray'],
   [/ration|snack|bar\b|biscuit|nutrient/i, 'ration'], [/hose|cable|coil|line\b/i, 'hose'], [/crate|container|cargo|drum|canister/i, 'crate'], [/box|case|carton|parts|spares|kit/i, 'smallbox'], [/vial|sample|specimen|tube/i, 'vial'],
   [/chip|isolinear|module|card/i, 'chip'], [/scanner|tricorder/i, 'scanner'], [/linen|towel|blanket|sheet|uniform|laundry/i, 'linen']];

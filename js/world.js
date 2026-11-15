@@ -1200,8 +1200,14 @@ export class World {
         for (const [r, fl] of Object.entries(free)) { for (let i = fl.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [fl[i], fl[j]] = [fl[j], fl[i]]; }
           for (const f of fl.slice(0, 2)) { let k = FIT[r][Math.floor(rnd() * FIT[r].length)]; if (k === 'rack' && ceilOf(f) < WH) k = 'locker'; f.deco = true; (byKind[k] || (byKind[k] = [])).push(f); } }
       }
+      // every sickbay keeps one stretcher bracket (MED-3, the stretcher can be taken: see below) on a wall face the passes above left free, when it has one
+      for (const r of d.rooms) { if (r.type !== 'sickbay' || (byKind.stretcher_rack || []).some(f => f.room === 'sickbay' && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h)) continue;
+        const f = faces.find(f => !f.deco && !f.win && !f.sign && f.room === 'sickbay' && ceilOf(f) >= WH - 0.01 && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h); if (f) { f.deco = true; (byKind.stretcher_rack || (byKind.stretcher_rack = [])).push(f); } }
       for (const [k, list] of Object.entries(byKind)) if (DECOR[k]) kit(k, DECOR[k], list);
-        else if (PROP_ART_FIXTURES.has(k)) for (const f of list) { const p = buildPropArt(k, m); p.position.set(f.px, 0, f.pz); p.rotation.y = f.ry; p.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(p); }   // wall pieces of the art batches (origin on the wall line, +z into the room)
+        else if (PROP_ART_FIXTURES.has(k)) for (const f of list) { const p = buildPropArt(k, m); p.position.set(f.px, 0, f.pz); p.rotation.y = f.ry; p.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(p);
+          if (p.userData.item === 'stretcher') {   // MED-3: the folded stretcher can be taken off its bracket ([E] Take, like loose clutter: js/main.js nearestClutter / takeClutter); its parts sit at z 0.13
+            const parts = p.children.filter(o => (Math.abs(o.position.z - 0.13) < 0.01 && o.position.y > 0.55 && o.position.y < 1.85) || (Math.abs(o.position.z - 0.17) < 0.004 && o.position.y > 0.9 && o.position.y < 1.55));   // bed, poles, handles, straps, buckles
+            this.clutter.push({ x: f.px + f.dx * 0.3, y: 1.2, z: f.pz + f.dy * 0.3, name: 'Folded stretcher', real: 'stretcher wall bracket', kind: 'stretcher', item: 'stretcher', gone: false, bracket: p, inst: { hide: () => parts.forEach(o => { o.visible = false; }) } }); } }   // wall pieces of the art batches (origin on the wall line, +z into the room)
       // ceiling holo-emitters (MED-9): up to four per sickbay at open tile centres under a full-height ceiling
       for (const r of d.rooms) if (r.type === 'sickbay') { let n = 0; for (let ty = r.y; ty < r.y + r.h && n < 4; ty++) for (let tx = r.x; tx < r.x + r.w && n < 4; tx++) if (this.grid[ty][tx] === 0 && this.ceilAt(tx, ty) >= WH - 0.01 && (tx + ty) % 2 === 0) { const p = buildPropArt('holo_emitter', m), [cx, cz] = this.center(tx, ty); p.position.set(cx, WH - 3.2, cz); g.add(p); n++; } }
       // searchable fixtures (see js/items.js): a spot just in front of the wall face, facing back at it
