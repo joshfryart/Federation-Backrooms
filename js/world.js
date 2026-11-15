@@ -892,6 +892,8 @@ export class World {
       }
       if (p.kind === 'warpcore') m.add(buildPropArt('warpcore_detail'));   // ENG-13 clamp rings and injector housings on the core
       if (p.kind === 'drawers' && d.room[p.ty]?.[p.tx] === 'morgue' && !morgueTray) { morgueTray = true; m.add(buildPropArt('morgue_tray', null, { col: 1, row: 0, pull: 0.75 })); }   // one drawer pulled out (MED-11)
+      if (m.userData.field) (this.fieldMats || (this.fieldMats = new Set())).add(m.userData.field);   // SEC-2 force-field planes (one shared material): shimmer, drop with the security grid (update)
+      if (m.userData.sight) (this.sights || (this.sights = [])).push(m.userData.sight);   // OPS-6 pattern buffer sight glass: slow glow (update)
       g.add(m); if (m.userData.top) this.tops[p.tx + p.ty * this.W] = m.userData.top;
       if (m.userData.box) {   // footprint wider than the default collision square: grow it (never shrink), rotated with the prop, kept inside the tile
         const [x0, x1, z0, z1] = m.userData.box, r = m.rotation.y, c = Math.cos(r), sn = Math.sin(r), H = this.propHalf, L = 1.15;
@@ -1153,7 +1155,7 @@ export class World {
       const fk = (x, y, dx, dy) => x + ',' + y + ',' + dx + ',' + dy, byPos = new Map(faces.map(f => [fk(f.tx, f.ty, f.dx, f.dy), f]));
       const ok = (f) => f && !f.deco && !f.win && !f.sign && ceilOf(f) >= WH - 0.01;
       for (const r of d.rooms) {
-        if (r.type !== 'shuttlebay' && r.type !== 'bridge') continue;
+        if (r.type !== 'shuttlebay' && r.type !== 'bridge' && r.type !== 'airlock') continue;
         const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h, doors = [];
         for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (this.grid[y][x] !== 1 && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => !inR(x + a, y + b) && this.grid[y + b]?.[x + a] === 0)) doors.push([x, y]);
         const one = faces.filter(f => ok(f) && inR(f.tx + f.dx, f.ty + f.dy) && (r.type !== 'bridge' || (f.dy === -1 && f.ty === r.y + r.h)));
@@ -1164,6 +1166,9 @@ export class World {
         if (!best) continue;
         const at = { px: best.reduce((a, f) => a + f.px, 0) / best.length, pz: best.reduce((a, f) => a + f.pz, 0) / best.length, ry: best[0].ry, dx: best[0].dx, dy: best[0].dy }; best.forEach(f => { f.deco = true; });
         if (r.type === 'bridge') { const k = best.length > 1 ? 'sysboard' : 'sysboard_half'; kit(k, DECOR[k], [at]); }
+        else if (r.type === 'airlock') { if (best.length < 2) { best.forEach(f => { f.deco = false; }); continue; }   // R-1 pod hatch bank (2.3 m) centred on the shared edge; status lamps pulse (update)
+          kit('podbank', DECOR.podbank, [at]); const pm = this.podMat || (this.podMat = new THREE.MeshBasicMaterial({ color: 0x40e070 })), lg = new THREE.BoxGeometry(0.07, 0.07, 0.012);
+          for (const [x, y, z] of [[-0.12, 1.7, 0.118], [1.08, 1.7, 0.118], [-0.6, 2.28, 0.033], [0.6, 2.28, 0.033]]) { const l = new THREE.Mesh(z < 0.1 ? new THREE.BoxGeometry(0.5, 0.045, 0.012) : lg, pm); l.position.set(at.px + Math.cos(at.ry) * x + Math.sin(at.ry) * z, y, at.pz - Math.sin(at.ry) * x + Math.cos(at.ry) * z); l.rotation.y = at.ry; g.add(l); } }
         else if (best.length > 1) { const b = buildPropArt('bay_door'); b.position.set(at.px, 0, at.pz); b.rotation.y = at.ry; b.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(b); }
       }
     }
@@ -1361,6 +1366,11 @@ export class World {
   }
   update(dt, t) {
     this.directory?.userData.pulse?.(t);   // "you are here" lamp
+    const lv = (id) => this.shipState?.level?.(id) || 0;   // 0 nominal, 1 degraded, 2 offline (main.js sets world.shipState)
+    if (this.fieldMats) { const L = lv('security'), on = L >= 2 ? 0 : this.powerAmt * (L === 1 && Math.sin(t * 23) + Math.sin(t * 7.7) > 1.1 ? 0.25 : 1);
+      for (const f of this.fieldMats) f.opacity = (0.12 + 0.035 * Math.sin(t * 9) + 0.015 * Math.sin(t * 37)) * on; }
+    if (this.sights) { const L = lv('transport'); for (let i = 0; i < this.sights.length; i++) { const k = L >= 2 ? 0.12 : (0.55 + 0.45 * Math.sin(t * 1.3 + i * 2.1)) * (L === 1 && Math.sin(t * 17 + i) > 0.6 ? 0.3 : 1); this.sights[i].color.setRGB(0.25 * k, k, 0.88 * k).multiplyScalar(0.35 + 0.65 * this.powerAmt); } }
+    if (this.podMat) { const a = this.alertAmt > 0.5, k = a ? (Math.sin(t * 8) > 0 ? 1 : 0.15) : 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2)); this.podMat.color.setRGB((a ? 1 : 0.25) * k, (a ? 0.6 : 0.88) * k, (a ? 0.1 : 0.44) * k); }
     this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
     if (this.coneMat) this.coneMat.opacity = 0.04 * this.powerAmt * (1 - this.alertAmt * 0.5);
     if (this.coneFlickMat) this.coneFlickMat.opacity = 0.04 * this.powerAmt * this.flickerF;
