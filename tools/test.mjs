@@ -245,10 +245,11 @@ const invRun = () => page.evaluate(async () => {
   out.newRooms = [...seen];
   g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
   for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
-  const w = g.world, pr = w.d.props.find(p => ['crate', 'table', 'bunk', 'biobed'].includes(p.kind));
-  if (pr) { const [cx, cz] = w.center(pr.tx, pr.ty); for (const [ox, oz] of [[1.7, 0], [-1.7, 0], [0, 1.7], [0, -1.7]]) { P.x = cx + ox; P.z = cz + oz; P.yaw = Math.atan2(ox, oz); P.pitch = -0.6; P.vx = P.vz = 0; g.step(1 / 60, 950); g.step(1 / 60, 950.02); const t = document.getElementById('prompt').textContent; if (t && !/Search/.test(t)) { out.examine = t; out.examineKind = pr.kind; break; } } }
+  const w = g.world;   // look at a crate / table / bunk / biobed from an open tile beside it (a stand point inside a wall or another prop sees that instead): up to 12 props
+  const K4 = ['crate', 'table', 'bunk', 'biobed'];   // these first; a small deck often has none of them, so then any floor prop with examine text
+  look: for (const pr of [...w.d.props.filter(p => K4.includes(p.kind)), ...w.d.props.filter(p => !K4.includes(p.kind))].slice(0, 12)) { const [cx, cz] = w.center(pr.tx, pr.ty); for (const [ox, oz] of [[1.7, 0], [-1.7, 0], [0, 1.7], [0, -1.7]]) { const [sx, sy] = w.tile(cx + ox, cz + oz); if (w.solid(sx, sy) || w.isTube(sx, sy)) continue; P.x = cx + ox; P.z = cz + oz; P.y = 0; P.yaw = Math.atan2(ox, oz); P.pitch = -0.6; P.vx = P.vz = 0; g.step(1 / 60, 950); g.step(1 / 60, 950.02); const t = document.getElementById('prompt').textContent; if (t && !/Search|\[E\]|\[Hold E\]|— nominal|Tubelift/.test(t)) { out.examine = t; out.examineKind = pr.kind; break look; } } }
   const cands = (w.clutter || []).filter(c => !g.ents.some(e => Math.hypot(e.x - c.x, e.z - c.z) < 3.5) && !(w.searchSites || []).some(s => Math.hypot(s.x - c.x, s.z - c.z) < 3) && !(g.repairPts || []).some(r => Math.hypot(r.x - c.x, r.z - c.z) < r.reach + 1) && Math.hypot(w.liftPos.x - c.x, w.liftPos.z - c.z) > 4);
-  find: for (const c of cands.slice(0, 15)) for (const [ox, oz] of [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]]) {
+  find: for (const c of cands.slice(0, 30)) for (const [ox, oz] of [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]]) {
     P.x = c.x + ox; P.z = c.z + oz; P.yaw = Math.atan2(ox, oz); P.pitch = 0; P.vx = P.vz = 0; g.step(1 / 60, 960); g.step(1 / 60, 960.02);
     const t = document.getElementById('prompt').textContent; if (t && !/\[E\]|nominal|Repair/.test(t)) { out.clutterPrompt = t; break find; } }
   return out;
