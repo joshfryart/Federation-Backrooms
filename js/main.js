@@ -5,6 +5,7 @@ import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, dressCrew, prewarmOutfits } from './actors.js';
+import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
@@ -1203,7 +1204,7 @@ function step(dt, t) {
       if (e.simmed && !e.walk) dodgeCheck(e, dt, d);
       if (e.op && e.walk) opEnd(e);   // leaving the equipment: put things away
       const q = e.ease; if (q) { const k = Math.max(0, 1 - dt * 3.5); q[0] *= k; q[1] *= k; if (q[0] * q[0] + q[1] * q[1] < 4e-4) { q[0] = q[1] = 0; e.ease = null; } }   // opEnd left the mesh on the seat / use point: it eases back onto the logical position instead of snapping
-      if (e.walk && walkStep(e, dt, d)) { if (q) { e.mesh.position.x += q[0]; e.mesh.position.z += q[1]; } continue; }
+      if (e.walk && (wearWalk(e, G, d), walkStep(e, dt, d))) { if (q) { e.mesh.position.x += q[0]; e.mesh.position.z += q[1]; } continue; }
       if (q && !e.op) { e.mesh.position.x = e.x + q[0]; e.mesh.position.z = e.z + q[1]; }
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
       if (e.repairing) (e.repairing.npc ? repairBodyStep : repairerStep)(e, dt, d);   // npc: Systems Nominal crew repair (js/repair.js); else the madness-mode repairer
@@ -1213,7 +1214,7 @@ function step(dt, t) {
         if (d > 22) continue;                       // far away: skip skinning updates
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
         H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
-        if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) fidgetStep(e, dt, d); }   // impostors never blink
+        if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) { fidgetStep(e, dt, d); wearStep(e, dt, d, G, world); } }   // impostors never blink
         H.update(dt * (e.fake ? 0.82 : 1));
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
