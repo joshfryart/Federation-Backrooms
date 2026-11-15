@@ -51,13 +51,12 @@ export async function wiringBrowser(page, fail) {
     { const e0 = crew().find(x => !x.walk) || crew()[0]; if (e0) { P.x = e0.x + 1.5; P.z = e0.z; tick(2); g.alerts.raise('fire', { deck: G.shipDeck + 1 }); tick(60);
       const near = crew().filter(x => Math.hypot(x.x - P.x, x.z - P.z) < 18); out.mask = { near: near.length, on: near.filter(x => x.wear?.mask?.meshes[0]?.visible).length }; g.alerts.clear('fire'); tick(3); out.mask.after = near.filter(x => x.wear?.mask).length; } }
     // a sleeper lies on the bunk (block forced to 'sleep'), gets up when it ends, then walks
-    { const bunk = w.d.props.find(p => p.kind === 'bunk' || p.kind === 'platform_bed'), e = crew().find(x => !x.walk); if (bunk && e) {
+    { const bunk = w.d.props.find(p => (p.kind === 'bunk' || p.kind === 'platform_bed') && !crew().some(o => o.wear?.lie?.p === p)), e = crew().find(x => !x.walk && !x.wear?.lie);   /* a bed nobody sleeps on (one sleeper per bed) */ if (bunk && e) {
       const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [bunk.tx + a, bunk.ty + b]).find(([x, y]) => w.d.grid[y]?.[x] === 0 && !w.solid(x, y)), [x, z] = w.center(...nb);
-      for (const o of crew()) if (o !== e && o.wear?.lie) { o.spot = 'console'; }   // nobody else on the bed
       e.walk = null; e.x = x; e.z = z; e.mesh.position.set(x, 0, z); e.spot = 'bunk'; e.faceAt = w.center(bunk.tx, bunk.ty); g.opEnd(e); g.opStart(e);
       const S = g.sim, where = S.where; S.where = (p) => p === e.person ? { ...where.call(S, p), activity: 'sleep' } : where.call(S, p); P.x = x + 2; P.z = z + 2; tick(30);
       const hp = hum(e).bones.Head.getWorldPosition(new THREE.Vector3()); out.lie = { lying: !!e.wear?.lie, rotX: +e.mesh.rotation.x.toFixed(2), headY: +hp.y.toFixed(2), logical: +Math.hypot(e.x - x, e.z - z).toFixed(2) };
-      delete S.where; tick(5); out.lie.up = !e.wear?.lie && Math.abs(e.mesh.rotation.x) < 0.01;
+      S.where = (p) => p === e.person ? { ...where.call(S, p), activity: 'handover_in' } : where.call(S, p); tick(5); delete S.where;   /* the block ends (the real one may be 'sleep' too) */ out.lie.up = !e.wear?.lie && Math.abs(e.mesh.rotation.x) < 0.01;
       const t0 = w.tile(e.x, e.z), dst = w.d.openTiles.find(([a, b]) => Math.abs(a - t0[0]) + Math.abs(b - t0[1]) > 3 && w.field(a, b, true)[t0[0] + t0[1] * w.W] > 0);
       if (dst) { g.startWalk(e, dst[0], dst[1]); let n = 0; for (; n < 30 * 60 && e.walk; n++) tick(1); out.lie.walked = !e.walk; } } }
     // pod hatch lamps / field shimmer / sight glow: find decks that have them
