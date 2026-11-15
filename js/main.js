@@ -318,8 +318,8 @@ function placeGore(data, rnd, n) {
 
 // ---- NPC walking on the player's deck: descend the path field toward a tile at walking pace, then take the pose of the spot
 const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'interact', desk: 'interact', workbench: 'interact', labbench: 'interact', junction: 'interact', warpcore: 'interact', replicator: 'interact', bar: 'sitting_idle', table: 'sitting_idle', sofa: 'sitting_idle', bunk: 'sitting_idle', biobed: 'idle_talking', treadmill: 'jog_fwd', weightbench: 'idle_torch' };
-function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; if (opStart(e)) return;   // simmed crew run the equipment's use script (js/haul.js, js/equipment.js); POSE_OF is the fallback
-  const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
+function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const rep = atRepairStand(e); if (!rep && opStart(e)) return;   // simmed crew run the equipment's use script (js/haul.js, js/equipment.js); POSE_OF is the fallback
+  const pose = rep ? 'idle' : POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
 function pathField(tx, ty, tubes = false) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty + (tubes ? 't' : ''); let f = c.get(k); if (!f) { f = tubes ? world.field(tx, ty, false, true) : world.field(tx, ty, true); const car = world.car; if (car && f[car.tx + car.ty * world.W] < 0) { const m = f[car.tx + car.dx + (car.ty + car.dy) * world.W]; if (m >= 0) f[car.tx + car.ty * world.W] = m + 1; }   /* the lift car counts as floor even while its doors are shut (crew step out of it) */ c.set(k, f); if (c.size > 60) c.delete(c.keys().next().value); } return f; }
 
 
@@ -537,6 +537,10 @@ function simHold(p, t) {
   if (t.lift ? t.from.deckNo !== here : t.to.deckNo !== here) return false; const e = ents.find(x => x.simmed && x.person === p); if (!e) return false;
   return t.lift ? true : !!e.walk?.opts.sim && !e.walk.vanish;   // leaving: still walking to / standing in the car; on this deck: still on a schedule walk
 }
+// someone with a body on this deck leaves it by lift: bodies() stops listing them at once, so simBodies sends the body to the car in this
+// same step instead of at its next 1.5 s pass (the body walked on to its old spot meanwhile, one more body than the sim lists: test-walk
+// 'npc bodies vs sim', seed 15 ship 0: a lift arrival whose plan changed during the ride is turned round 0.3 s after stepping out)
+function simDepart(a) { if (a.lift && world && a.from === G.shipDeck + 1 && ents.some(e => e.simmed && e.person === a.person && !e.board && !e.walk?.vanish)) G.simT = 0; }
 const dropBody = (e) => { scene.remove(e.mesh); releaseHuman(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); };
 function simBodies(dt, force = false) {
   G.simT = (G.simT || 0) - dt; if (!force && G.simT > 0) return; G.simT = 1.5; if (!world || !G.sim || G.phase === 'ride' || G.phase === 'select') { if (!force) return; }
@@ -596,6 +600,14 @@ function repairStand(p) {
   let t = [s.stand[0], s.stand[1]];
   if (j.role === 'helper') { const nb = WALK_DIRS.map(([a, b]) => [t[0] + a, t[1] + b]).find(([x, y]) => d.grid[y]?.[x] === 0 && !world.isTube(x, y)); if (nb) t = nb; }
   const r = repairPts.find(q => q.sys === j.sys); t.face = !s.main && r && r.px !== undefined ? [r.px, r.pz] : world.center(s.face[0], s.face[1]); return t;
+}
+// a crew repairer standing at their repair tile (job on this deck, not held by a higher override): they wait there for the repair pose
+// (beginRepairPose) and must not start the use script of their old schedule spot. opStart pulls the logical position up to 0.95 m per axis
+// toward that prop's use point (1.1 m off the tile centre at the helm on USF Ontario), past the 1.0 m arrive radius below: the walk
+// restarted every second and the job only began on the 150 s forced arrival (test.mjs pace-repair --seed 1)
+function atRepairStand(e) {
+  if (!e.person || !e.simmed || !G.repair) return false; const j = G.repair.jobOf(e.person); if (!j || j.suspended) return false;
+  const t = repairStand(e.person); if (!t) return false; const [cx, cz] = world.center(t[0], t[1]); return Math.hypot(e.x - cx, e.z - cz) < 1.0;
 }
 function repairBodyState(p) {
   if (!world || G.sim.where(p)?.deckNo !== G.shipDeck + 1) return null;
@@ -825,7 +837,7 @@ function newRun() {
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
-  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.holdBody = simHold; }
+  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.holdBody = simHold; G.sim.on('depart', simDepart); }
   G.social = G.sim ? generateSocial(G.roster, { seed: G.runSeed, plan: G.plan, data: commsData(), clock: G.comms.clock, ship: G.ship }) : null; if (G.social) G.sim.setSocial(G.social);   // js/social.js: groups, friendships, rivalries (before setupDuty: seeds trust)
   setupDuty();
   hideScreens(); fade(0);
