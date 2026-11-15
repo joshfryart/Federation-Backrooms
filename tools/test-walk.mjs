@@ -153,7 +153,8 @@ export async function walkBrowser(page, fail) {
     //     the car 5 s the boarders step back out ("We'll take the next one."), everyone waits beside the doors or in the line further back (apart,
     //     nobody left in the car), and once the player steps out they all board and go, nobody > 10 s in the car
     //     (parts 2, 8 and 10 send people off this deck: with fewer than 8 idle bodies left it moves to the deck with the most people, so the check always has a crowd)
-    if (idle().length < 8) { const cnt = G.shipDecks.map((_, i) => S.onDeck(i + 1).filter(o => !S.overridden(o.person)).length), best = cnt.indexOf(Math.max(...cnt)); if (best !== G.shipDeck) { g.loadDeck(best + 1); tick(5); g.simBodies(0, true); if (g.haul) g.haul.t = 1e9; }   /* no cart jobs, as at the start (a deck load restarts the haul timer) */ out.deck12 = { deck: G.shipDeck + 1, idle: idle().length }; }
+    const toBusiest = () => { const cnt = G.shipDecks.map((_, i) => S.onDeck(i + 1).filter(o => !S.overridden(o.person)).length), best = cnt.indexOf(Math.max(...cnt)); if (best !== G.shipDeck) { g.loadDeck(best + 1); tick(5); g.simBodies(0, true); if (g.haul) g.haul.t = 1e9; } };   /* no cart jobs, as at the start (a deck load restarts the haul timer) */
+    if (idle().length < 8) { toBusiest(); out.deck12 = { deck: G.shipDeck + 1, idle: idle().length }; }
     { const w = g.world, car = w.car, here = G.shipDeck + 1, other = Object.keys(G.plan).map(k => G.plan[k].find(s => s.deckNo !== here)).find(Boolean), type = Object.keys(G.plan).find(k => G.plan[k].includes(other)), ppl = idle().slice(0, 10).map(e => e.person), L = G.lift, nd = g.liftWaitSpots().length;
       const said = []; const say0 = G.say; G.say = (m, c) => { said.push(String(m)); return say0(m, c); };
       for (const p of ppl) S.redirect(p, type, 'door', 600, 'ordered', { prio: 2, site: other }); let boarded = false, n = 0;
@@ -179,6 +180,8 @@ export async function walkBrowser(page, fail) {
         for (const j of D.jobs.slice()) if (j.person === a) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(a, 2); tick(10 * 30); const after = S.overrideOf(a)?.activity;
         A.clear('red'); tick(3 * 30); for (const p of [a, b]) if (p) { for (const j of D.jobs.slice()) if (j.person === p) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(p, 2); } lp.state = st0;
         out.alertOrders = { a: !!a, keep, b: !!b, taken, after, left: g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations').length }; } } }
+    // bodies vs sim: never on an empty deck (parts 12-14 send people away; with fewer than 3 bodies left it moves to the busiest deck and lets the crew walk 10 s first, so the check sees arrivals / departures)
+    { const nb = () => g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, n0 = nb(); if (n0 < 3) { toBusiest(); tick(10 * 30); out.bodiesMoved = { from: n0, deck: G.shipDeck + 1 }; } }
     { const B = S.bodies(G.shipDeck + 1), es = g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish); out.bodies = { n: es.length, sim: B.size };
       const extra = es.filter(e => !B.has(e.person.id)); if (extra.length) out.bodies.extra = extra.map(e => { const st = S.st.get(e.person.id); return [e.person.short, st?.deckNo, st?.room, st?.transit ? (st.transit.lift ? 'lift>' + st.transit.to.deckNo : 'walk') : '', S.overrideOf(e.person)?.activity || '', e.walk ? (e.walk.opts.sim || 'walk') : '', e.simKey || '', e.haul ? 'haul' : '', e.op ? 'op' : '', e.cower ? 'cower' : '', e.fromCar ? 'fromCar' : ''].join(':'); }); }
     return out;
@@ -200,7 +203,7 @@ export async function walkBrowser(page, fail) {
   const LH = r.liftHeld; if (!(LH && LH.held && (!LH.boarded || LH.stepOut) && LH.inCar === 0 && LH.minGap >= 0.45 && LH.gone === LH.n && LH.maxWait < 10 && (LH.waitN <= LH.nd || LH.inLine > 0 || LH.line === 0))) fail('npc lift: held by the player in the car, crowd waits beside the doors and in a line, then boards ' + JSON.stringify(LH));
   const ST = r.stations; if (ST && !(ST.sent > 0 && ST.ok && ST.left === 0)) fail('npc red alert: crew go to their stations, released on clear ' + JSON.stringify(ST));
   const AO = r.alertOrders; if (AO && !(AO.keep && (AO.taken == null || AO.taken) && AO.after === 'stations' && AO.left === 0)) fail('npc red alert: ordered crew finish the order, an order takes someone off station, back to station after ' + JSON.stringify(AO));
-  if (!(r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim ' + JSON.stringify(r.bodies));
+  if (!(r.bodies.n >= 3 && r.bodies.n <= r.bodies.sim)) fail('npc bodies vs sim (at least 3 bodies, none the sim does not list) ' + JSON.stringify({ ...r.bodies, ...(r.bodiesMoved ? { moved: r.bodiesMoved } : {}) }));
   return r;
 }
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) { const errs = []; const r = await walkTests(m => errs.push(m)); console.log(errs.length ? [...new Set(errs)].join('\n') : 'walk OK ' + JSON.stringify(r)); process.exit(errs.length ? 1 : 0); }
