@@ -226,3 +226,7 @@ Airlock rooms with a pod hatch bank lose one or two wall faces for the random de
 * Pod hatch bank on a single face next to corner fixtures; lamp colours; field-cell shimmer brightness.
 * Stretcher pickup prompt and the empty bracket; a carried stretcher in the hands.
 * Belt icons for the eight new glyphs at 16 px.
+
+## Test runs (`node tools/test.mjs`)
+* HEAD 5c6be94 run 1: FAIL `npc bodies vs sim {"n":1,"sim":0}` (tools/test-walk.mjs) and FAIL wiring sleeper (a test bug: the real block was still `sleep`; fixed in bbb5c23). HEAD bbb5c23 run 2: OK.
+* Baseline 3fe10c2 (before this pass) run 1: FAIL `bot run` (deck 2 did not advance; ran while probes loaded the machine); run 2: OK. `npc bodies vs sim` did not fail on the baseline in two runs and did not recur on HEAD; it is a sim-body count check in the pathing tests, so it may be a rare flake or a body the wear glue kept around one frame longer: watch it.
