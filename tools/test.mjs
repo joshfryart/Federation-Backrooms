@@ -46,6 +46,8 @@ import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation clos
 await talkTests(fail);
 import { combatTests, combatBrowser } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 await combatTests(fail);
+import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
+await wiringTests(fail);
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 {
   const { generate, genShip } = await import(new URL('../js/gen.js', import.meta.url)), { SHIPS, deckOptions } = await import(new URL('../js/ships.js', import.meta.url));
@@ -571,6 +573,7 @@ await commsHud(page3, fail);
 await uiBrowser(page3, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
 await talkBrowser(page3, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
 await combatBrowser(page3, page, fail);   // strike / grab / drag / release, witnesses, security, player HP, madness zapper (tools/test-combat.mjs)
+await wiringBrowser(page3, fail);   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)
 await page.close();
 // ---- pace, crew repair response, shift-end tasks (js/pace.js, js/repair.js, js/duty.js) ----
 const rep = await page3.evaluate(async () => {

@@ -40,7 +40,7 @@ const SYM_ALIAS = { taskchair_plain: 'taskchair', fieldgen_damp: 'fieldgen', ran
 export const PROP_NAME_X = { helm: 'Helm station', baycontrol: 'Bay control', beampedestal: 'Beam pedestal', secdesk: 'Security desk', nursestation: "Nurses' station", holodesk: 'Holo desk', reactorstation: 'Reactor station', taskchair: 'Task chair', steriliser: 'Steriliser bench',
   surgical_table: 'Surgical table', med_dispenser: 'Medication dispenser', exam_couch: 'Exam couch', autopsy_table: 'Autopsy table', infusion_stand: 'Infusion stand', pumpskid: 'Pump skid', heatexch: 'Heat exchanger', scrubber: 'Scrubber', fieldgen: 'Field generator', fabricator: 'Fabricator',
   range: 'Range', servery: 'Servery', bar: 'Bar', barstool: 'Bar stool', wastebin: 'Waste bin', dishwasher: 'Dishwasher',
-  growbed: 'Grow bed', relayrack: 'Relay rack', chargerack: 'Charging rack', buffertank: 'Pattern buffer', cellfield: 'Field cell', nutrient_tanks: 'Nutrient tanks' };
+  fieldgen_damp: 'Damper field generator', growbed: 'Grow bed', relayrack: 'Relay rack', chargerack: 'Charging rack', buffertank: 'Pattern buffer', cellfield: 'Field cell', nutrient_tanks: 'Nutrient tanks' };
 /** drawPropSymbol(g, kind, s, C): draws the symbol centred on the current origin (the caller has done g.translate(cx, cy) as the deck-plans page does), s = tile symbol size in px,
  *  C = { panel, ink, sci } colours (strings). Returns true when it knows the kind (so the caller can fall back to its default box). */
 export function drawPropSymbol(g, kind, s, C = { panel: '#1b2130', ink: '#9db2c8', sci: '#35e6d8' }) {
