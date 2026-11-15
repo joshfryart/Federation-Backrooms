@@ -221,12 +221,13 @@ const dir = await page.evaluate(async () => {
 console.log('director:', JSON.stringify(dir)); if (!(dir.quietActs >= 4 && dir.peaked && dir.relaxed && dir.cascadeReactor !== 'nominal' && dir.repairer && dir.crewFixed)) fail('director');
 const srch = await page.evaluate(async () => {
   const g = __game, P = g.P, out = { sites: 0, kinds: {}, searched: false, prompt: '', say: '' };
-  for (let tries = 0; tries < 6 && !out.sites; tries++) { g.newRun(); g.setQuality('low'); out.sites = g.world.searchSites?.length || 0; }
+  const stand = (s) => [s.x + s.nx * 0.9, s.z + s.nz * 0.9];   // a site with nobody standing by (the prompt would offer a talk instead) and no repair point in reach (a damaged system's [Hold E] Repair outranks Search by design, js/main.js prompt order)
+  const clear = (s) => { const [x, z] = stand(s); return !g.ents.some(e => e.kind === 'crew' && Math.hypot(e.x - x, e.z - z) < 3) && !g.repairPts.some(r => Math.hypot(r.x - x, r.z - z) < r.reach + 0.3); };
+  for (let tries = 0; tries < 8 && !(out.sites && g.world.searchSites.some(clear)); tries++) { g.newRun(); g.setQuality('low'); out.sites = g.world.searchSites?.length || 0; }   // small decks have only a few fixtures: a fresh deck if none is clear
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
   for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
   for (const s of g.world.searchSites) out.kinds[s.kind] = (out.kinds[s.kind] || 0) + 1;
-  const stand = (s) => [s.x + s.nx * 0.9, s.z + s.nz * 0.9];   // one with nobody standing by (the prompt would offer a talk instead) and no repair point in reach (a damaged system's [Hold E] Repair outranks Search by design, js/main.js prompt order)
-  const site = g.world.searchSites.find(s => { const [x, z] = stand(s); return !g.ents.some(e => e.kind === 'crew' && Math.hypot(e.x - x, e.z - z) < 3) && !g.repairPts.some(r => Math.hypot(r.x - x, r.z - z) < r.reach + 0.3); }) || g.world.searchSites[0]; if (site) {
+  const site = g.world.searchSites.find(clear) || g.world.searchSites[0]; if (site) {
     P.x = site.x + site.nx * 0.9; P.z = site.z + site.nz * 0.9; P.yaw = Math.atan2(site.nx, site.nz); P.vx = P.vz = 0;   // stand in front, look at the wall
     g.step(1 / 60, 900); out.prompt = document.getElementById('prompt').textContent;
     const before = document.getElementById('msgs')?.textContent || '';
