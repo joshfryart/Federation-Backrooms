@@ -349,11 +349,18 @@ export const CARTS = {
   cargo: { name: 'cargo cart', w: 0.9, l: 1.3, handle: 0.95, load: ['crate', 'crate', 'smallbox'] },
   med: { name: 'medical trolley', w: 0.6, l: 0.9, handle: 0.7, load: ['medkit', 'scanner', 'linen'] },
   tool: { name: 'tool cart', w: 0.6, l: 0.95, handle: 0.72, load: ['toolbox', 'hose', 'smallbox'] },
+  // batch 6 / 11 art pushed as carts (js/carry.js makeCart builds the prop mesh; docs/propart-flight.md, docs/propart-polish.md). grip = centre -> push bar (m),
+  // flip = the art's push bar is at +z (turned round so it is at the back), slots = load layout, cap = how many items fit on top, top = load surface height
+  sled: { name: 'hover sled', art: 'hoversled', w: 0.9, l: 1.3, grip: 0.98, top: 0.21, slots: 'cargo', cap: 4, hover: true, load: ['crate', 'crate', 'smallbox'] },
+  bowser: { name: 'fuel bowser', art: 'fuelbowser', w: 0.95, l: 2.4, grip: 1.05, top: 0.91, cap: 0, load: [] },
+  trolley: { name: 'galley trolley', art: 'galley_trolley', w: 0.6, l: 0.8, grip: 0.5, flip: true, top: 1.62, cap: 3, load: ['tray', 'tray', 'cup'] },
+  linen: { name: 'linen cart', art: 'linen_cart', w: 0.6, l: 0.9, grip: 0.42, flip: true, top: 0.62, cap: 3, load: ['linen', 'linen', 'linen'] },
 };
 export const HAULERS = {
   cargo: { cart: 'cargo', to: ['stores', 'shuttlebay', 'transporter', 'cargo', 'lift'] }, qm: { cart: 'cargo', to: ['stores', 'cargo', 'mess', 'lift'] },
-  deck: { cart: 'cargo', to: ['shuttlebay', 'cargo', 'lift'] }, dc: { cart: 'tool', to: ['plant', 'workshop', 'engineering', 'stores'] },
-  galley: { cart: 'cargo', carry: 'tray', to: ['mess', 'stores', 'lounge'] }, cook: { cart: null, carry: 'tray', to: ['mess', 'lounge'] }, rep: { cart: 'cargo', to: ['mess', 'stores', 'workshop'] },
+  deck: { cart: 'sled', to: ['shuttlebay', 'cargo', 'lift'] }, dc: { cart: 'tool', to: ['plant', 'workshop', 'engineering', 'stores'] },
+  galley: { cart: 'trolley', carry: 'tray', to: ['mess', 'stores', 'lounge'] }, cook: { cart: null, carry: 'tray', to: ['mess', 'lounge'] }, rep: { cart: 'cargo', to: ['mess', 'stores', 'workshop'] },
+  pilot: { cart: 'bowser', to: ['shuttlebay', 'cargo'] },   // fuel_and_stores: the bowser stays on the flight deck side
   nurse: { cart: 'med', to: ['sickbay', 'lab', 'morgue', 'stores'] }, medtech: { cart: 'med', to: ['sickbay', 'lab', 'morgue'] }, doc: { cart: 'med', to: ['sickbay', 'morgue', 'lab'] },
   eps: { cart: 'tool', to: ['engineering', 'plant', 'workshop'] }, ttech: { cart: 'tool', to: ['transporter', 'workshop', 'engineering'] }, env: { cart: 'tool', to: ['plant', 'engineering', 'arboretum'] },
   reactor: { cart: 'tool', to: ['engineering', 'workshop'] }, bot: { cart: null, carry: 'harvest_tote', to: ['arboretum', 'lab'] }, lab: { cart: null, carry: 'smallbox', to: ['lab', 'stores'] },
