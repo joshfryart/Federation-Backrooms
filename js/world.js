@@ -1162,11 +1162,11 @@ export class World {
         const pairs = one.map(f => [f, byPos.get(fk(f.tx + Math.abs(f.dy), f.ty + Math.abs(f.dx), f.dx, f.dy))]).filter(([, g2]) => ok(g2) && inR(g2.tx + g2.dx, g2.ty + g2.dy));
         const far = (f) => Math.min(99, ...doors.map(([x, y]) => Math.abs(x - f.tx - f.dx) + Math.abs(y - f.ty - f.dy)));
         const score = (fs) => r.type === 'bridge' ? -Math.abs(fs.reduce((a, f) => a + f.tx, 0) / fs.length - (r.x + (r.w - 1) / 2)) : Math.min(...fs.map(far));
-        const best = pairs.sort((a, b) => score(b) - score(a))[0] || (r.type === 'bridge' ? one.map(f => [f]).sort((a, b) => score(b) - score(a))[0] : null);
+        const best = pairs.sort((a, b) => score(b) - score(a))[0] || (r.type === 'bridge' || r.type === 'airlock' ? one.map(f => [f]).sort((a, b) => score(b) - score(a))[0] : null);   // the 2.3 m pod bank also fits one 2.5 m face (3x3 airlocks rarely keep two free faces side by side)
         if (!best) continue;
         const at = { px: best.reduce((a, f) => a + f.px, 0) / best.length, pz: best.reduce((a, f) => a + f.pz, 0) / best.length, ry: best[0].ry, dx: best[0].dx, dy: best[0].dy }; best.forEach(f => { f.deco = true; });
         if (r.type === 'bridge') { const k = best.length > 1 ? 'sysboard' : 'sysboard_half'; kit(k, DECOR[k], [at]); }
-        else if (r.type === 'airlock') { if (best.length < 2) { best.forEach(f => { f.deco = false; }); continue; }   // R-1 pod hatch bank (2.3 m) centred on the shared edge; status lamps pulse (update)
+        else if (r.type === 'airlock') {   // R-1 pod hatch bank (2.3 m) on one face or centred on two; status lamps pulse (update)
           kit('podbank', DECOR.podbank, [at]); const pm = this.podMat || (this.podMat = new THREE.MeshBasicMaterial({ color: 0x40e070 })), lg = new THREE.BoxGeometry(0.07, 0.07, 0.012);
           for (const [x, y, z] of [[-0.12, 1.7, 0.118], [1.08, 1.7, 0.118], [-0.6, 2.28, 0.033], [0.6, 2.28, 0.033]]) { const l = new THREE.Mesh(z < 0.1 ? new THREE.BoxGeometry(0.5, 0.045, 0.012) : lg, pm); l.position.set(at.px + Math.cos(at.ry) * x + Math.sin(at.ry) * z, y, at.pz - Math.sin(at.ry) * x + Math.cos(at.ry) * z); l.rotation.y = at.ry; g.add(l); } }
         else if (best.length > 1) { const b = buildPropArt('bay_door'); b.position.set(at.px, 0, at.pz); b.rotation.y = at.ry; b.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(b); }
