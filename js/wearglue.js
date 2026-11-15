@@ -34,7 +34,7 @@ function finishDon(e) { const w = W(e); if (!w.don) return; w.don.worn?.setVisib
 
 /** the bed (bunk / platform bed prop) a sleeper at (x, z) uses: { p, cx, cz } or null */
 function bedNear(world, e) {
-  if (e.opProp) { const [tx, ty] = world.tile(e.opProp[0], e.opProp[1]), p = world.d.props.find(q => q.tx === tx && q.ty === ty && BEDS[q.kind]); if (p) { const [cx, cz] = world.center(tx, ty); return { p, cx, cz }; } }   // the bed the use script faced
+  if (e.opProp) { const [tx, ty] = world.tile(e.opProp[0], e.opProp[1]), p = world.d.props.find(q => q.tx === tx && q.ty === ty && BEDS[q.kind]); if (p) { const [cx, cz] = world.center(tx, ty); if (Math.hypot(cx - e.x, cz - e.z) < 3.6) return { p, cx, cz }; } }   // the bed the use script faced (if they are still beside it: opProp outlives the visit)
   let best = null, bd = 3.6;   // the logical position is clamped toward the seat, up to 0.95 m off the tile centre on both axes
   for (const p of world.d.props) { if (!BEDS[p.kind]) continue; const [cx, cz] = world.center(p.tx, p.ty), dd = Math.hypot(cx - e.x, cz - e.z); if (dd < bd) { bd = dd; best = { p, cx, cz }; } }
   return best;
@@ -58,7 +58,7 @@ export function wearStep(e, dt, d, G, world) {
   const H = e.mesh?.userData.human; if (!H || !e.person || e.fake || !e.simmed) return;
   const w = W(e);
   // sleeping on a bunk / platform bed
-  const asleep = e.spot === 'bunk' && !e.walk && !e.cower && !e.repairing && !e.haul && G.sim?.where(e.person)?.activity === 'sleep';
+  const asleep = e.spot === 'bunk' && !e.walk && !e.board && !e.cower && !e.repairing && !e.haul && G.sim?.where(e.person)?.activity === 'sleep' && !G.sim.where(e.person).transit;   // not someone standing in the lift car on their way to bed (pathing iteration 6: a boarder lay down on their old bunk 10 m away)
   if (asleep && !w.lie && world) {
     const b = bedNear(world, e), other = b && lyingOn.get(b.p);
     if (b && (!other || other === e || !other.mesh?.parent || other.wear?.lie?.p !== b.p)) {

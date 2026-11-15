@@ -284,8 +284,9 @@ export const BARK_POOLS = {
   tired: ['Is it end of shift yet?', 'I could sleep standing up.'], hungry: ['What is for supper?', 'The galley should be open.'], stressed: ['This is not good.', 'Hold on.'], alert: ['Alert status. Positions.', 'All hands, stand by.'],
   smalltalk: ['Long shift?', 'Quiet today.', 'Lift is slow today.'], correct: ['Actually, that is the long way.'],
 };
+let barkN = 0;   // varies the line from one bark to the next (was the wall clock: a test replay drew different lines)
 export function bark(p, pool = 'idle', rnd = null) {
-  rnd = rnd || seeded((p.voice?.hash || 1) ^ strHash(pool) ^ ((Date.now() / 1000) | 0));
+  rnd = rnd || seeded((p.voice?.hash || 1) ^ strHash(pool) ^ Math.imul(++barkN, 0x9e3779b1));
   const own = (p.tags || []).map(t => TAG_EFFECTS[t]).filter(e => e?.kind === 'bark' && e.pool === pool).flatMap(e => e.lines);
   const base = pool === 'stressed' && own.length && rnd() < 0.8 ? pickFrom(rnd, own) : own.length && rnd() < 0.35 ? pickFrom(rnd, own) : pickFrom(rnd, BARK_POOLS[pool] || BARK_POOLS.idle);
   if (/^(…|\(says)/.test(base)) return base;

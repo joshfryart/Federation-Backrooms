@@ -37,10 +37,10 @@ export async function wiringBrowser(page, fail) {
     const THREE = await import('three'), { makeSurvivor } = await import('./js/humans.js'), { dressCrew } = await import('./js/actors.js'), { outfitFor } = await import('./js/wearart.js'), E = await import('./js/equipment.js'), { HH_ICON } = await import('./js/menus.js');
     G.forceShip = 0; g.newRun(); hide(); g.setQuality('low'); G.hp = G.maxHp = 1e6;
     // 1) clothes cache: after the load-time prewarm, dressing 17 crew costs next to nothing and shares geometry per body kind
-    { for (let i = 0; i < 100 && (await import('./js/wearart.js')).wearCacheSize() < 20; i++) await new Promise(res => setTimeout(res, 100));
+    { const cached = (await import('./js/wearart.js')).wearCacheSize();   // tools/test.mjs awaits __game.warmed before any section: no wall-clock polling here (an idle job landing mid-section shifted Math.random)
       const ppl = g.roster.people.filter(p => outfitFor(p)).slice(0, 17), ms = [], meshes = []; for (const p of ppl) { const m = makeSurvivor(Math.random, p), t0 = performance.now(); dressCrew(m, p); ms.push(performance.now() - t0); meshes.push([p.body, m.userData.outfit]); }
       const geo = {}; let shared = 0; for (const [k, w] of meshes) { if (!w) continue; const key = k + w.id, gg = w.meshes[0].geometry; if (geo[key] === gg) shared++; geo[key] = gg; }
-      out.cache = { n: ppl.length, total: +ms.reduce((a, b) => a + b, 0).toFixed(1), max: +Math.max(...ms).toFixed(1), dressed: meshes.filter(m => m[1]).length, shared }; }
+      out.cache = { cached, n: ppl.length, total: +ms.reduce((a, b) => a + b, 0).toFixed(1), max: +Math.max(...ms).toFixed(1), dressed: meshes.filter(m => m[1]).length, shared }; }
     // 2) repair points on every deck of two ships (the parkour check wants >= 20)
     { const pts = []; for (const si of [0, 5]) { G.forceShip = si; g.newRun(); hide(); for (let d = 0; d < G.shipDecks.length; d++) { g.loadDeck(d + 1); pts.push(g.repairPts.length); } } out.points = { min: Math.min(...pts), n: pts.length, mains: null }; }
     // 3) a deck with people, a bunk and (if any) a suit locker
@@ -59,13 +59,18 @@ export async function wiringBrowser(page, fail) {
       S.where = (p) => p === e.person ? { ...where.call(S, p), activity: 'handover_in' } : where.call(S, p); tick(5); delete S.where;   /* the block ends (the real one may be 'sleep' too) */ out.lie.up = !e.wear?.lie && Math.abs(e.mesh.rotation.x) < 0.01;
       const t0 = w.tile(e.x, e.z), dst = w.d.openTiles.find(([a, b]) => Math.abs(a - t0[0]) + Math.abs(b - t0[1]) > 3 && w.field(a, b, true)[t0[0] + t0[1] * w.W] > 0);
       if (dst) { g.startWalk(e, dst[0], dst[1]); let n = 0; for (; n < 30 * 60 && e.walk; n++) tick(1); out.lie.walked = !e.walk; } } }
-    // pod hatch lamps / field shimmer / sight glow: find decks that have them
-    { let pods = 0, f = null, sg = null; for (let d = 0; d < G.shipDecks.length && (!pods || !f || !sg); d++) { const dd = G.shipDecks[d].data; if (!dd.rooms.some(r => r.type === 'airlock') && !dd.props.some(p => p.kind === 'cellfield' || p.kind === 'buffertank')) continue; g.loadDeck(d + 1); tick(2);
-        if (g.world.podMat) pods++; if (g.world.fieldMats && !f) { const m = [...g.world.fieldMats][0], a = m.opacity; tick(4); g.shipState.damage('security', 0.9); tick(2); f = { live: Math.max(a, m.opacity), off: m.opacity }; g.shipState.repair('security'); }
+    // pod hatch lamps: a deck with an airlock, built from the generator (fixed seeds, the first that has one: not every run has an airlock), lamps must change over time
+    { const { World } = await import('./js/world.js'), { generate } = await import('./js/gen.js'), { SHIPS, deckOptions } = await import('./js/ships.js'); let pods = null;
+      for (let i = 0; i < 200 && !pods; i++) { const ship = SHIPS[i % SHIPS.length], sd = ship.decks - 1 - (i >> 4) % 3, dd = generate(sd, i * 3301 + 7, deckOptions(ship, sd)); if (!dd.rooms.some(r => r.type === 'airlock')) continue; const ww = new World(dd, ship);
+        if (ww.podMat) { const c0 = ww.podMat.color.getHex(), seen = new Set([c0]); for (let k = 1; k <= 20; k++) { ww.update(0.1, 100 + k * 0.1); seen.add(ww.podMat.color.getHex()); } pods = { level: i, colours: seen.size }; } ww.dispose?.(); }
+      out.pods = pods; }
+    // field shimmer / sight glow: decks of this run that have them
+    { let f = null, sg = null; for (let d = 0; d < G.shipDecks.length && (!f || !sg); d++) { const dd = G.shipDecks[d].data; if (!dd.props.some(p => p.kind === 'cellfield' || p.kind === 'buffertank')) continue; g.loadDeck(d + 1); tick(2);
+        if (g.world.fieldMats && !f) { const m = [...g.world.fieldMats][0], a = m.opacity; tick(4); g.shipState.damage('security', 0.9); tick(2); f = { live: Math.max(a, m.opacity), off: m.opacity }; g.shipState.repair('security'); }
         if (g.world.sights && !sg) { const m = g.world.sights[0], a = m.color.g; tick(25); sg = { moved: Math.abs(m.color.g - a) > 0.02 }; } }
-      out.anim = { pods, field: f, sight: sg }; }
+      out.anim = { field: f, sight: sg }; }
     // stretcher off its bracket
-    { let c = null; for (let si = 0; si < 10 && !c; si++) { G.forceShip = si; g.newRun(); hide(); for (let d = 0; d < G.shipDecks.length && !c; d++) { if (!G.shipDecks[d].data.rooms.some(r => r.type === 'sickbay')) continue; g.loadDeck(d + 1); c = g.world.clutter.find(q => q.item === 'stretcher'); } }
+    { let c = null; for (let d = 0; d < G.shipDecks.length && !c; d++) { if (!G.shipDecks[d].data.rooms.some(r => r.type === 'sickbay')) continue; g.loadDeck(d + 1); c = g.world.clutter.find(q => q.item === 'stretcher'); }   // every ship has a sickbay (js/ships.js requirePlan) and every sickbay with a free wall face keeps a bracket (js/world.js)
       if (c) { for (const e of g.ents) if (e.kind === 'crew') { e.x += 60; if (e.mesh) e.mesh.position.x += 60; } const dx = c.x - c.bracket.position.x, dz = c.z - c.bracket.position.z, L = Math.hypot(dx, dz); P.x = c.x + dx / L * 0.6; P.z = c.z + dz / L * 0.6; P.yaw = Math.atan2(dx, dz); G.carry = null; tick(2);
         const prompt = document.getElementById('prompt').textContent; g.interact(); tick(1); out.stretcher = { prompt: /Take/.test(prompt), item: G.carry?.item, gone: !g.world.clutter.includes(c), hidden: c.bracket.children.filter(o => !o.visible).length }; G.carry = null; } else out.stretcher = null; }
     { const { makeCart } = await import('./js/carry.js'); out.carts = ['sled', 'bowser', 'trolley', 'linen'].map(k => { const c = makeCart(k, true); return [k, c.userData.art, c.userData.wheels.length, c.userData.load.length]; }); }
@@ -74,12 +79,12 @@ export async function wiringBrowser(page, fail) {
   });
   console.log('wiring:', JSON.stringify(r));
   const ck = (c, m) => { if (!c) fail('wiring: ' + m + ' ' + JSON.stringify(r)); };
-  ck(r.cache.dressed >= Math.min(10, r.cache.n) && r.cache.total < 40 && r.cache.max < 15 && r.cache.shared > 0, 'dressed crew spawn from the clothes cache');
+  ck(r.cache.cached >= 20 && r.cache.dressed >= Math.min(10, r.cache.n) && r.cache.total < 40 && r.cache.max < 15 && r.cache.shared > 0, 'dressed crew spawn from the clothes cache');
   ck(r.carts.every(([k, art, wh]) => art && wh === 4), 'art carts build');
   ck(r.points.min >= 20, 'repair points per deck >= 20');
   ck(!r.mask || (r.mask.on === r.mask.near && r.mask.after === 0), 'breathers on fire alert');
   ck(!r.lie || (r.lie.lying && Math.abs(r.lie.rotX + Math.PI / 2) < 0.05 && r.lie.headY < 1 && r.lie.logical < 1.4 && r.lie.up && r.lie.walked !== false), 'sleeper lies on the bunk, gets up and walks');
-  ck(r.anim.pods > 0 && (!r.anim.field || (r.anim.field.live > 0.03 && r.anim.field.off === 0)) && (!r.anim.sight || r.anim.sight.moved), 'pod lamps / field cell / pattern buffer animation');
+  ck(r.pods && r.pods.colours > 2 && (!r.anim.field || (r.anim.field.live > 0.03 && r.anim.field.off === 0)) && (!r.anim.sight || r.anim.sight.moved), 'pod lamps / field cell / pattern buffer animation');
   ck(!r.stretcher || (r.stretcher.prompt && r.stretcher.item === 'stretcher' && r.stretcher.gone && r.stretcher.hidden >= 10), 'stretcher from its bracket');
   ck(r.icons === 'regen,scalpel,torch,extinguisher,mop,hook,crowbar,rifle', 'handheld icons');
 }

@@ -47,7 +47,8 @@ import { navTests, navBrowser } from './test-nav.mjs';   // routing / cross-deck
 import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / pointer lock, wheel maths, toasts, icons (tools/test-ui.mjs)
 import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation close-up: state machine, framing, pause rules, intents (tools/test-talk.mjs)
 import { combatTests, combatBrowser, combatMadness } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
-import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
+import { wiringTests, wiringBrowser } from './test-wiring.mjs';
+import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
   ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests]]) S(n, null, () => f(fail));
 
@@ -196,7 +197,7 @@ const strSeed = (s) => { let h = SEED ^ 0x9e3779b9; for (const c of s) h = Math.
 // one browser for the whole run; ONE live page at a time (each page is its own renderer process, closed once its sections are done: every newRun() builds a ship).
 // Page load + game ready get a generous timeout and ONE retry on a fresh page (logged as RETRY): a slow or crashed load is not a test result.
 // Nothing else is retried here: a section that fails, fails.
-const gameReady = async (p) => p.evaluate(async ({ ship, manual }) => { await __game.ready; __game.setQuality('low'); __game.G.manual = manual; if (ship != null) Object.defineProperty(__game.G, 'forceShip', { get: () => ship, set: () => { }, configurable: true }); }, { ship: SHIP, manual: !process.env.TEST_REALTIME });   // TEST_REALTIME=1: the old wall-clock frame loop (diagnostics only)
+const gameReady = async (p) => p.evaluate(async ({ ship, manual }) => { await __game.ready; await __game.warmed; __game.setQuality('low'); __game.G.manual = manual; if (ship != null) Object.defineProperty(__game.G, 'forceShip', { get: () => ship, set: () => { }, configurable: true }); }, { ship: SHIP, manual: !process.env.TEST_REALTIME });   // TEST_REALTIME=1: the old wall-clock frame loop (diagnostics only)
 const openPage = async (path, tag = '', viewport = { width: 320, height: 180 }, ready = gameReady) => {
   if (!browser) browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required'] });   // a running AudioContext: in a suspended one (no user gesture) every scheduled sound node stays alive, gigabytes over a run
   for (let attempt = 1; ; attempt++) {
@@ -320,26 +321,29 @@ const park = await page.evaluate(async () => {
 console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun) || park.climb.tube.hit)   /* climbed in after you, or dragged you out of the high mouth */ && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
 });
 S('director', 'madness', async (page) => {   // a crew member is dispatched to a lighting junction and fixes it (the Director / cascade half is the node section director-cascade)
+await installHelpers(page);
 const dir = await page.evaluate(async () => {
-  const g = __game; for (let a = 0; a < 6; a++) { g.newRun(); if (g.repairPts.some(p => p.sys === 'lighting')) break; }   /* a layout with no wall space for the junction would make the probe meaningless */ g.setQuality('low'); for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null; for (const e of g.ents.filter(e => e.opener)) { g.scene.remove(e.mesh); g.ents.splice(g.ents.indexOf(e), 1); }
-  g.shipState.damage('lighting', 0.9, { quiet: true }); for (const e of g.ents.filter(e => e.repairing)) e.repairing = null; g.spawnRepairer('lighting');
-  const rep = g.ents.find(e => e.repairing?.sys === 'lighting'); let tt = 500, secs = 0;
-  if (rep) { g.P.x = rep.x + 30; for (let i = 0; i < 60 * 70 && g.shipState.status('lighting') !== 'nominal'; i++) { g.G.phase = 'play'; g.G.hp = 1e6; tt += 1 / 60; g.step(1 / 60, tt); secs = i / 60; } }
-  return { repairer: !!rep, crewFixed: g.shipState.status('lighting') === 'nominal', secs: +secs.toFixed(0) };
+  const g = __game; g.newRun(); g.setQuality('low'); __T.hideEnemies();
+  const sys = g.repairPts.some(p => p.sys === 'lighting') ? 'lighting' : g.repairPts.find(p => !p.main)?.sys || g.repairPts[0]?.sys;   // lighting junction, or (a deck with no wall space for one) the first junction this deck has
+  g.shipState.damage(sys, 0.9, { quiet: true }); for (const e of g.ents.filter(e => e.repairing)) e.repairing = null; g.spawnRepairer(sys);
+  const rep = g.ents.find(e => e.repairing?.sys === sys); let tt = 500, secs = 0;
+  const budget = rep ? rep.repairing.need + 2 : 0;   // js/main.js spawnRepairer: they appear at the point and need 35-55 s (no hostile about to scare them off)
+  if (rep) { g.P.x = rep.x + 30; for (let i = 0; i < 60 * budget && g.shipState.status(sys) !== 'nominal'; i++) { g.G.phase = 'play'; g.G.hp = 1e6; tt += 1 / 60; g.step(1 / 60, tt); secs = i / 60; } }
+  return { sys, repairer: !!rep, crewFixed: g.shipState.status(sys) === 'nominal', secs: +secs.toFixed(0), budget };
 });
 console.log('director repairer:', JSON.stringify(dir)); if (!(dir.repairer && dir.crewFixed)) fail('director');
 });
-S('search', 'madness', async (page) => {   // search a wall fixture
+S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach
+await installHelpers(page);
 const srch = await page.evaluate(async () => {
-  const g = __game, P = g.P, out = { sites: 0, kinds: {}, searched: false, prompt: '', say: '' };
-  const stand = (s) => [s.x + s.nx * 0.9, s.z + s.nz * 0.9];   // a site with nobody standing by (the prompt would offer a talk instead) and no repair point in reach (a damaged system's [Hold E] Repair outranks Search by design, js/main.js prompt order)
-  const clear = (s) => { const [x, z] = stand(s); return !g.ents.some(e => e.kind === 'crew' && Math.hypot(e.x - x, e.z - z) < 3) && !g.repairPts.some(r => Math.hypot(r.x - x, r.z - z) < r.reach + 0.3); };
-  for (let tries = 0; tries < 8 && !(out.sites && g.world.searchSites.some(clear)); tries++) { g.newRun(); g.setQuality('low'); out.sites = g.world.searchSites?.length || 0; }   // small decks have only a few fixtures: a fresh deck if none is clear
+  const g = __game, P = g.P, T = __T, out = { sites: 0, kinds: {}, searched: false, prompt: '', say: '' };
+  g.newRun(); g.setQuality('low'); out.sites = g.world.searchSites?.length || 0;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
-  for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
+  T.hideEnemies(); T.quiet(); for (const r of g.repairPts) if (g.shipState.status(r.sys) !== 'nominal') g.shipState.repair(r.sys);   // a damaged system's [Hold E] Repair outranks Search by design (js/main.js prompt order)
   for (const s of g.world.searchSites) out.kinds[s.kind] = (out.kinds[s.kind] || 0) + 1;
-  const site = g.world.searchSites.find(clear) || g.world.searchSites[0]; if (site) {
-    P.x = site.x + site.nx * 0.9; P.z = site.z + site.nz * 0.9; P.yaw = Math.atan2(site.nx, site.nz); P.vx = P.vz = 0;   // stand in front, look at the wall
+  const stand = (s) => [s.x + s.nx * 0.9, s.z + s.nz * 0.9], site = g.world.searchSites.find(s => T.open(...stand(s), 0.25)) || g.world.searchSites[0]; if (site) {
+    const [sx, sz] = stand(site); out.moved = T.clearSite(sx, sz, 3);   // nobody standing by (the prompt would offer a talk instead)
+    P.x = sx; P.z = sz; P.yaw = Math.atan2(site.nx, site.nz); P.vx = P.vz = 0;   // stand in front, look at the wall
     g.step(1 / 60, 900); out.prompt = document.getElementById('prompt').textContent;
     const before = document.getElementById('msgs')?.textContent || '';
     for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code: 'KeyE', key: 'e', bubbles: true }));
@@ -347,25 +351,24 @@ const srch = await page.evaluate(async () => {
   }
   return out;
 });
-console.log('search:', JSON.stringify(srch)); if (!(srch.sites > 0 && srch.searched && /Search/.test(srch.prompt))) fail('fixture search');
+console.log('search:', JSON.stringify(srch)); if (!(srch.sites > 0 && srch.searched && /Search/.test(srch.prompt))) fail('fixture search ' + JSON.stringify(srch));
 });
 S('inventory', 'madness', async (page) => {   // look-at examine text on a prop, clutter prompts (the room-type scan is the node section inventory-rooms)
-const invRun = () => page.evaluate(async () => {
-  const g = __game, P = g.P, out = { clutter: 0, examine: '', examineKind: '', clutterPrompt: '' };
-  for (let i = 0; i < 4; i++) { g.newRun(); g.setQuality('low'); out.clutter += g.world.clutter?.length || 0; }
-  g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
-  for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
-  const w = g.world;   // look at a crate / table / bunk / biobed from an open tile beside it (a stand point inside a wall or another prop sees that instead): up to 12 props
-  const K4 = ['crate', 'table', 'bunk', 'biobed'];   // these first; a small deck often has none of them, so then any floor prop with examine text
-  look: for (const pr of [...w.d.props.filter(p => K4.includes(p.kind)), ...w.d.props.filter(p => !K4.includes(p.kind))].slice(0, 12)) { const [cx, cz] = w.center(pr.tx, pr.ty); for (const [ox, oz] of [[1.7, 0], [-1.7, 0], [0, 1.7], [0, -1.7]]) { const [sx, sy] = w.tile(cx + ox, cz + oz); if (w.solid(sx, sy) || w.isTube(sx, sy)) continue; P.x = cx + ox; P.z = cz + oz; P.y = 0; P.yaw = Math.atan2(ox, oz); P.pitch = -0.6; P.vx = P.vz = 0; g.step(1 / 60, 950); g.step(1 / 60, 950.02); const t = document.getElementById('prompt').textContent; if (t && !/Search|\[E\]|\[Hold E\]|— nominal|Tubelift/.test(t)) { out.examine = t; out.examineKind = pr.kind; break look; } } }
-  const cands = (w.clutter || []).filter(c => !g.ents.some(e => Math.hypot(e.x - c.x, e.z - c.z) < 3.5) && !(w.searchSites || []).some(s => Math.hypot(s.x - c.x, s.z - c.z) < 3) && !(g.repairPts || []).some(r => Math.hypot(r.x - c.x, r.z - c.z) < r.reach + 1) && Math.hypot(w.liftPos.x - c.x, w.liftPos.z - c.z) > 4);
-  find: for (const c of cands.slice(0, 30)) for (const [ox, oz] of [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]]) {
-    P.x = c.x + ox; P.z = c.z + oz; P.yaw = Math.atan2(ox, oz); P.pitch = 0; P.vx = P.vz = 0; g.step(1 / 60, 960); g.step(1 / 60, 960.02);
-    const t = document.getElementById('prompt').textContent; if (t && !/\[E\]|nominal|Repair/.test(t)) { out.clutterPrompt = t; break find; } }
+await installHelpers(page);
+const inv = await page.evaluate(async () => {
+  const g = __game, P = g.P, T = __T, out = { clutter: 0, examine: '', examineKind: '', clutterPrompt: '' };
+  for (let i = 0; i < 4; i++) { g.newRun(); g.setQuality('low'); out.clutter += g.world.clutter?.length || 0; }   // clutter count over 4 runs (not a retry: every run counts)
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;   // the probes run on the last of those runs
+  T.hideEnemies(); T.quiet(); for (const r of g.repairPts) if (g.shipState.status(r.sys) !== 'nominal') g.shipState.repair(r.sys);
+  const w = g.world, K4 = ['crate', 'table', 'bunk', 'biobed'];   // look at a crate / table / bunk / biobed from its open side (any floor prop with examine text when the deck has none of them)
+  const look = (x, z, yaw, pitch) => { P.x = x; P.z = z; P.y = 0; P.yaw = yaw; P.pitch = pitch; P.vx = P.vz = 0; g.step(1 / 60, 950); g.step(1 / 60, 950.02); return document.getElementById('prompt').textContent; };
+  for (const pr of [...w.d.props.filter(p => K4.includes(p.kind)), ...w.d.props.filter(p => !K4.includes(p.kind))]) { const [cx, cz] = w.center(pr.tx, pr.ty), sd = T.openSideOf(cx, cz, 1.7, 1.3); if (!sd) continue;
+    T.clearSite(sd.x, sd.z, 3.5); const t = look(sd.x, sd.z, sd.yaw, -0.6); if (t && !/Search|\[E\]|\[Hold E\]|— nominal|Tubelift/.test(t)) { out.examine = t; out.examineKind = pr.kind; break; } if ((out.tried ||= []).length < 6) out.tried.push(pr.kind + ': ' + t); }
+  const cands = (w.clutter || []).filter(c => !(w.searchSites || []).some(s => Math.hypot(s.x - c.x, s.z - c.z) < 3) && Math.hypot(w.liftPos.x - c.x, w.liftPos.z - c.z) > 4);   // away from search fixtures and the lift (their prompts outrank it)
+  for (const c of cands) { const sd = T.openSideOf(c.x, c.z, 0.9); if (!sd) continue; T.clearSite(sd.x, sd.z, 3.5); const t = look(sd.x, sd.z, sd.yaw, 0); if (t && !/\[E\]|nominal|Repair/.test(t)) { out.clutterPrompt = t; break; } }
   return out;
 });
-let inv = await invRun(); for (let a = 0; a < 3 && !(inv.examine && inv.clutterPrompt && !/\[E\](?! Take)/.test(inv.clutterPrompt)); a++) inv = await invRun();   // random layouts: the look-at probe can miss on one ship, so retry on fresh runs
-console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
+console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game ' + JSON.stringify(inv));
 });
 S('props', 'madness', async (page) => {   // prop models: footprints, use points, tris, item art, shuttle cradle / bay door
 const propsOk = await page.evaluate(async () => {
@@ -404,6 +407,7 @@ console.log('props:', JSON.stringify(propsOk)); if (propsOk.bad.length || propsO
 S('combat-madness', 'madness', (page) => combatMadness(page, fail));   // madness mode: no hand-to-hand, the zapper still fires (tools/test-combat.mjs)
 // ---- Systems Nominal (default mode) ----
 S('nominal', 'nominal', async (page2) => {   // calm start, lift doors, rides down / up / one deck, locked lift, billet / duty / phases / death, NPC walk, tubes, dodge, evacuation, equipment, handhelds, doors, terminal
+await installHelpers(page2);
 const nom = await page2.evaluate(async () => {
   const g = __game, P = g.P, out = { log: [] }; g.G.forceShip = 0; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.hp = g.G.maxHp = 1e6;
   const key = (code) => { for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code, key: code, bubbles: true })); };
@@ -415,7 +419,8 @@ const nom = await page2.evaluate(async () => {
   if (out.calm.simBodies > out.calm.simHere || (out.calm.simHere && !out.calm.simBodies)) out.simBad = out.calm;
   // walk out and back in: doors open as you approach, the panel opens when you step into the car
   const w = g.world, c = w.car; const far = (k) => { P.x = c.x + c.dx * k; P.z = c.z + c.dy * k; P.vx = P.vz = 0; };
-  far(5.0); tick(5); const nearOpen = w.liftOpen; far(9); tick(5); let held = 0; for (; held < 300 && w.liftOpen; held++) { far(9); tick(1); }   /* crew walking up to the car or standing in its doorway keep the doors open (js/main.js lift step): give them up to 10 s */ out.doors = { nearOpen, farShut: !w.liftOpen, heldSecs: +(held / 30).toFixed(1) };
+  const loud = __T.quiet(); __T.clearSite(c.x, c.z, 9);   // nobody walks up to the car while the doors are under test (crew walking up / in the doorway keep them open by design)
+  far(5.0); tick(5); const nearOpen = w.liftOpen; far(9); let held = 0; for (; held < 6 * 30 && w.liftOpen; held++) { far(9); tick(1); }   /* budget 6 s: npcT 1 s + the 1.6 s shut timer + up to 4 s for boarders already in the car (carStep) */ out.doors = { nearOpen, farShut: !w.liftOpen, heldSecs: +(held / 30).toFixed(1) }; loud();
   far(3.0); tick(5); P.x = c.x; P.z = c.z; tick(3); out.walkIn = { phase: G.phase, panel: document.getElementById('liftui').className, rows: [...document.querySelectorAll('#liftrows .lr')].map(r => r.textContent) };
   key('Escape'); tick(2); out.cancel = G.phase;
   // search a fixture on deck 1, ride down to the bottom deck and back up
@@ -647,9 +652,12 @@ const rep = await page3.evaluate(async () => {
   G.hp = G.maxHp = 1e6; G.phase = 'play'; let t = 0; const tick = (n, dt = 0.1) => { for (let i = 0; i < n; i++) { t += dt; G.phase = 'play'; g.step(dt, t); } };
   // a system serviced on this deck breaks: a crew member is dispatched, walks to it (body), works (marker), patches it to ~0.85 and reports on the comm bus
   const here = G.shipDeck + 1, sys = ['helm', 'alert', 'lifts', 'computer', 'sensors'].find(s => g.repair.site(s)?.deckNo === here) || Object.keys(g.repair.sites).find(s => g.repair.sites[s].deckNo === here);
-  const ev = []; g.repair.on(e => ev.push(e.type)); g.shipState.damage(sys, 0.5); let walked = false, posed = false, marker = false, lead = null, maxProg = 0, body = false;
-  for (let i = 0; i < 6000 && !ev.includes('done'); i++) { tick(1);   /* up to 600 s: a patch can fail its roll (js/repair.js verify), wait 40-70 s for a part, fail twice and escalate before it holds */ const j = [...g.repair.jobs.values()][0]; if (j?.lead) lead = j.lead.person; if (lead) { const e = g.ents.find(x => x.simmed && x.person === lead); if (e) body = true; if (e?.walk) walked = true; if (e?.repairing?.npc) posed = true; if (e?.repMark) marker = true; } if (j) maxProg = Math.max(maxProg, j.need ? j.progress / j.need : 0); }
-  out.repair = { sys, events: [...new Set(ev)], lead: lead?.short || null, hp: +g.shipState.hp(sys).toFixed(2), walked, posed, marker, body, maxProg: +maxProg.toFixed(2), secs: +t.toFixed(0), report: g.comms.log.some(m => /patched/.test(m.text)), heading: g.comms.log.some(m => /heading to/.test(m.text)), released: lead ? !g.sim.overridden(lead) : null };
+  const ev = []; let budget = 22, est = null; g.repair.on(e => { ev.push(e.type); if (e.type === 'assign' && est == null) { const j = g.repair.jobs.get(e.sys), p = g.roster.people.find(q => q.id === e.id); est = +(g.sim.estimate(p, j.site.room, j.site.tx != null ? j.site : null) || 0).toFixed(1);
+    budget = t + est * 1.5 + 12 + (g.pace.setup?.[1] ?? 5) + e.need + 5; } });   // explicit budget once someone is sent: walk (+50 %, the body's pace) + up to 10 s of last metres off-screen + set-up + the work itself + 5 s
+  const roll0 = g.repair.roll; g.repair.roll = () => 0;   // the patch holds the first time: failed patches / parts / escalation are the node tests (tools/test-repair.mjs); notice <= 22 s on every preset
+  g.shipState.damage(sys, 0.5); let walked = false, posed = false, marker = false, lead = null, maxProg = 0, body = false;
+  for (let i = 0; t < budget && !ev.includes('done'); i++) { tick(1); const j = [...g.repair.jobs.values()][0]; if (j?.lead) lead = j.lead.person; if (lead) { const e = g.ents.find(x => x.simmed && x.person === lead); if (e) body = true; if (e?.walk) walked = true; if (e?.repairing?.npc) posed = true; if (e?.repMark) marker = true; } if (j) maxProg = Math.max(maxProg, j.need ? j.progress / j.need : 0); }
+  g.repair.roll = roll0; out.repair = { sys, budget: +budget.toFixed(0), est, events: [...new Set(ev)], lead: lead?.short || null, hp: +g.shipState.hp(sys).toFixed(2), walked, posed, marker, body, maxProg: +maxProg.toFixed(2), secs: +t.toFixed(0), report: g.comms.log.some(m => /patched/.test(m.text)), heading: g.comms.log.some(m => /heading to/.test(m.text)), released: lead ? !g.sim.overridden(lead) : null };
   // world pause: nothing ticks while a menu is open
   const st0 = g.sim.t, dt0 = g.duty.t; G.menuPause = true; tick(30); out.paused = g.sim.t === st0 && g.duty.t === dt0; G.menuPause = false;
   // tasks stay open to the end of the shift, then count
