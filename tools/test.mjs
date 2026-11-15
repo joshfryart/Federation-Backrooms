@@ -318,7 +318,7 @@ const nom = await page2.evaluate(async () => {
   if (out.calm.simBodies > out.calm.simHere || (out.calm.simHere && !out.calm.simBodies)) out.simBad = out.calm;
   // walk out and back in: doors open as you approach, the panel opens when you step into the car
   const w = g.world, c = w.car; const far = (k) => { P.x = c.x + c.dx * k; P.z = c.z + c.dy * k; P.vx = P.vz = 0; };
-  far(5.0); tick(5); const nearOpen = w.liftOpen; far(9); tick(5); out.doors = { nearOpen, farShut: !w.liftOpen };
+  far(5.0); tick(5); const nearOpen = w.liftOpen; far(9); tick(5); let held = 0; for (; held < 300 && w.liftOpen; held++) { far(9); tick(1); }   /* crew walking up to the car or standing in its doorway keep the doors open (js/main.js lift step): give them up to 10 s */ out.doors = { nearOpen, farShut: !w.liftOpen, heldSecs: +(held / 30).toFixed(1) };
   far(3.0); tick(5); P.x = c.x; P.z = c.z; tick(3); out.walkIn = { phase: G.phase, panel: document.getElementById('liftui').className, rows: [...document.querySelectorAll('#liftrows .lr')].map(r => r.textContent) };
   key('Escape'); tick(2); out.cancel = G.phase;
   // search a fixture on deck 1, ride down to the bottom deck and back up
