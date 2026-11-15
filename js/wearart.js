@@ -277,25 +277,49 @@ const head = {
  *  opts: color (hex), gloves / apron / cap (booleans), helmet (suit: build the bubble helmet, hidden until show()), keepGarment (do not hide the casual clothes).
  *  Returns { id, meshes, tris, setVisible(v), remove(), part(name)? } or null when the body cannot be measured. Call once per human; the pose is restored. */
 export function wearOutfit(human, id, opts = {}) {
-  if (!BUILD[id]) return null; const A = analyse(human); if (!A) return null;
-  if (id !== 'suit' && !A.src.garment && id !== 'gloves') return null;
-  const B = new Build(A); BUILD[id](B, A, opts); const meshes = B.finish(), parent = A.body.parent, hidden = [];
-  if (!opts.keepGarment && A.garmentMesh && ['coverall', 'scrubs', 'whites'].includes(id)) { A.garmentMesh.visible = false; hidden.push(A.garmentMesh); }
-  for (const m of meshes) { parent.add(m); m.updateMatrixWorld(true); }
+  if (!BUILD[id]) return null;
+  const e = wornParts(human, `outfit:${id}:${JSON.stringify(opts)}`, (A) => { if (id !== 'suit' && !A.src.garment && id !== 'gloves') return null; const B = new Build(A); BUILD[id](B, A, opts); return B; });
+  if (!e) return null; const meshes = attachParts(human, e), hidden = [];
+  if (!opts.keepGarment && ['coverall', 'scrubs', 'whites'].includes(id)) { const gm = garmentOf(human.userData.human.inner); if (gm) { gm.visible = false; hidden.push(gm); } }
   let helmet = null; if (id === 'suit') { helmet = meshes.find(m => m.material === MAT.glass()) || null; if (helmet) helmet.visible = !!opts.helmetShown; }
-  const w = { id, meshes, hidden, tris: meshes.reduce((n, m) => n + countTris(m), 0), helmet,
+  const w = { id, meshes, hidden, tris: e.tris, helmet,
     setVisible(v) { for (const m of meshes) if (m !== helmet) m.visible = v; for (const m of hidden) m.visible = !v; },
     showHelmet(v) { if (helmet) helmet.visible = v; },
-    remove() { for (const m of meshes) { m.parent?.remove(m); m.geometry.dispose(); } for (const m of hidden) m.visible = true; } };
+    remove() { detachParts(meshes); for (const m of hidden) m.visible = true; const l = human.userData.worn, i = l ? l.indexOf(w) : -1; if (i >= 0) l.splice(i, 1); } };
   (human.userData.worn || (human.userData.worn = [])).push(w); return w;
 }
 /** wearHeadgear(human, 'mask' | 'hood' | 'headset' | 'cap', opts) -> same handle as wearOutfit */
 export function wearHeadgear(human, id, opts = {}) {
-  if (!head[id]) return null; const A = analyse(human); if (!A) return null; const B = new Build(A); head[id](B, A, opts); const meshes = B.finish();
-  for (const m of meshes) { A.body.parent.add(m); m.updateMatrixWorld(true); }
-  const w = { id, meshes, hidden: [], tris: meshes.reduce((n, m) => n + countTris(m), 0), setVisible(v) { for (const m of meshes) m.visible = v; }, remove() { for (const m of meshes) { m.parent?.remove(m); m.geometry.dispose(); } } };
+  if (!head[id]) return null;
+  const e = wornParts(human, `head:${id}:${JSON.stringify(opts)}`, (A) => { const B = new Build(A); head[id](B, A, opts); return B; }); if (!e) return null;
+  const meshes = attachParts(human, e);
+  const w = { id, meshes, hidden: [], tris: e.tris, setVisible(v) { for (const m of meshes) m.visible = v; }, showHelmet() { },
+    remove() { detachParts(meshes); const l = human.userData.worn, i = l ? l.indexOf(w) : -1; if (i >= 0) l.splice(i, 1); } };
   (human.userData.worn || (human.userData.worn = [])).push(w); return w;
 }
+// ---- cache: a garment is built ONCE per body kind and outfit (+ opts). The geometry is stored in the space of the human's `inner` group (the GLB scene, before the per-person
+// height / build scale), with bone inverses in that same space; those depend only on the body kind, so every later human of that kind shares the geometry and materials and only
+// gets new SkinnedMeshes bound to its own bones (the inner scale is applied by the skeleton). Before: 15-100 ms per dressed body (rest-pose measure + build); after: well under 1 ms.
+const WEAR_CACHE = new Map();
+export const wearCacheSize = () => WEAR_CACHE.size;
+function wornParts(human, key, make) {
+  const H = human.userData.human; if (!H) return null; const ck = `${H.kind}|${key}`;
+  if (WEAR_CACHE.has(ck)) return WEAR_CACHE.get(ck);
+  const A = analyse(human); let e = null; const B = A && make(A);
+  if (B) {
+    human.updateMatrixWorld(true); const toInner = new THREE.Matrix4().copy(H.inner.matrixWorld).invert().multiply(human.matrixWorld), back = toInner.clone().invert(), parts = [];
+    for (const [list, mat] of [[B.cloth, MAT.cloth()], [B.trim, MAT.trim()], [B.glass, MAT.glass()]]) if (list.length) { const g = mergeGeometries(list, false); g.applyMatrix4(toInner); g.computeBoundingSphere(); parts.push({ geo: g, mat }); }
+    if (parts.length) e = { parts, binv: A.binv.map(m => m.clone().multiply(back)), tris: parts.reduce((n, p) => n + (p.geo.index ? p.geo.index.count : p.geo.attributes.position.count) / 3, 0) };
+  }
+  WEAR_CACHE.set(ck, e); return e;
+}
+const _I = new THREE.Matrix4();
+function attachParts(human, e) {
+  const body = bodyOf(human.userData.human.inner), bones = body.skeleton.bones;
+  return e.parts.map(p => { const m = new THREE.SkinnedMesh(p.geo, p.mat); m.name = 'wear'; m.frustumCulled = false; m.castShadow = true; m.bind(new THREE.Skeleton(bones, e.binv), _I); body.parent.add(m); m.updateMatrixWorld(true); return m; });
+}
+function detachParts(meshes) { for (const m of meshes) { m.parent?.remove(m); m.skeleton?.dispose(); } }   // geometry and materials are shared through WEAR_CACHE: never disposed here
+const garmentOf = (inner) => { let g = null; inner.traverse(o => { const n = o.isSkinnedMesh ? o.material.name || '' : ''; if (n.startsWith('garment') && !n.includes('shoes')) g = o; }); return g; };   // the last one, as analyse() measures it
 /** which outfit a crew member wears in normal duty: { outfit, opts } or null (keep the casual clothes). person = a js/crew.js roster entry ({ dept, billet|role }). */
 export function outfitFor(person) {
   const d = person?.dept, role = (person?.billet || person?.role || person?.id || '') + '';

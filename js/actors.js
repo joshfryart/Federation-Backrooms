@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { textures } from './world.js';
 import { pbr } from './assets.js';
 import { buildItem } from './itemart.js';
-import { wearOutfit, outfitFor } from './wearart.js';
+import { wearOutfit, wearHeadgear, outfitFor } from './wearart.js';
+import { makeHuman } from './humans.js';
 // generated normal + roughness (+AO) from tools/build-textures.mjs, when loaded; repeat set per use
 const withSet = (mat, set, rx = 1, ry = rx, ns = 1) => { const p = pbr(set); if (!p) return mat; const rep = (t) => { const c = t.clone(); c.needsUpdate = true; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(rx, ry); return c; }; mat.normalMap = rep(p.n); mat.normalScale = new THREE.Vector2(ns, ns); mat.roughnessMap = rep(p.r); mat.roughness = 1; return mat; };
 
@@ -589,4 +590,13 @@ export function dressCrew(mesh, person) {
   const o = outfitFor(person); let w = null;
   if (o) { try { w = wearOutfit(mesh, o.outfit, o.opts); } catch (e) { console.warn('wearOutfit', o.outfit, e.message); } }
   mesh.userData.outfit = w; return w;
+}
+
+// Build every duty outfit (and the headset / breather) once per body kind while the game is idle (loading screen), so the first engineer / medic / cook of each body kind
+// spawned mid-shift does not pay the 20-55 ms build (js/wearart.js caches per body kind and outfit). One combination per idle callback.
+export function prewarmOutfits(kinds = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy']) {
+  const jobs = []; for (const k of kinds) { for (const o of ['coverall', 'scrubs', 'whites']) jobs.push([k, o, 0]); for (const hg of ['headset', 'mask']) jobs.push([k, hg, 1]); }
+  const idle = (f) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(f, { timeout: 300 }) : setTimeout(f, 30));
+  const next = () => { const j = jobs.shift(); if (!j) return; try { const h = makeHuman({ kind: j[0], seed: 1, kit: false, shadow: false }); if (h) j[2] ? wearHeadgear(h, j[1]) : wearOutfit(h, j[1]); } catch (e) { console.warn('prewarmOutfits', j, e.message); } idle(next); };
+  idle(next);
 }

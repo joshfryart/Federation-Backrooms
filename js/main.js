@@ -4,7 +4,7 @@ import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
-import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, dressCrew } from './actors.js';
+import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, dressCrew, prewarmOutfits } from './actors.js';
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
@@ -1749,7 +1749,7 @@ function frame() {
 }
 
 // expose for debugging/tests
-const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); prewarmOutfits(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
