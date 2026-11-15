@@ -321,7 +321,7 @@ function pathField(tx, ty, tubes = false) { const c = G.fieldCache || (G.fieldCa
 
 
 // ---- fidgets and gestures (js/movement.js): an additive bone layer + face morphs on top of whatever clip is playing
-const SIT_SPOTS = new Set(['bar', 'table', 'sofa', 'bunk']), WORK_SPOTS = new Set(['console', 'desk', 'workbench', 'labbench', 'junction', 'warpcore', 'replicator']), CUE_OF = { yawn: 'sigh', groan: 'sigh', cough: 'clear', knuckles: 'crack', sigh: 'sigh', hum: 'hum', whistle: 'whistle' };
+const SIT_SPOTS = new Set(['bar', 'table', 'sofa', 'bunk']), WORK_SPOTS = new Set(['console', 'desk', 'workbench', 'labbench', 'junction', 'warpcore', 'replicator', 'tank', 'servers', 'weaponrack', 'tree']), CUE_OF = { yawn: 'sigh', groan: 'sigh', cough: 'clear', knuckles: 'crack', sigh: 'sigh', hum: 'hum', whistle: 'whistle' };
 function fidgetStep(e, dt, d) {
   const H = e.mesh.userData.human; if (!H || !e.person || e.fake) return;
   if (opHook(e, dt, d)) return;   // an equipment Operator / cart / carried load drives the additive layer instead of the fidgeter

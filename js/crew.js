@@ -77,25 +77,26 @@ const CREW_SCALE = { cairn: 1.4, longhouse: 1.0, tandem: 1.3, cruller: 0.8, plou
 
 // systems: what each department runs. host = where its main hardware is on a deck:
 //   a prop kind ('warpcore', 'biobed', …, 'console@bridge' = a console in a bridge), 'lift' (the tubelift), or 'junction'
-//   (distributed; serviced from yellow maintenance junctions on every deck). Every system can also be reached from a
+//   (distributed; serviced from yellow maintenance junctions on every deck). Batches 1-11 hardware: coolant -> plant pump skid, life -> CO2 scrubber, gravity / dampers ->
+//   the engineering field generators, comms -> datacore relay rack, armory -> charging rack, hydro -> grow bed (else a tree). Every system can also be reached from a
 //   junction on any deck that lacks its main hardware, but junction repairs take longer.
 const SY = (id, dept, name, host, parts, eff, o = {}) => ({ id, dept, name, host, parts, eff, repair: 5, weight: 1, ...o });
 export const SYSTEMS = [
   SY('alert', 'command', 'Alert & Command Network', 'console@bridge', ['Command chair interface', 'Alert relays ×6', 'Bridge command console'], { deg: 'Alert lighting lags', off: 'No klaxon or red alert when you are hunted' }, { home: 'Command' }),
   SY('helm', 'flight', 'Helm & Navigation', 'console@bridge', ['Helm console', 'Navigational deflector control', 'Attitude thrusters ×12'], { deg: 'Ship yaws — the deck lurches now and then', off: 'Uncontrolled drift — the deck lurches often' }, { home: 'Command', weight: 1.4 }),
-  SY('dampers', 'flight', 'Inertial Dampers', 'junction', ['Damper field generators ×2', 'Field coils ×8'], { deg: 'Hits and lurches knock you further', off: 'Hits and lurches throw you and hurt' }, { home: 'Engineering', weight: 1.3 }),
+  SY('dampers', 'flight', 'Inertial Dampers', 'fieldgen_damp', ['Damper field generators ×2', 'Field coils ×8'], { deg: 'Hits and lurches knock you further', off: 'Hits and lurches throw you and hurt' }, { home: 'Engineering', weight: 1.3 }),
   SY('computer', 'operations', 'Computer Core', 'console', ['Isolinear core stacks ×3', 'Optical data network', 'Operations console'], { deg: 'Scan-o-matic loses item markers', off: 'Scan-o-matic offline' }, { home: 'Services', weight: 1.3 }),
-  SY('comms', 'operations', 'Internal Comms', 'junction', ['Comm relays ×10', 'Subspace transceiver'], { deg: 'Announcements and fault warnings garbled', off: 'No announcements or fault warnings' }, { home: 'Services', weight: 1.6 }),
+  SY('comms', 'operations', 'Internal Comms', 'relayrack', ['Comm relays ×10', 'Subspace transceiver'], { deg: 'Announcements and fault warnings garbled', off: 'No announcements or fault warnings' }, { home: 'Services', weight: 1.6 }),
   SY('transport', 'operations', 'Transporters', 'pad', ['Transporter pads ×6', 'Pattern buffers ×2', 'Emitter array'], { deg: 'Survivors cannot be beamed to safety', off: 'Survivors cannot be beamed to safety' }, { home: 'Services' }),
   SY('reactor', 'engineering', 'Main Reactor', 'warpcore', ['Reaction chamber', 'Plasma injectors ×4', 'Magnetic constrictors ×12', 'Reactor control console'], { deg: 'Lights run dim', off: 'Brownout — emergency lighting only' }, { home: 'Engineering', repair: 8, weight: 1.2 }),
   SY('eps', 'engineering', 'EPS Power Grid', 'junction', ['EPS conduits', 'Power taps ×24', 'Junction breakers'], { deg: 'Rolling blackouts', off: 'Frequent blackouts' }, { home: 'Engineering', weight: 2.6 }),
-  SY('gravity', 'engineering', 'Gravity Plating', 'junction', ['Graviton generators ×4', 'Deck plating grid'], { deg: 'Gravity at 60% — you jump higher, land harder', off: 'Gravity at 30%' }, { home: 'Engineering', weight: 1.6 }),
+  SY('gravity', 'engineering', 'Gravity Plating', 'fieldgen', ['Graviton generators ×4', 'Deck plating grid'], { deg: 'Gravity at 60% — you jump higher, land harder', off: 'Gravity at 30%' }, { home: 'Engineering', weight: 1.6 }),
   SY('lifts', 'engineering', 'Tubelift Network', 'lift', ['Lift cars ×4', 'Lift shafts', 'Lift controller'], { deg: 'Lift controller unstable', off: 'Tubelift locked out until repaired' }, { home: 'Engineering', weight: 0.8 }),
-  SY('life', 'engineering', 'Life Support', 'junction', ['Atmosphere processors ×2', 'CO₂ scrubbers ×6', 'Circulation fans'], { deg: 'Thin air — stamina recovers slowly', off: 'CO₂ build-up — you slowly suffocate' }, { home: 'Services', section: 'Environmental', weight: 1.6, repair: 6 }),
-  SY('coolant', 'engineering', 'Coolant & Plumbing', 'junction', ['Coolant pumps ×4', 'Heat exchangers ×2', 'Water reclamation'], { deg: 'Steam leaks — noisy', off: 'Scalding steam vents' }, { home: 'Engineering', section: 'Environmental', weight: 2.2 }),
+  SY('life', 'engineering', 'Life Support', 'scrubber', ['Atmosphere processors ×2', 'CO₂ scrubbers ×6', 'Circulation fans'], { deg: 'Thin air — stamina recovers slowly', off: 'CO₂ build-up — you slowly suffocate' }, { home: 'Services', section: 'Environmental', weight: 1.6, repair: 6 }),
+  SY('coolant', 'engineering', 'Coolant & Plumbing', 'pumpskid@plant', ['Coolant pumps ×4', 'Heat exchangers ×2', 'Water reclamation'], { deg: 'Steam leaks — noisy', off: 'Scalding steam vents' }, { home: 'Engineering', section: 'Environmental', weight: 2.2 }),
   SY('lighting', 'engineering', 'Lighting Grid', 'junction', ['Light panels', 'Lighting controllers ×8'], { deg: 'Panels flicker', off: 'Most panels dead' }, { home: 'Services', section: 'Environmental', weight: 2.4, repair: 4 }),
   SY('security', 'security', 'Internal Security', 'junction', ['Internal sensors', 'Force-field emitters ×20', 'Security console'], { deg: 'Lifeform scanner blind', off: 'Lifeform scanner blind' }, { home: 'Services' }),
-  SY('armory', 'security', 'Armory Chargers', 'junction', ['Charging racks ×2', 'Zapper locker'], { deg: 'Power cells half charged (+1)', off: 'Power cells half charged (+1)' }, { home: 'Services' }),
+  SY('armory', 'security', 'Armory Chargers', 'chargerack', ['Charging racks ×2', 'Zapper locker'], { deg: 'Power cells half charged (+1)', off: 'Power cells half charged (+1)' }, { home: 'Services' }),
   SY('sensors', 'sciences', 'Sensor Arrays', 'console', ['Long-range sensor pallet', 'Lateral arrays ×2', 'Science console'], { deg: 'Tubelift not shown on the scan-o-matic', off: 'Scan range halved, lift hidden' }, { home: 'Habitat', weight: 1.2 }),
   SY('hydro', 'sciences', 'Hydroponics', 'tree', ['Grow beds ×12', 'Nutrient pumps', 'O₂ reclamation'], { deg: 'O₂ reserve low — life-support faults hit harder', off: 'O₂ reserve gone — life-support faults hit harder' }, { home: 'Habitat', weight: 0.8 }),
   SY('sickbay', 'medical', 'Sickbay', 'biobed', ['Biobeds ×6', 'Surgical bay', 'Pharmacy replicator'], { deg: 'Medkits heal less (+22)', off: 'Medkits heal little (+12)' }, { home: 'Habitat' }),
@@ -122,13 +123,15 @@ export function hardwareSites(data) {
   for (const s of SYSTEMS) {
     if (s.host === 'junction') continue;
     if (s.host === 'lift') { out.push({ sys: s.id, tx: data.exit[0], ty: data.exit[1], kind: 'lift' }); continue; }
-    const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['tree', 'plant'] : kind === 'console' ? ['console', 'helm'] : [kind];   // the bridge's forward-port console is the FLT-1 helm station (js/gen.js)
-    const p = data.props.find(p => kinds.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !out.some(o => o.tx === p.tx && o.ty === p.ty));
+    const [kind, room] = s.host.split('@'), kinds = kind === 'tree' ? ['growbed', 'tree', 'plant'] : kind === 'console' ? ['console', 'helm'] : [kind];   // the bridge's forward-port console is the FLT-1 helm station (js/gen.js)
+    const fits = (p, ks) => ks.includes(p.kind) && (!room || data.room[p.ty][p.tx] === room) && !out.some(o => o.tx === p.tx && o.ty === p.ty);
+    const p = kind === 'tree' ? kinds.map(k => data.props.find(p => fits(p, [k]))).find(Boolean) : data.props.find(p => fits(p, kinds));   // hydro: a grow bed before a tree
     if (p) out.push({ sys: s.id, tx: p.tx, ty: p.ty, kind: p.kind });
   }
   return out;
 }
-export const HOST_LABEL = { 'console@bridge': 'bridge consoles', console: 'consoles', warpcore: 'reactor core', biobed: 'biobeds', pad: 'transporter pad', tree: 'grow beds', replicator: 'replicators', holocube: 'holo-grid', lift: 'tubelift controls', junction: 'maintenance junctions' };
+export const HOST_LABEL = { 'console@bridge': 'bridge consoles', console: 'consoles', warpcore: 'reactor core', biobed: 'biobeds', pad: 'transporter pad', tree: 'grow beds', replicator: 'replicators', holocube: 'holo-grid', lift: 'tubelift controls', junction: 'maintenance junctions',
+  'pumpskid@plant': 'coolant pumps', scrubber: 'CO2 scrubbers', fieldgen: 'graviton generator', fieldgen_damp: 'damper field generator', relayrack: 'comm relay racks', chargerack: 'charging racks' };
 
 // ---------------------------------------------------------------- crew roster
 const GIVEN = ['Alex', 'Sam', 'Jordan', 'Morgan', 'Taylor', 'Casey', 'Riley', 'Jamie', 'Avery', 'Quinn', 'Rowan', 'Elliot', 'Noor', 'Amara', 'Kenji', 'Mei', 'Priya', 'Arjun', 'Sofia', 'Mateo', 'Chloé', 'Étienne', 'Malik', 'Ifeoma', 'Kwame', 'Leila', 'Omar', 'Hana', 'Yuki', 'Ines', 'Tomás', 'Aroha', 'Sila', 'Nuka', 'Desmond', 'Wren', 'Felix', 'Isla', 'Ravi', 'Dana', 'Gabriel', 'Marguerite', 'Olu', 'Freya', 'Henrik', 'Lucia', 'Bao', 'Saoirse', 'Tariq', 'Zainab'];
