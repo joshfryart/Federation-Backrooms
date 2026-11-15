@@ -5,6 +5,7 @@ import { deckOptions, requirePlan } from './ships.js';
 
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+const shuffleWith = (a, rnd) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 export function generate(deck, seed, opts = {}) {
   const rnd = mulberry32(seed);
   const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
@@ -158,7 +159,7 @@ export function generate(deck, seed, opts = {}) {
         const gens = interior.length >= 4 ? ['fieldgen', 'fieldgen_damp'] : ['fieldgen'];
         for (const k of gens) {
           let done = false;
-          for (const [x, y] of freeIn().sort(() => prnd() - 0.5)) {
+          for (const [x, y] of shuffleWith(freeIn(), prnd)) {   // Fisher-Yates: a random sort comparator gave a different order per JS engine (node vs Chromium built different decks from one seed)
             if (Math.abs(x - cx) + Math.abs(y - cy) < 2) continue;
             for (const [ax, ay] of prnd() < 0.5 ? [[1, 0], [0, 1]] : [[0, 1], [1, 0]]) {
               const ends = [[x + ax, y + ay], [x - ax, y - ay]]; if (!ends.every(([ex, ey]) => grid[ey]?.[ex] === 0)) continue;
