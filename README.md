@@ -29,5 +29,9 @@ Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **
 - `crew.html` — ship's company: chain of command, department loadouts, Break/Repair any system and see its effects.
 - `ships.html` — fleet schematics (profile + deck plans for all ten ships).
 - `models.html` — model viewer (`?set=crew|enemies|misc|props`, `?clip=<name>`, drag to orbit).
-- `node tools/test.mjs` — headless smoke test (needs Playwright + Chromium): checks the level generator and plays a bot run through every deck. Prints `OK` or `FAIL <check>` lines; a page that fails to load (or crashes while loading) is retried once on a fresh page and logged as `RETRY page load …` — sections themselves are never retried. Known causes of past flakes: `TODO.md` (test-suite reliability).
+- `node tools/test.mjs` — headless test suite (needs Playwright + Chromium; starts its own static server). Prints `OK` or `FAIL <check>` lines; each FAIL is followed by `ship=… seed=… deck=…` and a `replay:` command. Modes:
+  - `--gate`: every node-only section (generator, ship decks, voices, director cascade, pace presets, the `tools/test-*.mjs` unit suites) plus one browser smoke (load, newRun, 300 test-clock frames, lift one deck down, one high-quality render). Aim: under 2 minutes.
+  - full (no flag): everything, one live browser page at a time, plus the smoke on a fixed seed set (`tools/seed-scan.mjs` picks the three ship / run-seed pairs).
+  - `--only a,b` runs just those sections (`--list` names them); `--seed N` (or env `TEST_SEED`, default 1) seeds `Math.random` in every page and re-seeds per section, so `node tools/test.mjs --only walk --seed 7` replays that section; `--ship i` pins the ship.
+  - Pages run on a test clock (`G.manual`: the render loop neither steps nor draws; sections tick with `__game.step` / `__game.advance`) with a cheap renderer (`?test=1`). Each section prints its wall time and JS heap. A page that fails to load is retried once (`RETRY page load …`); sections are never retried. Past flakes: `TODO.md` (test-suite reliability).
 - `tools/build-*.mjs` — offline scripts that re-pack the upstream CC0 assets (not needed to run the game).
