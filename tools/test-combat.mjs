@@ -148,12 +148,17 @@ export async function combatBrowser(page, mad, fail) {
   const h = r.hurt; if (!(h.hpLow < h.hp0 && h.staggered && h.flash && h.downed && h.alive && h.hpAfter > 0)) fail('combat: player HP / stagger / knock-down ' + JSON.stringify(h));
   const sc = r.security; if (!(sc.over && sc.phase === 'play' && (sc.restrained || sc.chain.some(c => /logged/.test(c))) && sc.chain.length)) fail('combat: security response ' + JSON.stringify(sc));
   if (!(r.wheel.length >= 6 && ['h.grab', 'h.release', 'h.restrain', 'h.subdue', 'h.fists', 'h.up'].every(k => r.wheel.includes(k)) && r.toolsHands && r.hudIds)) fail('combat: wheel / HUD ids ' + JSON.stringify({ w: r.wheel, t: r.toolsHands, h: r.hudIds }));
-  // madness mode: no hand-to-hand, the zapper still fires (right mouse stays the grapple hook)
-  if (mad) {
+  if (mad) await combatMadness(mad, fail);
+  return r;
+}
+
+// madness mode: no hand-to-hand, the zapper still fires (right mouse stays the grapple hook); mad = a ?mode=madness page (tools/test.mjs runs it before that page closes)
+export async function combatMadness(mad, fail) {
+  {
     const m = await mad.evaluate(async () => { const g = __game, G = g.G; g.newRun(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.phase = 'play'; let t = 0; for (let i = 0; i < 5; i++) { t += 1 / 30; g.step(1 / 30, t); } G.phaser = Math.max(1, G.phaser); const p0 = G.phaser; g.fire(); return { mode: G.mode, fired: G.phaser === p0 - 1, prim: G.combat?.primary?.() === false, sec: G.combat?.secondary?.(true) === false, hud: document.getElementById('cb-hud')?.style.display ?? 'none' }; });
     console.log('combat madness:', JSON.stringify(m)); if (!(m.mode === 'madness' && m.fired && m.prim && m.sec)) fail('combat: madness mode zapper / no hand-to-hand ' + JSON.stringify(m));
+    return m;
   }
-  return r;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) { let bad = 0; const r = await combatTests((m) => { bad++; console.log('FAIL', m); }); console.log('combat unit:', JSON.stringify(r), bad ? 'FAILED' : 'OK'); process.exit(bad ? 1 : 0); }

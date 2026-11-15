@@ -1,55 +1,57 @@
-// Headless smoke test:  node tools/test.mjs   (needs `playwright` + Chromium; starts its own static server)
-// 1) generator: every chip and the exit are reachable on decks 0-11 × 25 seeds
-// 2) bot run (page loaded with ?mode=madness, the old roguelike): collect chips, ride the lift, pick a perk, through to the win screen, with every enemy type ticking
-// 3) Systems Nominal (default mode, second page): every deck of every ship generates, ship-level rooms exist per shipPlan, no hostiles / madness / faults,
-//    and a bot rides the real turbolift from the top deck to the bottom and back (locked when the lifts system is offline)
+// Headless test suite:  node tools/test.mjs [--gate] [--only a,b] [--seed N] [--ship i] [--list]   (needs `playwright` + Chromium; starts its own static server)
+//   full (default)  every section: node-only checks, then the browser sections page by page (one live page at a time), then the seed-set smoke
+//   --gate          the node-only sections + one browser smoke (load, newRun, 300 test-clock frames, lift one deck down, one high-quality render); target < 2 min
+//   --only a,b      just these sections (names: --list); a browser section runs on a fresh page of its kind
+//   --seed N        Math.random seed for every page (env TEST_SEED; default 1); each browser section re-seeds from (N, its name) before it runs,
+//                   so `--only <section> --seed N` replays the section with the same random draws as in a full run
+//   --ship i        pin G.forceShip to SHIPS[i] for the whole run (sections that pick a ship themselves are overridden)
+// Pages run on the test clock: G.manual = true stops main.js frame() from stepping or drawing the world; sections tick with __game.step / __game.advance
+// (game timers such as the madness lift's perk screen run on that clock too). ?test=1 gives a cheap renderer (no antialias / shadow maps, pixel ratio 1).
+// A FAIL prints ship / run seed / deck and a replay line. Each section prints its wall time and JS heap.
+// Sections (in order): node unit suites (tools/test-*.mjs), room props, generator, ship decks, inventory rooms, director cascade, crew voices, pace presets;
+//   madness page: bot run (chips, lift, perk, to the win screen), parkour, director repairer, fixture search, inventory in game, prop models, madness zapper;
+//   nominal page: Systems Nominal ship / turbolift / billet / duty / NPC walking / equipment / handhelds / doors, voices speech, NPC lift riders;
+//   voices.html; nominal page 3: nav HUD, NPC walking, comms HUD, UI, talk, combat, wiring, pace / crew repair / shift end; smoke on the seed set (tools/seed-scan.mjs).
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { extname, join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.webp': 'image/webp', '.exr': 'application/octet-stream', '.css': 'text/css' };
-const server = createServer(async (req, res) => {
-  try { const p = join(ROOT, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/, '/index.html')); const b = await readFile(p); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(b); }
-  catch { res.writeHead(404); res.end(); }
-}).listen(0);
-const port = server.address().port; const errors = []; let failed = false;
-const fail = (m) => { failed = true; console.log('FAIL', m); };
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'), imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
+const argv = process.argv.slice(2), arg = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : (argv[i + 1] ?? d); };
+const SEED = +(arg('seed', process.env.TEST_SEED ?? 1)) >>> 0, SHIP = arg('ship', null) == null ? null : +arg('ship'), GATE = argv.includes('--gate'), ONLY = arg('only', null) ? String(arg('only')).split(',') : null;
+// seed set for the full run's smoke (tools/seed-scan.mjs: smallest deck, a ring / twin hull, a large hull): [ship index, run seed]
+const SEED_SET = [[3, 56], [4, 2], [2, 7]];
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.webp': 'image/webp', '.exr': 'application/octet-stream', '.css': 'text/css', '.json': 'application/json' };
+let errors = [], failed = false, cur = '', curPage = null, ctx = {};
+const replay = (name) => `node tools/test.mjs --only ${name} --seed ${SEED}${SHIP != null ? ' --ship ' + SHIP : ''}`;
+const where = () => `  ship=${ctx.ship ?? '-'} seed=${ctx.runSeed ?? '-'} (--seed ${SEED}) deck=${ctx.deck ?? '-'}   replay: ${replay(cur)}`;
+let secFails = 0; const fail = (m) => { failed = true; secFails++; console.log('FAIL', m); if (!curPage) console.log(where()); };   // browser sections: the ship / seed / deck line follows once the section has ended (the page state it failed in)
+const sections = [], S = (name, page, fn) => sections.push({ name, page, fn });   // page: null = node only
+
+// ---- node-only sections ----
 import { unitTests as commsUnit, hudTests as commsHud } from './test-comms.mjs';   // alerts / comm bus / bridge model / HUD (tools/test-comms.mjs)
-await commsUnit(fail);
 import { simTests } from './test-sim.mjs';
-await simTests(fail);
 import { walkTests, walkBrowser } from './test-walk.mjs';   // NPC walking between schedule blocks: sim.bodies, lift, sealed doors, friends (tools/test-walk.mjs)
-await walkTests(fail);
 import { dutyTests } from './test-duty.mjs';
-await dutyTests(fail);
 import { socialTests } from './test-social.mjs';   // social tracker + sim/duty hooks (tools/test-social.mjs)
-await socialTests(fail);
 import { gaitTests } from './test-gait.mjs';
-await gaitTests(fail);
 import { movementTests } from './test-movement.mjs';
-await movementTests(fail);
 import { equipmentTests } from './test-equipment.mjs';   // equipment motions / carry items (tools/test-equipment.mjs)
-await equipmentTests(fail);
 import { repairTests } from './test-repair.mjs';   // NPC repair response, sim priorities, pace, speech etiquette (tools/test-repair.mjs)
-await repairTests(fail);
 import { handheldTests } from './test-handhelds.mjs';   // handheld job equipment / improvised weapons (tools/test-handhelds.mjs)
-await handheldTests(fail);
 import { navTests, navBrowser } from './test-nav.mjs';   // routing / cross-deck plans / pins + nav HUD (tools/test-nav.mjs)
-await navTests(fail);
 import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / pointer lock, wheel maths, toasts, icons (tools/test-ui.mjs)
-await uiTests(fail);
 import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation close-up: state machine, framing, pause rules, intents (tools/test-talk.mjs)
-await talkTests(fail);
-import { combatTests, combatBrowser } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
-await combatTests(fail);
+import { combatTests, combatBrowser, combatMadness } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
-await wiringTests(fail);
+for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests]]) S(n, null, () => f(fail));
+
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
-{
+S('room-props', null, async () => {
   const { generate, genShip } = await import(new URL('../js/gen.js', import.meta.url)), { SHIPS, deckOptions } = await import(new URL('../js/ships.js', import.meta.url));
   const WANT = { bridge: ['helm'], engineering: ['reactorstation', 'fieldgen'], shuttlebay: ['baycontrol'], transporter: ['beampedestal'], holodeck: ['holodesk'], brig: ['secdesk'], sickbay: ['nursestation'],
     mess: ['range', 'servery'], lounge: ['bar'], plant: ['pumpskid', 'heatexch', 'scrubber'], workshop: ['fabricator'], morgue: ['autopsy_table'], quarters: ['desk'] };
@@ -76,24 +78,11 @@ await wiringTests(fail);
   const bigLow = Object.keys(bigN).filter(t => (bigFull[t] || 0) < bigN[t] * 0.9).map(t => `${t} ${bigFull[t] || 0}/${bigN[t]}`);
   console.log(`room props: ${levels} levels, ${Object.keys(has).length} room/prop pairs, wall props stranded ${stranded}, big sickbays with the medical set ${big5full}/${big5}, big rooms with their set ${Object.keys(bigN).map(t => t + ' ' + (bigFull[t] || 0) + '/' + bigN[t]).join(' ')}, lift in a room ${exitInRoom}${low.length ? ', too rare: ' + low.join('; ') : ''}${bigLow.length ? ', big rooms short: ' + bigLow.join('; ') : ''}`);
   if (low.length || stranded || exitInRoom || big5full < big5 || bigLow.length) fail('room props');
-}
-const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-// one browser for the whole run; each page is its own renderer process, closed once its sections are done (memory: every newRun() builds a deck).
-// Page load + game ready get a generous timeout and ONE retry on a fresh page (logged as RETRY): a slow or crashed load is not a test result.
-// Nothing else is retried here: a section that fails, fails.
-const openPage = async (path, tag = '', viewport = { width: 640, height: 360 }, ready = async (p) => p.evaluate(async () => { await __game.ready; __game.setQuality('low'); })) => {
-  for (let attempt = 1; ; attempt++) {
-    const p = await browser.newPage({ viewport }); p.setDefaultTimeout(120000); p.setDefaultNavigationTimeout(120000);
-    const errs = []; p.on('pageerror', e => errs.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(tag + m.text()); }); p.on('crash', () => errs.push(tag + 'renderer crashed'));
-    try { await p.goto(`http://localhost:${port}/${path}`); await ready(p); p.on('pageerror', e => errors.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(tag + m.text()); }); p.on('crash', () => errors.push(tag + 'renderer crashed')); errors.push(...errs); return p; }
-    catch (e) { await p.close().catch(() => { }); if (attempt >= 2) throw e; console.log(`RETRY page load ${path}: ${String(e.message || e).split('\n')[0]}${errs.length ? ' / ' + errs[0] : ''}`); }
-  }
-};
-const page = await openPage('index.html?mode=madness');
-if (await page.evaluate(() => __game.G.mode) !== 'madness') fail('?mode=madness did not select madness mode');
-
-const gen = await page.evaluate(async () => {
-  const { generate } = await import('./js/world.js'); const { SHIPS, deckOptions } = await import('./js/ships.js'); const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0;
+});
+const GEN = await imp('js/gen.js'), SHIPSM = await imp('js/ships.js');
+S('generator', null, async () => {   // every chip and the exit are reachable on decks 0-11 x 25 seeds (js/gen.js in node)
+const gen = (() => {
+  const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM; const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0;
   for (let deck = 0; deck < 12; deck++) for (let seed = 1; seed <= 25; seed++) {
     const ship = SHIPS[(deck + seed) % SHIPS.length], sd = Math.round(Math.min(deck, 7) / 7 * (ship.decks - 1)); const d = generate(deck, seed * 7919 + deck, deckOptions(ship, sd)); n++;
     const wallCount = d.grid.reduce((a, r) => a + r.reduce((b, c) => b + (c === 1 ? 1 : 0), 0), 0); if (d.W > 2 * Math.min(6 + Math.floor(deck * 0.7), 11) + 1) masked++; minOpen = Math.min(minOpen, d.openTiles.length);
@@ -105,14 +94,134 @@ const gen = await page.evaluate(async () => {
     tubes += d.tubes.length; if (d.tubes.length) withTubes++; ladders += d.tubes.filter(t => t.ladder > 0).length; bigRooms += d.rooms.filter(r => r.big).length;
   }
   return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen };
-});
+})();
 console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
+});
+S('ship-decks', null, async () => {   // every deck of every ship generates, ship-level rooms exist per shipPlan (js/gen.js in node)
+const shipTest = (() => {
+  const { SHIPS } = SHIPSM, { genShip, shipPlan } = GEN;
+  const NEED = ['bridge', 'readyroom', 'engineering', 'sickbay', 'mess', 'lounge', 'gym', 'holodeck', 'lab', 'quarters', 'shuttlebay', 'cargo', 'transporter', 'armory', 'brig', 'datacore', 'arboretum', 'stores'];
+  const bad = [], dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]; let decks = 0;
+  for (const ship of SHIPS) for (const seed of [0, 1, 2, 3, 4, 5]) {
+    const ds = genShip(ship, seed), plan = shipPlan(ship, seed, ds); decks += ds.length;
+    if (ds.length !== ship.decks) bad.push(`${ship.name}: ${ds.length} decks`);
+    for (const t of NEED) if (!plan[t]) bad.push(`${ship.name}/${seed}: no ${t}`); else for (const r of plan[t]) if (ds[r.deck].room[r.ty][r.tx] !== t) bad.push(`${ship.name}/${seed}: ${t} not at ${r.deck},${r.tx},${r.ty}`);
+    if (plan.bridge?.[0].deck !== 0 || plan.readyroom?.[0].deck !== 0) bad.push(`${ship.name}/${seed}: bridge/ready room not on the Command deck`);
+    if ((plan.quarters || []).length < 3) bad.push(`${ship.name}/${seed}: few quarters`);
+    if (!ds.some(d => d.props.some(p => p.kind === 'warpcore'))) bad.push(`${ship.name}/${seed}: no warp core`);
+    ds.forEach((d, i) => { if (!d.exitBlocks) bad.push(`${ship.name}/${seed}/${i}: lift is not a dead-end car`); });
+  }
+  return { decks, bad };
+})();
+console.log(`ship decks: ${shipTest.decks} generated, ${shipTest.bad.length} problems`); if (shipTest.bad.length) fail('ship decks: ' + shipTest.bad.slice(0, 6).join('; '));
+});
+S('inventory-rooms', null, async () => {   // the new room types turn up across 120 generated decks (was the first half of the in-game inventory probe)
+  const NEW = new Set(['readyroom', 'brig', 'armory', 'gym', 'lab', 'laundry', 'lounge', 'workshop', 'plant', 'morgue', 'datacore', 'stores', 'washroom', 'airlock']), seen = new Set();
+  { const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM;
+    for (let i = 0; i < 120; i++) { const ship = SHIPS[i % SHIPS.length], sd = i % ship.decks, d = generate(sd, i * 7919 + 3, deckOptions(ship, sd)); for (const r of d.rooms) if (NEW.has(r.type)) seen.add(r.type); } }
+  const newRooms = [...seen]; console.log('inventory rooms:', JSON.stringify(newRooms)); if (!(newRooms.length >= 12)) fail('inventory in game: new room types ' + newRooms.length);
+});
+S('director-cascade', null, async () => {   // Director pacing + ShipState cascade (the module half of "director"; the crew repairer stays in the browser)
+  const { Director } = await imp('js/director.js'); const { ShipState } = await imp('js/crew.js'); const { SHIPS } = SHIPSM;
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const D = new Director(rnd); D.reset(3); const acts = {}, phases = new Set(); let t = 0;
+  const run = (secs, tension) => { for (let i = 0; i < secs * 10; i++) { t += 0.1; const a = D.update(0.1, { tension, deckTime: t, faults: 1, dormant: 1, active: 1, madPending: 20 }); if (a) acts[a] = (acts[a] || 0) + 1; phases.add(D.phase); } };
+  run(240, 0); const quietActs = Object.values(acts).reduce((a, b) => a + b, 0);
+  run(60, 1); const peaked = phases.has('peak'); run(90, 0);
+  const SS = new ShipState(SHIPS[0], 5); SS.repair('reactor'); SS.damage('coolant', 1); for (let i = 0; i < 450; i++) SS.tick(0.1, { deckTime: 0, tension: 0, deck: 1 });
+  const dir = { quietActs, acts, peaked, relaxed: phases.has('relax'), backToBuild: D.phase === 'build', cascadeReactor: SS.status('reactor') };
+  console.log('director:', JSON.stringify(dir)); if (!(dir.quietActs >= 4 && dir.peaked && dir.relaxed && dir.cascadeReactor !== 'nominal')) fail('director');
+});
+S('voices', null, async () => {   // crew voices / tags / lift lines over every ship x 3 seeds (js/voice.js + js/crew.js in node; personas from assets/data/personas.json)
+const V = await imp('js/voice.js'); V.setPersonas(JSON.parse(readFileSync(join(ROOT, 'assets/data/personas.json'), 'utf8')));
+const vox = await (async () => {
+  const { SHIPS } = SHIPSM, { makeComplement } = await imp('js/crew.js');
+  const bad = [], all = V.allTags(), sig = (r) => r.people.map(p => V.voiceSig(p.voice, p.tags)); let people = 0, tagTotal = 0, personas = 0;
+  if (!V.havePersonas()) bad.push('personas.json not loaded');
+  for (const ship of SHIPS) for (const seed of [1, 7, 4242]) {
+    const a = makeComplement(ship, seed), b = makeComplement(ship, seed), sa = sig(a);
+    if (JSON.stringify(sa) !== JSON.stringify(sig(b)) || JSON.stringify(a.people.map(p => p.persona)) !== JSON.stringify(b.people.map(p => p.persona))) bad.push(`${ship.name}/${seed}: voices not deterministic`);
+    if (new Set(sa).size !== sa.length) bad.push(`${ship.name}/${seed}: two people share a voice+tag set`);
+    if (new Set(a.people.map(p => p.voice.hash)).size !== a.people.length) bad.push(`${ship.name}/${seed}: voice hash collision`);
+    for (const p of a.people) {
+      people++; tagTotal += p.tags.length; if (p.persona) personas++;
+      if (p.tags.length < 8 || p.tags.length > 14) bad.push(`${p.short}: ${p.tags.length} tags`);
+      for (const c of V.CATEGORIES) if (!p.tags.some(t => V.catOf(t) === c)) bad.push(`${p.short}: no ${c} tag`);
+      const cf = V.conflictsIn(p.tags); if (cf.length) bad.push(`${p.short}: conflicts ${JSON.stringify(cf)}`);
+      for (const t of p.tags) if (!all.includes(t)) bad.push(`${p.short}: unknown tag ${t}`);
+      const v = p.voice; if (!(v.pitch >= 0.5 && v.pitch <= 1.8 && v.rate >= 0.7 && v.rate <= 1.5 && v.volume >= 0.5 && v.volume <= 1 && v.formant >= 0.8 && v.formant <= 1.25 && v.breath >= 0 && v.breath <= 1 && v.rough >= 0 && v.rough <= 1 && v.vibrato >= 0 && v.vibrato <= 1 && Number.isInteger(v.hash))) bad.push(`${p.short}: voice out of range`);
+    }
+    if (bad.length > 8) break;
+  }
+  const noFx = all.filter(t => !V.hasEffect(t)), extra = Object.keys(V.TAG_EFFECTS).filter(t => !all.includes(t));
+  let asym = 0; for (const [t, cs] of Object.entries(V.CONFLICTS)) for (const c of cs) if (!V.CONFLICTS[c]?.includes(t)) asym++;
+  const bodies = {}; for (const p of makeComplement(SHIPS[0], 1).people) (bodies[p.body] ||= []).push(p.voice.pitch); const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  // lift lines: 30 sampled people x random destinations
+  const ship = SHIPS[2], R = makeComplement(ship, 3), lines = [], lbad = []; let sd = 5; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  for (let k = 0; k < 30; k++) {
+    const p = R.people[Math.floor(rnd() * R.people.length)], rooms = ['Bridge', 'Engineering', 'Sickbay', 'Galley', 'Cargo', 'Lab'].filter(() => rnd() < 0.4), d = { deckNo: 1 + Math.floor(rnd() * 9), zone: ['Command', 'Habitat', 'Services', 'Engineering'][Math.floor(rnd() * 4)], rooms };
+    const l = V.liftLine(p, d), lo = l.toLowerCase(), place = V.pickPlace(p, d).toLowerCase(); lines.push(l);
+    if (!l || !(lo.includes(V.numWord(d.deckNo)) || lo.includes(String(d.deckNo)) || (place && lo.includes(place.slice(2))))) lbad.push(`${p.short}: "${l}" for deck ${d.deckNo} ${place}`);
+    if (V.liftLine(p, d) !== l) lbad.push('liftLine not deterministic');
+  }
+  // tag-shaped examples from the spec
+  const mk = (tags, extra = {}) => ({ id: 1, rank: 2, dept: 'command', body: 'crew_m', voice: { hash: 5 }, tags, ...extra }), D1 = { deckNo: 1, zone: 'Command', rooms: ['Bridge'] }, DE = { deckNo: 5, zone: 'Engineering', rooms: ['Engineering'] };
+  const ex = { terse: V.liftLine(mk(['speech:terse', 'lift:one-word']), D1), formal: V.liftLine(mk(['speech:formal', 'lift:full-sentence']), D1), casual: V.liftLine(mk(['speech:casual', 'lift:names-place']), DE), mumble: V.liftLine(mk(['lift:mumbles', 'lift:names-place']), DE), please: V.liftLine(mk(['lift:says-please', 'lift:says-deck-number']), D1) };
+  const exOk = /^Bridge\.$/.test(ex.terse) && /^Deck one, the bridge, please\.$/.test(ex.formal) && /^(Uh|Yeah|Okay), engineering\.$/.test(ex.casual) && /^…ngineering\.$/.test(ex.mumble) && /please/.test(ex.please);
+  return { people, avgTags: +(tagTotal / people).toFixed(1), personas, bad, noFx, extra, asym, tags: all.length, pitch: Object.fromEntries(Object.entries(bodies).map(([k, a]) => [k, +avg(a).toFixed(2)])), lbad, sample: lines.slice(0, 4), ex, exOk };
+})();
+console.log('voices:', JSON.stringify({ ...vox, bad: vox.bad.slice(0, 4) }));
+{ const o = vox; if (!(o.bad.length === 0 && o.noFx.length === 0 && o.extra.length === 0 && o.asym === 0 && o.personas === o.people && o.lbad.length === 0 && o.exOk && o.pitch.crew_heavy < o.pitch.crew_m && o.pitch.crew_m < o.pitch.crew_f2)) fail('crew voices: ' + JSON.stringify({ bad: o.bad.slice(0, 3), noFx: o.noFx.slice(0, 3), extra: o.extra, asym: o.asym, lbad: o.lbad.slice(0, 3), exOk: o.exOk, ex: o.ex })); }
+});
+S('pace-presets', null, async () => {   // First watch / Crunch / Standard scale the clock, duty, tasks and phases (js/pace.js through the modules newRun wires them into)
+  const PC = await imp('js/pace.js'), K = await imp('js/clock.js'), C = await imp('js/crew.js'), D = await imp('js/duty.js'), PH = await imp('js/phases.js'), { SHIPS } = SHIPSM;
+  const duties = JSON.parse(readFileSync(join(ROOT, 'assets/data/duties.json'), 'utf8')), ship = SHIPS[0], seed = 4242, roster = C.makeComplement(ship, seed), player = D.pickBillet(roster, seed); player.isPlayer = true;
+  const snap = (id) => { const pace = PC.paceFor(id), clock = new K.ShipClock({ seed }); clock.assign(roster); clock.setPace(pace.T); const ss = new C.ShipState(ship, seed); ss.paceT = pace.T;   // as js/main.js setupDuty
+    const duty = new D.Duty({ player, roster, clock, duties, shipState: ss, seed, mission: D.pickMission ? D.pickMission(seed) : 'quiet_watch', pace }), ph = new PH.Phases({ shipState: ss, roster, duty, seed, pace });
+    return { id: pace.id, T: clock.paceT, rate: +clock.rate.toFixed(5), firstDue: Math.round(Math.min(...duty.loops.map(l => l.next))), period0: duty.loops[0]?.period, run: ph.runLength, phaseAt: ph.phaseAt[4], firstTask: Math.round(Math.min(...duty.tasks.map(t => t.at_s), 1e9)), cascadeT: ss.paceT }; };
+  const r = { first: snap('first'), crunch: snap('crunch'), std: snap('standard'), read: [PC.readPace('?pace=crunch', null).id, PC.readPace('', null, true).id, PC.paceFor('nope').id] };
+  console.log('pace presets:', JSON.stringify(r));
+  if (!(r.first.T === 2.5 && r.first.firstDue >= 180 && r.first.firstTask >= 240 && r.first.run === 3000 && r.first.phaseAt === 2400 && r.crunch.T === 0.7 && r.crunch.run === 840 && r.std.T === 1 && r.std.run === 1200 && r.first.rate < r.std.rate && r.std.rate < r.crunch.rate && r.read.join() === 'crunch,standard,standard')) fail('pace presets ' + JSON.stringify(r));
+});
 
+// ---- browser ----
+const { chromium } = require('playwright');
+const server = createServer(async (req, res) => {
+  try { const p = join(ROOT, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/, '/index.html')); const b = await readFile(p); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(b); }
+  catch { res.writeHead(404); res.end(); }
+}).listen(0);
+const port = server.address().port; let browser = null;
+const strSeed = (s) => { let h = SEED ^ 0x9e3779b9; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0; return h >>> 0; };
+// one browser for the whole run; ONE live page at a time (each page is its own renderer process, closed once its sections are done: every newRun() builds a ship).
+// Page load + game ready get a generous timeout and ONE retry on a fresh page (logged as RETRY): a slow or crashed load is not a test result.
+// Nothing else is retried here: a section that fails, fails.
+const gameReady = async (p) => p.evaluate(async ({ ship, manual }) => { await __game.ready; __game.setQuality('low'); __game.G.manual = manual; if (ship != null) Object.defineProperty(__game.G, 'forceShip', { get: () => ship, set: () => { }, configurable: true }); }, { ship: SHIP, manual: !process.env.TEST_REALTIME });   // TEST_REALTIME=1: the old wall-clock frame loop (diagnostics only)
+const openPage = async (path, tag = '', viewport = { width: 320, height: 180 }, ready = gameReady) => {
+  if (!browser) browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required'] });   // a running AudioContext: in a suspended one (no user gesture) every scheduled sound node stays alive, gigabytes over a run
+  for (let attempt = 1; ; attempt++) {
+    const p = await browser.newPage({ viewport }); p.setDefaultTimeout(120000); p.setDefaultNavigationTimeout(120000);
+    await p.addInitScript((seed) => { window.__seedRandom = (s) => { let a = s >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }; window.__seedRandom(seed); }, SEED);   // Math.random seeded (the generator of tools/soak-walk.mjs); __seedRandom re-seeds per section
+    const errs = []; p.on('pageerror', e => errs.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(tag + m.text()); }); p.on('crash', () => errs.push(tag + 'renderer crashed'));
+    try { await p.goto(`http://localhost:${port}/${path}`); await ready(p); p.on('pageerror', e => errors.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(tag + m.text()); }); p.on('crash', () => errors.push(tag + 'renderer crashed')); errors.push(...errs); return p; }
+    catch (e) { await p.close().catch(() => { }); if (attempt >= 2) throw e; console.log(`RETRY page load ${path}: ${String(e.message || e).split('\n')[0]}${errs.length ? ' / ' + errs[0] : ''}`); }
+  }
+};
+const PAGES = {   // page kinds: how to open one
+  madness: () => openPage('index.html?mode=madness&test=1'),
+  nominal: () => openPage('index.html?test=1', 'nominal: '),
+  voices: () => openPage('voices.html?ship=3&seed=2', 'voices.html: ', { width: 900, height: 600 }, (p) => p.waitForFunction(() => window.__ready, null, { timeout: 60000 })),
+  nominal3: async () => { const p = await openPage('index.html?test=1', 'nominal: '); await p.evaluate(() => { __game.G.forceShip = 1; }); return p; },   // forceShip 1 as the lift-rider section on the previous page leaves it
+  smoke: () => openPage('index.html', 'smoke: '),   // no ?test=1: the one high-quality render runs on the real renderer settings
+};
+
+// ---- madness page (?mode=madness, the old roguelike) ----
+S('madness-mode', 'madness', async (page) => { if (await page.evaluate(() => __game.G.mode) !== 'madness') fail('?mode=madness did not select madness mode'); });
+S('bot-run', 'madness', async (page) => {   // collect chips, ride the lift, pick a perk, through to the win screen, with every enemy type ticking
 const run = await page.evaluate(async () => {
   const g = __game, kinds = new Set(); g.newRun(); g.setQuality('low');
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
   const key = (code) => { for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code, key: code.replace('Key', '').replace('Digit', '').toLowerCase(), bubbles: true })); };
-  let t = 0; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); } };
+  let t = 0; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); } }, adv = (secs) => { for (let i = 0; i < Math.round(secs * 30); i++) { t += 1 / 30; g.advance(1 / 30, t); } };   // adv: test-clock frames (the lift fade and the perk screen run on game timers)
   const log = [];
   for (let guard = 0; guard < 14 && g.G.phase !== 'win'; guard++) {
     if (g.G.phase === 'paused') g.G.phase = 'play';
@@ -126,19 +235,21 @@ const run = await page.evaluate(async () => {
     if (g.shipState.status('lifts') === 'offline') g.shipState.repair('lifts');
     for (const r of g.repairPts) if (Math.hypot(r.x - g.world.liftPos.x, r.z - g.world.liftPos.z) < r.reach + 0.5 && g.shipState.status(r.sys) !== 'nominal') g.shipState.repair(r.sys);   // a damaged system in reach of the lift (the lift controls themselves when 'lifts' is only degraded, or a junction beside the car) turns E into hold-to-repair (js/main.js interact): the bot would press E forever
     for (let k = 0; k < 4 && g.G.phase === 'play'; k++) { g.P.clung = 0; g.P.kbx = g.P.kbz = 0; g.P.x = g.world.liftPos.x; g.P.z = g.world.liftPos.z; tick(2); key('KeyE'); tick(1); }
-    await new Promise(r => setTimeout(r, 2600)); tick(4);
-    for (let w = 0; w < 36 && g.G.deck === deck && g.G.phase !== 'win' && g.G.phase !== 'perk'; w++) { await new Promise(r => setTimeout(r, 500)); tick(4); }   // slow machine: keep waiting for the lift transition (up to ~20 s)
-    if (g.G.phase === 'perk') { key('Digit1'); await new Promise(r => setTimeout(r, 300)); }
+    adv(2.6); tick(4);
+    for (let w = 0; w < 36 && g.G.deck === deck && g.G.phase !== 'win' && g.G.phase !== 'perk'; w++) { adv(0.5); tick(4); }   // keep waiting for the lift transition (up to ~20 s of game time)
+    if (g.G.phase === 'perk') { key('Digit1'); adv(0.3); }
     if (g.G.phase === 'paused') { document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; }   // no pointer lock in headless
     log.push(`${deck}→${g.G.deck}:${g.G.phase}`);
     if (g.G.deck === deck && g.G.phase !== 'win') return { err: `deck ${deck} did not advance (phase ${g.G.phase})`, log };
   }
   return { phase: g.G.phase, deck: g.G.deck, kinds: [...kinds], log };
 });
+console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
+});
+S('parkour', 'madness', async (page) => {   // jump, mantle, grapple, Jiffy tube, space madness, crazed crew climbing, ship-system repair
 const park = await page.evaluate(async () => {
   const g = __game, P = g.P, r = {}; g.newRun(); const w = g.world; g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = 1e6; for (const e of g.gorns) { e.dead = true; e.delay = 1e9; e.mesh.visible = false; } g.gorns.length = 0; P.clung = 0;
   const key = (code) => { g.G.phase = 'play'; for (const t of ['keydown', 'keyup']) window.dispatchEvent(new KeyboardEvent(t, { code })); };
-  await new Promise(r => setTimeout(r, 300));
   let t = 100; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 60; g.step(1 / 60, t); } };
   const c = w.center(w.d.start[0], w.d.start[1]); P.x = c[0]; P.z = c[1]; tick(5);
   // jump: leaves the floor, comes back
@@ -206,21 +317,18 @@ const park = await page.evaluate(async () => {
   return r;
 });
 console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun) || park.climb.tube.hit)   /* climbed in after you, or dragged you out of the high mouth */ && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
+});
+S('director', 'madness', async (page) => {   // a crew member is dispatched to a lighting junction and fixes it (the Director / cascade half is the node section director-cascade)
 const dir = await page.evaluate(async () => {
-  const { Director } = await import('./js/director.js'); const { ShipState } = await import('./js/crew.js'); const { SHIPS } = await import('./js/ships.js');
-  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const D = new Director(rnd); D.reset(3); const acts = {}, phases = new Set(); let t = 0;
-  const run = (secs, tension) => { for (let i = 0; i < secs * 10; i++) { t += 0.1; const a = D.update(0.1, { tension, deckTime: t, faults: 1, dormant: 1, active: 1, madPending: 20 }); if (a) acts[a] = (acts[a] || 0) + 1; phases.add(D.phase); } };
-  run(240, 0); const quietActs = Object.values(acts).reduce((a, b) => a + b, 0);
-  run(60, 1); const peaked = phases.has('peak'); run(90, 0);
-  const S = new ShipState(SHIPS[0], 5); S.repair('reactor'); S.damage('coolant', 1); for (let i = 0; i < 450; i++) S.tick(0.1, { deckTime: 0, tension: 0, deck: 1 });
   const g = __game; for (let a = 0; a < 6; a++) { g.newRun(); if (g.repairPts.some(p => p.sys === 'lighting')) break; }   /* a layout with no wall space for the junction would make the probe meaningless */ g.setQuality('low'); for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null; for (const e of g.ents.filter(e => e.opener)) { g.scene.remove(e.mesh); g.ents.splice(g.ents.indexOf(e), 1); }
   g.shipState.damage('lighting', 0.9, { quiet: true }); for (const e of g.ents.filter(e => e.repairing)) e.repairing = null; g.spawnRepairer('lighting');
   const rep = g.ents.find(e => e.repairing?.sys === 'lighting'); let tt = 500, secs = 0;
   if (rep) { g.P.x = rep.x + 30; for (let i = 0; i < 60 * 70 && g.shipState.status('lighting') !== 'nominal'; i++) { g.G.phase = 'play'; g.G.hp = 1e6; tt += 1 / 60; g.step(1 / 60, tt); secs = i / 60; } }
-  return { quietActs, acts, peaked, relaxed: phases.has('relax'), backToBuild: D.phase === 'build', cascadeReactor: S.status('reactor'), repairer: !!rep, crewFixed: g.shipState.status('lighting') === 'nominal', secs: +secs.toFixed(0) };
+  return { repairer: !!rep, crewFixed: g.shipState.status('lighting') === 'nominal', secs: +secs.toFixed(0) };
 });
-console.log('director:', JSON.stringify(dir)); if (!(dir.quietActs >= 4 && dir.peaked && dir.relaxed && dir.cascadeReactor !== 'nominal' && dir.repairer && dir.crewFixed)) fail('director');
+console.log('director repairer:', JSON.stringify(dir)); if (!(dir.repairer && dir.crewFixed)) fail('director');
+});
+S('search', 'madness', async (page) => {   // search a wall fixture
 const srch = await page.evaluate(async () => {
   const g = __game, P = g.P, out = { sites: 0, kinds: {}, searched: false, prompt: '', say: '' };
   const stand = (s) => [s.x + s.nx * 0.9, s.z + s.nz * 0.9];   // a site with nobody standing by (the prompt would offer a talk instead) and no repair point in reach (a damaged system's [Hold E] Repair outranks Search by design, js/main.js prompt order)
@@ -239,13 +347,11 @@ const srch = await page.evaluate(async () => {
   return out;
 });
 console.log('search:', JSON.stringify(srch)); if (!(srch.sites > 0 && srch.searched && /Search/.test(srch.prompt))) fail('fixture search');
+});
+S('inventory', 'madness', async (page) => {   // look-at examine text on a prop, clutter prompts (the room-type scan is the node section inventory-rooms)
 const invRun = () => page.evaluate(async () => {
-  const g = __game, P = g.P, out = { newRooms: [], clutter: 0, examine: '', examineKind: '', clutterPrompt: '' };
-  const NEW = new Set(['readyroom', 'brig', 'armory', 'gym', 'lab', 'laundry', 'lounge', 'workshop', 'plant', 'morgue', 'datacore', 'stores', 'washroom', 'airlock']), seen = new Set();
-  { const { generate } = await import('./js/gen.js'), { SHIPS, deckOptions } = await import('./js/ships.js');
-    for (let i = 0; i < 120; i++) { const ship = SHIPS[i % SHIPS.length], sd = i % ship.decks, d = generate(sd, i * 7919 + 3, deckOptions(ship, sd)); for (const r of d.rooms) if (NEW.has(r.type)) seen.add(r.type); } }
+  const g = __game, P = g.P, out = { clutter: 0, examine: '', examineKind: '', clutterPrompt: '' };
   for (let i = 0; i < 4; i++) { g.newRun(); g.setQuality('low'); out.clutter += g.world.clutter?.length || 0; }
-  out.newRooms = [...seen];
   g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = g.G.maxHp = 1e6;
   for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0; g.G.mad.t = 1e9; g.G.mad.pending = null;
   const w = g.world;   // look at a crate / table / bunk / biobed from an open tile beside it (a stand point inside a wall or another prop sees that instead): up to 12 props
@@ -258,8 +364,11 @@ const invRun = () => page.evaluate(async () => {
   return out;
 });
 let inv = await invRun(); for (let a = 0; a < 3 && !(inv.examine && inv.clutterPrompt && !/\[E\](?! Take)/.test(inv.clutterPrompt)); a++) inv = await invRun();   // random layouts: the look-at probe can miss on one ship, so retry on fresh runs
-console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.newRooms.length >= 12 && inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
+console.log('inventory in game:', JSON.stringify(inv)); if (!(inv.clutter > 20 && inv.examine && inv.clutterPrompt && !/\[E\]/.test(inv.clutterPrompt))) fail('inventory in game');
+});
+S('props', 'madness', async (page) => {   // prop models: footprints, use points, tris, item art, shuttle cradle / bay door
 const propsOk = await page.evaluate(async () => {
+  if (!__game.world) { __game.newRun(); __game.setQuality('low'); }   // --only props on a fresh page
   const { PROP_KINDS, PROP_GALLERY, PROP_ART_FIXTURES, buildProp } = await import('./js/world.js'), { PROP_ART } = await import('./js/propart.js'), bad = []; let maxTris = 0, art = 0;
   const tris = (o) => { let n = 0; o.traverse(m => { if (m.isMesh) n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return Math.round(n); };
   for (const k of PROP_GALLERY) { try { const g = buildProp(k); if (!g || !g.children.length) { bad.push(k); continue; }
@@ -290,25 +399,10 @@ const propsOk = await page.evaluate(async () => {
   return { n: PROP_KINDS.length, gallery: PROP_GALLERY.length, art, maxTris, bad };
 });
 console.log('props:', JSON.stringify(propsOk)); if (propsOk.bad.length || propsOk.n < 56 || propsOk.art < 34) fail('prop models');
-console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
-// ---- Systems Nominal (default mode) on its own page ----
-const page2 = await openPage('index.html', 'nominal: ');
-const shipTest = await page2.evaluate(async () => {
-  const { SHIPS } = await import('./js/ships.js'); const { genShip, shipPlan } = await import('./js/gen.js');
-  const NEED = ['bridge', 'readyroom', 'engineering', 'sickbay', 'mess', 'lounge', 'gym', 'holodeck', 'lab', 'quarters', 'shuttlebay', 'cargo', 'transporter', 'armory', 'brig', 'datacore', 'arboretum', 'stores'];
-  const bad = [], dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]]; let decks = 0;
-  for (const ship of SHIPS) for (const seed of [0, 1, 2, 3, 4, 5]) {
-    const ds = genShip(ship, seed), plan = shipPlan(ship, seed, ds); decks += ds.length;
-    if (ds.length !== ship.decks) bad.push(`${ship.name}: ${ds.length} decks`);
-    for (const t of NEED) if (!plan[t]) bad.push(`${ship.name}/${seed}: no ${t}`); else for (const r of plan[t]) if (ds[r.deck].room[r.ty][r.tx] !== t) bad.push(`${ship.name}/${seed}: ${t} not at ${r.deck},${r.tx},${r.ty}`);
-    if (plan.bridge?.[0].deck !== 0 || plan.readyroom?.[0].deck !== 0) bad.push(`${ship.name}/${seed}: bridge/ready room not on the Command deck`);
-    if ((plan.quarters || []).length < 3) bad.push(`${ship.name}/${seed}: few quarters`);
-    if (!ds.some(d => d.props.some(p => p.kind === 'warpcore'))) bad.push(`${ship.name}/${seed}: no warp core`);
-    ds.forEach((d, i) => { if (!d.exitBlocks) bad.push(`${ship.name}/${seed}/${i}: lift is not a dead-end car`); });
-  }
-  return { decks, bad };
 });
-console.log(`ship decks: ${shipTest.decks} generated, ${shipTest.bad.length} problems`); if (shipTest.bad.length) fail('ship decks: ' + shipTest.bad.slice(0, 6).join('; '));
+S('combat-madness', 'madness', (page) => combatMadness(page, fail));   // madness mode: no hand-to-hand, the zapper still fires (tools/test-combat.mjs)
+// ---- Systems Nominal (default mode) ----
+S('nominal', 'nominal', async (page2) => {   // calm start, lift doors, rides down / up / one deck, locked lift, billet / duty / phases / death, NPC walk, tubes, dodge, evacuation, equipment, handhelds, doors, terminal
 const nom = await page2.evaluate(async () => {
   const g = __game, P = g.P, out = { log: [] }; g.G.forceShip = 0; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.hp = g.G.maxHp = 1e6;
   const key = (code) => { for (const t of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(t, { code, key: code, bubbles: true })); };
@@ -495,49 +589,18 @@ console.log('nominal:', JSON.stringify(nom));
   if (!q.kit || !q.worn || q.worn.bone !== 'pelvis' || q.inHand !== 'hand_r') fail('handhelds: NPC kit on the body / in hand ' + JSON.stringify(q.worn) + q.inHand);
   if (!q.repair || !q.repair.faster || !q.repair.scan) fail('handhelds: tricorder repair ' + JSON.stringify(q.repair));
   if (!q.weapon || !(q.weapon.stunned && q.weapon.cower && q.weapon.broken && !q.weapon.jobAfter && q.weapon.hits <= 6 && q.weapon.recovered)) fail('handhelds: improvised weapon ' + JSON.stringify(q.weapon)); }
-// ---- crew voices, tags, lift speech, NPC riders ----
-const vox = await page2.evaluate(async () => {
+});
+S('voices-speech', 'nominal', async (page2) => {   // speaking in headless: every mode works without throwing and leaves a subtitle (the voice / tag checks are the node section voices)
+const o = await page2.evaluate(async () => {
   const V = await import('./js/voice.js'), SP = await import('./js/speech.js'), { SHIPS } = await import('./js/ships.js'), { makeComplement } = await import('./js/crew.js');
-  const bad = [], all = V.allTags(), sig = (r) => r.people.map(p => V.voiceSig(p.voice, p.tags)); let people = 0, tagTotal = 0, personas = 0;
-  if (!V.havePersonas()) bad.push('personas.json not loaded');
-  for (const ship of SHIPS) for (const seed of [1, 7, 4242]) {
-    const a = makeComplement(ship, seed), b = makeComplement(ship, seed), sa = sig(a);
-    if (JSON.stringify(sa) !== JSON.stringify(sig(b)) || JSON.stringify(a.people.map(p => p.persona)) !== JSON.stringify(b.people.map(p => p.persona))) bad.push(`${ship.name}/${seed}: voices not deterministic`);
-    if (new Set(sa).size !== sa.length) bad.push(`${ship.name}/${seed}: two people share a voice+tag set`);
-    if (new Set(a.people.map(p => p.voice.hash)).size !== a.people.length) bad.push(`${ship.name}/${seed}: voice hash collision`);
-    for (const p of a.people) {
-      people++; tagTotal += p.tags.length; if (p.persona) personas++;
-      if (p.tags.length < 8 || p.tags.length > 14) bad.push(`${p.short}: ${p.tags.length} tags`);
-      for (const c of V.CATEGORIES) if (!p.tags.some(t => V.catOf(t) === c)) bad.push(`${p.short}: no ${c} tag`);
-      const cf = V.conflictsIn(p.tags); if (cf.length) bad.push(`${p.short}: conflicts ${JSON.stringify(cf)}`);
-      for (const t of p.tags) if (!all.includes(t)) bad.push(`${p.short}: unknown tag ${t}`);
-      const v = p.voice; if (!(v.pitch >= 0.5 && v.pitch <= 1.8 && v.rate >= 0.7 && v.rate <= 1.5 && v.volume >= 0.5 && v.volume <= 1 && v.formant >= 0.8 && v.formant <= 1.25 && v.breath >= 0 && v.breath <= 1 && v.rough >= 0 && v.rough <= 1 && v.vibrato >= 0 && v.vibrato <= 1 && Number.isInteger(v.hash))) bad.push(`${p.short}: voice out of range`);
-    }
-    if (bad.length > 8) break;
-  }
-  const noFx = all.filter(t => !V.hasEffect(t)), extra = Object.keys(V.TAG_EFFECTS).filter(t => !all.includes(t));
-  let asym = 0; for (const [t, cs] of Object.entries(V.CONFLICTS)) for (const c of cs) if (!V.CONFLICTS[c]?.includes(t)) asym++;
-  const bodies = {}; for (const p of makeComplement(SHIPS[0], 1).people) (bodies[p.body] ||= []).push(p.voice.pitch); const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
-  // lift lines: 30 sampled people x random destinations
-  const ship = SHIPS[2], R = makeComplement(ship, 3), lines = [], lbad = []; let sd = 5; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
-  for (let k = 0; k < 30; k++) {
-    const p = R.people[Math.floor(rnd() * R.people.length)], rooms = ['Bridge', 'Engineering', 'Sickbay', 'Galley', 'Cargo', 'Lab'].filter(() => rnd() < 0.4), d = { deckNo: 1 + Math.floor(rnd() * 9), zone: ['Command', 'Habitat', 'Services', 'Engineering'][Math.floor(rnd() * 4)], rooms };
-    const l = V.liftLine(p, d), lo = l.toLowerCase(), place = V.pickPlace(p, d).toLowerCase(); lines.push(l);
-    if (!l || !(lo.includes(V.numWord(d.deckNo)) || lo.includes(String(d.deckNo)) || (place && lo.includes(place.slice(2))))) lbad.push(`${p.short}: "${l}" for deck ${d.deckNo} ${place}`);
-    if (V.liftLine(p, d) !== l) lbad.push('liftLine not deterministic');
-  }
-  // tag-shaped examples from the spec
-  const mk = (tags, extra = {}) => ({ id: 1, rank: 2, dept: 'command', body: 'crew_m', voice: { hash: 5 }, tags, ...extra }), D1 = { deckNo: 1, zone: 'Command', rooms: ['Bridge'] }, DE = { deckNo: 5, zone: 'Engineering', rooms: ['Engineering'] };
-  const ex = { terse: V.liftLine(mk(['speech:terse', 'lift:one-word']), D1), formal: V.liftLine(mk(['speech:formal', 'lift:full-sentence']), D1), casual: V.liftLine(mk(['speech:casual', 'lift:names-place']), DE), mumble: V.liftLine(mk(['lift:mumbles', 'lift:names-place']), DE), please: V.liftLine(mk(['lift:says-please', 'lift:says-deck-number']), D1) };
-  const exOk = /^Bridge\.$/.test(ex.terse) && /^Deck one, the bridge, please\.$/.test(ex.formal) && /^(Uh|Yeah|Okay), engineering\.$/.test(ex.casual) && /^…ngineering\.$/.test(ex.mumble) && /please/.test(ex.please);
-  // speaking in headless: every mode must work without throwing, always leave a subtitle
-  const sp = [], p0 = R.people[0]; for (const m of ['babble', 'synth', 'subs']) { SP.setMode(m); try { const r = SP.speak(p0, V.liftLine(p0, { deckNo: 4, zone: 'Habitat', rooms: ['Sickbay'] })); sp.push([m, r.mode, r.dur > 0]); SP.cue(p0, 'hum'); } catch (e) { sp.push([m, 'THREW ' + e.message]); } }
+  const R = makeComplement(SHIPS[2], 3), sp = [], p0 = R.people[0]; for (const m of ['babble', 'synth', 'subs']) { SP.setMode(m); try { const r = SP.speak(p0, V.liftLine(p0, { deckNo: 4, zone: 'Habitat', rooms: ['Sickbay'] })); sp.push([m, r.mode, r.dur > 0]); SP.cue(p0, 'hum'); } catch (e) { sp.push([m, 'THREW ' + e.message]); } }
   try { SP.speak(null, 'Neutral voice test.'); SP.speak(p0, ''); } catch (e) { sp.push(['null', 'THREW']); } SP.setMode('babble');
   const subs = document.getElementById('subs')?.children.length || 0, desc = V.describeVoice(p0);
-  return { people, avgTags: +(tagTotal / people).toFixed(1), personas, bad, noFx, extra, asym, tags: all.length, pitch: Object.fromEntries(Object.entries(bodies).map(([k, a]) => [k, +avg(a).toFixed(2)])), lbad, sample: lines.slice(0, 4), ex, exOk, sp, subs, desc };
+  return { sp, subs, desc };
 });
-console.log('voices:', JSON.stringify({ ...vox, bad: vox.bad.slice(0, 4) }));
-{ const o = vox; if (!(o.bad.length === 0 && o.noFx.length === 0 && o.extra.length === 0 && o.asym === 0 && o.personas === o.people && o.lbad.length === 0 && o.exOk && o.sp.every(x => x[1] !== undefined && !/THREW/.test(x[1])) && o.sp.length === 3 && o.subs > 0 && o.desc.length > 10 && o.pitch.crew_heavy < o.pitch.crew_m && o.pitch.crew_m < o.pitch.crew_f2)) fail('crew voices: ' + JSON.stringify({ bad: o.bad.slice(0, 3), noFx: o.noFx.slice(0, 3), extra: o.extra, asym: o.asym, lbad: o.lbad.slice(0, 3), exOk: o.exOk, ex: o.ex, sp: o.sp, subs: o.subs })); }
+console.log('voices speech:', JSON.stringify(o)); if (!(o.sp.every(x => x[1] !== undefined && !/THREW/.test(x[1])) && o.sp.length === 3 && o.subs > 0 && o.desc.length > 10)) fail('crew voices: ' + JSON.stringify({ sp: o.sp, subs: o.subs }));
+});
+S('lift-riders', 'nominal', async (page2) => {   // NPC riders: chance, board, speak, leave at their stop
 const rid = await page2.evaluate(async () => {
   const g = __game, G = g.G, out = { rides: [] }; G.forceShip = 1; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.hp = G.maxHp = 1e6;
   let t = 0; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); } }; const D = G.ship.decks; tick(10);
@@ -561,25 +624,24 @@ const rid = await page2.evaluate(async () => {
 console.log('lift riders:', JSON.stringify(rid));
 { const o = rid, ok = o.player && o.rate > 0.2 && o.rate < 0.5 && o.rides.length === 3 && o.rides.every(r => !r.err && r.inScene && r.playerSaid && r.riderSaid && r.board && r.left && r.cleared && r.phase === 'play') && o.rides[1].leftRiding && o.rides[1].leftAt === o.rides[1].riderDest && o.rides[1].deck === 0 && o.rides[2].leftRiding && o.rides[2].deck === o.rides[2].to && o.none;
   if (!ok) fail('NPC lift riders'); }
-const vpage = await openPage('voices.html?ship=3&seed=2', 'voices.html: ', { width: 900, height: 600 }, (p) => p.waitForFunction(() => window.__ready, null, { timeout: 60000 }));
+});
+S('voices-html', 'voices', async (vpage) => {   // voices.html: the roster table, chips, say, department filter
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
 console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && vp.chips > vp.rows * 8 && /\[/.test(vp.said) && vp.eng > 0 && vp.eng < vp.total)) fail('voices.html');
-await vpage.close();
-// the browser sub-suites on a fresh nominal page (page2 has built dozens of decks by now); forceShip 1 as the lift-rider section above left it
-await page2.close(); const page3 = await openPage('index.html', 'nominal: '); await page3.evaluate(() => { __game.G.forceShip = 1; });
-await navBrowser(page3, fail);
-await walkBrowser(page3, fail);
-await commsHud(page3, fail);
-await uiBrowser(page3, fail);   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
-await talkBrowser(page3, fail);   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
-await combatBrowser(page3, page, fail);   // strike / grab / drag / release, witnesses, security, player HP, madness zapper (tools/test-combat.mjs)
-await wiringBrowser(page3, fail);   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)
-await page.close();
-// ---- pace, crew repair response, shift-end tasks (js/pace.js, js/repair.js, js/duty.js) ----
+});
+// ---- the browser sub-suites on a fresh nominal page ----
+S('nav', 'nominal3', (p) => navBrowser(p, fail));
+S('walk', 'nominal3', (p) => walkBrowser(p, fail));
+S('comms-hud', 'nominal3', (p) => commsHud(p, fail));
+S('ui', 'nominal3', (p) => uiBrowser(p, fail));   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
+S('talk', 'nominal3', (p) => talkBrowser(p, fail));   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
+S('combat', 'nominal3', (p) => combatBrowser(p, null, fail));   // strike / grab / drag / release, witnesses, security, player HP (the madness zapper is combat-madness)
+S('wiring', 'nominal3', (p) => wiringBrowser(p, fail));   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)
+S('pace-repair', 'nominal3', async (page3) => {   // pace wiring (title control, standard newRun), crew repair response, world pause, shift-end tasks (the preset maths is the node section pace-presets)
 const rep = await page3.evaluate(async () => {
   const g = __game, G = g.G, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
   const snap = () => ({ id: g.pace.id, T: g.clock.paceT, rate: +g.clock.rate.toFixed(5), firstDue: Math.round(Math.min(...g.duty.loops.map(l => l.next))), period0: g.duty.loops[0]?.period, run: g.phases.runLength, phaseAt: g.phases.phaseAt[4], firstTask: Math.round(Math.min(...g.duty.tasks.map(t => t.at_s), 1e9)), cascadeT: g.shipState.paceT });
-  G.forceShip = 0; g.pace = 'first'; g.newRun(); hide(); out.first = snap(); g.pace = 'crunch'; g.newRun(); hide(); out.crunch = snap(); g.pace = 'standard'; g.newRun(); hide(); g.setQuality('low'); out.std = snap();
+  G.forceShip = 0; g.pace = 'standard'; g.newRun(); hide(); g.setQuality('low'); out.std = snap();
   out.title = { buttons: document.querySelectorAll('#pacesel [data-pace]').length, summary: document.getElementById('pacesum').textContent };
   G.hp = G.maxHp = 1e6; G.phase = 'play'; let t = 0; const tick = (n, dt = 0.1) => { for (let i = 0; i < n; i++) { t += dt; G.phase = 'play'; g.step(dt, t); } };
   // a system serviced on this deck breaks: a crew member is dispatched, walks to it (body), works (marker), patches it to ~0.85 and reports on the comm bus
@@ -594,10 +656,52 @@ const rep = await page3.evaluate(async () => {
   G.hud2?.hideEnd(); return out;
 });
 console.log('pace/repair:', JSON.stringify(rep));
-{ const r = rep, R = r.repair; if (!(r.first.T === 2.5 && r.first.firstDue >= 180 && r.first.firstTask >= 240 && r.first.run === 3000 && r.first.phaseAt === 2400 && r.crunch.T === 0.7 && r.crunch.run === 840 && r.std.T === 1 && r.std.run === 1200 && r.first.rate < r.std.rate && r.std.rate < r.crunch.rate && r.title.buttons === 3 && /Standard/.test(r.title.summary))) fail('pace presets ' + JSON.stringify(r));
+{ const r = rep, R = r.repair; if (!(r.std.T === 1 && r.std.run === 1200 && r.title.buttons === 3 && /Standard/.test(r.title.summary))) fail('pace presets ' + JSON.stringify(r));
   // the lead can be dispatched from another deck (no body here, the job runs in the sim): the work marker is only required when their body was on this deck
   if (!(R.events.includes('assign') && R.events.includes('done') && Math.abs(R.hp - 0.85) < 0.01 && R.report && R.heading && (R.posed || !R.walked) && (R.marker || !R.body) && R.released && (R.walked || R.events.includes('arrive')))) fail('crew repair response ' + JSON.stringify(R));
   if (!r.paused) fail('world pause (G.menuPause)'); if (!(r.tasks.open === r.tasks.n && r.tasks.after === r.tasks.n && (r.tasks.n === 0 || (r.tasks.chain && r.tasks.end)))) fail('shift-end tasks ' + JSON.stringify(r.tasks)); }
+});
+// ---- browser smoke (the gate's one browser check; the full run repeats it on the seed set) ----
+const smoke = (ship, seed) => async (page) => {
+  const r = await page.evaluate(async ({ ship, seed }) => {
+    const g = __game, G = g.G; if (ship != null) G.forceShip = ship; if (seed != null) G.forceSeed = seed; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.hp = G.maxHp = 1e6; G.phase = 'play';
+    const out = { ship: G.ship.name, runSeed: G.runSeed, decks: G.ship.decks, open: g.world.d.openTiles.length };
+    let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
+    out.bodies = g.ents.filter(e => e.simmed).length;
+    const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
+    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; g.setQuality('low');   // one high-quality frame through the post chain
+    delete G.forceSeed; return out;
+  }, { ship, seed });
+  console.log('smoke:', JSON.stringify(r));
+  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+};
+S('smoke', 'smoke', smoke(SHIP, null));
+for (const [i, [ship, seed]] of SEED_SET.entries()) S('smoke-set' + i, 'smoke', smoke(ship, seed));
+
+// ---- runner ----
+if (argv.includes('--list')) { console.log(sections.map(s => `${s.name}${s.page ? ' [' + s.page + ']' : ' [node]'}`).join('\n')); process.exit(0); }
+const pick = ONLY ? sections.filter(s => ONLY.includes(s.name)) : GATE ? sections.filter(s => !s.page || s.name === 'smoke') : sections.filter(s => s.name !== 'smoke');
+if (ONLY) for (const n of ONLY) if (!sections.some(s => s.name === n)) { console.log(`no section '${n}' (--list)`); process.exit(2); }
+console.log(`test: ${ONLY ? 'only ' + ONLY.join(',') : GATE ? 'gate' : 'full'}, seed ${SEED}${SHIP != null ? ', ship ' + SHIP : ''}, ${pick.length} sections`);
+const T0 = Date.now(), times = []; let page = null, pageKind = null;
+const mb = (b) => (b / 1048576).toFixed(0);
+const snap = (p) => p.evaluate(() => (window.gc?.(), { ship: __game.G.ship?.name, runSeed: __game.G.runSeed, deck: __game.G.shipDeck, heap: performance.memory?.usedJSHeapSize, gl: [__game.renderer.info.programs?.length, __game.renderer.info.memory.textures, __game.renderer.info.memory.geometries] }));
+for (const sec of pick) {
+  if (sec.page !== pageKind && sec.page) { if (page) await page.close().catch(() => { }); page = null; pageKind = sec.page; page = await PAGES[sec.page](); }
+  cur = sec.name; curPage = sec.page; ctx = {}; secFails = 0; const t0 = Date.now(), e0 = errors.length; let threw = null;
+  const game = page && sec.page !== 'voices';
+  try { if (game) { await page.evaluate((s) => window.__seedRandom(s), strSeed(sec.name)); ctx = await snap(page); } await sec.fn(page); } catch (e) { threw = e; }
+  if (game) ctx = await snap(page).catch(() => ctx);
+  if (threw) { fail(`${sec.name} threw: ${String(threw.message || threw).split('\n')[0]}`); if (page) await page.close().catch(() => { }); page = null; pageKind = null; }   // a crashed / wedged page: the next section opens a fresh one
+  if (secFails && curPage) console.log(where());
+  if (errors.length > e0) console.log(`  page errors in ${sec.name}: ${[...new Set(errors.slice(e0))].slice(0, 3).join(' | ').slice(0, 400)}`);
+  const ms = Date.now() - t0; times.push([sec.name, ms]);
+  console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB`);
+}
+if (page) await page.close().catch(() => { });
+const tot = (Date.now() - T0) / 1000, slow = times.slice().sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, ms]) => `${n} ${(ms / 1000).toFixed(1)}`).join(', ');
+console.log(`time: ${tot.toFixed(1)} s total (node ${(times.filter(([n]) => !sections.find(s => s.name === n).page).reduce((a, [, ms]) => a + ms, 0) / 1000).toFixed(1)} s); slowest: ${slow}`);
+cur = 'page-errors'; curPage = null; ctx = {};
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
-await browser.close(); server.close();
+if (browser) await browser.close(); server.close();
 console.log(failed ? 'FAILED' : 'OK'); process.exit(failed ? 1 : 0);
