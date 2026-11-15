@@ -406,6 +406,56 @@ flake list or outside pathing. The standalone browser walk part (scratch runner 
 Requests to other owners (iteration 5): none. The art commit b9bf0b7 landed during this iteration; the soak numbers above are on
 e354e13 + pathing only, so a re-soak on HEAD will differ cell by cell (layouts change with any prop / decor commit).
 
+### Iteration 6 (2026-11-15)
+
+Follow-up on the unfinished WIP a01da90 (lift-held fix; review of each hunk in `docs/pathing-review.md`). Two fixes in c26ad3b:
+1. **Repair walk dither** (`test.mjs --only pace-repair --seed 1` failed). A crew repairer who reached the repair tile ran `poseFor` ->
+   `opStart` for their *old* schedule spot; opStart pulls the logical position up to 0.95 m per axis toward that prop's use point (1.1 m
+   off the tile centre at the helm on USF Ontario), past the 1.0 m arrive radius, so the repair walk restarted every second and the job
+   only began on the 150 s forced arrival. `atRepairStand(e)` (job on this deck, not suspended, within 1.0 m of `repairStand`) skips
+   opStart and plays `idle` there until `beginRepairPose` takes over.
+2. **Lift-depart body gap** (`npc bodies vs sim`, `--only walk --ship 0 --seed 15`: a lift arrival whose plan changed during the ride
+   turned round 0.3 s after stepping out, one body more than the sim lists). `bodies()` stops listing someone the moment they leave by
+   lift, but simBodies only noticed on its next 1.5 s pass, while the body walked on to its old spot. `simDepart` (sim `depart` event)
+   resets `G.simT` so the body is sent to the car in the same step.
+
+**WIP walkStep "pass side" hunk: dropped.** The hunk passed a standing / near-still body (v < 0.15) on the side away from them instead of
+always bearing right. On seed 11 it raised walker brushing 28.2 -> 37.7 pair-s but stuck walks went 2 -> 0, so it was measured on five
+configurations (four ships: Nova Scotia = longhouse, the longest hull; Manitoba = tandem; New Brunswick = cruller, the ring; Ontario =
+cairn, the most decks), each `node tools/soak-walk.mjs <args>` with the defaults (decks 3, 150 s each, clock x6), one browser at a time,
+three variants of c26ad3b's `js/main.js`: the hunk in, the hunk out (always bear right, as before a01da90), and a rework (still bodies:
+pass on the side away from them, but only as far as it takes to clear them, `need * 0.65 - |lat|`, and keep the chosen side while they
+stay ahead). The soak is deterministic for a given tree (seed 11 with the hunk reproduced the review's 37.7 exactly), but chaotic across
+trees.
+
+| config (args) | ship | variant | stuck (walks, body-s) | walker brushing all / near lift (pair-s) | teleports in sight | boarders > 10 s | lift queue > 15 s | orders never there |
+|---|---|---|---|---|---|---|---|---|
+| `--seed 11` | Nova Scotia | with / without / rework | 0, 0 / 2, 0.8 / 2, 2.3 | 37.7 / 33.3; 28.2 / 25.1; 41.3 / 32.8 | 4 / 4 / 4 | 0 / 0 / 0 | 0 / 0 / 0 | 16 of 29 / 15 of 28 / 16 of 29 |
+| `--seed 12` | Nova Scotia | with / without / rework | 5, 5.9 / 2, 3.0 / 1, 4.0 | 38.0 / 19.8; 25.1 / 12.0; 35.3 / 26.3 | 1 / 1 / 1 | 0 / 0 / 0 | 1 / 0 / 1 | 9 of 22 / 10 of 22 / 10 of 22 |
+| `--ship 4 --seed 13` | Manitoba | with / without / rework | 2, 4.5 / 0, 0 / 9, 49.4 | 22.0 / 12.6; 21.9 / 12.9; 53.9 / 18.4 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 17 of 37 / 16 of 37 / 18 of 37 |
+| `--ship 3 --seed 14` | New Brunswick | with / without / rework | 2, 1.1 / 1, 0.6 / 3, 0.9 | 11.6 / 6.8; 14.4 / 5.7; 11.9 / 6.3 | 4 / 4 / 4 | 0 / 0 / 0 | 0 / 0 / 0 | 12 of 36 / 12 of 36 / 12 of 36 |
+| `--ship 0 --seed 15` | Ontario | with / without / rework | 3, 3.4 / 5, 5.3 / 1, 2.7 | 48.7 / 31.6; 21.3 / 14.2; 52.9 / 32.7 | 4 / 5 / 5 | 0 / 0 / 0 | 1 / 0 / 0 | 8 of 26 / 7 of 26 / 7 of 25 |
+| **sum** | | **with** | **12, 14.9** | **158.0 / 104.1** | **13** | **0** | **2** | **62 of 150** |
+| | | **without** | **10, 9.7** | **110.9 / 69.9** | **14** | **0** | **0** | **60 of 149** |
+| | | **rework** | **16, 59.3** | **195.3 / 116.5** | **14** | **0** | **1** | **63 of 149** |
+
+Without the hunk is not worse on stuck walks (10 vs 12 walks, 9.7 vs 14.9 body-s; seed 11's 0 -> 2 was one cell, 0.8 body-s) and has
+the least brushing (-30 % overall, -33 % near the lift; lower or equal on four of five, New Brunswick +2.8 pair-s), and no lift queue
+> 15 s. The rework was worst (Manitoba: 9 stuck walks, 49 body-s, a crowd near the lift on deck 3). So walkStep is back to "always bear
+right" (the no-op `- lat * 0.0` dropped). Most brushing in every variant is `carg` (squeezing past within 3.5 m of the car), not the
+passing side.
+
+Replay (each must print OK; all did on this commit): `node tools/test.mjs --only walk --ship 0 --seed 15`, `--only walk --seed 8`,
+`--only walk --seed 16`, `--only walk --seed 36`, `--only pace-repair --seed 1`, `--gate`. Soak: `node tools/soak-walk.mjs --seed 11`
+(and `--seed 12`, `--ship 4 --seed 13`, `--ship 3 --seed 14`, `--ship 0 --seed 15`).
+
+Open:
+1. **Teleports in sight** rose from 0 on every iteration 5 configuration to 4-7 per soak since 660fa96 (above: 0-5 per
+   configuration, 13-14 over the five, the same in all three variants, so not the passing side). Not chased here; the soak's
+   `teleSamples` (`--samples`) say which bodies and where.
+2. Brushing near the lift is mostly walkers squeezing past (`carg`, ghost) in the lift crowd; the passing side does not reach it.
+3. The other unproven a01da90 hunks (carStep shutT, haul.js no shove into the car) still lack a walk-test case (`docs/pathing-review.md`).
+
 ## Closing summary (iterations 1-5)
 
 Iteration 1 baseline vs iteration 5, same soak (seed 11, USF Nova Scotia, decks 3, 4, 2, 150 s each at clock x6). The layouts changed in

@@ -438,8 +438,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (e.forceT > 0) e.forceT -= dt;
   for (const o of (tubeish || e.forceT > 0) ? [] : others) {
     const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 3.0 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.3) continue; const lat = ox * rx + oz * rz; if (Math.abs(lat) > 1.3) continue;
-    const still = !o.player && o.ent && (!o.ent.walk || (o.ent.v || 0) < 0.15), side = !still ? 1 : lat > 0.15 ? -1 : lat < -0.15 ? 1 : world.solidAt(o.x + rx * 0.6, o.z + rz * 0.6) ? -1 : 1;   // someone standing to the right (a place in the lift line, iteration 6): pass on their left, not into them
-    const need = gt.space * 1.05 - (o.player ? 0.1 : 0), k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0) * side; gx += rx * off; gz += rz * off;   // bear right of everyone else (two people meeting both step the same way)
+    const need = gt.space * 1.05 - (o.player ? 0.1 : 0), k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0); gx += rx * off; gz += rz * off;   // always bear right of them
     if (od < 0.8 + gt.space * 0.3 && (!(e.ghost > 0) || o.player)) slow = Math.min(slow, Math.max(0.05, (od - 0.35) / 0.8));
   }
   const carFull = (G.lift?.boardN || 0) >= CAR_SLOTS.length;   // a full car takes nobody else (they wait for the next one)
