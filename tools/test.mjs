@@ -6,7 +6,8 @@
 //                   so `--only <section> --seed N` replays the section with the same random draws as in a full run
 //   --ship i        pin G.forceShip to SHIPS[i] for the whole run (sections that pick a ship themselves are overridden)
 // Pages run on the test clock: G.manual = true stops main.js frame() from stepping or drawing the world; sections tick with __game.step / __game.advance
-// (game timers such as the madness lift's perk screen run on that clock too). ?test=1 gives a cheap renderer (no antialias / shadow maps, pixel ratio 1).
+// (game timers such as the madness lift's perk screen run on that clock too; env TEST_REALTIME=1 brings back the wall-clock loop for comparison).
+// ?test=1 gives a cheap renderer (no antialias / shadow maps, pixel ratio 1) and no background portrait rendering (js/menus.js).
 // A FAIL prints ship / run seed / deck and a replay line. Each section prints its wall time and JS heap.
 // Sections (in order): node unit suites (tools/test-*.mjs), room props, generator, ship decks, inventory rooms, director cascade, crew voices, pace presets;
 //   madness page: bot run (chips, lift, perk, to the win screen), parkour, director repairer, fixture search, inventory in game, prop models, madness zapper;
