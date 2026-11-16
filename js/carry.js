@@ -7,6 +7,8 @@
 //   rollCart(cart, dist)  spin the wheels;  cartLoad(cart, id) / cartUnload(cart) -> id;  cartHandle(cart) world point the pusher holds
 import * as THREE from 'three';
 import { ITEMS, CARTS, handsFor } from './equipment.js';
+import { buildItem } from './itemart.js';
+import { buildPropArt } from './propart.js';
 
 const M = {};
 function mats() {
@@ -26,6 +28,7 @@ const cyl = (r0, r1, h, m, x = 0, y = 0, z = 0, seg = 12) => { const o = new THR
 
 // ---- item meshes. Local frame: +y up (when the item rests on a surface), origin at the grip; ud.rest = height of the origin above a surface
 export function makeItemMesh(id) {
+  { const a = buildItem(ITEMS[id]?.model || id); if (a) { a.userData.item = id; return a; } }   // generated models (js/itemart.js; ITEMS[id].model names another kind); the legacy boxes below are the fallback
   const m = mats(), g = new THREE.Group(); g.name = 'item:' + id; g.userData.item = id; let rest = 0;
   switch (id) {
     case 'cup': g.add(cyl(0.042, 0.036, 0.1, m.white, 0, 0, 0)); g.add(cyl(0.037, 0.037, 0.005, m.brown, 0, 0.046, 0)); { const h = new THREE.Mesh(new THREE.TorusGeometry(0.026, 0.007, 6, 12), m.white); h.position.set(0.05, 0, 0); g.add(h); } rest = 0.05; break;
@@ -113,7 +116,20 @@ export function tickHeld(H) {
 }
 
 // ---- carts. Local frame: +z is the front (direction of travel), the handle is at the back (-z). ud.handle = distance centre -> grip
+// art carts (CARTS[kind].art): the batch prop mesh (built once per kind, then cloned: shared geometry and materials). The art is one merged mesh per material, so its wheels
+// do not turn: `wheels` are four empty pivots (rollCart keeps working; the hover sled has none to show anyway).
+const ART_CART = {};
+function makeArtCart(kind, C, loaded) {
+  const src = ART_CART[C.art] || (ART_CART[C.art] = buildPropArt(C.art)); if (!src) return null;
+  const g = new THREE.Group(), art = src.clone(); if (C.flip) art.rotation.y = Math.PI; g.add(art); g.name = 'cart:' + kind; const wheels = [];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const p = new THREE.Object3D(); p.position.set(sx * (C.w / 2 - 0.08), 0.06, sz * (C.l / 2 - 0.12)); g.add(p); wheels.push(p); }
+  art.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  g.userData = { kind, cart: true, art: C.art, wheels, wr: 0.06, handle: C.grip ?? C.l / 2 + 0.12, half: [C.w / 2, C.l / 2], topY: C.top ?? 0.2, cap: C.cap ?? 3, slots: C.slots || 'small', hover: !!C.hover, load: [], loadMeshes: [], name: C.name };
+  if (loaded) for (const id of C.load || []) cartLoad(g, id);
+  return g;
+}
 export function makeCart(kind = 'cargo', loaded = false) {
+  if (CARTS[kind]?.art) { const a = makeArtCart(kind, CARTS[kind], loaded); if (a) return a; kind = 'cargo'; }
   const m = mats(), C = CARTS[kind] || CARTS.cargo, g = new THREE.Group(), w = C.w, l = C.l, wheels = [], wr = kind === 'cargo' ? 0.075 : 0.055, HY = 1.16;   // handle bar at the height of the 'push' clip's hands
   g.name = 'cart:' + kind; const deckY = kind === 'cargo' ? 0.22 : 0.18;
   const wheel = (x, z) => { const p = new THREE.Group(); p.position.set(x, wr, z); const t = cyl(wr, wr, 0.045, m.rubber, 0, 0, 0, 14); t.rotation.z = Math.PI / 2; p.add(t); const hub = cyl(wr * 0.45, wr * 0.45, 0.05, m.metal, 0, 0, 0, 8); hub.rotation.z = Math.PI / 2; p.add(hub); const sp = box(0.05, wr * 1.6, 0.012, m.hazard); p.add(sp); g.add(p); wheels.push(p); g.add(box(0.02, deckY - wr, 0.03, m.dark, x, wr + (deckY - wr) / 2, z)); };
@@ -137,8 +153,8 @@ export function makeCart(kind = 'cargo', loaded = false) {
 }
 // stack an item on the cart's top; returns false when full
 export function cartLoad(cart, id) {
-  const u = cart.userData, n = u.load.length, cap = u.kind === 'cargo' ? 4 : 3; if (n >= cap) return false;
-  const mesh = makeItemMesh(id), big = ITEMS[id]?.two, slots = u.kind === 'cargo' ? [[0, 0.3], [0, -0.25], [0, 0.03, 1], [0.0, -0.1, 1]] : [[-0.12, 0.1], [0.12, -0.12], [0, 0, 1]];
+  const u = cart.userData, n = u.load.length, cap = u.cap ?? (u.kind === 'cargo' ? 4 : 3); if (n >= cap) return false;
+  const mesh = makeItemMesh(id), big = ITEMS[id]?.two, slots = (u.slots || u.kind) === 'cargo' ? [[0, 0.3], [0, -0.25], [0, 0.03, 1], [0.0, -0.1, 1]] : [[-0.12, 0.1], [0.12, -0.12], [0, 0, 1]];
   const s = slots[n] || [0, 0, 1]; let y = u.topY + (mesh.userData.rest || 0); if (s[2]) { const below = u.loadMeshes[n - 2] || u.loadMeshes[0]; if (below) { const bb = new THREE.Box3().setFromObject(below); y = bb.max.y - cart.position.y + (mesh.userData.rest || 0) + 0.005; } }
   if (!big && GRIP_OF[id] === 'hang') y = u.topY + 0.235;   // hanging items rest on their base
   if (mesh.userData.lie) mesh.rotation.z = Math.PI / 2;

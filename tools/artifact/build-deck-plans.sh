@@ -9,6 +9,7 @@ cat > "$ROOT/tools/artifact/.entry.js" <<'JS'
 export { generate } from '../../js/gen.js';
 export { SHIPS, CLASSES, ZONES, zoneOf, deckOptions, shipDeckFor, drawSchematic } from '../../js/ships.js';
 export { ROOMS, RANKS } from '../../js/data.js';
+export { PROP_SYMBOLS, PROP_NAME_X, drawPropSymbol } from '../../js/propsymbols.js';
 export { makeComplement, SYSTEMS, SYS, DEPARTMENTS, DEPT, DIVISION, HOST_LABEL, CASCADES, homeDeck, hardwareSites } from '../../js/crew.js';
 JS
 npx esbuild "$ROOT/tools/artifact/.entry.js" --bundle --format=iife --global-name=ShipLib --minify --outfile="$TMP/lib.js"

@@ -1,0 +1,57 @@
+<!doctype html><meta charset="utf-8"><title>Security and damage control viewer</title>
+<style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
+#l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.8;line-height:1.6}#l a{color:#9cf;margin-right:10px;text-decoration:none}
+.tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000}</style>
+<canvas id="c"></canvas><div id="l"><a href="?set=props">floor props</a><a href="?set=decor">wall fixtures</a><a href="?set=items">items (x4)</a><a href="?set=all">all</a> &nbsp; ?only=name &amp;yaw=0.6 &amp;static=1 &amp;zoom=0.7 (js/propart-security.js) &nbsp; 1.75 m capsule = crew reference</div>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { kinds } from './js/propart-security.js';
+import { DECOR_SEC } from './js/decorart-security.js';
+import { DEFS_SECURITY, buildSecurityItem } from './js/itemart-security.js';
+const q = new URLSearchParams(location.search), set = q.get('set') || 'all', only = q.get('only'), stat = q.get('static'), yaw0 = parseFloat(q.get('yaw') || '0.5'), pitch = parseFloat(q.get('pitch') || '0.18');
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true });
+r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.1;
+const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.55; }
+const key = new THREE.DirectionalLight(0xfff0d8, 2.4); key.position.set(3, 6, 6); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -14, right: 14, top: 8, bottom: -6 }); s.add(key);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 30), new THREE.MeshStandardMaterial({ color: 0x2a3040, roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
+// mirror of the Kit class in js/world.js (that one is not exported)
+class Kit {
+  constructor() { this.solid = []; this.glow = []; }
+  _add(geo, x, y, z, col, glow) { geo.translate(x, y, z); const c = Array.isArray(col) ? new THREE.Color(col[0], col[1], col[2]) : new THREE.Color(col), n = geo.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } geo.setAttribute('color', new THREE.BufferAttribute(a, 3)); (glow ? this.glow : this.solid).push(geo); return this; }
+  box(w, h, d, x, y, col, z0 = 0, glow = false, rz = 0) { const g = new THREE.BoxGeometry(w, h, d); if (rz) g.rotateZ(rz); return this._add(g, x, y, z0 + d / 2, col, glow); }
+  cyl(r, h, x, y, col, z0 = 0, axis = 'y', glow = false, seg = 10) { const g = new THREE.CylinderGeometry(r, r, h, seg); if (axis === 'z') g.rotateX(Math.PI / 2); else if (axis === 'x') g.rotateZ(Math.PI / 2); return this._add(g, x, y, z0 + (axis === 'z' ? h / 2 : r), col, glow); }
+  cone(r, h, x, y, col, z0 = 0, rx = 0, rz = 0) { const g = new THREE.ConeGeometry(r, h, 6); g.rotateX(rx); g.rotateZ(rz); return this._add(g, x, y, z0 + r, col, false); }
+  done() { const m = (l) => l.length ? mergeGeometries(l, false) : null; return { solid: m(this.solid), glow: m(this.glow) }; }
+}
+const kitM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }), kitG = new THREE.MeshBasicMaterial({ vertexColors: true });
+const decor = (name) => { const K = new Kit(); DECOR_SEC[name](K); const d = K.done(), g = new THREE.Group(); if (d.solid) g.add(new THREE.Mesh(d.solid, kitM)); if (d.glow) g.add(new THREE.Mesh(d.glow, kitG)); g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3.2, 0.1), new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.8 })); wall.position.set(0, 1.6, -0.05); g.add(wall); return g; };
+const list = [], tris = (g) => { let n = 0; g.traverse(o => { if (o.isMesh) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return Math.round(n); };
+const add = (name, mesh, w = 1.4, wall = false) => { if (only && !only.split(',').includes(name)) return; list.push({ name, mesh, w, wall, tris: tris(mesh) }); };
+const props = set === 'all' || set === 'props', dc = set === 'all' || set === 'decor', it = set === 'all' || set === 'items';
+if (props) for (const [k, f] of Object.entries(kinds)) add(k, f({}, {}), 2.6);
+if (it) for (const k of Object.keys(DEFS_SECURITY)) { const m = buildSecurityItem(k, { frame: 'base' }), w = new THREE.Group(); m.scale.setScalar(4); w.add(m); add(k, w, 1.6); }
+if (dc) for (const k of Object.keys(DECOR_SEC)) add(k, decor(k), 2.2, true);
+let x = 0; const tags = [];
+for (const it of list) { it.mesh.position.x = x + it.w / 2; s.add(it.mesh); it.mesh.traverse(o => { if (o.isMesh && !o.material.transparent) { o.castShadow = true; o.receiveShadow = true; } });
+  const cap = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.75 - 0.44, 4, 10), new THREE.MeshStandardMaterial({ color: 0x66aa88, roughness: 0.7, transparent: true, opacity: 0.8 })); cap.position.set(x + it.w / 2 + it.w * 0.5 + 0.3, 0.875, wallOffset(it)); s.add(cap); it.cap = cap;
+  const d = document.createElement('div'); d.className = 'tag'; d.textContent = `${it.name}  ${it.tris} tris`; document.body.appendChild(d); tags.push([d, it]); x += it.w + 1.3; }
+function wallOffset(it) { return it.wall ? 0.9 : 0; }
+const total = x; let t = 0, camX = 0, drag = 0, yaw = yaw0; const focus = list.length === 1 ? list[0] : null;
+addEventListener('pointermove', e => { if (e.buttons) drag -= e.movementX * 0.005; });
+function frame(now) {
+  t = now / 1000; const sc = list.length ? Math.max(...list.map(i => i.w)) : 2;
+  if (focus) { const c = focus.mesh.position.x, a = stat ? yaw : yaw + drag + (focus.wall ? Math.sin(t * 0.3) * 0.7 : t * 0.4), d = 6.2 * (q.get('zoom') ? parseFloat(q.get('zoom')) : 1); cam.position.set(c + Math.sin(a) * d, 1.5 + d * pitch, Math.cos(a) * d); cam.lookAt(c, focus.wall ? 1.4 : 0.9, 0); focus.cap.position.set(c + focus.w * 0.5 + 0.1, 0.875, 0); focus.cap.visible = true;
+    if (!focus.wall) focus.mesh.rotation.y = 0; }
+  else { for (const it of list) if (!it.wall && !stat) it.mesh.rotation.y = Math.sin(t * 0.4 + it.mesh.position.x) * 0.5; camX = (total - 1.3) / 2; const half = Math.min(total / 2 + 1, 40); cam.position.set(camX, 3.2 + half * 0.12, 7 + half * 1.2); cam.lookAt(camX, 1, 0); }
+  r.render(s, cam);
+  for (const [d, it] of tags) { const p = new THREE.Vector3(it.mesh.position.x, 0, 0.9).project(cam); d.style.left = (p.x * 0.5 + 0.5) * innerWidth + 'px'; d.style.top = (-p.y * 0.5 + 0.5) * innerHeight + 'px'; }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame); window.__ready = true;
+</script>

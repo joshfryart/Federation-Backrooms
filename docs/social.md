@@ -95,10 +95,10 @@ Debug page: `social.html?ship=<0-9>&seed=<n>` (linked from `crew.html`). In game
   `aboutYou(p, you)` → p's one line about their history with you (friend, mentor, rival, ex, resents you, sweet on
   you, owes you, ...) or null; `playerBrief(you, max = 7)` → `[{ kind, id, text }]` "who you already know" lines
   for a briefing card or the log (kinds: partner, friend, mentor, protege, shipmate, ex, rival, feud, admirer, cool,
-  debt). Neither is wired into the HUD yet.
+  debt). Wired: `js/socialui.js` `briefNotes` adds a dismissible "Crew notes" block (top 5 lines, `hide` button; Begin / Enter still skips the whole card) to the run-start briefing card (`newRun` in `js/main.js`; skipped under webdriver / `?brief=0` like the card).
 - **Rumours**: `rumours(p, { n = 2, asker })` → the hooks p would pass on: about other people p has a tie to (a
   gossip knows them all), never about p or the asker, secrets only from a gossip or a close friend of those involved.
-  `storyOf(a, b)` → one sentence explaining a tie (debug page). Not wired into the talk menu yet.
+  `storyOf(a, b)` → one sentence explaining a tie (debug page). Wired: talk menu "Any news?" -> `rumourFor` (`js/socialui.js`): needs trust (incl. `TRUST_ATT`) ≥ `RUMOUR_TRUST.open` 0.42 (gossip 0.28; secrets 0.65), one unheard hook per ask (`graph._heard`, never repeated), else a refusal line.
 - **Queries**: `friendsOf`, `groupsOf`, `seekTargets(p, { present, activity })`, `preferredCompany(p, activity)`,
   `describe(p)` (UI lines), `stats()`, `toJSON()` / `SocialGraph.fromJSON(j)`.
 

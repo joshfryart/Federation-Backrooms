@@ -4,13 +4,14 @@ import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
-import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel } from './actors.js';
-import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman } from './humans.js';
+import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, dressCrew, prewarmOutfits } from './actors.js';
+import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
-import { makeJunction, setLamp, makeBeacon } from './sysview.js';
+import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js';
 import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
@@ -21,7 +22,7 @@ import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
 import { createShipComms, loadCommsData, commsData } from './shipcomms.js';
 import { CrewSim } from './sim.js';
 import { generateSocial } from './social.js';
-import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALITIES } from './duty.js';
+import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALITIES, JOB_WAIT } from './duty.js';
 import { DutyHUD } from './hud-duty.js';
 import { Phases, PHASES, FAILURE_MODES } from './phases.js';
 import { readPace, savePace, mountPaceControl, paceFor } from './pace.js';   // shift length / pace presets (title screen, ?pace=)
@@ -37,6 +38,7 @@ import { Kit } from './kit.js';   // handheld job equipment / improvised weapons
 import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / hold / shove / strike, security response, armory (js/combat.js rules, docs/combat.md)
 import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
+import { briefNotes, rumourFor } from './socialui.js';   // run-start crew notes + rumours (docs/social.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
@@ -51,8 +53,10 @@ const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder a
 
 // ---------------- renderer ----------------
 const canvas = $('view');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+// ?test=1 (tools/test.mjs pages): cheap renderer (no antialias, pixel ratio 1, no shadow maps). The gate's one high-quality smoke render loads without it.
+const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !TEST_MODE, powerPreference: 'high-performance' });
+renderer.setPixelRatio(TEST_MODE ? 1 : Math.min(window.devicePixelRatio, 1.5));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 80);
 scene.add(camera);
@@ -60,7 +64,7 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi)
 const lamp = new THREE.PointLight(0xfff0d0, 9, 14, 1.8); scene.add(lamp);
 const torch = new THREE.SpotLight(0xfff6e0, 22, 30, 0.5, 0.65, 1.7); torch.position.set(0.15, -0.1, 0); camera.add(torch);
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.enabled = !TEST_MODE; renderer.shadowMap.type = THREE.PCFShadowMap;
 torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.camera.near = 0.2; torch.shadow.camera.far = 30; torch.shadow.bias = -0.0004; torch.shadow.normalBias = 0.04;
 let post = null;
 // the first-person viewmodel lives in its own scene (own lights, drawn over the world) so it never clips walls or gets blown out by the torch
@@ -120,7 +124,7 @@ const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(loc
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
 function setQuality(q) {
-  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
+  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
   const el = $('qsel'); if (el) el.value = q;
 }
 
@@ -172,8 +176,8 @@ function updateHUD() {
 // ---------------- level loading ----------------
 function clearLevel() {
   if (world) { scene.remove(world.group); world.dispose(); }
-  for (const g of gorns) scene.remove(g.mesh);
-  for (const e of ents) scene.remove(e.mesh);
+  for (const g of gorns) { scene.remove(g.mesh); releaseHuman(g.mesh); }
+  for (const e of ents) { scene.remove(e.mesh); releaseHuman(e.mesh); }   // bone textures (js/humans.js releaseHuman)
   for (const r of repairPts) if (r.obj) scene.remove(r.obj);
   gorns = []; ents = []; repairPts = [];
 }
@@ -259,9 +263,9 @@ function loadDeck(n) {
   $('shipcls').textContent = ship.cls + '-class';
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
-  if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; setTimeout(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
+  if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; later(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
   else G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
-  if (n === 1 && !NM) setTimeout(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
+  if (n === 1 && !NM) later(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
 }
 
 function spawnThreats(data, n, rnd) {
@@ -314,13 +318,13 @@ function placeGore(data, rnd, n) {
 
 // ---- NPC walking on the player's deck: descend the path field toward a tile at walking pace, then take the pose of the spot
 const WALK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], POSE_OF = { console: 'interact', desk: 'interact', workbench: 'interact', labbench: 'interact', junction: 'interact', warpcore: 'interact', replicator: 'interact', bar: 'sitting_idle', table: 'sitting_idle', sofa: 'sitting_idle', bunk: 'sitting_idle', biobed: 'idle_talking', treadmill: 'jog_fwd', weightbench: 'idle_torch' };
-function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; if (opStart(e)) return;   // simmed crew run the equipment's use script (js/haul.js, js/equipment.js); POSE_OF is the fallback
-  const pose = POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
+function poseFor(e) { const H = e.mesh.userData.human; if (!H) return; const rep = atRepairStand(e); if (!rep && opStart(e)) return;   // simmed crew run the equipment's use script (js/haul.js, js/equipment.js); POSE_OF is the fallback
+  const pose = rep ? 'idle' : POSE_OF[e.spot] || 'idle'; try { H.play(pose, { fade: 0.25 }); } catch (er) { H.play('idle', { fade: 0.25 }); } H.standing = pose.startsWith('idle'); e.walking = false; }
 function pathField(tx, ty, tubes = false) { const c = G.fieldCache || (G.fieldCache = new Map()), k = tx + ',' + ty + (tubes ? 't' : ''); let f = c.get(k); if (!f) { f = tubes ? world.field(tx, ty, false, true) : world.field(tx, ty, true); const car = world.car; if (car && f[car.tx + car.ty * world.W] < 0) { const m = f[car.tx + car.dx + (car.ty + car.dy) * world.W]; if (m >= 0) f[car.tx + car.ty * world.W] = m + 1; }   /* the lift car counts as floor even while its doors are shut (crew step out of it) */ c.set(k, f); if (c.size > 60) c.delete(c.keys().next().value); } return f; }
 
 
 // ---- fidgets and gestures (js/movement.js): an additive bone layer + face morphs on top of whatever clip is playing
-const SIT_SPOTS = new Set(['bar', 'table', 'sofa', 'bunk']), WORK_SPOTS = new Set(['console', 'desk', 'workbench', 'labbench', 'junction', 'warpcore', 'replicator']), CUE_OF = { yawn: 'sigh', groan: 'sigh', cough: 'clear', knuckles: 'crack', sigh: 'sigh', hum: 'hum', whistle: 'whistle' };
+const SIT_SPOTS = new Set(['bar', 'table', 'sofa', 'bunk']), WORK_SPOTS = new Set(['console', 'desk', 'workbench', 'labbench', 'junction', 'warpcore', 'replicator', 'tank', 'servers', 'weaponrack', 'tree']), CUE_OF = { yawn: 'sigh', groan: 'sigh', cough: 'clear', knuckles: 'crack', sigh: 'sigh', hum: 'hum', whistle: 'whistle' };
 function fidgetStep(e, dt, d) {
   const H = e.mesh.userData.human; if (!H || !e.person || e.fake) return;
   if (opHook(e, dt, d)) return;   // an equipment Operator / cart / carried load drives the additive layer instead of the fidgeter
@@ -349,17 +353,59 @@ function evacuationStep(dt) {
   for (const p of G.roster.people) if (!p.isPlayer && !['dead', 'crazed', 'evacuated'].includes(p.status) && !G.sim.overridden(p) && ['mess', 'quarters', 'lounge', 'gym', 'holodeck', 'cargo', 'stores', 'laundry', 'arboretum'].includes(G.sim.where(p)?.room)) { if (hash01('evac', G.runSeed, p.id) < 0.6) G.sim.redirect(p, room, 'door', undefined, 'evacuating'); }
 }
 
+// red alert ("All hands to stations", js/alerts.js): crew who are off their post go to their station, the first block of their billet's day
+// (where their watch begins), at sim priority 3 ('stations', staggered over 8 s); released when the alert is cleared. Not in the collapse:
+// evacuation (above) takes over. docs/pathing.md iteration 4: before this a red alert moved nobody (only their gait changed).
+// Iteration 5: crew carrying an accepted player order (prio 2 'ordered') finish it first (19 of 23 orders stalled under the stations
+// call); an order given during the alert takes them off their station (orderWalk); they go to their station once the job is done.
+const onOrder = (p) => G.sim?.overrideAt(p, 2)?.activity === 'ordered' && !!G.duty?.jobs.some(j => j.person === p);
+function alertStations(dt) {
+  const S = G.sim, A = G.comms?.alerts; if (!S || !A || !G.roster) return; G.stationT = (G.stationT || 0) - dt; if (G.stationT > 0) return; G.stationT = 1;
+  const on = A.has('red') && !(G.phases?.index >= 4), St = G.stations;
+  if (!on) { if (St) { for (const p of St.sent) if (S.overrideAt(p, 3)?.activity === 'stations') S.release(p, 3); G.stations = null; } return; }
+  const st = St || (G.stations = { t0: G.time, sent: new Set() });
+  for (const p of G.roster.people) {
+    if (p.isPlayer || st.sent.has(p) || ['dead', 'crazed', 'evacuated', 'corpse'].includes(p.status) || !S.st.has(p.id) || (S.overrideOf(p)?.prio ?? 0) >= 3 || onOrder(p)) continue;
+    const day = S.data?.billets?.[p.billet]?.day, b = day?.[0]; if (!b || !G.plan?.[b[2]]?.length) continue;
+    if (G.time - st.t0 < hash01('station', G.runSeed, p.id) * 8) continue; st.sent.add(p); S.redirect(p, b[2], b[3], undefined, 'stations', { prio: 3 });
+  }
+}
+
 function gaitFor(e) {   // this walker's gait right now: their own mix of parts, modulated by alert level, fatigue and time of day
   if (!e.gaitBase) e.gaitBase = makeGait(e.person, G.runSeed);
   if (!e.gaitCtx || G.time - e.gaitT > 1 || e.gaitRun !== !!e.run) { e.gaitRun = !!e.run; const h = G.comms ? G.comms.clock.localHour(e.person) : 2; e.gaitT = G.time; e.gaitCtx = gaitNow(e.gaitBase, { run: !!e.run, alert: G.comms?.alerts?.top()?.def.severity ?? 0, tired: Math.max(0, Math.min(1, (h - 5) / 3)), relaxed: h > 8 && h < 20 }); }
   return e.gaitCtx;
 }
-function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, np: 0, opts }; e.run = !!opts.run; e.bestF = e.bestT = undefined; if (opts.sim) e.simKey = null; }
+function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, np: 0, opts, t0: G.time }; e.liftWait = null; e.liftGo = false; e.run = !!opts.run; e.bestF = e.bestT = undefined; if (opts.sim) e.simKey = null; }
+const WALK_SEP = 0.55;   // m between two bodies' centres that a walker keeps (walkStep)
+const CAR_SLOTS = [[0, 0.55], [0.6, 0.55], [-0.6, 0.55], [0.3, -0.1], [-0.3, -0.1], [0, -0.6], [0.6, -0.6], [-0.6, -0.6]];   // >= 0.58 m apart; [lateral, back] m from the car centre: where boarders stand while the doors close (8: iteration 5, one car per deck, so a surge needs bigger carfuls; the front pair stands 0.5 m inside the doors)
+// where lift walkers wait while the car is shut / cycling or people are stepping out of it: beside the doors ([lateral, out] m from the car
+// centre, both sides, two rows), not in front of them, so arrivals get out first and corridor walkers get past (docs/pathing.md iteration 2)
+const LIFT_WAIT = [[-0.85, 2.0], [0.85, 2.0], [-0.9, 2.85], [0.9, 2.85], [-0.95, 3.6], [0.95, 3.6]];
+function liftWaitSpots(c) {
+  if (c.waitSpots) return c.waitSpots; const out = [];
+  for (const [l, b] of LIFT_WAIT) { const x = c.x + c.dx * b - c.dy * l, z = c.z + c.dy * b + c.dx * l, q = { x, z, y: 0 }; world.resolve(q, 0.3); if (Math.hypot(q.x - x, q.z - z) < 0.25 && !world.solidAt(q.x, q.z) && world.los(c.x + c.dx * 1.5, c.z + c.dy * 1.5, q.x, q.z)) out.push([q.x, q.z]); }
+  return (c.waitSpots = out);
+}
+// overflow (docs/pathing.md iteration 4: a surge of 7-11 people leaving a deck at once crowded 4-6 m out once the 6 door spots were
+// taken): a line further back, two spots per side of the walkway on the tiles 2-4 steps from the car (path field), leaving the middle free
+function liftQueueSpots(c) {
+  if (c.queueSpots) return c.queueSpots; const f = pathField(c.tx, c.ty), W = world.W, door = liftWaitSpots(c), out = [];
+  for (let v = 2; v <= 4; v++) for (let y = 0; y < world.H; y++) for (let x = 0; x < W; x++) {
+    if (f[x + y * W] !== v || world.grid[y]?.[x] !== 0 || world.isTube(x, y)) continue; const dn = WALK_DIRS.map(([a, b]) => [x + a, y + b]).find(([a, b]) => f[a + b * W] === v - 1); if (!dn) continue;
+    const [cx, cz] = world.center(x, y), ax = Math.sign(dn[0] - x), az = Math.sign(dn[1] - y);   // (ax, az) toward the car; lateral = (-az, ax)
+    for (const along of [0.6, -0.6]) for (const lat of [0.68, -0.68]) { const px = cx + ax * along - az * lat, pz = cz + az * along + ax * lat, q = { x: px, z: pz, y: 0 }; world.resolve(q, 0.3);
+      if (Math.hypot(q.x - px, q.z - pz) < 0.05 && !world.solidAt(px, pz) && ![...door, ...out].some(([sx, sz]) => Math.hypot(sx - px, sz - pz) < 0.6) && world.los(cx, cz, px, pz)) out.push([px, pz, v]); }
+  }
+  out.sort((a, b) => a[2] - b[2] || Math.hypot(a[0] - c.x, a[1] - c.z) - Math.hypot(b[0] - c.x, b[1] - c.z)); return (c.queueSpots = out.slice(0, 14));
+}
+const liftComing = () => { const c = world.car; return !!c && ents.some(q => q.walk?.vanish && !q.board && Math.hypot(q.x - c.x, q.z - c.z) < 4.5); };   // someone is walking up to / waiting at the lift car
 const unseenAt = (x, z) => Math.hypot(x - P.x, z - P.z) > 14 || !world.los(P.x, P.z, x, z);
+const hiddenFar = (x, z) => Math.hypot(x - P.x, z - P.z) > 30 || !world.los(P.x, P.z, x, z);   // out of sight even down a long corridor (iteration 5: lift arrivals / walks cut short 14-30 m away in a clear line of sight were 7-21 'far pops' per Manitoba run)
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, right-hand passing, braking, wall clearance.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, gt = gaitFor(e);
   const clampY = () => { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading || 0) * 0.6, e.z + Math.cos(e.heading || 0) * 0.6), gy = (e.v || 0) > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0, dy = gy - y0; e.y = y0 + Math.max(-2.4 * dt, Math.min(3.2 * dt, dy * Math.min(1, dt * 9))); e.mesh.position.y = e.y; };
-  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.opts.sim) e.simKey = w.opts.sim; if (w.vanish) { const c = world.car; if (c && G.lift && world.tile(e.x, e.z).join() === c.tx + ',' + c.ty) { e.board = true; G.lift.boardN = (G.lift.boardN || 0) + 1; G.lift.shutT ||= 1.6; if (H) { H.play('idle', { fade: 0.3 }); H.standing = true; H.add = null; } e.walking = false; }   /* in the car: the doors close on them (carStep), then they are gone */ else dropBody(e); } else { if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
+  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.opts.sim) e.simKey = w.opts.sim; if (w.opts.board) { if (H) { H.play('idle', { fade: 0.3 }); H.standing = true; H.add = null; } e.walking = false; return false; }   /* settled on a spot in the car */ if (w.vanish) { const c = world.car; if (c && G.lift && world.tile(e.x, e.z).join() === c.tx + ',' + c.ty) { const used = new Set(ents.filter(o => o.board).map(o => o.boardSlot)), pt = ([l, b]) => [c.x - c.dy * l - c.dx * b, c.z + c.dx * l - c.dy * b]; let k = 0, bd = 1e9; CAR_SLOTS.forEach((q, i) => { const [qx, qz] = pt(q), dd = Math.hypot(qx - e.x, qz - e.z) + (used.has(i) ? 100 : 0); if (dd < bd) { bd = dd; k = i; } }); const [sl, sb] = CAR_SLOTS[k]; e.boardSlot = k; e.board = true; G.lift.boardN = (G.lift.boardN || 0) + 1;   /* the doors close when nobody else is walking up, or after 4 s (carStep) */ startWalk(e, 0, 0, false, { point: [c.x - c.dy * sl - c.dx * sb, c.z + c.dx * sl - c.dy * sb], board: true }); return true; }   /* in the car: step to a free spot in it (not all on the centre), the doors close on them (carStep), then they are gone */   /* in the car: the doors close on them (carStep), then they are gone */ else dropBody(e); } else { if (w.opts.off && !w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); if (w.opts.sim) e.simKey = w.opts.sim; startWalk(e, w.tx, w.ty, false, { point: [cx + w.opts.off[0], cz + w.opts.off[1]] }); return true; }   /* sharing a tile in a full room: step off its centre */ if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
   if (e.heading === undefined) e.heading = e.mesh.rotation.y;
   const turnTo = (gx, gz, k = 1) => { const want = Math.atan2(gx - e.x, gz - e.z); const err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading)); const mt = (e.v > 0.3 ? Math.min(5.2, gt.turn) : Math.min(3.4, gt.turn * 1.3)) * dt * k; e.heading += Math.max(-mt, Math.min(mt, err)); e.mesh.rotation.y = e.heading; return err; };
   const animate = (clip, scale) => { if (!H) return; if (!e.walking || e.clip !== clip) { try { H.play(clip, { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = clip; } };
@@ -368,7 +414,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (w.opts.point) {
     e.v = e.v || 0; const [px, pz] = w.opts.point, dist = Math.hypot(px - e.x, pz - e.z); if (dist < 0.07) return finish();
     const err = turnTo(px, pz, 1.4), sp0 = (w.opts.run ? 3.0 : 1.5) * Math.max(0.2, Math.cos(Math.min(1.3, Math.abs(err)))) * Math.min(1, 0.25 + dist / 0.6);
-    e.v = (e.v || 0) + Math.max(-12 * dt, Math.min(9 * dt, sp0 - e.v)); const sp = Math.min(e.v * dt, dist); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.27); e.x = q.x; e.z = q.z; e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
+    e.v = (e.v || 0) + Math.max(-12 * dt, Math.min(9 * dt, sp0 - e.v)); const sp = Math.min(e.v * dt, dist); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp; if (!w.opts.board) { const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.27); e.x = q.x; e.z = q.z; }   /* a boarder stays inside the car even once its doors make the tile solid */ e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
     animate(w.opts.run ? gt.clip : 'walk'); if (H && d <= 22) { H.add = null; H.lookYaw += (0 - H.lookYaw) * Math.min(1, dt * 4); H.update(dt * Math.max(0.5, Math.min(2.2, e.v / (w.opts.run ? 3.0 : 0.95)))); } return true;
   }
   let cur = f[mx0 + my0 * W];
@@ -387,15 +433,41 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (cur === 0) { gx = fx; gz = fz; }
   // pass others on the right-hand side (so two people meeting both step the same way), slow for anyone you cannot get round
   let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg, rx = uz, rz = -ux;   // (rx, rz) = right of travel
-  const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh && !o.board), { x: P.x, z: P.z, player: true }];
-  if (cur < (e.bestF ?? 1e9) - 0.5) { e.bestF = cur; e.bestT = G.time; w.np = 0; } if (G.time - (e.bestT ?? G.time) > 5 && toEnd > 0.5) { e.forceT = 2; e.bestT = G.time; e.bestF = cur; if (++w.np >= 4 && w.opts.sim && unseenAt(e.x, e.z)) return finish(); }   // no progress for 5 s: ignore everyone and head straight down the field for a moment; a schedule walk held up for 20 s is cut short, but only out of sight
+  const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh && !o.board).map(o => ({ x: o.mesh.position.x, z: o.mesh.position.z, walk: !!o.walk, ent: o })), { x: P.x, z: P.z, player: true }];   // where their body really is (a seated / operating body sits on the seat or use point, not on its logical tile centre)
+  if (cur < (e.bestF ?? 1e9) - 0.5) { e.bestF = cur; e.bestT = G.time; w.np = 0; } if (G.time - (e.bestT ?? G.time) > 5 && toEnd > 0.5) { e.forceT = 2; e.bestT = G.time; e.bestF = cur; if (++w.np >= 4 && w.opts.sim && (w.vanish ? hiddenFar : unseenAt)(e.x, e.z)) return finish(); }   /* a lift walk cut short vanishes: only where nobody can see it */   // no progress for 5 s: ignore everyone and head straight down the field for a moment; a schedule walk held up for 20 s is cut short, but only out of sight
   if (e.forceT > 0) e.forceT -= dt;
   for (const o of (tubeish || e.forceT > 0) ? [] : others) {
     const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 3.0 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.3) continue; const lat = ox * rx + oz * rz; if (Math.abs(lat) > 1.3) continue;
-    const need = gt.space * 1.05 - (o.player ? 0.1 : 0) - lat * 0.0, k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0); gx += rx * off; gz += rz * off;   // always bear right of them
+    const need = gt.space * 1.05 - (o.player ? 0.1 : 0), k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0); gx += rx * off; gz += rz * off;   // always bear right of them
     if (od < 0.8 + gt.space * 0.3 && (!(e.ghost > 0) || o.player)) slow = Math.min(slow, Math.max(0.05, (od - 0.35) / 0.8));
   }
-  if (w.vanish && toEnd < 2.4 && world.grid[w.ty]?.[w.tx] !== 0) slow = 0.05;   // the lift doors are shut: wait in front of them
+  const carFull = (G.lift?.boardN || 0) >= CAR_SLOTS.length;   // a full car takes nobody else (they wait for the next one)
+  if (w.vanish && toEnd < 2.4 && (world.grid[w.ty]?.[w.tx] !== 0 || ((G.lift?.shutT > 0 || carFull) && toEnd > 1.3))) slow = 0.05;   // the lift doors are shut (or closing on a full car): wait in front of them
+  // waiting for the lift: stand beside the doors (LIFT_WAIT) while the car is shut / cycling or someone is stepping out (arrivals first)
+  let liftWait = false; const car = world.car;
+  const held = !!G.lift?.held;   // the player has stood in the open car for a while without using its panel: wait outside until they get out (carStep)
+  const shutNow = !!G.lift && (G.lift.shutT > 0 || carFull || held || !!G.fx?.liftLocked), Wq = (w.vanish && car && G.lift) ? ents.filter(o => o !== e && o.liftWait != null && !o.board && o.walk?.vanish) : [], lineOn = shutNow || Wq.length > 0;
+  let atSpot = false;
+  if (w.vanish && car && G.lift && toEnd < (lineOn ? 9 : 4.2) && cur <= (lineOn ? 4 : 2) && (toEnd > 1.3 || held)) {   // up to 4 steps out while there is a line (the car shut / full / held, people waiting), else beside the doors only
+    const shut = shutNow, out = !shut && ents.some(o => o !== e && o.fromCar > G.time - 8 && o.walk && !o.board && Math.hypot(o.x - car.x, o.z - car.z) < 1.8);   // someone who just came out of the car is still in it / its doorway
+    // the car is open: as many as it has room for leave the line, front first (iteration 4: all 13 of a surge rushed the doors at once, then 7 had to back off again); newcomers join the line behind
+    let stay = shut || out; if (!stay && Wq.length && !e.liftGo) { const room = CAR_SLOTS.length - (G.lift.boardN || 0) - ents.filter(o => o !== e && o.walk?.vanish && !o.board && o.liftWait == null && (o.liftGo || Math.hypot(o.x - car.x, o.z - car.z) < 4.2)).length;   /* already on their way in (called forward from anywhere in the line, or close) */ stay = e.liftWait != null ? Wq.filter(o => o.liftWait < e.liftWait).length >= room : Wq.length >= room; }
+    if (!stay && Wq.length) e.liftGo = true; else if (shut || (out && Math.hypot(e.x - car.x, e.z - car.z) < 2.6)) e.liftGo = false;   // called forward: keeps going (no flip back into the line as a newcomer) until the doors shut / someone steps out again
+    if (e.liftGo && out && !shut) { stay = false; slow = 0; atSpot = true; gx = car.x; gz = car.z; }   /* standing still facing the car, not squeezing through anyone */   // arrivals stepping out while a called group walks up: those further out stop where they are and go on once the doorway is clear, not back to the line (iteration 5 trace: 8 called people sent back for 5 s per arrival)
+    const door = stay ? liftWaitSpots(car) : null, spots = door && (door.length ? door.concat(liftQueueSpots(car)) : door), nd = door?.length || 0;   // the 6 door spots first, then the line further back (iteration 4)
+    if (spots?.length) {
+      const free = (q, i) => !ents.some(o => o !== e && o.kind === 'crew' && o.mesh && !o.board && (o.liftWait === i || Math.hypot(o.x - q[0], o.z - q[1]) < 0.5));   // nobody stands there or has claimed it
+      const cost = (q, i) => i < nd ? Math.hypot(q[0] - e.x, q[1] - e.z) + i * 0.15 : 50 + i;   // the nearest door spot, else the front-most free place in the line
+      let k = e.liftWait ?? -1; if (k < 0 || k >= spots.length || !free(spots[k], k) || (k >= nd && spots.some((q, i) => i < k && free(q, i)))) { k = -1; let bd = 1e9; spots.forEach((q, i) => { const dd = cost(q, i); if (dd < bd && free(q, i)) { bd = dd; k = i; } }); }   // in the line: move up when a place ahead frees
+      if (k >= 0) { e.liftWait = k; liftWait = true; const [qx, qz] = spots[k], dq = Math.hypot(qx - e.x, qz - e.z); if (dq < 0.2) { gx = car.x; gz = car.z; slow = 0; atSpot = true; } else if (dq < 1.5 || world.los(e.x, e.z, qx, qz)) { gx = qx; gz = qz; slow = Math.max(0.05, Math.min(1, dq / 1.2)); }
+        else { const [sx, sy] = world.tile(qx, qz), f2 = pathField(sx, sy); let ax = tx, ay = ty, pick = null;   /* a place in the line round a corner: follow the path to it (its own field) until it is in sight. Was the car's field, whose goal is the car: someone */
+          for (let s = 0; s < 4; s++) { let bv = f2[ax + ay * W], nx = -1, ny = -1; for (const [dx, dy] of WALK_DIRS) { const v = f2[ax + dx + (ay + dy) * W]; if (v >= 0 && (bv < 0 || v < bv)) { bv = v; nx = ax + dx; ny = ay + dy; } } if (nx < 0) break; ax = nx; ay = ny; const [cx, cz] = world.center(ax, ay); if (!pick || world.los(e.x, e.z, cx, cz)) pick = [cx, cz]; else break; }   /* stepping out of a held car crept back to its centre (pathing iteration 6) */
+          [gx, gz] = pick || [qx, qz]; } }
+    }
+  }
+  if (!liftWait) { e.liftWait = null; e.waitT0 = null; } else e.waitT0 ??= G.time;   // waitT0: since when (simBodies holds back new arrivals once someone has waited 3 s)
+  const doorWait = liftWait || (slow === 0.05 && w.vanish && toEnd < 2.4);
+  if (!w.chk || G.time - w.chk.t > 4) { if (w.chk && !doorWait && toEnd > 0.6 && !tubeish && Math.hypot(e.x - w.chk.x, e.z - w.chk.z) < 0.3) e.ghost = 1.5; w.chk = { t: G.time, x: e.x, z: e.z }; }   // creeping (< 0.3 m in 4 s) behind someone who will not clear the way: squeeze past too, not only when stopped dead
   // heading steers toward the goal at a capped rate; speed eases with turn error, nearness to the end, braking distance and obstacles
   const err = turnTo(gx, gz);
   e.pauseCool = (e.pauseCool || 0) - dt; if ((e.pauseT || 0) > 0) { e.pauseT -= dt; slow = Math.min(slow, 0.05); } else if (Math.abs(err) > 0.8 && e.v > 0.7 && e.pauseCool <= 0 && gt.pause > 0 && Math.random() < gt.pause * dt * 8) { e.pauseT = 0.5 + Math.random() * 0.8; e.pauseCool = 5; }
@@ -404,11 +476,15 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   e.v = (e.v || 0); e.v += Math.max(-1.5 * gt.accel * dt, Math.min(gt.accel * dt, target - e.v));
   if (w.vanish && toEnd < 3.4 && G.lift) G.lift.npcT = 1;   // someone is walking up to the lift: the doors open for them too (carStep)
   if (toEnd < 0.05 && !w.vanish) return finish();
-  if (w.vanish && cur === 0 && toEnd < 0.2) return finish();
+  if (w.vanish && cur === 0 && toEnd < 0.75 && !liftWait) return finish();   // inside the car: step to a free spot in it (finish), not everyone onto its centre
   // blocked by someone for a while: squeeze past (ghost through NPCs) rather than teleport; a player in a one-tile corridor is simply waited for
-  if (e.v < 0.05 && slow < 0.3) { w.stuck += dt; if (w.stuck > 2.5) e.ghost = 1.5; if (w.stuck > 30 && unseenAt(e.x, e.z)) return finish(); } else w.stuck = Math.max(0, w.stuck - dt);
+  if (e.v < 0.05 && slow < 0.3) { w.stuck += dt; if (w.stuck > 2.5) e.ghost = 1.5; if (w.stuck > 30 && (w.vanish ? hiddenFar : unseenAt)(e.x, e.z)) return finish(); } else w.stuck = Math.max(0, w.stuck - dt);
+  if (atSpot) e.ghost = 0;   // standing in the lift line on purpose: not squeezing through anyone
+  if (e.fromCar > G.time - 6 && world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 1.6) e.ghost = Math.max(e.ghost || 0, 0.2);   // just out of the lift: step out of the car through the others who came with you (not the player)
   if (e.ghost > 0) e.ghost -= dt;
   const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp;
+  const nearCar = world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 2.6;   // the car and its doors have their own choreography (spots in the car, holding back while it cycles); everyone keeps their space once outside the doors (iteration 2)
+  const sep = G.walkSep ?? WALK_SEP; if (!tubeish && (!nearCar || Math.hypot(e.x - world.car.x, e.z - world.car.z) > 1.3) && !atSpot && toEnd > 0.3 && !(e.ghost > 0)) for (const o of others) { if (o.player) continue; const ox = e.x - o.x, oz = e.z - o.z, od = Math.hypot(ox, oz); if (od < sep) { const side = od > 1e-3 ? Math.sign(ox * rx + oz * rz) || 1 : (e.person.id & 1 ? 1 : -1), k = Math.min(sep - od, 0.8 * dt) * side; e.x += rx * k; e.z += rz * k; } }   // personal space: a walker slides sideways (never back) off anyone closer than `sep` (side by side in a doorway, overtaking) instead of walking through them; not while squeezing past (ghost)
   if (!e.climbing) { const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.26); e.x = q.x; e.z = q.z; }   // never clip walls
   if (toEnd < 0.35 && !w.vanish) { const k = Math.min(1, dt * 7); e.x += (fx - e.x) * k; e.z += (fz - e.z) * k; }   // ease onto the exact spot
   e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
@@ -431,12 +507,13 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
 // ---- NPC sim bodies: people the sim puts on this deck get a body; others are abstract. A body always walks: to its next spot on this deck
 // (real path, js/sim.js lists a person at their destination as soon as they set off), to the lift car when the sim sends them to another
 // deck (the doors close on them, carStep), and out of the car when they arrive. Bodies only appear in place on a deck load (force).
+const liftKeepClear = (x, y) => { const c = world.car; return !!c && ((x === c.tx && y === c.ty) || (x === c.tx + c.dx && y === c.ty + c.dy)); };   // the car (its tile can belong to the room it opens into) and the tile at its doors: nobody sits / stands there
 function simTileFor(person, e) {   // a tile in the person's room: beside the furniture of their spot (facing it) when there is some, else spread by id
   if (e.activity === 'repairing') { const t = repairStand(person); if (t) return t; }   // crew repair (js/repair.js): the tile beside the hardware / junction
   const d = world.d, S = G.social, sx = e.tx ?? e.stx, sy = e.ty ?? e.sty, kinds = propsFor(e.spot);   // spot -> prop kinds (js/equipment.js: bar -> table, locker -> shelving …)
   let R = sx == null ? null : d.rooms?.find(r => r.type === e.room && sx >= r.x && sx < r.x + r.w && sy >= r.y && sy < r.y + r.h) || null;   // the room instance the sim chose (friends converge on one), not any room of that type
-  const inR = (x, y) => !R || (x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h), ok = (x, y) => d.grid[y]?.[x] === 0 && !world.isTube(x, y) && d.room[y][x] === e.room && inR(x, y);
-  const taken = (x, y) => ents.some(o => { if (!o.simmed || o.person === person || o.board || o.walk?.vanish) return false; const [ox, oy] = o.walk && !o.walk.opts.point ? [o.walk.tx, o.walk.ty] : world.tile(o.x, o.z); return ox === x && oy === y; });   // someone stands there or is on the way to it
+  const inR = (x, y) => !R || (x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h), ok = (x, y) => d.grid[y]?.[x] === 0 && !world.isTube(x, y) && d.room[y][x] === e.room && inR(x, y) && !liftKeepClear(x, y);
+  const takenN = (x, y) => ents.reduce((n, o) => { if (!o.simmed || o.person === person || o.board || o.walk?.vanish) return n; const [ox, oy] = o.walk && !o.walk.opts.point ? [o.walk.tx, o.walk.ty] : world.tile(o.x, o.z); return n + (ox === x && oy === y ? 1 : 0); }, 0), taken = (x, y) => takenN(x, y) > 0;   // someone stands there or is on the way to it
   // free time (js/social.js): sit down with whoever of your people is already there, else at your circle's table (anchorOf)
   let h = (person.id * 2654435761 + 7) >>> 0, pal = null;
   if (S && e.free) { for (const t of S.seekTargets(person).slice(0, 5)) { pal = ents.find(o => o.simmed && o.person?.id === t.id && o.room === e.room && !o.board && !o.walk?.vanish && inR(...(o.walk && !o.walk.opts.point ? [o.walk.tx, o.walk.ty] : world.tile(o.x, o.z)))); if (pal) break; } h = (S.anchorOf(person) * 2654435761 + 7) >>> 0; }
@@ -446,13 +523,24 @@ function simTileFor(person, e) {   // a tile in the person's room: beside the fu
     const tiles = []; for (let y = R ? R.y : 0; y < (R ? R.y + R.h : d.room.length); y++) for (let x = R ? R.x : 0; x < (R ? R.x + R.w : d.room[y].length); x++) if (ok(x, y)) tiles.push([x, y]);
     if (tiles.length) {
       if (pal) { const [px, py] = pal.walk && !pal.walk.opts.point ? [pal.walk.tx, pal.walk.ty] : world.tile(pal.x, pal.z); let best = null, bd = 1e9; for (const t of tiles) { const q = Math.abs(t[0] - px) + Math.abs(t[1] - py); if (q > 0 && q < bd && !taken(t[0], t[1])) { bd = q; best = t; } } if (best) { const t = [best[0], best[1]]; t.face = world.center(px, py); return t; } }   // nothing to sit at: stand with them
-      for (let k = 0; k < Math.min(12, tiles.length); k++) { const t = tiles[(h + k) % tiles.length]; if (!taken(t[0], t[1])) return t; } return tiles[h % tiles.length];
+      let best = null, bn = 1e9; for (let k = 0; k < tiles.length; k++) { const t = tiles[(h + k) % tiles.length], n = takenN(t[0], t[1]); if (!n) return t; if (n < bn) { bn = n; best = t; } }
+      { const t = [best[0], best[1]], [cx, cz] = world.center(t[0], t[1]), a = bn * 2.4 + (best[0] * 7 + best[1] * 3) % 6.28, q = { x: cx + Math.cos(a) * 0.62, z: cz + Math.sin(a) * 0.62, y: 0 }; world.resolve(q, 0.28); t.off = [q.x - cx, q.z - cz]; return t; }   // a full room (17 at a 12-tile mess): share the least crowded tile, standing off its centre (docs/pathing.md iteration 3: they all stood on one spot)
     }
     if (!R) break; R = null;   // an instance without floor of its own type: any room of that type on the deck (as before)
   }
   return null;
 }
-const dropBody = (e) => { scene.remove(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); };
+// the abstract sim waits for the body (js/sim.js holdBody): a trip on the player's deck is not over while the person's body is still walking it
+function simHold(p, t) {
+  if (!world || !G.shipDecks || G.phase === 'ride' || G.phase === 'select') return false; const here = G.shipDeck + 1;
+  if (t.lift ? t.from.deckNo !== here : t.to.deckNo !== here) return false; const e = ents.find(x => x.simmed && x.person === p); if (!e) return false;
+  return t.lift ? true : !!e.walk?.opts.sim && !e.walk.vanish;   // leaving: still walking to / standing in the car; on this deck: still on a schedule walk
+}
+// someone with a body on this deck leaves it by lift: bodies() stops listing them at once, so simBodies sends the body to the car in this
+// same step instead of at its next 1.5 s pass (the body walked on to its old spot meanwhile, one more body than the sim lists: test-walk
+// 'npc bodies vs sim', seed 15 ship 0: a lift arrival whose plan changed during the ride is turned round 0.3 s after stepping out)
+function simDepart(a) { if (a.lift && world && a.from === G.shipDeck + 1 && ents.some(e => e.simmed && e.person === a.person && !e.board && !e.walk?.vanish)) G.simT = 0; }
+const dropBody = (e) => { scene.remove(e.mesh); releaseHuman(e.mesh); const i = ents.indexOf(e); if (i >= 0) ents.splice(i, 1); };
 function simBodies(dt, force = false) {
   G.simT = (G.simT || 0) - dt; if (!force && G.simT > 0) return; G.simT = 1.5; if (!world || !G.sim || G.phase === 'ride' || G.phase === 'select') { if (!force) return; }
   const here = G.sim.bodies(G.shipDeck + 1), L = G.lift, car = world.car, have = new Set(ents.filter(e => e.person).map(e => e.person)), busy = (e) => e.cower || e.haul || e.repairing || e.cb?.ai || e.stunT > 0;
@@ -461,22 +549,25 @@ function simBodies(dt, force = false) {
     if (e.kind !== 'crew' || !e.simmed) continue; const o = here.get(e.person.id), k = o ? `${o.room}|${o.spot}|${o.tx},${o.ty}` : 'lift';
     if (force) { if (!o || o.room !== e.room || e.board || e.walk?.vanish) { dropBody(e); have.delete(e.person); } continue; }
     if (e.board) continue;
-    if (e.walk ? !e.walk.opts.sim || e.walk.opts.sim === k : e.simKey === k || (o && o.room === e.room && busy(e))) continue;   // on its way there / already there / someone else's walk (haul, repair, dodge) / held (combat, repair pose)
+    if (e.walk ? (!e.walk.opts.sim && !(!o && e.haul && car)) || e.walk.opts.sim === k : e.simKey === k || (o && o.room === e.room && busy(e))) continue;   // on its way there / already there / someone else's walk (haul, repair, dodge) / held (combat, repair pose). A cart job does not outlast the person's time on the deck: when the sim sends them off it, they leave the cart and walk to the lift (js/haul.js drops a job whose walk is replaced; iteration 6: the sim had them riding while the body kept pushing, one body too many on the deck)
     if (!o) { if (car) startWalk(e, car.tx, car.ty, true, { sim: k, ...(runFor(e.person) ? { run: true, tubes: true } : {}) }); else if (unseenAt(e.x, e.z)) dropBody(e); continue; }   // left the deck: walk to the lift and go
-    const t = simTileFor(e.person, o); if (t) { place(e, o, t); startWalk(e, t[0], t[1], false, { sim: k, ...(runFor(e.person) ? { run: true } : {}) }); }   // a new room or spot on this deck: walk there
+    const t = simTileFor(e.person, o); if (t) { place(e, o, t); startWalk(e, t[0], t[1], false, { sim: k, off: t.off, ...(runFor(e.person) ? { run: true } : {}) }); }   // a new room or spot on this deck: walk there
   }
   let n = 0; for (const o of here.values()) {   // arrive: out of the lift car (its doors are shut, or it is out of sight), a few at a time
     if (have.has(o.person) || o.person.status === 'dead' || o.person.status === 'crazed') continue;
-    const k = `${o.room}|${o.spot}|${o.tx},${o.ty}`, t = simTileFor(o.person, o); if (!t) continue; let [cx, cz] = world.center(t[0], t[1]), rot = (o.person.id * 0.9) % 6.28, out = false;
+    const k = `${o.room}|${o.spot}|${o.tx},${o.ty}`, t = simTileFor(o.person, o); if (!t) continue; let [cx, cz] = world.center(t[0], t[1]); if (t.off) { cx += t.off[0]; cz += t.off[1]; } let rot = (o.person.id * 0.9) % 6.28, out = false;
     if (!force && car) {
-      const hid = unseenAt(car.x, car.z); if (n >= 3 || G.fx?.liftLocked) continue;
-      if (!hid && !(L && !world.liftOpen && L.closedT > 1)) { if (L && !inCarTile() && !(L.shutT > 0)) { L.shutT = 1.6; L.arrive = true; } continue; }   // the player is looking into the open car: it leaves and comes back with them
-      const lat = [0, 0.6, -0.6][n++]; cx = car.x - car.dy * lat; cz = car.z + car.dx * lat; rot = Math.atan2(car.dx, car.dy); out = true; if (L) { L.npcT = 4; if (L.boardN) { for (const e of ents.slice()) if (e.board) dropBody(e); L.boardN = 0; } } if (!world.liftOpen) world.setLiftOpen(true);
+      const hid = hiddenFar(car.x, car.z) && CAR_SLOTS.every(([l, b]) => hiddenFar(car.x - car.dy * l - car.dx * b, car.z + car.dx * l - car.dy * b)) && ents.every(q => !q.board || hiddenFar(q.x, q.z));   /* every spot in the car, not only its centre (iteration 5: an arrival appeared on a side spot in sight round a corner) */   // nobody waiting in the car is in sight either (they are removed when the car comes back)
+      if (n >= 3 || G.fx?.liftLocked) continue;   // at most 3 per cycle (this line sat inside the comment above until iteration 2)
+      if (!hid && !(L && !world.liftOpen && L.closedT > 1)) { if (L && !inCarTile() && !(L.shutT > 0) && !L.boardN && !liftComing()) L.shutT = 1.6; if (L) L.arrive = true; continue; }   // the player is looking into the open car: it leaves and comes back with them, but not while people are boarding or walking up to it: they arrive when the doors shut on those (one cycle, docs/pathing.md iteration 3)
+      if (ents.some(q => q.liftWait != null && q.waitT0 != null && G.time - q.waitT0 > 3)) continue;   // people have been waiting beside the doors: let them board first (turns, not a steady stream out of the car)
+      if (world.liftOpen && (L?.boardN || ents.some(q => q.liftGo && q.walk?.vanish && !q.board))) continue;   // a carful is boarding / called forward: arrivals come behind the doors that shut on them (iteration 5 trace: arrivals in an open, unseen car dropped the boarders and sent the called group back for 5-15 s)
+      const spot = CAR_SLOTS.map(([l, b]) => [car.x - car.dy * l - car.dx * b, car.z + car.dx * l - car.dy * b]).find(([x, z]) => !ents.some(q => q.kind === 'crew' && q.mesh && !q.board && Math.hypot(q.x - x, q.z - z) < 0.6)); if (!spot) continue; n++; [cx, cz] = spot;   /* a free spot in the car (others may still be stepping out) */ rot = Math.atan2(car.dx, car.dy); out = true; if (L) { L.npcT = 4; if (L.boardN) { for (const e of ents.slice()) if (e.board) dropBody(e); L.boardN = 0; } } if (!world.liftOpen) world.setLiftOpen(true);
     } else if (!force && !unseenAt(cx, cz)) continue;
     o.person.status = 'seen';
-    const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); m.position.set(cx, 0, cz); m.rotation.y = rot; m.userData.rank = o.person.short; scene.add(m);
+    const m = makeSurvivor(data0(), o.person) || makeCrew(0x2a5fb0); dressCrew(m, o.person); m.position.set(cx, 0, cz); m.rotation.y = rot; m.userData.rank = o.person.short; scene.add(m);
     const ne = { kind: 'crew', mesh: m, x: cx, z: cz, t: Math.random() * 6, used: false, fake: false, person: o.person, simmed: true, simKey: k }; place(ne, o, t); ents.push(ne);
-    if (out) { startWalk(ne, t[0], t[1], false, { sim: k, ...(runFor(o.person) ? { run: true } : {}) }); ne.pauseT = 0.9; ne.mesh.userData.human?.play('idle', { fade: 0 }); } else poseFor(ne);
+    if (out) { startWalk(ne, t[0], t[1], false, { sim: k, off: t.off, ...(runFor(o.person) ? { run: true } : {}) }); ne.pauseT = 0.4 + n * 0.6; ne.fromCar = G.time;   /* one after another, not all at once */ ne.mesh.userData.human?.play('idle', { fade: 0 }); } else poseFor(ne);
   }
 }
 const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
@@ -490,7 +581,7 @@ G.talk = new Talk({ G, P, THREE, NOM, camera, scene, renderer, CFG, vmScene, get
 // ---- NPC repair response glue (js/repair.js decides who goes where, in the abstract): here bodies walk (run when urgent) to the hardware
 // on the player's deck, kneel / work the console with their handheld in hand, sparks fly, a small floating marker shows en route / working
 // (progress ring) / needs a part, and the comm bus carries their lines. The player can hold E alongside (assist), take over, or order.
-const runFor = (p) => { const ov = G.sim?.overrideOf?.(p); return !!ov && (ov.prio >= 2 || (ov.activity === 'repairing' ? !!G.repair?.jobOf(p)?.urgent : true)); };
+const runFor = (p) => { const ov = G.sim?.overrideOf?.(p); return !!ov && ((ov.prio >= 2 && ov.activity !== 'ordered') || (ov.activity === 'repairing' ? !!G.repair?.jobOf(p)?.urgent : true)); };
 function setupRepair() {
   G.repair = null; if (!NOM() || !G.sim || !G.shipDecks) return;
   const say = (p, text, o = {}) => {
@@ -509,6 +600,14 @@ function repairStand(p) {
   if (j.role === 'helper') { const nb = WALK_DIRS.map(([a, b]) => [t[0] + a, t[1] + b]).find(([x, y]) => d.grid[y]?.[x] === 0 && !world.isTube(x, y)); if (nb) t = nb; }
   const r = repairPts.find(q => q.sys === j.sys); t.face = !s.main && r && r.px !== undefined ? [r.px, r.pz] : world.center(s.face[0], s.face[1]); return t;
 }
+// a crew repairer standing at their repair tile (job on this deck, not held by a higher override): they wait there for the repair pose
+// (beginRepairPose) and must not start the use script of their old schedule spot. opStart pulls the logical position up to 0.95 m per axis
+// toward that prop's use point (1.1 m off the tile centre at the helm on USF Ontario), past the 1.0 m arrive radius below: the walk
+// restarted every second and the job only began on the 150 s forced arrival (test.mjs pace-repair --seed 1)
+function atRepairStand(e) {
+  if (!e.person || !e.simmed || !G.repair) return false; const j = G.repair.jobOf(e.person); if (!j || j.suspended) return false;
+  const t = repairStand(e.person); if (!t) return false; const [cx, cz] = world.center(t[0], t[1]); return Math.hypot(e.x - cx, e.z - cz) < 1.0;
+}
 function repairBodyState(p) {
   if (!world || G.sim.where(p)?.deckNo !== G.shipDeck + 1) return null;
   const e = ents.find(x => x.simmed && x.person === p); if (!e) return null; if (e.walk) return 'walking';
@@ -521,7 +620,7 @@ function repairBodies(dt) {
     const j = G.repair.jobOf(e.person), here = j && j.site.deckNo === G.shipDeck + 1 && !j.suspended;
     if (here && !e.walk && ['setup', 'working', 'part'].includes(j.state)) { if (!e.repairing?.npc) beginRepairPose(e, j); else e.repairing.job = j; }
     else if (e.repairing?.npc) endRepairPose(e);
-    if (tick && here && j.state === 'travel' && !e.walk && G.sim.where(e.person)?.room === j.site.room) {   // already in the right room: walk the last metres
+    if (tick && here && j.state === 'travel' && !e.walk && !e.board && G.sim.where(e.person)?.room === j.site.room) {   // already in the right room: walk the last metres
       const t = repairStand(e.person); if (t) { const [cx, cz] = world.center(t[0], t[1]); if (Math.hypot(e.x - cx, e.z - cz) > 1.0) { if (e.op) opEnd(e); e.room = j.site.room; e.faceAt = t.face; startWalk(e, t[0], t[1], false, { run: j.urgent }); } }
     }
     if (tick) repairMarker(e, j);
@@ -571,7 +670,7 @@ function setupDuty() {
   // pace (js/pace.js): one scalar T, applied once each: clock rate, ShipState cascades, Duty constructor, Phases constructor (docs/pacing.md)
   G.pace = G.pace || readPace(location.search, localStorage, navigator.webdriver); G.comms.clock.setPace(G.pace.T); G.shipState.paceT = G.pace.T;
   G.duty = new Duty({ player: G.player, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say, seed: G.runSeed, mission: G.mission, pace: G.pace });
-  G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
+  G.duty.atJob = orderAt;   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
   G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1', pace: G.pace });
   setupRepair(); G.pin = null; G.intro = null; G.introDone = false; G.attn = {}; G.barkAt = G.nodAt = undefined;
   G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel.`, 'warn'); });
@@ -581,16 +680,37 @@ function setupDuty() {
     else if (ev.type === 'task') { g(`Task open: ${ev.task} (${ev.room}) — due by end of shift`, 'comp'); if (ev.first) startIntro(ev); }
     else if (ev.type === 'taskdone' && G.intro && G.intro.task === ev.task) endIntro();
     else if (ev.type === 'done') g(ev.auto ? `Round skipped: ${ev.label}. It comes round again.` : ev.quality === 'proper' ? `${ev.label}: done properly.` : `${ev.label}: ${ev.quality}.`, ev.quality === 'proper' ? 'good' : ev.auto ? 'comp' : 'warn');
-    else if (ev.type === 'witness' || ev.type === 'audit' || ev.type === 'refused') g(`${ev.who}: ${ev.text}`, 'warn');
+    else if (ev.type === 'refused') { g(ev.text.startsWith(ev.who) ? ev.text : `${ev.who}: ${ev.text}`, 'warn'); if (ev.person) refuseReact(ev.person, ev.text); }
+    else if (ev.type === 'witness' || ev.type === 'audit') g(`${ev.who}: ${ev.text}`, 'warn');
     else if (ev.type === 'consequence') g(`${ev.name} is ${ev.status} — neglected maintenance.`, 'warn');
     else if (ev.type === 'missed' && !ev.shiftEnd) g(`Missed: ${ev.task}. ${ev.neglect}`, 'warn');
-    else if (ev.type === 'jobdone') g(`${ev.who} finished ${ev.label} (${ev.quality}).`, 'good');
-    else if (ev.type === 'ordered') g(`${ev.who} takes the job: ${ev.label}.`, 'comp');
+    else if (ev.type === 'jobdone') { g(`${ev.who} finished ${ev.label} (${ev.quality}).`, 'good'); if (ev.job) orderEnd(ev.job); }
+    else if (ev.type === 'ordered') { if (ev.job) orderWalk(ev.job); g(`${ev.who} takes the job: ${ev.label}.${ev.job ? orderEta(ev.job) : ''}`, 'comp'); }
+    else if (ev.type === 'atjob') g(`${ev.who} is at the job: ${ev.label}.`, 'comp');
   });
 }
+// a refused order / favour shows on the body when it is in sight on this deck: a head shake, and the line spoken aloud when close
+function refuseReact(p, text) {
+  const e = ents.find(x => x.simmed && x.person === p); if (!e?.mesh) return; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d > 16 || !world.los(P.x, P.z, e.x, e.z)) return;
+  e.fid = e.fid || new Fidgeter(e.person, G.runSeed); e.fid.force('shake_head');
+  if (d < 10) { try { speak(p, String(text).replace(/^[^:]*: "?|"$/g, ''), { gain: Math.max(0.3, 1.1 - 0.08 * d) }); } catch (er) { } }
+}
+// ordered / delegated jobs (js/duty.js): the person goes to the job room (sim priority 2, activity 'ordered': walks there on this deck, rides
+// the lift from another) and the job's clock only runs once they are there (Duty.atJob); done = released back to their schedule
+function orderWalk(j) { const p = j.person, l = j.loop; if (!G.sim || !l?.room || !G.plan?.[l.room]) return; if (G.sim.overrideAt(p, 3)?.activity === 'stations') { G.sim.release(p, 3); G.stations?.sent.delete(p); }   /* red alert: the player's order wins over the stations call (iteration 5); alertStations sends them back once the job is done */ G.sim.redirect(p, l.room, l.spot || 'door', j.left + JOB_WAIT + 60, 'ordered', { prio: 2 }); }
+// how long an ordered person needs to get to the job (the sim's walk / lift estimate): told to the player with the order, since a
+// cross-deck order takes 30-90 s of real walking and riding (docs/pathing.md iteration 3)
+function orderEta(j) {
+  const S = G.sim, l = j.loop; if (!S?.estimate || !l?.room || !G.plan?.[l.room]) return ''; const s = S.estimate(j.person, l.room); if (s == null) return '';
+  const wh = S.where(j.person), deck = wh?.deckNo && wh.deckNo !== G.shipDeck + 1 ? ` from deck ${wh.deckNo}` : wh?.transit && wh.deckNo == null ? ' from the lift' : '';
+  return s < 4 ? ' "On it."' : ` "On my way${deck}, ${s < 25 ? 'a few seconds' : s < 50 ? 'half a minute' : s < 100 ? 'about a minute' : 'a couple of minutes'}."`;
+}
+const etaNote = (s) => s == null ? '' : s < 4 ? 'there · ' : s < 50 ? `~${Math.max(5, Math.round(s / 5) * 5)} s · ` : `~${Math.round(s / 60) || 1} min · `;   // the delegate menu: how far each person is from the job (nearest first, Duty.byDistance)
+function orderAt(j) { const p = j.person, l = j.loop, S = G.sim; if (!S || !l?.room || !G.plan?.[l.room]) return true; const wh = S.where(p); if (!wh || wh.transit || wh.room !== l.room) return false; const e = ents.find(x => x.simmed && x.person === p); if (!e) return wh.deckNo !== G.shipDeck + 1;   /* on the player's deck: wait for the body (it steps out of the lift / appears) */ return (!e.walk && !!e.simKey?.startsWith(l.room + '|')); }   // a body on this deck has walked all the way in (simBodies re-plans every 1.5 s)
+function orderEnd(j) { const p = j.person, S = G.sim; if (!S || S.overrideAt(p, 2)?.activity !== 'ordered') return; S.release(p, 2); const next = G.duty?.jobs.find(x => x.person === p); if (next) orderWalk(next); }
 function nomTick(dt) {
   if (!NOM() || !G.sim || worldPaused()) return;   // a menu / wheel / map / terminal / conversation is open: the ship holds still
-  G.sim.tick(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt); G.repair?.tick(dt); repairBodies(dt);
+  G.sim.tick(dt); alertStations(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt); G.repair?.tick(dt); repairBodies(dt);
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt);
@@ -607,7 +727,7 @@ function dutyMenu() {
   const top = [
     { label: 'Do a duty or task', run: () => H.openMenu('Duty / tasks', here.map(it => ({ label: it.label, note: it.note, off: it.off && false, run: () => { if (it.room !== room) say(`Do this in the ${it.room}.`, 'warn'); else doIt(it); } })).concat(here.length ? [] : [{ label: 'Nothing to do right now', off: true }]), 'digit to choose'), keepOpen: true },
     { label: 'Order a subordinate', run: () => { const subs = D.subs(); H.openMenu('Order whom?', subs.slice(0, 9).map(p => ({ label: `${p.short} — ${p.title}`, note: `trust ${Math.round(D.trust(p) * 100)}%`, run: () => { const r = D.order(p, null); if (!r.ok && !r.refused) say(r.why, 'warn'); } })).concat(subs.length ? [] : [{ label: 'No one reports to you', off: true }])); }, keepOpen: true },
-    { label: 'Delegate a due duty', run: () => { const due = D.loops.filter(l => l.state === 'due'), subs = D.subs().slice(0, 9); if (!due.length || !subs.length) { say(!subs.length ? 'No one to delegate to.' : 'Nothing due to delegate.', 'warn'); return; } H.openMenu('Delegate which?', due.map(l => ({ label: l.label, run: () => H.openMenu(`Delegate "${l.label}" to`, subs.map(p => ({ label: `${p.short} — ${p.title}`, note: `trust ${Math.round(D.trust(p) * 100)}%`, run: () => { const r = D.delegate(p, l.id); if (!r.ok && !r.refused) say(r.why, 'warn'); } }))), keepOpen: true }))); }, keepOpen: true },
+    { label: 'Delegate a due duty', run: () => { const due = D.loops.filter(l => l.state === 'due'), subs = D.subs(); if (!due.length || !subs.length) { say(!subs.length ? 'No one to delegate to.' : 'Nothing due to delegate.', 'warn'); return; } H.openMenu('Delegate which?', due.map(l => ({ label: l.label, run: () => H.openMenu(`Delegate "${l.label}" to`, D.byDistance(subs, G.plan?.[l.room] ? l.room : null).slice(0, 9).map(({ person: p, eta }) => ({ label: `${p.short} — ${p.title}`, note: `${etaNote(eta)}trust ${Math.round(D.trust(p) * 100)}%`, run: () => { const r = D.delegate(p, l.id); if (!r.ok && !r.refused) say(r.why, 'warn'); } }))), keepOpen: true }))); }, keepOpen: true },
     { label: 'Report to the bridge', run: () => { const done = D.loops.filter(l => l.last); H.openMenu('Report which?', done.flatMap(l => [{ label: `${l.label} — honest`, run: () => D.report(l.id, true) }, ...(l.last !== 'proper' ? [{ label: `${l.label} — "all fine"`, run: () => D.report(l.id, false) }] : [])]).concat(done.length ? [] : [{ label: 'Nothing to report yet', off: true }])); }, keepOpen: true },
     { label: 'Show the whole board (B)', run: () => { H.big = !H.big; H.renderBoard(); } },
   ];
@@ -657,6 +777,7 @@ function talkMenu(e) {
     { label: 'Ask about their duty', run: () => { const l = DUTIES.billets?.[pr.billet]?.loops?.[0]; say(l ? `Mostly ${l.label.toLowerCase()}, every so often. ${DUTIES.billets[pr.billet].rules?.[0] ? '' : ''}` : 'Keeping the ship running.'); } },
     { label: 'Ask how they feel about you', run: () => say(mood === 'warm' ? 'You pull your weight. That counts for a lot here.' : mood === 'cold' ? 'I hear things. Make sure they are not true.' : 'Fine, I suppose. Ask me again later.') },
     { label: 'Ask who they hang out with', run: () => say(G.social ? G.social.talkLine(pr, me) : 'Whoever is on my watch, I suppose.') },   // js/social.js
+    { label: 'Any news?', run: () => { const r = rumourFor(G.social, pr, me, t); say(r.text || r.none); } },   // js/socialui.js: a rumour from social.hooks, gated by trust, never repeated
   ];
   if (D.subs().includes(pr)) opts.push({ label: 'Order them to do their duty', run: () => { const r = D.order(pr, null); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
   else opts.push({ label: 'Ask for a hand with your duty', run: () => { const r = D.askHelp(pr); if (!r.ok && !r.refused) G.say(r.why, 'warn'); } });
@@ -703,7 +824,7 @@ let DUTIES = { billets: {} };
 async function loadDuties() { try { DUTIES = await (await fetch('./assets/data/duties.json')).json(); } catch (e) { console.warn('duties not loaded', e); } return DUTIES; }
 
 function newRun() {
-  Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: Math.floor(Math.random() * 1e6) });
+  Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: G.forceSeed ?? Math.floor(Math.random() * 1e6) });   // G.forceSeed: tools/test.mjs seed-set smoke runs
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
   G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p); G.portraits?.clear();   // portraits are cached by person id: a new crew needs new faces
@@ -715,12 +836,12 @@ function newRun() {
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
-  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks }) : null; if (G.sim) G.sim.setPlayer(G.player);
+  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.holdBody = simHold; G.sim.on('depart', simDepart); }
   G.social = G.sim ? generateSocial(G.roster, { seed: G.runSeed, plan: G.plan, data: commsData(), clock: G.comms.clock, ship: G.ship }) : null; if (G.social) G.sim.setSocial(G.social);   // js/social.js: groups, friendships, rivalries (before setupDuty: seeds trust)
   setupDuty();
   hideScreens(); fade(0);
   loadDeck(1);
-  if (NOM() && G.duty && !navigator.webdriver && new URLSearchParams(location.search).get('brief') !== '0') { G.phase = 'briefing'; document.exitPointerLock?.(); G.hud2.showBriefing(makeBriefing(G.player, G.roster, G.mission, DUTIES, MISSIONS), () => { G.phase = 'play'; requestLock(); }); return; }
+  if (NOM() && G.duty && !navigator.webdriver && new URLSearchParams(location.search).get('brief') !== '0') { G.phase = 'briefing'; document.exitPointerLock?.(); G.hud2.showBriefing(makeBriefing(G.player, G.roster, G.mission, DUTIES, MISSIONS), () => { G.phase = 'play'; requestLock(); }); briefNotes(G.hud2, G.social, G.player); return; }
   requestLock();
   G.phase = 'play';
 }
@@ -738,7 +859,7 @@ document.addEventListener('pointerlockchange', () => {
 function completeDeck() {
   G.phase = 'lift'; sound.lift(); fade(1, 900);
   G.hp = Math.min(G.maxHp, G.hp + 20);
-  setTimeout(() => {
+  later(() => {
     if (G.deck >= winDeck() && !G.endless) {
       document.exitPointerLock?.();
       $('winstats').innerHTML = `${winDeck()} decks of the ${G.ship.name} · ${G.tribbles} furbles rescued · ${G.stuns} hostiles stunned<br>Time on shift ${fmtTime(G.time)}`;
@@ -780,7 +901,7 @@ function die(by, line = null) {
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
   $('deathline').textContent = line || pick(DEATH_LINES);
   $('stats').innerHTML = [['Last known position', `Deck ${deckReached} · ${ship.name}`], ['Registry', ship.reg], ['Cause', by?.name || 'Unknown'], ['Furbles rescued', G.tribbles], ['Hostiles stunned', G.stuns], ['Time on shift', fmtTime(G.time)], ['Best run', `Deck ${G.best}`]].map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('');
-  setTimeout(() => showScreen('dead'), 2400);
+  later(() => showScreen('dead'), 2400);
 }
 
 // callbacks used by Gorn AI
@@ -910,7 +1031,7 @@ function interact() {
       if (G.fx.evac && !NOM()) {   // transporters up: beam them to safety
         G.say(`${who}: ${line} — Transporter room, one to beam out!`, 'npc'); if (pr) pr.status = 'evacuated';
         for (let i = 0; i < 40; i++) sparks.add(near.x + (Math.random() - 0.5) * 0.6, Math.random() * 1.9, near.z + (Math.random() - 0.5) * 0.6, 0, 0.4 + Math.random(), 0, BEAM, 0.9);
-        sound.tone(880, 0.9, 'sine', 0.06, 600); setTimeout(() => { scene.remove(near.mesh); const i = ents.indexOf(near); if (i >= 0) ents.splice(i, 1); }, 650); giveLoot();
+        sound.tone(880, 0.9, 'sine', 0.06, 600); later(() => { scene.remove(near.mesh); const i = ents.indexOf(near); if (i >= 0) ents.splice(i, 1); }, 650); giveLoot();
       } else { G.say(`${who}: ${line}`, 'npc'); if (pr) pr.status = 'alive'; if (Math.random() < 0.6) giveLoot(); }
     } else if (near.kind === 'body') { const pr = near.person; if (pr && pr.status !== 'dead') pr.status = 'dead'; G.say(pr ? `${pr.full}, ${pr.title} (${DEPT[pr.dept].name}). Dead. You take what they had.` : 'You search the crewman\'s body…', 'npc'); giveLoot(true); }
     else if (near.kind === 'emh' && !G.fx.emh) { G.say('The emitter crackles. No hologram. (Medical Hologram offline)', 'warn'); near.used = false; }
@@ -922,7 +1043,7 @@ function interact() {
   if (site) {
     site.used = true; sound.pickup();
     const r = searchFixture(site.room, site.kind);
-    if (r) { G.say(r.text, 'npc'); if (r.loot === 'heal') { G.hp = Math.min(G.maxHp, G.hp + 15); setTimeout(() => G.say('Found a hypospray (+15 health)', 'good'), 900); sound.heal(); } else if (r.loot === 'cell') { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 900); } }
+    if (r) { G.say(r.text, 'npc'); if (r.loot === 'heal') { G.hp = Math.min(G.maxHp, G.hp + 15); later(() => G.say('Found a hypospray (+15 health)', 'good'), 900); sound.heal(); } else if (r.loot === 'cell') { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); later(() => G.say('Found a zapper power cell (+1)', 'good'), 900); } }
     else G.say(`${fixtureName(site.kind)}: nothing useful.`, 'npc');
     updateHUD(); return;
   }
@@ -965,8 +1086,8 @@ function lookedPropObj() {
 }
 function giveLoot(forced) {
   const r = Math.random();
-  if (r < 0.45) { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); setTimeout(() => G.say('Found a zapper power cell (+1)', 'good'), 1200); }
-  else if (r < 0.8 || forced) { G.hp = Math.min(G.maxHp, G.hp + 25); setTimeout(() => G.say('Found a hypospray (+25 health)', 'good'), 1200); sound.heal(); }
+  if (r < 0.45) { G.phaser = Math.min(G.maxPhaser, G.phaser + 1); later(() => G.say('Found a zapper power cell (+1)', 'good'), 1200); }
+  else if (r < 0.8 || forced) { G.hp = Math.min(G.maxHp, G.hp + 25); later(() => G.say('Found a hypospray (+25 health)', 'good'), 1200); sound.heal(); }
 }
 function nearest(r, pred) {
   let best = null, bd = r;
@@ -1014,7 +1135,11 @@ function buildViewmodel() {
   gunVM.rotation.set(0.05, 0.1, 0); gunVM.userData.baseRx = 0.05; gunVM.scale.setScalar(0.9);
   vmScene.add(gunVM); vmScene.environment = scene.environment; vmScene.environmentIntensity = 0.25; updateHUD();
 }
+G.testMode = TEST_MODE;
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
+// game timers: setTimeout normally; under the test clock (G.manual, tools/test.mjs) they wait for __game.advance() game time instead of the wall clock
+let manT = 0; const timers = [];
+function later(fn, ms) { if (G.manual) timers.push({ at: manT + ms / 1000, fn }); else setTimeout(fn, ms); }
 function step(dt, t) {
   if (NOM() && G.menuPause) return;   // a menu / wheel / panel / map is open: the whole world holds still (js/menus.js keeps the UI alive)
   if (shot > 0) shot -= dt;
@@ -1100,7 +1225,7 @@ function step(dt, t) {
       if (e.simmed && !e.walk) dodgeCheck(e, dt, d);
       if (e.op && e.walk) opEnd(e);   // leaving the equipment: put things away
       const q = e.ease; if (q) { const k = Math.max(0, 1 - dt * 3.5); q[0] *= k; q[1] *= k; if (q[0] * q[0] + q[1] * q[1] < 4e-4) { q[0] = q[1] = 0; e.ease = null; } }   // opEnd left the mesh on the seat / use point: it eases back onto the logical position instead of snapping
-      if (e.walk && walkStep(e, dt, d)) { if (q) { e.mesh.position.x += q[0]; e.mesh.position.z += q[1]; } continue; }
+      if (e.walk && (wearWalk(e, G, d), walkStep(e, dt, d))) { if (q) { e.mesh.position.x += q[0]; e.mesh.position.z += q[1]; } continue; }
       if (q && !e.op) { e.mesh.position.x = e.x + q[0]; e.mesh.position.z = e.z + q[1]; }
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
       if (e.repairing) (e.repairing.npc ? repairBodyStep : repairerStep)(e, dt, d);   // npc: Systems Nominal crew repair (js/repair.js); else the madness-mode repairer
@@ -1110,12 +1235,12 @@ function step(dt, t) {
         if (d > 22) continue;                       // far away: skip skinning updates
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
         H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
-        if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) fidgetStep(e, dt, d); }   // impostors never blink
+        if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) { fidgetStep(e, dt, d); wearStep(e, dt, d, G, world); } }   // impostors never blink
         H.update(dt * (e.fake ? 0.82 : 1));
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
   }
-  function remove(e) { scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1); }
+  function remove(e) { scene.remove(e.mesh); releaseHuman(e.mesh); ents.splice(ents.indexOf(e), 1); }
 
   // prompt
   let prompt = '';
@@ -1125,11 +1250,11 @@ function step(dt, t) {
   else if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
   else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
-  else if (rp) prompt = `${SYS[rp.sys].name} — nominal`;
   if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
   if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
   if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
+  if (!prompt && rp) prompt = `${SYS[rp.sys].name} — nominal`;   // status label last: a junction beside a fixture, clutter or terminal must not hide what [E] does there
   $('prompt').textContent = prompt;
 
   // room label + exploration
@@ -1159,7 +1284,7 @@ function step(dt, t) {
   // rolling blackouts: the hum stops, the lights die, something is still walking
   if (G.blackout > 0) { G.blackout -= dt; if (G.blackout <= 0) { world.setPower(true); sound.setPower(true); sound.powerUp(); } }
   else { G.blackT -= dt; if (G.blackT <= 0 && G.deckTime > 25) { G.director?.bump(0.1, 'blackout'); G.blackout = 5 + Math.random() * 5; G.blackT = (G.fx.blackoutEvery || 170) * (0.7 + Math.random() * 0.6); world.setPower(false); sound.setPower(false); sound.powerDown(); G.say('Computer: Main power failure. Emergency lighting only.', 'comp'); } }
-  world.powerTarget = G.blackout > 0 ? 0 : G.fx.power; world.lightFault = G.fx.lightFlicker;
+  world.powerTarget = G.blackout > 0 ? 0 : G.fx.power; world.lightFault = G.fx.lightFlicker; world.shipState = G.shipState;
   G.distT -= dt; if (G.distT <= 0) { G.distT = 25 + Math.random() * 30; sound.distant(pick(['steps', 'steps', 'scrape', 'door', 'whisper'])); }
   for (const dr of world.drips) if (dr.fire) { dr.fire = false; if (Math.hypot(dr.x - P.x, dr.z - P.z) < 16) { for (let i = 0; i < 4; i++) water.add(dr.x, dr.y - 0.1, dr.z, (Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3, WATER, 1.2); sound.drip(); } }
   if (G.phase === 'play' && G.deck === 1 && !NOM()) {
@@ -1283,7 +1408,7 @@ function nearestRepair(any = false) {
 }
 function placeRepairPoints(data) {
   repairPts = []; const rnd = mulberry32(G.runSeed * 7 + G.deck * 131);
-  const faces = world.wallFaces.filter(f => { const ox = f.tx + f.dx, oy = f.ty + f.dy; return !f.deco && data.grid[oy]?.[ox] === 0 && !world.isTube(ox, oy) && !(ox === data.exit[0] && oy === data.exit[1]); });
+  const faces = world.wallFaces.filter(f => { const ox = f.tx + f.dx, oy = f.ty + f.dy; return (f.jct || !f.deco) && data.grid[oy]?.[ox] === 0 && !world.isTube(ox, oy) && !(ox === data.exit[0] && oy === data.exit[1]); });
   for (let i = faces.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [faces[i], faces[j]] = [faces[j], faces[i]]; }
   const taken = [], deckCode = String(G.shipDeck + 1).padStart(2, '0');
   const takeFace = (dept) => {
@@ -1302,7 +1427,7 @@ function placeRepairPoints(data) {
       const j = makeJunction(s, `JCT ${deckCode}-${String(jn).padStart(2, '0')}`, DEPT[s.dept].name, DIVISION[DEPT[s.dept].division].color);
       j.group.position.set(f.px + f.dx * 0.01, 0.85, f.pz + f.dy * 0.01); j.group.rotation.y = f.ry; scene.add(j.group);
       j.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
-      pt = { x: f.px + f.dx * 0.55, z: f.pz + f.dy * 0.55, main: false, reach: 1.6, obj: j.group, lamp: j.lamp, y: 1.25, px: f.px, pz: f.pz, where: `junction ${deckCode}-${String(jn).padStart(2, '0')}` };
+      pt = { x: f.px + f.dx * 0.55, z: f.pz + f.dy * 0.55, main: false, reach: 1.6, obj: j.group, lamp: j.lamp, door: j.door, open: 0, y: 1.25, px: f.px, pz: f.pz, where: `junction ${deckCode}-${String(jn).padStart(2, '0')}` };
       { const ox = f.tx + f.dx, oy = f.ty + f.dy; G.repair?.bindJunction(s.id, G.shipDeck + 1, [ox, oy], [f.tx, f.ty], data.room[oy]?.[ox] || 'corridor'); }   // crew sent to this system go to this very junction
     }
     if (!pt.obj) { pt.obj = makeBeacon(); pt.obj.position.set(pt.x, pt.y + 0.3, pt.z); scene.add(pt.obj); }
@@ -1345,6 +1470,7 @@ function updateShipSystems(dt, tension) {
   // faulted hardware sparks, steams and blinks
   for (const r of repairPts) {
     const st = S.status(r.sys); if (r.lamp) setLamp(r.lamp, st, t);
+    if (r.door) { const want = (rp === r && G.repairT > 0) || G.repair?.workingOn(r.sys) ? 1 : 0; if (want || r.open > 0.001) { r.open += (want - r.open) * Math.min(1, dt * 3); setJunctionDoor(r, r.open); } }   // the junction door opens while someone works at it (docs/propart-integration.md request 2)
     if (!r.lamp) { r.obj.visible = st !== 'nominal'; r.obj.rotation.y = t * 2; r.obj.material.color.set(G.repair?.workingOn(r.sys) && Math.sin(t * 6) > 0 ? 0x40e0ff : st === 'offline' ? 0xff3020 : 0xffa020); }   // cyan blink: being worked
     if (st === 'nominal') continue;
     r.fxT = (r.fxT || Math.random() * 2) - dt;
@@ -1463,13 +1589,16 @@ function boardLift(person, dest, delay = 0) {   // person is (now) in the car; t
 function leaveRider() {
   const r = G.lift.rider; if (!r || r.left) return; r.left = true; G.liftLog.push(`leave:${r.person.id}:${r.destIdx + 1}`);
   const th = (r.person.tags || []).includes('lift:says-thanks') && TAG_EFFECTS['lift:says-thanks'].leave; if (th) speak(r.person, th[r.person.id % th.length]);
-  if (r.mesh) scene.remove(r.mesh); r.mesh = null; r.h = null;
+  if (r.mesh) { scene.remove(r.mesh); releaseHuman(r.mesh); } r.mesh = null; r.h = null;
 }
-function clearRider() { const r = G.lift?.rider; if (r?.mesh) scene.remove(r.mesh); if (r) { r.mesh = null; r.h = null; } if (G.lift) G.lift.rider = null; }
+function clearRider() { const r = G.lift?.rider; if (r?.mesh) { scene.remove(r.mesh); releaseHuman(r.mesh); } if (r) { r.mesh = null; r.h = null; } if (G.lift) G.lift.rider = null; }
 function riderStep(dt) {
   const r = G.lift?.rider; if (!r) return; r.clock += dt; if (r.h) { r.h.update(dt); liveFace(r.h, G.time, r.person.id * 3.1); }
   for (const e of r.events) if (!e.done && r.clock >= e.t) { e.done = true; e.fn(); }
 }
+// people called forward from the line (e.liftGo) still walking up to the open car: it waits for them (up to 7 s of boarding instead of 4),
+// else they reached the doors as they shut and walked back to the line, a crowd churning at the mouth (iteration 5, Manitoba surge deck)
+const liftCalled = () => { const c = world.car; return !!c && ents.some(e => e.liftGo && e.walk?.vanish && !e.board && Math.hypot(e.x - c.x, e.z - c.z) < 11); };
 function carStep(dt) {
   const c = world.car, L = G.lift; if (!c || G.phase !== 'play') return;
   const dx = P.x - c.x, dz = P.z - c.z, d = Math.hypot(dx, dz), inT = inCarTile(), s = dx * c.dx + dz * c.dy, locked = !!G.fx.liftLocked;
@@ -1478,10 +1607,15 @@ function carStep(dt) {
   if (d > 10) { L.far = true; if (L.rider) clearRider(); } else if (d < 6.5 && L.far) { L.far = false; rollRider(); }   // wander off and the rider is gone; come back and someone may be waiting
   // crew use the car too (simBodies): the doors open for someone walking up or stepping out (npcT), and shut for a moment (shutT) when
   // someone has boarded or is about to arrive while the player looks in — nobody appears or vanishes in an open car
-  L.npcT = Math.max(0, (L.npcT || 0) - dt); L.closedT = world.liftOpen ? 0 : (L.closedT || 0) + dt; if (L.shutT > 0) { L.shutT -= dt; if (inT || L.shutT < 0) L.shutT = 0; } else if (L.boardN && !inT && world.liftOpen && !(L.npcT > 0)) L.shutT = 1.6; const shut = L.shutT > 0;
+  L.npcT = Math.max(0, (L.npcT || 0) - dt); L.closedT = world.liftOpen ? 0 : (L.closedT || 0) + dt; if (L.shutT > 0) { L.shutT -= dt; if (inT || L.shutT < 0) L.shutT = 0; } else if (L.boardN && !inT && world.liftOpen && ((!(L.npcT > 0) && !liftCalled()) || L.boardW > (liftCalled() ? 7 : 4) || L.boardN >= CAR_SLOTS.length)) L.shutT = 1.6;   // boarders leave when nobody else is coming, or after 4 s / a full car even if more are (they wait for the next car)
+  L.boardW = L.boardN ? (L.boardW || 0) + dt : 0; const shut = L.shutT > 0 || (!!L.boardN && !world.liftOpen && !L.held);   // shut doors with boarders behind them stay shut until the car has gone (closedT > 1.2), not reopen on the queue (iteration 5)
+  // the player stands in the open car without using its panel (it keeps the doors open): after a few seconds the crew stop boarding, those
+  // inside step back out to wait beside the doors ("We'll take the next one."), and they board once the player is out (docs/pathing.md iteration 4)
+  L.inCarT = inT && world.liftOpen ? (L.inCarT || 0) + dt : 0; const held0 = L.held; L.held = L.inCarT > 5;
+  if (L.held && !held0 && L.boardN) { let said = false; for (const e of ents) if (e.board && e.simmed) { e.board = false; e.boardSlot = null; startWalk(e, c.tx, c.ty, true, { sim: 'lift' }); e.simKey = 'lift'; if (!said && e.person) { said = true; const line = "We'll take the next one."; G.say(`${e.person.short}: ${line}`, 'npc'); try { speak(e.person, line); } catch (er) { } } } L.boardN = 0; L.boardW = 0; }
   if (L.closedT > 1.2) { if (L.boardN) { for (const e of ents.slice()) if (e.board) dropBody(e); L.boardN = 0; } if (L.arrive) { L.arrive = false; G.simT = 0; } }
   if (!locked && !shut && !world.liftOpen && (d < 4.4 || L.npcT > 0)) world.setLiftOpen(true);
-  else if (!inT && world.liftOpen && (locked || shut || (d > 5.6 && !(L.npcT > 0)))) { if (ents.some(e => e.simmed && !e.board && Math.abs(e.x - c.x) < 1.2 && Math.abs(e.z - c.z) < 1.2)) L.npcT = Math.max(L.npcT, 0.3); else world.setLiftOpen(false); }   // never shut on someone in the doorway
+  else if (!inT && world.liftOpen && (locked || shut || (d > 5.6 && !(L.npcT > 0)))) { if (ents.some(e => e.simmed && !e.board && Math.abs(e.x - c.x) < 1.2 && Math.abs(e.z - c.z) < 1.2)) L.npcT = Math.max(L.npcT, 0.3); else if (L.shutT > 0 && !L.boardN && !locked && liftComing()) L.shutT = 0; else world.setLiftOpen(false); }   // never shut on someone in the doorway; an arrival's shut (simBodies, nobody boarding) gives way to someone walking up meanwhile: they board first and the arrival comes behind their doors (iteration 6: the empty car shut in their face)
   if (inT && L.armed && !locked && s < 0.25 && P.grounded) openLiftPanel();
 }
 function liftStep(dt, t) {
@@ -1504,7 +1638,7 @@ function liftStep(dt, t) {
 // ---------------- space madness ----------------
 // One crew member at a time loses their mind, lowest rank first. They hunt the deck's other crew before you. Kill them
 // and, shortly after, someone else on the deck starts screaming.
-function npcFor(person, rnd = Math.random) { person.uniform = person.uniform || G.roster.uniformOf(person); const m = makeSurvivor(rnd, person) || makeCrew(person.uniform); m.userData.rank = person.short; return m; }
+function npcFor(person, rnd = Math.random) { person.uniform = person.uniform || G.roster.uniformOf(person); const m = makeSurvivor(rnd, person) || makeCrew(person.uniform); dressCrew(m, person); m.userData.rank = person.short; return m; }
 function startDeckMadness(data, n, rnd) {
   G.mad = { t: n === 1 ? 1e9 : 16 + rnd() * 14, pending: null };
   if (n !== 1) return;
@@ -1620,26 +1754,40 @@ function dyingStep(dt, t) {
 }
 function frame() {
   requestAnimationFrame(frame);
-  const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; elapsed += dt; const t = elapsed;
+  const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (G.manual) return;   // test clock (tools/test.mjs): nothing runs on the wall clock (world, UI frame incl. portrait warm-up, drawing); tests drive __game.step / advance / menus.frame / renderOnce
+  elapsed += dt; tickWorld(dt, elapsed); G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
+  if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
+  // auto-downgrade if the machine struggles
+  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
+  render(dt, elapsed);
+}
+function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
   if (G.phase === 'play' && world) step(dt, t);
   else if ((G.phase === 'ride' || G.phase === 'select') && world) liftStep(dt, t);
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
   else if (G.phase === 'talk' && world) G.talk.step(dt, t);   // conversation close-up: only the speaker, the camera and the talk UI run (js/talk.js)
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
-  G.menus?.frame(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
-  if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
-  // auto-downgrade if the machine struggles
-  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
+}
+function render(dt, t) {
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
     post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
   } else { renderer.render(scene, camera); renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true; }
 }
+// test clock: advance(dt) = one frame of game time without drawing (step / liftStep / dyingStep / talk / idle world as frame() picks), plus the game timers now due
+function advance(dt = 1 / 30, t) {   // t: the caller's own clock (tests pass the t they give step()); default the frame clock
+  scene.updateMatrixWorld(); elapsed += dt; tickWorld(dt, t ?? elapsed);
+  if (G.talk?.active && G.phase !== 'talk') G.talk.abort();
+  runTimers(dt);
+}
+function runTimers(dt) { manT += dt; for (let i = 0; i < timers.length; i++) if (timers[i].at <= manT) { const { fn } = timers.splice(i--, 1)[0]; fn(); } }   // game timers due under the test clock
 
 // expose for debugging/tests
-const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+let warmed = null;   // duty-clothes prewarm (js/actors.js prewarmOutfits): tests await __game.warmed so no idle job lands mid-section
+const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); warmed = prewarmOutfits(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, S, spawnRepairer, complete: completeDeck, step: (dt, t) => (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t), liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)

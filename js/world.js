@@ -1,12 +1,21 @@
 import * as THREE from 'three';
 import { SEARCHABLE, clutterFor } from './items.js';
+import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { buildPropArt, PROP_ART, PROP_ART_KINDS, PROP_ART_FIXTURES } from './propart.js';   // art batches (js/propart-*.js), docs/propart-integration.md
+import { buildChair } from './propart-stations1.js';
+import { DECOR_ENG } from './decorart-eng.js';
+import { DECOR_BRIDGE } from './decorart-bridge.js';     // batch 7: sysboard, sysboard_half (CMD-1)
+import { DECOR_SEC } from './decorart-security.js';      // batch 8: dclocker, emitterpost, camdome, badgereader
+import { installIcons, buildEmblemPlate, ROOM_DEPT, buildPlacard, PLACARD_ROOMS, buildFloorZone, ZONE_ROOMS, buildDirectory, DECOR_SIGN } from './signart.js';   // batch 10 (docs/signart.md)
+installIcons();   // U-1 / U-2: the handheld glyphs and the flight / operations badge shapes join the live ICONS / SHAPES / CATS tables (js/icons.js) before any HUD draws
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
+const JUNCTION_FACES = 21;   // one per ship system (js/crew.js SYSTEMS): wall faces kept bare for repair junctions
 export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
 export const TUBE_UP = 1.7; // floor height of a tube's upper run (reached by ladder)
 const TUBE_SIDE = 0.65;     // thickness of the tube's own side walls: leaves a 1.2 m wide crawlway in a 2.5 m tile
@@ -300,7 +309,9 @@ export function buildProp(kind) {
     case 'desk': { g.userData.top = 0.76;   // ready room desk: wood top, drawer pedestals, a flat screen, a lamp and a stack of binders
       g.add(rbox(1.8, 0.05, 0.85, m.wood, 0, 0.7, 0, 0.02)); for (const sx of [-1, 1]) g.add(rbox(0.5, 0.7, 0.78, m.dark, sx * 0.62, 0, 0, 0.03));
       g.add(rbox(0.5, 0.34, 0.03, m.dark, -0.1, 0.78, -0.2, 0.01)); g.add(box(0.44, 0.28, 0.01, m.screenB, -0.1, 0.81, -0.18)); g.add(cyl(0.02, 0.02, 0.3, m.metal, 0.5, 0.75, 0.15, 8)); g.add(cyl(0.1, 0.12, 0.02, m.metal, 0.5, 0.75, 0.15, 12));
-      g.add(rbox(0.3, 0.07, 0.22, m.crate2, -0.65, 0.75, 0.2, 0.01)); g.add(rbox(0.28, 0.06, 0.2, m.fabric, -0.65, 0.82, 0.2, 0.01)); break; }
+      g.add(rbox(0.3, 0.07, 0.22, m.crate2, -0.65, 0.75, 0.2, 0.01)); g.add(rbox(0.28, 0.06, 0.2, m.fabric, -0.65, 0.82, 0.2, 0.01));
+      { const c = buildChair('flight', false), ch = new THREE.Group(); ch.name = 'chair'; c.position.set(0, 0, 0.77); c.rotation.y = Math.PI; ch.add(c); g.add(ch); }   // task chair at the desk's seat (pelvis z 0.77 = spot 0.36 + 0.41)
+      g.userData.seat = 0.48; break; }
     case 'cell': {   // brig cell: bunk, steel toilet and a bar front
       g.add(rbox(1.9, 0.3, 0.8, m.dark, 0, 0, -0.5, 0.04)); g.add(rbox(1.84, 0.1, 0.74, m.sheet, 0, 0.3, -0.5, 0.04)); g.add(cyl(0.16, 0.12, 0.38, m.metal, 0.75, 0, 0.1, 12)); g.add(box(1.9, 0.06, 0.06, m.metal, 0, 1.95, 0.55)); g.add(box(1.9, 0.06, 0.06, m.metal, 0, 0.0, 0.55));
       for (let i = 0; i < 13; i++) g.add(cyl(0.017, 0.017, 1.95, m.metal, -0.9 + i * 0.15, 0, 0.55, 6)); g.add(box(0.1, 0.1, 0.1, m.blinkR, 0.9, 1.1, 0.55)); break; }
@@ -363,7 +374,7 @@ export function buildProp(kind) {
     case 'replicator':
       g.add(rbox(1.5, 2.1, 0.42, m.panel, 0, 0, 0.4, 0.05)); g.add(rbox(0.9, 0.62, 0.3, m.dark, 0, 0.85, 0.3, 0.06)); g.add(box(0.8, 0.5, 0.02, m.glowO, 0, 0.9, 0.42)).material = m.screenO;
       g.add(cyl(0.3, 0.3, 0.02, m.glowO, 0, 0.86, 0.26, 20)); g.add(rbox(0.3, 0.22, 0.03, m.dark, 0.5, 1.6, 0.18, 0.02)); g.add(box(0.25, 0.17, 0.01, m.screenB, 0.5, 1.625, 0.163)); g.add(box(1.3, 0.03, 0.02, m.glowB, 0, 1.95, 0.185)); break;
-    default: g.add(rbox(0.8, 0.8, 0.8, m.metal));
+    default: { const a = buildPropArt(kind, m, { rbox, box, cyl }); if (a) return a; g.add(rbox(0.8, 0.8, 0.8, m.metal)); }
   }
   return g;
 }
@@ -489,14 +500,17 @@ const DECOR = {
   breaker(K) { K.box(0.52, 0.72, 0.12, 0, 1.5, 0x6a6f58).box(0.46, 0.6, 0.006, 0, 1.47, 0x777c66, 0.12).box(0.52, 0.06, 0.004, 0, 1.83, YL, 0.122).box(0.03, 0.1, 0.03, 0.18, 1.47, DK, 0.126).cyl(0.03, WH - 1.86, -0.12, (WH + 1.86) / 2, MT, 0.03).cyl(0.02, WH - 1.86, 0.1, (WH + 1.86) / 2, 0x4a4f58, 0.03); [GG, GG, GR].forEach((c, i) => K.box(0.035, 0.035, 0.008, -0.16 + i * 0.07, 1.7, c, 0.126, true)); K.box(0.2, 0.1, 0.004, -0.08, 1.4, 0xe0d8c0, 0.127); },
   kit(K) { K.box(0.5, 0.38, 0.14, 0, 1.4, WHT).box(0.2, 0.06, 0.006, 0, 1.4, RD, 0.14).box(0.06, 0.2, 0.006, 0, 1.4, RD, 0.14).box(0.16, 0.03, 0.03, 0, 1.62, DK, 0.05).box(0.5, 0.02, 0.145, 0, 1.3, 0xb8c0c4); },
 };
+Object.assign(DECOR, DECOR_ENG);   // batch 3 wall kits: foamstation, hosecab, panelbox, panelopen (js/decorart-eng.js)
+Object.assign(DECOR, DECOR_BRIDGE, DECOR_SEC, DECOR_SIGN);   // batches 7, 8 and 10 (js/decorart-bridge.js, js/decorart-security.js, js/signart.js: podhatch, podbank)
+// pool entries that are PROP_ART fixtures (gas_panel, stretcher_rack) are built as single meshes by the decor pass, not as kits
 const ROOM_DECOR = {
-  bridge: ['monitorB', 'monitorO', 'monitorB', 'comm'], engineering: ['gauges', 'pipes', 'toolboard', 'monitorO', 'breaker', 'pipes'], sickbay: ['medcab', 'monitorG', 'medcab', 'kit', 'locker'], mess: ['menu', 'shelf', 'fountain', 'shelf'],
+  bridge: ['monitorB', 'monitorO', 'monitorB', 'comm'], engineering: ['gauges', 'pipes', 'toolboard', 'monitorO', 'breaker', 'pipes', 'panelopen', 'hosecab', 'dclocker'], sickbay: ['medcab', 'monitorG', 'medcab', 'kit', 'locker', 'gas_panel', 'stretcher_rack', 'gas_panel'], mess: ['menu', 'shelf', 'fountain', 'shelf'],
   transporter: ['coil', 'monitorB', 'comm'], shuttlebay: ['hose', 'toolboard', 'pipes', 'rack', 'extinguisher'], cargo: ['rack', 'rack', 'rack', 'extinguisher', 'breaker'], holodeck: ['comm'], quarters: ['locker', 'picture', 'mirror', 'shelf', 'picture'], arboretum: ['planter', 'planter', 'fountain'],
-  corridor: ['extinguisher', 'comm', 'fountain', 'ventgrille', 'ventgrille', 'breaker', 'kit'],
-  readyroom: ['picture', 'shelf', 'monitorB', 'locker'], brig: ['locker', 'monitorO', 'comm', 'extinguisher'], armory: ['rack', 'locker', 'rack', 'extinguisher'], gym: ['mirror', 'fountain', 'shelf', 'extinguisher'],
-  lab: ['monitorG', 'shelf', 'locker', 'medcab', 'monitorB'], laundry: ['shelf', 'pipes', 'locker', 'hose'], lounge: ['picture', 'shelf', 'fountain', 'mirror', 'monitorB'], workshop: ['toolboard', 'rack', 'toolboard', 'pipes', 'breaker', 'hose'],
-  plant: ['pipes', 'gauges', 'pipes', 'breaker', 'monitorO', 'hose'], morgue: ['medcab', 'locker', 'monitorG', 'kit'], datacore: ['monitorB', 'monitorO', 'comm', 'breaker', 'coil'], stores: ['rack', 'rack', 'shelf', 'locker', 'extinguisher'],
-  washroom: ['mirror', 'fountain', 'shelf', 'kit'], airlock: ['locker', 'hose', 'rack', 'extinguisher', 'comm'],
+  corridor: ['extinguisher', 'comm', 'fountain', 'ventgrille', 'ventgrille', 'breaker', 'kit', 'panelbox', 'dclocker', 'camdome', 'badgereader'],
+  readyroom: ['picture', 'shelf', 'monitorB', 'locker'], brig: ['locker', 'monitorO', 'comm', 'extinguisher', 'emitterpost', 'camdome', 'badgereader'], armory: ['rack', 'locker', 'rack', 'extinguisher', 'camdome'], gym: ['mirror', 'fountain', 'shelf', 'extinguisher'],
+  lab: ['monitorG', 'shelf', 'locker', 'medcab', 'monitorB'], laundry: ['shelf', 'pipes', 'locker', 'hose'], lounge: ['picture', 'shelf', 'fountain', 'mirror', 'monitorB'], workshop: ['toolboard', 'rack', 'toolboard', 'pipes', 'breaker', 'hose', 'panelbox'],
+  plant: ['pipes', 'gauges', 'pipes', 'breaker', 'monitorO', 'hose', 'foamstation', 'hosecab', 'panelbox', 'dclocker'], morgue: ['medcab', 'locker', 'monitorG', 'kit'], datacore: ['monitorB', 'monitorO', 'comm', 'breaker', 'coil'], stores: ['rack', 'rack', 'shelf', 'locker', 'extinguisher', 'dclocker', 'coldstore_door'],
+  washroom: ['mirror', 'fountain', 'shelf', 'kit'], airlock: ['locker', 'hose', 'rack', 'extinguisher', 'comm', 'podhatch', 'podhatch'],
 };
 const kitCache = {};
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
@@ -519,7 +533,7 @@ export class World {
     this.wallFaces = []; this.sparkers = []; this.steamers = []; this.alertAmt = 0;
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
-    this.tops = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
+    this.tops = {}; this.propExt = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
     OWN = this.own = [];
     try { this._build(); this._details(); this._liminal(); this._dressing(); } finally { OWN = null; }
   }
@@ -540,11 +554,13 @@ export class World {
   solid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.W || ty >= this.H || this.grid[ty][tx] !== 0; }
   solidAt(x, z) { const [tx, ty] = this.tile(x, z); return this.solid(tx, ty); }
   // parkour helpers: climbable prop height on a tile (Infinity = not climbable / not a prop)
+  // collision box of a prop tile: [offset x, offset z, half x, half z] from the tile centre (default square unless the prop's footprint is bigger)
+  propBox(tx, ty) { return this.propExt[tx + ty * this.W] || [0, 0, this.propHalf, this.propHalf]; }
   topAt(tx, ty) { return this.grid[ty]?.[tx] === 2 ? (this.tops[tx + ty * this.W] ?? Infinity) : this.tubeKind(tx, ty) === 'up' ? TUBE_UP : Infinity; }
   groundAt(x, z, feetY = 0) {
     const [tx, ty] = this.tile(x, z);
     if (this.tubeKind(tx, ty) === 'up') return feetY >= TUBE_UP - 0.4 ? TUBE_UP : 0; const top = this.topAt(tx, ty); if (!isFinite(top) || feetY < top - 0.3) return 0;
-    const h = this.propHalf + 0.12; return Math.abs(x - (tx + 0.5) * TS) <= h && Math.abs(z - (ty + 0.5) * TS) <= h ? top : 0;
+    const [ox, oz, hx, hz] = this.propBox(tx, ty); return Math.abs(x - (tx + 0.5) * TS - ox) <= hx + 0.12 && Math.abs(z - (ty + 0.5) * TS - oz) <= hz + 0.12 ? top : 0;
   }
   // march a ray through the deck: returns { x, y, z, dist, kind: 'wall'|'ceiling'|'floor'|'prop', tx, ty } or null
   raycast(ox, oy, oz, dx, dy, dz, max = 20) {
@@ -553,7 +569,7 @@ export class World {
       const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t; const [tx, ty] = this.tile(x, z); const c = this.grid[ty]?.[tx];
       let kind = null;
       if (c === undefined || c === 1 || (y < TUBE_UP && this.tubeKind(tx, ty) === 'up')) kind = 'wall'; else if (y <= 0) kind = 'floor'; else if (y >= this.ceilAt(tx, ty)) kind = 'ceiling';
-      else if (c === 2) { const top = this.topAt(tx, ty), h = this.propHalf; if (y <= (isFinite(top) ? top : 2.2) && Math.abs(x - (tx + 0.5) * TS) <= h && Math.abs(z - (ty + 0.5) * TS) <= h) kind = 'prop'; }
+      else if (c === 2) { const top = this.topAt(tx, ty), [ox, oz, hx, hz] = this.propBox(tx, ty); if (y <= (isFinite(top) ? top : 2.2) && Math.abs(x - (tx + 0.5) * TS - ox) <= hx && Math.abs(z - (ty + 0.5) * TS - oz) <= hz) kind = 'prop'; }
       if (kind) { const b = t - st; return { x: ox + dx * b, y: Math.max(0.05, oy + dy * b), z: oz + dz * b, dist: b, kind, tx, ty }; }
     }
     return null;
@@ -580,7 +596,8 @@ export class World {
         if (!this.solid(x, y)) continue;
         const prop = this.grid[y]?.[x] === 2;
         if (prop && (p.y || 0) >= this.topAt(x, y) - 0.03) continue;   // standing on / passing over a climbable prop
-        const half = prop ? TS * 0.36 : TS / 2; push(cx, cz, half, half);
+        if (prop) { const [ox, oz, hx, hz] = this.propBox(x, y); push(cx + ox, cz + oz, hx, hz); continue; }   // wide art props (userData.box) reach past the default square
+        push(cx, cz, TS / 2, TS / 2);
       }
       if (this.doorLock && this.doors) for (const d of this.doors) { if (d.open > 0.5 || Math.abs(d.f.x - p.x) > TS || Math.abs(d.f.z - p.z) > TS) continue; d.f.ax ? push(d.f.x, d.f.z, 0.06, (TS - 0.52) / 2) : push(d.f.x, d.f.z, (TS - 0.52) / 2, 0.06); }   // sealed doors (power out) are solid
     }
@@ -821,8 +838,19 @@ export class World {
         const roll = rndv();
         stripes.push({ px, pz, ry });
         const face = { tx: x, ty: y, dx, dy, px, pz, ry, room: roomT, wall: this.wallKind[x + y * W] }; this.wallFaces.push(face);   // .deco = something already hangs here
-        if (roll < 0.18) { lcars.push({ px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
-        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push({ px, pz, ry }); face.deco = true; face.win = true; }
+        if (this.grid[y + dy][x + dx] === 2) face.deco = true;   // a prop stands against this wall (gen.js wall placements): no fixture, search site or junction behind it
+        if (roll < 0.18) { lcars.push(face.lc = { px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
+        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push(face.lc = { px, pz, ry }); face.deco = true; face.win = true; }
+      }
+      // keep wall space for the systems' repair junctions (main.js placeRepairPoints) before any decoration claims it: on small decks the
+      // decor passes used to take every free face and leave systems with no repair point on the deck. Spread out, room faces first; .jct faces stay bare.
+      {
+        const [ex, ey] = d.exit, h = (f) => { const v = Math.sin(f.tx * 12.9898 + f.ty * 78.233 + f.dx * 3.7 + f.dy * 5.3 + d.deck * 1.9) * 43758.5453; return v - Math.floor(v); };
+        const cand = this.wallFaces.filter(f => { const ox = f.tx + f.dx, oy = f.ty + f.dy; return this.grid[oy][ox] === 0 && !this.isTube(ox, oy) && !(ox === ex && oy === ey); }).sort((a, b) => h(a) - h(b));
+        const res = [], ok = (f, gap) => !f.jct && res.every(t => Math.hypot(t.px - f.px, t.pz - f.pz) > gap);
+        for (const gap of [7, 4, 1.5]) for (const rooms of [true, false]) for (const f of cand) { if (res.length >= JUNCTION_FACES) break; if ((!rooms || f.room) && ok(f, gap)) { f.jct = true; res.push(f); } }
+        const drop = new Set(res.map(f => f.lc).filter(Boolean)); if (drop.size) { const keep = (a) => a.filter(o => !drop.has(o)); lcars.splice(0, lcars.length, ...keep(lcars)); windows.splice(0, windows.length, ...keep(windows)); }
+        for (const f of res) { f.deco = true; f.win = false; delete f.lc; }
       }
       const sg = new THREE.PlaneGeometry(TS, 0.14);
       const sm = new THREE.InstancedMesh(sg, new THREE.MeshBasicMaterial({ color: 0xffffff }), stripes.length || 1);
@@ -851,20 +879,36 @@ export class World {
       dummy.rotation.set(0, 0, 0);
     }
     // props
+    let morgueTray = false;
     for (const p of d.props) {
       const m = buildProp(p.kind);
       const [cx, cz] = this.center(p.tx, p.ty);
       m.position.set(cx, 0, cz); m.rotation.y = p.kind === 'viewscreen' ? 0 : p.rot;
       if (p.kind === 'viewscreen') { m.position.z -= TS * 0.35; }
+      if (p.kind === 'bar' && p.wall) { const b = buildProp('barback'); b.position.z = -0.98; m.add(b); m.userData.box = [-1.12, 1.12, -1.25, 0.77]; }   // bar against a wall: the back bar between it and the wall
+      if (p.kind === 'shuttle') {   // FLT-3: the shuttle sits on its cradle (raised by the pads' height) on a painted 4 m pad marking; collision covers the cradle's length
+        const cr = buildPropArt('shuttle_cradle'), lift = cr.userData.use?.craftLift?.y ?? 0.25; for (const c of m.children) c.position.y += lift; m.userData.top += lift;
+        const pm = buildPropArt('padmark'); pm.traverse(o => { o.userData.noShadow = true; }); m.add(cr, pm); m.userData.box = [-1.6, 1.6, -0.8, 0.8];
+      }
+      if (p.kind === 'warpcore') m.add(buildPropArt('warpcore_detail'));   // ENG-13 clamp rings and injector housings on the core
+      if (p.kind === 'drawers' && d.room[p.ty]?.[p.tx] === 'morgue' && !morgueTray) { morgueTray = true; m.add(buildPropArt('morgue_tray', null, { col: 1, row: 0, pull: 0.75 })); }   // one drawer pulled out (MED-11)
+      if (m.userData.field) (this.fieldMats || (this.fieldMats = new Set())).add(m.userData.field);   // SEC-2 force-field planes (one shared material): shimmer, drop with the security grid (update)
+      if (m.userData.sight) (this.sights || (this.sights = [])).push(m.userData.sight);   // OPS-6 pattern buffer sight glass: slow glow (update)
       g.add(m); if (m.userData.top) this.tops[p.tx + p.ty * this.W] = m.userData.top;
-      m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
+      if (m.userData.box) {   // footprint wider than the default collision square: grow it (never shrink), rotated with the prop, kept inside the tile
+        const [x0, x1, z0, z1] = m.userData.box, r = m.rotation.y, c = Math.cos(r), sn = Math.sin(r), H = this.propHalf, L = 1.15;
+        const pts = [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].map(([lx, lz]) => [lx * c + lz * sn, -lx * sn + lz * c]);   // three.js rotation.y
+        const b = [Math.max(-L, Math.min(-H, ...pts.map(q => q[0]))), Math.min(L, Math.max(H, ...pts.map(q => q[0]))), Math.max(-L, Math.min(-H, ...pts.map(q => q[1]))), Math.min(L, Math.max(H, ...pts.map(q => q[1])))];
+        if (b[0] < -H - 0.01 || b[1] > H + 0.01 || b[2] < -H - 0.01 || b[3] > H + 0.01) this.propExt[p.tx + p.ty * this.W] = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[1] - b[0]) / 2, (b[3] - b[2]) / 2];   // [offset x, offset z, half x, half z]
+      }
+      m.traverse(o => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
     }
     // loose clutter from the ship inventory: small things on the floor near walls and on tables (look at one for its name; see nearestClutter in js/main.js)
     this.clutter = [];
     {
-      const shapes = [new THREE.BoxGeometry(1, 1, 1), new THREE.CylinderGeometry(0.5, 0.5, 1, 10), new THREE.BoxGeometry(1, 1, 1)], lists = [[], [], []];
+      const lists = {};
       const ph = (str) => { let h = 2166136261; for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
-      const add = (it, x, y, z, k) => { const h = ph(it[0]), sz = [[0.12 + h * 0.16, 0.08 + h * 0.12, 0.1 + h * 0.14], [0.07 + h * 0.05, 0.12 + h * 0.14, 0.07 + h * 0.05], [0.26, 0.025, 0.2]][it[2]]; const rec = { x, y: y + sz[1] / 2, z, name: it[0], real: it[1], gone: false }; lists[it[2]].push({ x, y: y + sz[1] / 2, z, sx: sz[0], sy: sz[1], sz: sz[2], ry: rndv() * 6.28, h, rec });
+      const add = (it, x, y, z, k) => { const h = ph(it[0]), kind = kindForName(it[0], it[2], h); const rec = { x, y: y + 0.05, z, name: it[0], real: it[1], kind, gone: false }; (lists[kind] ||= []).push({ x, y, z, ry: rndv() * 6.28, s: 1, rec });
         this.clutter.push(rec); };
       for (const r of d.rooms) {
         const pool = clutterFor(r.type); if (!pool.length) continue;
@@ -872,8 +916,7 @@ export class World {
         const n = Math.min(tiles.length, 3 + Math.floor(r.w * r.h / 9)); for (let i = 0; i < n; i++) { const [tx, ty] = tiles.splice(Math.floor(rndv() * tiles.length), 1)[0]; const it = pool[Math.floor(rndv() * pool.length)]; add(it, (tx + 0.5 + (rndv() - 0.5) * 0.7) * TS, 0, (ty + 0.5 + (rndv() - 0.5) * 0.7) * TS, 0); }
         for (const p of d.props) if (p.kind === 'table' && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h && rndv() < 0.7) { const [cx, cz] = this.center(p.tx, p.ty); add(pool[Math.floor(rndv() * pool.length)], cx + (rndv() - 0.5) * 0.7, 0.78, cz + (rndv() - 0.5) * 0.7, 0); }
       }
-      const cm = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.2 });
-      shapes.forEach((geo, k) => { const l = lists[k]; if (!l.length) return; const im = new THREE.InstancedMesh(geo, cm, l.length); l.forEach((c, i) => { c.rec.inst = { im, i }; dummy.position.set(c.x, c.y, c.z); dummy.rotation.set(0, c.ry, 0); dummy.scale.set(c.sx, c.sy, c.sz); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, new THREE.Color().setHSL(c.h, k === 2 ? 0.08 : 0.35, k === 2 ? 0.75 : 0.45)); }); im.castShadow = im.receiveShadow = true; g.add(im); });
+      for (const kind in lists) { const l = lists[kind], r = buildInstanced(kind, l); if (!r) continue; l.forEach((c, i) => { c.rec.inst = { hide: () => r.hide(i) }; }); g.add(r.group); }   // generated clutter models (js/itemart.js)
       dummy.scale.set(1, 1, 1); dummy.rotation.set(0, 0, 0);
     }
     // lift
@@ -911,7 +954,20 @@ export class World {
     };
     for (const r of d.rooms) {
       const fs = this.wallFaces.filter(f => f.room === r.type && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h);
-      if (fs.length) place(fs[Math.floor(rnd() * fs.length)], ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
+      if (fs.length) { const f = fs[Math.floor(rnd() * fs.length)]; place(f, ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
+        const e = buildEmblemPlate(ROOM_DEPT[r.type] || 'services'); e.position.set(f.px + f.dx * 0.02 - f.dy * 0.92, 2.6, f.pz + f.dy * 0.02 + f.dx * 0.92); e.rotation.y = f.ry; g.add(e); }   // G-1 department plate beside the room sign
+    }
+    // --- signage (batch 10, js/signart.js) on its own random stream: hazard placards (G-2), floor zone markings (G-3), the deck directory by the lift (G-4)
+    {
+      const srnd = mulberry32(d.deck * 7331 + d.exit[0] * 101 + d.exit[1] * 7 + 3);
+      for (const f of this.wallFaces) { const l = PLACARD_ROOMS[f.room]; if (!l || f.deco || f.sign || f.win || srnd() > 0.2) continue;
+        const m = buildPlacard(l[Math.floor(srnd() * l.length)]); m.position.set(f.px + f.dx * 0.012, 1.45, f.pz + f.dy * 0.012); m.rotation.y = f.ry; g.add(m); f.deco = true; }
+      for (const r of d.rooms) { const l = ZONE_ROOMS[r.type]; if (!l || r.type === 'airlock') continue; const open = [];
+        for (let ty = r.y + 1; ty < r.y + r.h - 1; ty++) for (let tx = r.x + 1; tx < r.x + r.w - 1; tx++) if (this.grid[ty][tx] === 0) open.push([tx, ty]);
+        for (let n = Math.min(open.length, 1 + Math.floor(srnd() * 3)); n > 0; n--) { const [tx, ty] = open.splice(Math.floor(srnd() * open.length), 1)[0], z = buildFloorZone(l[Math.floor(srnd() * l.length)]), [cx, cz] = this.center(tx, ty);
+          z.position.x = cx; z.position.z = cz; z.rotation.z = Math.floor(srnd() * 4) * Math.PI / 2; g.add(z); } }
+      const [lx, ly] = d.exit, f = this.wallFaces.find(f => !f.room && !f.deco && !f.sign && !f.win && !(f.tx + f.dx === lx && f.ty + f.dy === ly) && Math.abs(f.tx + f.dx - lx) + Math.abs(f.ty + f.dy - ly) <= 2);
+      if (f) { const b = buildDirectory(d.rooms, { deck: d.deck + 1, here: { x: lx, y: ly }, accent: '#' + new THREE.Color(ship.accent).getHexString() }); b.position.set(f.px + f.dx * 0.01, 1.5, f.pz + f.dy * 0.01); b.rotation.y = f.ry; g.add(b); f.deco = true; this.directory = b; }
     }
     const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'MAINTENANCE\nDUCT ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TUBELIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
     for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) place(f, corr[Math.floor(rnd() * corr.length)], 2.55, 1.2);
@@ -1094,6 +1150,28 @@ export class World {
     const ceilOf = (f) => this.ceilAt(f.tx + f.dx, f.ty + f.dy);
     const decal = (map, opacity, color = 0xffffff) => new THREE.MeshLambertMaterial({ map, color, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
 
+    // --- wide wall pieces over two wall tiles: the shuttlebay's bay door (R-3) on the wall farthest from its doorways, the bridge's systems board (CMD-1) on the aft wall
+    {
+      const fk = (x, y, dx, dy) => x + ',' + y + ',' + dx + ',' + dy, byPos = new Map(faces.map(f => [fk(f.tx, f.ty, f.dx, f.dy), f]));
+      const ok = (f) => f && !f.deco && !f.win && !f.sign && ceilOf(f) >= WH - 0.01;
+      for (const r of d.rooms) {
+        if (r.type !== 'shuttlebay' && r.type !== 'bridge' && r.type !== 'airlock') continue;
+        const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h, doors = [];
+        for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (this.grid[y][x] !== 1 && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => !inR(x + a, y + b) && this.grid[y + b]?.[x + a] === 0)) doors.push([x, y]);
+        const one = faces.filter(f => ok(f) && inR(f.tx + f.dx, f.ty + f.dy) && (r.type !== 'bridge' || (f.dy === -1 && f.ty === r.y + r.h)));
+        const pairs = one.map(f => [f, byPos.get(fk(f.tx + Math.abs(f.dy), f.ty + Math.abs(f.dx), f.dx, f.dy))]).filter(([, g2]) => ok(g2) && inR(g2.tx + g2.dx, g2.ty + g2.dy));
+        const far = (f) => Math.min(99, ...doors.map(([x, y]) => Math.abs(x - f.tx - f.dx) + Math.abs(y - f.ty - f.dy)));
+        const score = (fs) => r.type === 'bridge' ? -Math.abs(fs.reduce((a, f) => a + f.tx, 0) / fs.length - (r.x + (r.w - 1) / 2)) : Math.min(...fs.map(far));
+        const best = pairs.sort((a, b) => score(b) - score(a))[0] || (r.type === 'bridge' || r.type === 'airlock' ? one.map(f => [f]).sort((a, b) => score(b) - score(a))[0] : null);   // the 2.3 m pod bank also fits one 2.5 m face (3x3 airlocks rarely keep two free faces side by side)
+        if (!best) continue;
+        const at = { px: best.reduce((a, f) => a + f.px, 0) / best.length, pz: best.reduce((a, f) => a + f.pz, 0) / best.length, ry: best[0].ry, dx: best[0].dx, dy: best[0].dy }; best.forEach(f => { f.deco = true; });
+        if (r.type === 'bridge') { const k = best.length > 1 ? 'sysboard' : 'sysboard_half'; kit(k, DECOR[k], [at]); }
+        else if (r.type === 'airlock') {   // R-1 pod hatch bank (2.3 m) on one face or centred on two; status lamps pulse (update)
+          kit('podbank', DECOR.podbank, [at]); const pm = this.podMat || (this.podMat = new THREE.MeshBasicMaterial({ color: 0x40e070 })), lg = new THREE.BoxGeometry(0.07, 0.07, 0.012);
+          for (const [x, y, z] of [[-0.12, 1.7, 0.118], [1.08, 1.7, 0.118], [-0.6, 2.28, 0.033], [0.6, 2.28, 0.033]]) { const l = new THREE.Mesh(z < 0.1 ? new THREE.BoxGeometry(0.5, 0.045, 0.012) : lg, pm); l.position.set(at.px + Math.cos(at.ry) * x + Math.sin(at.ry) * z, y, at.pz - Math.sin(at.ry) * x + Math.cos(at.ry) * z); l.rotation.y = at.ry; g.add(l); } }
+        else if (best.length > 1) { const b = buildPropArt('bay_door'); b.position.set(at.px, 0, at.pz); b.rotation.y = at.ry; b.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(b); }
+      }
+    }
     // --- emergency lamps: dim red normally, pulse on alert, hold steady when the power is out
     {
       const list = faces.filter(f => !f.room && !f.deco && rnd() < 0.085); list.forEach(f => { f.deco = true; });
@@ -1111,7 +1189,7 @@ export class World {
       for (const f of faces) {
         if (f.deco) continue; const pool = ROOM_DECOR[f.room || 'corridor']; if (!pool) continue;
         if (rnd() > (f.room ? (f.room === 'holodeck' ? 0.08 : 0.5) : 0.085)) continue;
-        let k = pool[Math.floor(rnd() * pool.length)]; if ((k === 'pipes' || k === 'breaker' || k === 'planter' || k === 'coil' || k === 'rack') && ceilOf(f) < WH) k = 'ventgrille';
+        let k = pool[Math.floor(rnd() * pool.length)]; if ((k === 'pipes' || k === 'breaker' || k === 'planter' || k === 'coil' || k === 'rack' || k === 'foamstation' || k === 'stretcher_rack' || k === 'camdome' || k === 'coldstore_door' || k === 'emitterpost') && ceilOf(f) < WH) k = 'ventgrille';
         f.deco = true; (byKind[k] || (byKind[k] = [])).push(f);
       }
       // guaranteed searchable fixtures: two per room (suited to the room), two along corridors, on wall faces the random pass left free
@@ -1122,7 +1200,16 @@ export class World {
         for (const [r, fl] of Object.entries(free)) { for (let i = fl.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [fl[i], fl[j]] = [fl[j], fl[i]]; }
           for (const f of fl.slice(0, 2)) { let k = FIT[r][Math.floor(rnd() * FIT[r].length)]; if (k === 'rack' && ceilOf(f) < WH) k = 'locker'; f.deco = true; (byKind[k] || (byKind[k] = [])).push(f); } }
       }
-      for (const [k, list] of Object.entries(byKind)) kit(k, DECOR[k], list);
+      // every sickbay keeps one stretcher bracket (MED-3, the stretcher can be taken: see below) on a wall face the passes above left free, when it has one
+      for (const r of d.rooms) { if (r.type !== 'sickbay' || (byKind.stretcher_rack || []).some(f => f.room === 'sickbay' && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h)) continue;
+        const f = faces.find(f => !f.deco && !f.win && !f.sign && f.room === 'sickbay' && ceilOf(f) >= WH - 0.01 && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h); if (f) { f.deco = true; (byKind.stretcher_rack || (byKind.stretcher_rack = [])).push(f); } }
+      for (const [k, list] of Object.entries(byKind)) if (DECOR[k]) kit(k, DECOR[k], list);
+        else if (PROP_ART_FIXTURES.has(k)) for (const f of list) { const p = buildPropArt(k, m); p.position.set(f.px, 0, f.pz); p.rotation.y = f.ry; p.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(p);
+          if (p.userData.item === 'stretcher') {   // MED-3: the folded stretcher can be taken off its bracket ([E] Take, like loose clutter: js/main.js nearestClutter / takeClutter); its parts sit at z 0.13
+            const parts = p.children.filter(o => (Math.abs(o.position.z - 0.13) < 0.01 && o.position.y > 0.55 && o.position.y < 1.85) || (Math.abs(o.position.z - 0.17) < 0.004 && o.position.y > 0.9 && o.position.y < 1.55));   // bed, poles, handles, straps, buckles
+            this.clutter.push({ x: f.px + f.dx * 0.3, y: 1.2, z: f.pz + f.dy * 0.3, name: 'Folded stretcher', real: 'stretcher wall bracket', kind: 'stretcher', item: 'stretcher', gone: false, bracket: p, inst: { hide: () => parts.forEach(o => { o.visible = false; }) } }); } }   // wall pieces of the art batches (origin on the wall line, +z into the room)
+      // ceiling holo-emitters (MED-9): up to four per sickbay at open tile centres under a full-height ceiling
+      for (const r of d.rooms) if (r.type === 'sickbay') { let n = 0; for (let ty = r.y; ty < r.y + r.h && n < 4; ty++) for (let tx = r.x; tx < r.x + r.w && n < 4; tx++) if (this.grid[ty][tx] === 0 && this.ceilAt(tx, ty) >= WH - 0.01 && (tx + ty) % 2 === 0) { const p = buildPropArt('holo_emitter', m), [cx, cz] = this.center(tx, ty); p.position.set(cx, WH - 3.2, cz); g.add(p); n++; } }
       // searchable fixtures (see js/items.js): a spot just in front of the wall face, facing back at it
       this.searchSites = []; for (const [k, list] of Object.entries(byKind)) if (SEARCHABLE.has(k)) for (const f of list) this.searchSites.push({ x: f.px + f.dx * 0.35, z: f.pz + f.dy * 0.35, nx: f.dx, nz: f.dy, kind: k, room: f.room || 'corridor', used: false });
       this.decorCount = Object.values(byKind).reduce((a, l) => a + l.length, 0);
@@ -1268,7 +1355,7 @@ export class World {
   }
 
   // pick a piece of clutter up: hide its instance and drop it from the look list
-  takeClutter(c) { if (c.gone) return false; c.gone = true; if (c.inst) { const d = new THREE.Object3D(); d.scale.set(0, 0, 0); d.updateMatrix(); c.inst.im.setMatrixAt(c.inst.i, d.matrix); c.inst.im.instanceMatrix.needsUpdate = true; } const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
+  takeClutter(c) { if (c.gone) return false; c.gone = true; c.inst?.hide(); const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
   // doors part for the player (and anyone in `who`, [{x, z, w}]) within reach and close again behind them. Sealed doors (doorLock) stay shut
   // for everyone; a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player pried)
   slideDoors(dt, px, pz, who = [], onOpen = null) {
@@ -1284,6 +1371,12 @@ export class World {
     }
   }
   update(dt, t) {
+    this.directory?.userData.pulse?.(t);   // "you are here" lamp
+    const lv = (id) => this.shipState?.level?.(id) || 0;   // 0 nominal, 1 degraded, 2 offline (main.js sets world.shipState)
+    if (this.fieldMats) { const L = lv('security'), on = L >= 2 ? 0 : this.powerAmt * (L === 1 && Math.sin(t * 23) + Math.sin(t * 7.7) > 1.1 ? 0.25 : 1);
+      for (const f of this.fieldMats) f.opacity = (0.12 + 0.035 * Math.sin(t * 9) + 0.015 * Math.sin(t * 37)) * on; }
+    if (this.sights) { const L = lv('transport'); for (let i = 0; i < this.sights.length; i++) { const k = L >= 2 ? 0.12 : (0.55 + 0.45 * Math.sin(t * 1.3 + i * 2.1)) * (L === 1 && Math.sin(t * 17 + i) > 0.6 ? 0.3 : 1); this.sights[i].color.setRGB(0.25 * k, k, 0.88 * k).multiplyScalar(0.35 + 0.65 * this.powerAmt); } }
+    if (this.podMat) { const a = this.alertAmt > 0.5, k = a ? (Math.sin(t * 8) > 0 ? 1 : 0.15) : 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2)); this.podMat.color.setRGB((a ? 1 : 0.25) * k, (a ? 0.6 : 0.88) * k, (a ? 0.1 : 0.44) * k); }
     this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
     if (this.coneMat) this.coneMat.opacity = 0.04 * this.powerAmt * (1 - this.alertAmt * 0.5);
     if (this.coneFlickMat) this.coneFlickMat.opacity = 0.04 * this.powerAmt * this.flickerF;
@@ -1318,4 +1411,13 @@ export class World {
   }
 }
 function yy(y, H) { return y < 0 || y >= H; }
-export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttle', 'holocube', 'pad', 'bunk', 'table', 'biobed', 'crate', 'tree', 'lonechair', 'plant', 'cart', 'replicator', 'desk', 'cell', 'weaponrack', 'treadmill', 'weightbench', 'labbench', 'washer', 'sofa', 'lathe', 'workbench', 'tank', 'drawers', 'servers', 'shelving', 'suitrack', 'sinkunit'];
+export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttle', 'holocube', 'pad', 'bunk', 'table', 'biobed', 'crate', 'tree', 'lonechair', 'plant', 'cart', 'replicator', 'desk', 'cell', 'weaponrack', 'treadmill', 'weightbench', 'labbench', 'washer', 'sofa', 'lathe', 'workbench', 'tank', 'drawers', 'servers', 'shelving', 'suitrack', 'sinkunit',
+  'helm', 'baycontrol', 'beampedestal', 'secdesk', 'nursestation', 'holodesk', 'reactorstation', 'range', 'servery', 'bar', 'dishwasher', 'wastebin', 'pumpskid', 'heatexch', 'scrubber', 'fieldgen', 'fieldgen_damp', 'fabricator', 'steriliser', 'surgical_table', 'med_dispenser', 'exam_couch', 'autopsy_table', 'infusion_stand',
+  // batches 5-11 (docs/propart-integration.md "Batches 5-11")
+  'growbed', 'nutrient_tanks', 'sensorstation', 'charttable', 'spectrometer', 'samplefridge', 'fumehood', 'fuelbowser', 'pallet', 'pallet_loaded', 'hoversled', 'reachin_cooler',
+  'navstation', 'opsstation', 'commsstation', 'relayrack', 'buffertank', 'plottable', 'cellfield', 'chargerack', 'issuecounter',
+  'briefing_table', 'platform_bed', 'workpod', 'maint_stand', 'cargo_pad', 'injector_crate', 'knee_mill', 'drill_press', 'scan_arch', 'specimen_tank', 'mat', 'grapple_dummy', 'sparring_set',
+  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors'];
+// everything the art batches built (PROP_KINDS above = the floor props gen.js places; the rest are variants, chairs, stools, wall / ceiling pieces and add-ons)
+export const PROP_GALLERY = [...PROP_KINDS, ...PROP_ART_KINDS.filter(k => !PROP_KINDS.includes(k))];
+export { PROP_ART, PROP_ART_FIXTURES };

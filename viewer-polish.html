@@ -1,0 +1,52 @@
+<!doctype html><meta charset="utf-8"><title>Polish art viewer (batch 11)</title>
+<style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
+#l{position:fixed;top:8px;left:10px;font-size:12px;letter-spacing:.08em;opacity:.75;line-height:1.6}#l a{color:#9cf;margin-right:10px;text-decoration:none}
+.tag{position:fixed;transform:translate(-50%,0);font-size:11px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000}</style>
+<canvas id="c"></canvas><div id="l"><a href="?set=props&g=0">props 1</a><a href="?set=props&g=1">2</a><a href="?set=props&g=2">3</a><a href="?set=props&g=3">4</a><a href="?set=props&g=4">5</a><a href="?set=props&g=5">6</a><a href="?set=props&g=6">7</a><a href="?set=props&g=7">8</a><a href="?set=items">items</a><br>js/propart-polish.js, js/itemart-polish.js · drag orbit · wheel zoom · ?only=pool_table,arcade · ?spin=0 · ?cam=x,y,z,tx,ty,tz · ?person=0 hide reference · ?g=N page of 4 (?per=)</div>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { kinds, KIND_NAMES, META } from './js/propart-polish.js';
+import { DEFS_POLISH, buildPolishItem } from './js/itemart-polish.js';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+const q = new URLSearchParams(location.search); const set = q.get('set') || 'props', only = q.get('only') ? q.get('only').split(',') : null, spin = q.get('spin') === '0' ? 0 : +(q.get('spin') || 0.3);
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(1); r.setSize(innerWidth, innerHeight, false); r.shadowMap.enabled = true; r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.1;
+const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.55; }
+const key = new THREE.DirectionalLight(0xfff0d8, 2.4); key.position.set(3, 6, 6); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -16, right: 16, top: 8, bottom: -6 }); s.add(key);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 30), new THREE.MeshStandardMaterial({ color: 0x2a3040, roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
+const refMat = new THREE.MeshStandardMaterial({ color: 0xcc8866, roughness: 0.7, transparent: true, opacity: 0.9 });
+const person = (h = 1.75) => { const g = new THREE.Group(), m = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, h - 0.38, 4, 12), refMat); m.position.y = h / 2; g.add(m); return g; };
+const list = [];
+const PER = +(q.get('per') || 4), g0 = +(q.get('g') || 0);
+let names = set === 'items' ? Object.keys(DEFS_POLISH) : KIND_NAMES; names = names.filter(k => !only || only.includes(k));
+if (!only) names = set === 'items' ? names : names.slice(g0 * PER, g0 * PER + PER);
+for (const k of names) {
+  const g = new THREE.Group(); let m, w = 3.0;
+  if (set === 'items') { m = buildPolishItem(k, { frame: 'base' }); m.scale.setScalar(3); w = Math.max(0.5, m.userData.size[0] * 3 + 0.4); if (q.get('person') !== '0' && false) g.add(person()); }
+  else { m = kinds[k](); const u = m.userData, sz = u.size || [2, 2, 2]; w = Math.max(sz[0], sz[2]) + 0.9; if (q.get('person') !== '0') { const p = person(); p.position.set(-w / 2 + 0.25, 0, sz[2] / 2 + 0.7); g.add(p); } }
+  g.add(m);
+  const c = document.createElement('div'); c.className = 'tag'; c.textContent = `${k} ${META?.[k] ? '(' + META[k] + ')' : ''} · ${m.userData.tris} tris`; document.body.appendChild(c);
+  list.push({ g, m, w, el: c });
+}
+let tallest = 1; for (const l of list) tallest = Math.max(tallest, l.m.userData.size ? l.m.userData.size[1] : 1);
+let x = 0; const total = list.reduce((a, l) => a + l.w, 0);
+for (const l of list) { l.g.position.x = x + l.w / 2 - total / 2; x += l.w; s.add(l.g); }
+const C = (q.get('cam') || '').split(',').map(Number); let tgt = new THREE.Vector3(C[3] || 0, C[4] ?? (set === 'items' ? 0.15 : 1.0), C[5] || 0), yaw = 0.2, pitch = 0.22, dist = Math.max(3.5, total * 0.95, set === 'items' ? 0 : tallest * 2.2);
+if (C.length >= 3 && q.get('cam')) { const p = new THREE.Vector3(C[0], C[1], C[2]).sub(tgt); dist = p.length(); yaw = Math.atan2(p.x, p.z); pitch = Math.asin(p.y / dist); }
+let drag = false; addEventListener('pointerdown', () => drag = true); addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => { if (drag) { yaw -= e.movementX * 0.006; pitch = Math.max(-0.2, Math.min(1.3, pitch + e.movementY * 0.005)); } });
+addEventListener('wheel', e => { dist *= e.deltaY > 0 ? 1.1 : 0.9; });
+addEventListener('resize', () => { r.setSize(innerWidth, innerHeight, false); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+const clock = new THREE.Clock(); const v = new THREE.Vector3();
+function frame() {
+  requestAnimationFrame(frame); const dt = Math.min(0.05, clock.getDelta());
+  for (const l of list) l.m.rotation.y += dt * spin;
+  cam.position.set(tgt.x + Math.sin(yaw) * Math.cos(pitch) * dist, tgt.y + Math.sin(pitch) * dist, tgt.z + Math.cos(yaw) * Math.cos(pitch) * dist); cam.lookAt(tgt);
+  for (const l of list) { v.set(l.g.position.x, -0.08, 0.5).project(cam); l.el.style.left = (v.x * 0.5 + 0.5) * innerWidth + 'px'; l.el.style.top = (-v.y * 0.5 + 0.5) * innerHeight + 'px'; }
+  r.render(s, cam);
+}
+frame(); window.__ready = true; window.__info = () => list.map(l => [l.m.name, l.m.userData.tris]);
+</script>

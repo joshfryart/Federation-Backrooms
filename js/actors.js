@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { textures } from './world.js';
 import { pbr } from './assets.js';
+import { buildItem } from './itemart.js';
+import { wearOutfit, wearHeadgear, outfitFor } from './wearart.js';
+import { makeHuman } from './humans.js';
 // generated normal + roughness (+AO) from tools/build-textures.mjs, when loaded; repeat set per use
 const withSet = (mat, set, rx = 1, ry = rx, ns = 1) => { const p = pbr(set); if (!p) return mat; const rep = (t) => { const c = t.clone(); c.needsUpdate = true; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(rx, ry); return c; }; mat.normalMap = rep(p.n); mat.normalScale = new THREE.Vector2(ns, ns); mat.roughnessMap = rep(p.r); mat.roughness = 1; return mat; };
 
@@ -386,8 +389,16 @@ export function makeTribble() {
 // =====================================================================
 //  ITEMS
 // =====================================================================
+const ITEM_ART = { chip: [5, 0x40ffa0, 0.42, 0.14], battery: [1.9, 0x40c8ff, 0.3, 0.12], medkit: [1.35, 0xff6060, 0.32, 0.08] };   // [scale, halo colour, halo radius, halo opacity]: pickups are drawn bigger than life
 export function makeItem(kind) {
   const g = new THREE.Group();
+  const art = ITEM_ART[kind]; let body = null;
+  if (art) { try { body = buildItem(kind, { frame: 'base', scale: art[0] }); } catch (e) { console.warn('itemart', kind, e); } }
+  if (body) {   // js/itemart.js models (falls back to the old boxes below if a kind has no model)
+    body.position.y = -body.userData.size[1] * art[0] / 2; g.add(body);
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(art[2], 10, 8), new THREE.MeshBasicMaterial({ color: art[1], transparent: true, opacity: art[3], depthWrite: false })));
+    g.position.y = 0.9; return g;
+  }
   if (kind === 'chip') {
     const pcb = canvasTex(128, 128, (c, s) => { c.fillStyle = '#0c3b2a'; c.fillRect(0, 0, s, s); c.strokeStyle = '#d8b24a'; c.lineWidth = 2; for (let i = 0; i < 14; i++) { c.beginPath(); c.moveTo(Math.random() * s, Math.random() * s); c.lineTo(Math.random() * s, Math.random() * s); c.stroke(); } c.fillStyle = '#40ffa0'; c.fillRect(48, 48, 32, 32); });
     g.add(mk(new THREE.BoxGeometry(0.34, 0.04, 0.34), new THREE.MeshStandardMaterial({ map: pcb, emissive: 0x20ff90, emissiveMap: pcb, emissiveIntensity: 0.9, roughness: 0.4 })));
@@ -570,4 +581,29 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
     ring.material.color.setRGB(1, 0.6 + 0.2 * rs, 0.23 + 0.5 * rs);
   };
   return { group: g, muzzle, flash, cells, ring, lens, tick, vents, reloading: () => rel < 1 };
+}
+
+// duty clothes by department (docs/wearart.md, docs/propart-integration.md "Batches 5-11"): engineering coveralls, medical scrubs, galley whites; everyone else keeps the uniform.
+// mesh = a makeSurvivor / makeHuman group (needs userData.human), person = a js/crew.js roster entry. Skinned on the human's own bones, so walking clips drive it as before.
+export function dressCrew(mesh, person) {
+  if (!mesh?.userData?.human || !person || mesh.userData.outfit !== undefined) return mesh?.userData?.outfit || null;
+  const o = outfitFor(person); let w = null;
+  if (o) { try { w = wearOutfit(mesh, o.outfit, o.opts); } catch (e) { console.warn('wearOutfit', o.outfit, e.message); } }
+  mesh.userData.outfit = w; return w;
+}
+
+// Build every duty outfit (and the headset / breather) once per body kind while the game is idle (loading screen), so the first engineer / medic / cook of each body kind
+// spawned mid-shift does not pay the 20-55 ms build (js/wearart.js caches per body kind and outfit). One combination per idle callback.
+// Each job runs on its own random stream (three's generateUUID draws Math.random for every clip / geometry it builds): a job that lands between
+// two awaits of a test (tools/test.mjs seeds Math.random) must not shift the game's stream. Returns a promise that resolves when all are built.
+export function prewarmOutfits(kinds = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy']) {
+  const jobs = []; for (const k of kinds) { for (const o of ['coverall', 'scrubs', 'whites']) jobs.push([k, o, 0]); for (const hg of ['headset', 'mask']) jobs.push([k, hg, 1]); }
+  const idle = (f) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(f, { timeout: 300 }) : setTimeout(f, 30));
+  let s = 0x2f6b1d; const own = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  return new Promise((done) => {
+    const next = () => { const j = jobs.shift(); if (!j) return done(); const R = Math.random; Math.random = own;
+      try { const h = makeHuman({ kind: j[0], seed: 1, kit: false, shadow: false }); if (h) j[2] ? wearHeadgear(h, j[1]) : wearOutfit(h, j[1]); } catch (e) { console.warn('prewarmOutfits', j, e.message); } finally { Math.random = R; }
+      idle(next); };
+    idle(next);
+  });
 }

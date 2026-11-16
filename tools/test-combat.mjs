@@ -7,6 +7,7 @@
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'), imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
+import { installHelpers } from './test-helpers.mjs';
 
 export async function combatTests(fail) {
   const CB = await imp('js/combat.js'), HH = await imp('js/handhelds.js'), { SHIPS } = await imp('js/ships.js'), Cr = await imp('js/crew.js'), V = await imp('js/voice.js'), { AlertState } = await imp('js/alerts.js');
@@ -93,6 +94,7 @@ export async function combatTests(fail) {
 
 // ---- browser block: the real game (page = the Systems Nominal page, mad = the madness page)
 export async function combatBrowser(page, mad, fail) {
+  await installHelpers(page);
   const r = await page.evaluate(async () => {
     const g = __game, G = g.G, P = g.P, out = {}; G.forceShip = 0; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.phase = 'play'; G.hp = G.maxHp = 100;
     let t = 0; const tick = (n) => { for (let i = 0; i < n; i++) { t += 1 / 30; G.phase = 'play'; g.step(1 / 30, t); } };
@@ -100,8 +102,8 @@ export async function combatBrowser(page, mad, fail) {
     G.simT = 1e9; if (g.haul) g.haul.t = 1e9; const M = G.combat, W = g.world, hum = (x) => x.mesh.userData.human; out.have = !!M;
     const es = g.ents.filter(x => x.simmed && x.mesh?.userData.human && x.person.dept !== 'security'); out.n = es.length; if (es.length < 3) return out;
     const open = (x, z) => { const [tx, ty] = W.tile(x, z); return !W.solid(tx, ty) && !W.isTube(tx, ty); };
-    const clear = (e, r = 3.5) => { for (const o of g.ents) if (o !== e && o.simmed && Math.hypot(o.x - e.x, o.z - e.z) < r) { o.x += 60; o.mesh.position.x = o.x; } };
-    const stand = (e, d = 0.85) => { const y0 = e.mesh.rotation.y; let px = e.x, pz = e.z; for (const da of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.5, -2.5, 3.14]) { px = e.x + Math.sin(y0 + da) * d; pz = e.z + Math.cos(y0 + da) * d; if (open(px, pz) && W.los(px, pz, e.x, e.z)) break; } P.x = px; P.z = pz; P.vx = P.vz = 0; P.kbx = P.kbz = 0; P.yaw = Math.atan2(-(e.x - P.x), -(e.z - P.z)); };
+    const T = __T, clear = (e, r = 3.5) => T.clearSite(e.x, e.z, r, [e]);   // tools/test-helpers.mjs: bystanders moved to their own spots far away
+    const stand = (e, d = 0.85, behind = false) => T.standNear(e, d, behind);
     const trust0 = new Map(G.roster.people.map(p => [p.id, g.duty.trust(p)]));
     // 1) strike: reaction clip + stun, trust, witnesses, chain, security call
     const e = es[0]; clear(e); const w = es.find(x => x !== e); if (w) { const ang = Math.atan2(P.x - e.x, P.z - e.z); w.walk = null; if (w.op) g.opEnd(w); for (const [dx, dz] of [[2.2, 0], [-2.2, 0], [0, 2.2], [0, -2.2], [1.6, 1.6], [-1.6, -1.6]]) if (open(e.x + dx, e.z + dz) && W.los(e.x + dx, e.z + dz, e.x, e.z)) { w.x = e.x + dx; w.z = e.z + dz; w.mesh.position.set(w.x, 0, w.z); break; } }
@@ -116,20 +118,26 @@ export async function combatBrowser(page, mad, fail) {
     // 3) grab another crew member at a console: their work stops, the body follows the hold point, release -> they resume
     G.simT = 0; for (let i = 0; i < 30 * 90 && (M.sec || M.restrained > 0); i++) tick(1); G.simT = 1e9;   // a witness who called it in may have started a second response
     const live = () => g.ents.filter(x => x.simmed && x.mesh?.userData.human && x.person.dept !== 'security' && !(x.cb && (x.cb.ctl || x.cb.fleeT > 0 || x.cb.inj.state !== 'ok')));   // bodies come and go while security walks over: pick from the live ones
-    const f = live().find(x => x !== e && x !== w) || live()[0]; if (!f) { out.skip = 'no free crew body after the security response'; return out; } clear(f); const cp = W.d.props.find(p => p.kind === 'console' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => open(...W.center(p.tx + a, p.ty + b))));
+    const CB = await import('./js/combat.js'), pf = M.pf(), f = live().filter(x => x !== e && x !== w).sort((a, b) => CB.breakRate({ state: 'grabbed' }, pf, M.nf(a)) - CB.breakRate({ state: 'grabbed' }, pf, M.nf(b)) || a.person.id - b.person.id)[0] || live()[0];   // the one least likely to struggle free (the struggle itself is js/combat.js gStep, the unit tests)
+    if (!f) { out.skip = 'no free crew body after the security response'; return out; } clear(f); const cp = W.d.props.find(p => p.kind === 'console' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => open(...W.center(p.tx + a, p.ty + b))));
     if (cp) { const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([a, b]) => [cp.tx + a, cp.ty + b]).find(([x, y]) => open(...W.center(x, y))), [x, z] = W.center(nb[0], nb[1]); f.walk = null; f.x = x; f.z = z; f.mesh.position.set(x, 0, z); f.faceAt = W.center(cp.tx, cp.ty); f.spot = 'console'; g.opEnd(f); g.opStart(f); clear(f); }
-    tick(5); const wasOp = !!f.op; stand(f, 0.85); let grabbed = false, tries = 0;
-    for (; tries < 8 && !grabbed; tries++) { if (!M.g) { stand(f, 0.85); M.secondary(true); } for (let i = 0; i < 25 && !grabbed; i++) { tick(1); grabbed = ['grabbed', 'held'].includes(M.g?.gs.state) && M.g.e === f; } }
-    const g0 = { x: f.x, z: f.z }; let maxGap = 0, moved = 0, slow = 1, hud = null; if (grabbed) { const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); for (let i = 0; i < 45 && M.g; i++) { const nx = P.x - fx * 0.025, nz = P.z - fz * 0.025; if (open(nx, nz)) { P.x = nx; P.z = nz; } tick(1); if (M.g) { maxGap = Math.max(maxGap, Math.hypot(f.x - P.x, f.z - P.z)); moved = Math.hypot(f.x - g0.x, f.z - g0.z); slow = Math.min(slow, P.cbSlow); hud = hud || document.getElementById('cb-ring')?.dataset.state || null; } } }
-    out.grab = { wasOp, tries, grabbed, opEnded: !f.op, state: M.g?.gs.state || 'broke free / let go', follows: +moved.toFixed(2), gap: +maxGap.toFixed(2), slow, hud, cower: !!f.cower, dbg: grabbed ? null : { restrained: M.restrained, ko: M.ko, g: M.g?.e.person.short || null, gs: M.g?.gs.state || null, front: M.front(1.35, 0.55)?.person.short || null, f: f.person.short, fst: f.cb ? [f.cb.inj.state, f.cb.ai, f.cb.ctl] : null, d: +Math.hypot(f.x - P.x, f.z - P.z).toFixed(2), sec: !!M.sec, carry: !!G.carry, push: !!P.pushing } };
+    tick(5); const wasOp = !!f.op; stand(f, 0.85); let grabbed = false, tries = 0, drags = 0, maxGap = 0, moved = 0, slow = 1, hud = null;
+    const tryGrab = () => { grabbed = false; for (; tries < 8 && !grabbed; tries++) { if (!M.g && (M.restrained > 0 || M.sec)) { G.simT = 0; for (let i = 0; i < 30 * 60 && (M.restrained > 0 || M.sec); i++) tick(1); G.simT = 1e9; }   /* a missed grab is an assault too: security may come and restrain the player first (game rule) — let that play out, then try again */ if (!M.g) { stand(f, 0.85, true); M.secondary(true); } for (let i = 0; i < 25 && !grabbed; i++) { tick(1); grabbed = ['grabbed', 'held'].includes(M.g?.gs.state) && M.g.e === f; } } return grabbed; };
+    // drag: back off along the most open of behind / left / right (a wall at the player's back stops the player, not the mechanic) for 1.5 s of one hold:
+    // the body must follow the hold point >= 0.4 m
+    const way = () => { const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); return [[-fx, -fz], [fz, -fx], [-fz, fx]].map(([x, z]) => { let n = 0; while (n < 48 && open(P.x + x * 0.025 * (n + 1), P.z + z * 0.025 * (n + 1)) && W.los(P.x, P.z, P.x + x * 0.025 * (n + 1), P.z + z * 0.025 * (n + 1))) n++; return [x, z, n]; }).sort((a, b) => b[2] - a[2])[0]; };
+    for (; drags < 1 && tryGrab(); drags++) { const g0 = { x: f.x, z: f.z }, [dx, dz] = way(); for (let i = 0; i < 45 && M.g; i++) { const nx = P.x + dx * 0.025, nz = P.z + dz * 0.025; if (open(nx, nz)) { P.x = nx; P.z = nz; } tick(1); if (M.g) { maxGap = Math.max(maxGap, Math.hypot(f.x - P.x, f.z - P.z)); moved = Math.max(moved, Math.hypot(f.x - g0.x, f.z - g0.z)); slow = Math.min(slow, P.cbSlow); hud = hud || document.getElementById('cb-ring')?.dataset.state || null; } } }
+    out.grab = { wasOp, tries, drags, grabbed: grabbed || drags > 0, opEnded: !f.op, state: M.g?.gs.state || 'broke free / let go', follows: +moved.toFixed(2), gap: +maxGap.toFixed(2), slow, hud, cower: !!f.cower, dbg: grabbed ? null : { restrained: M.restrained, ko: M.ko, g: M.g?.e.person.short || null, gs: M.g?.gs.state || null, front: M.front(1.35, 0.55)?.person.short || null, f: f.person.short, fst: f.cb ? [f.cb.inj.state, f.cb.ai, f.cb.ctl] : null, d: +Math.hypot(f.x - P.x, f.z - P.z).toFixed(2), sec: !!M.sec, carry: !!G.carry, push: !!P.pushing } };
     M.secondary(false); tick(3); out.grab.released = !M.g;
     let resumed = false; for (let i = 0; i < 30 * 40 && !resumed; i++) { tick(1); resumed = !f.cb?.ctl && !f.cb?.fleeT && (!!f.op || !!f.walk || !f.cower); } out.grab.resumed = resumed; out.grab.update = !hum(f)._cbOrig;
     // 4) the player gets hit: HP, stagger, knock-down instead of death
     G.simT = 0; for (let i = 0; i < 30 * 90 && M.sec; i++) tick(1);   // a second offence (the restrain above) can call security again: let it finish
-    G.simT = 1e9; const h = live().find(x => x !== e && x !== f) || live()[0]; if (!h) { out.skip = 'no free crew body for the fight'; return out; } clear(h); M.release?.(); g.sim.release(h.person); if (h.op) g.opEnd(h); h.walk = null; stand(h, 1.0); M.takeOver(h); M.start(h, 'fight'); const hp0 = G.hp; let minSlow = 1, flash = false, hpLow = G.hp;
+    G.simT = 1e9; const h = live().find(x => x !== e && x !== f) || live()[0]; if (!h) { out.skip = 'no free crew body for the fight'; return out; } M.release?.(); g.sim.release(h.person); if (h.op) g.opEnd(h); h.walk = null;
+    { const [ax, az] = T.arena(h.x, h.z) || [h.x, h.z]; h.x = ax; h.z = az; h.mesh.position.set(ax, 0, az); clear(h, 6); stand(h, 1.0); }   // the fight in the open (8 floor tiles round it): a shove into a corner / round a bend used to need the player stood back in front
+    M.takeOver(h); M.start(h, 'fight'); const hp0 = G.hp; let minSlow = 1, flash = false, hpLow = G.hp;
     const trace = []; for (let i = 0; i < 30 * 12 && G.hp > hp0 - 15; i++) { tick(1); if (i % 45 === 0) trace.push([h.cb.ai, h.cb.pend?.kind, +Math.hypot(h.x - P.x, h.z - P.z).toFixed(1), +h.cb.cd.toFixed(1), h.cb.inj.state, !!h.cb.ctl, h.cb.fleeT || 0, M.stance, M.ko > 0, !!h.walk].join(':')); minSlow = Math.min(minSlow, P.cbSlow); if (M.flashT > 0) flash = true; hpLow = Math.min(hpLow, G.hp); }
-    let downed = false; for (let i = 0; i < 30 * 20 && !downed; i++) { G.hp = Math.min(G.hp, 3); if (h.cb.ai !== 'fight') { M.start(h, 'fight'); } tick(1); downed = M.ko > 0; }
-    out.hurt = { hp0, hpLow: +hpLow.toFixed(1), staggered: minSlow < 1, flash, downed, hpAfter: +G.hp.toFixed(1), phase: G.phase, alive: G.hp > 0 && G.phase === 'play', grabbedYou: !!M.grabbedBy, h: h.person.short, trace };
+    let downed = false, kdSecs = 0; const KD = 20; for (let i = 0; i < 30 * KD && !downed; i++) { G.hp = Math.min(G.hp, 3); if (h.cb.ai !== 'fight') { M.start(h, 'fight'); } tick(1); downed = M.ko > 0; kdSecs = (i + 1) / 30; }   // budget 20 s at 1-3 HP: the fighter walks back up after each shove
+    out.hurt = { hp0, kdSecs: +kdSecs.toFixed(1), hpLow: +hpLow.toFixed(1), staggered: minSlow < 1, flash, downed, hpAfter: +G.hp.toFixed(1), phase: G.phase, alive: G.hp > 0 && G.phase === 'play', grabbedYou: !!M.grabbedBy, h: h.person.short, trace };
     M.grabbedBy = null; M.calm(h);
     // 5) quick wheel 'Hands' kids + armory gating
     out.wheel = M.wheelKids().map(k => k.id); const S = G.menus.sectors().find(s => s.id === 'tools'); out.toolsHands = !!S?.kids.some(k => k.id === 't.hands');
@@ -145,12 +153,17 @@ export async function combatBrowser(page, mad, fail) {
   const h = r.hurt; if (!(h.hpLow < h.hp0 && h.staggered && h.flash && h.downed && h.alive && h.hpAfter > 0)) fail('combat: player HP / stagger / knock-down ' + JSON.stringify(h));
   const sc = r.security; if (!(sc.over && sc.phase === 'play' && (sc.restrained || sc.chain.some(c => /logged/.test(c))) && sc.chain.length)) fail('combat: security response ' + JSON.stringify(sc));
   if (!(r.wheel.length >= 6 && ['h.grab', 'h.release', 'h.restrain', 'h.subdue', 'h.fists', 'h.up'].every(k => r.wheel.includes(k)) && r.toolsHands && r.hudIds)) fail('combat: wheel / HUD ids ' + JSON.stringify({ w: r.wheel, t: r.toolsHands, h: r.hudIds }));
-  // madness mode: no hand-to-hand, the zapper still fires (right mouse stays the grapple hook)
-  if (mad) {
+  if (mad) await combatMadness(mad, fail);
+  return r;
+}
+
+// madness mode: no hand-to-hand, the zapper still fires (right mouse stays the grapple hook); mad = a ?mode=madness page (tools/test.mjs runs it before that page closes)
+export async function combatMadness(mad, fail) {
+  {
     const m = await mad.evaluate(async () => { const g = __game, G = g.G; g.newRun(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.phase = 'play'; let t = 0; for (let i = 0; i < 5; i++) { t += 1 / 30; g.step(1 / 30, t); } G.phaser = Math.max(1, G.phaser); const p0 = G.phaser; g.fire(); return { mode: G.mode, fired: G.phaser === p0 - 1, prim: G.combat?.primary?.() === false, sec: G.combat?.secondary?.(true) === false, hud: document.getElementById('cb-hud')?.style.display ?? 'none' }; });
     console.log('combat madness:', JSON.stringify(m)); if (!(m.mode === 'madness' && m.fired && m.prim && m.sec)) fail('combat: madness mode zapper / no hand-to-hand ' + JSON.stringify(m));
+    return m;
   }
-  return r;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) { let bad = 0; const r = await combatTests((m) => { bad++; console.log('FAIL', m); }); console.log('combat unit:', JSON.stringify(r), bad ? 'FAILED' : 'OK'); process.exit(bad ? 1 : 0); }
