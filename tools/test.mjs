@@ -249,6 +249,7 @@ const run = await page.evaluate(async () => {
 console.log('bot run:', JSON.stringify(run)); if (run.err || run.phase !== 'win') fail('bot run');
 });
 S('parkour', 'madness', async (page) => {   // jump, mantle, grapple, Jiffy tube, space madness, crazed crew climbing, ship-system repair
+await installHelpers(page);
 const park = await page.evaluate(async () => {
   const g = __game, P = g.P, r = {}; g.newRun(); const w = g.world; g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); g.G.phase = 'play'; g.G.hp = 1e6; for (const e of g.gorns) { e.dead = true; e.delay = 1e9; e.mesh.visible = false; } g.gorns.length = 0; P.clung = 0;
   const key = (code) => { g.G.phase = 'play'; for (const t of ['keydown', 'keyup']) window.dispatchEvent(new KeyboardEvent(t, { code })); };
@@ -294,17 +295,17 @@ const park = await page.evaluate(async () => {
   // crazed crew climb: vault onto a prop you are standing on; follow you up a ladder into a tube's upper run
   { const Sx = g.S, NB = [[1, 0], [-1, 0], [0, 1], [0, -1]], c = {};
     const wd_up = (w, en) => w.tubeKind(...w.tile(en.x, en.z)) === 'up';
-    const chase = (wd, from, secs, until) => { for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
+    const chase = (wd, from, secs, until) => {   /* until(en, hits, maxY): the chase ends on a result (reached height), the seconds are only the bail-out */ for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
       const en = g.makeEnemy('crazed', wd, from, 3, 0, g.scene, g.sound); en.state = Sx.PATROL; en.mesh.visible = true; g.gorns.push(en); g.G.hp = 1e6; let maxY = 0, byEn = 0;
       const hp = g.G.hitPlayer, dd = g.G.dragDown; g.G.hitPlayer = (e, n) => { if (e === en) byEn++; return hp(e, n); }; g.G.dragDown = (e) => { if (e === en) byEn++; return dd(e); };
-      let up = false; for (let i = 0; i < 60 * secs && !until(en, byEn); i++) { g.G.phase = 'play'; en.state = Sx.CHASE; en.timer = 5; en.setTarget(...wd.tile(P.x, P.z)); tick(1); maxY = Math.max(maxY, en.y); if (wd.tubeKind(...wd.tile(en.x, en.z)) === 'up') up = true; }
+      let up = false; for (let i = 0; i < 60 * secs && !until(en, byEn, maxY); i++) { g.G.phase = 'play'; en.state = Sx.CHASE; en.timer = 5; en.setTarget(...wd.tile(P.x, P.z)); tick(1); maxY = Math.max(maxY, en.y); if (wd.tubeKind(...wd.tile(en.x, en.z)) === 'up') up = true; }
       g.G.hitPlayer = hp; g.G.dragDown = dd;
       return { maxY: +maxY.toFixed(2), upperRun: up, dist: +Math.hypot(en.x - P.x, en.z - P.z).toFixed(2), hit: byEn > 0 }; };
     for (let d = 1; d < 9 && !(c.prop && c.tube); d++) { g.loadDeck(d); const w = g.world;
-      if (!c.prop) { const pr = w.d.props.find(p => isFinite(w.topAt(p.tx, p.ty)) && w.topAt(p.tx, p.ty) < 1.1 && NB.some(([a, b]) => w.grid[p.ty + b]?.[p.tx + a] === 0));
-        if (pr) { const [a, b] = NB.find(([a, b]) => w.grid[pr.ty + b]?.[pr.tx + a] === 0); const fld = w.field(pr.tx + a, pr.ty + b); const from = w.d.openTiles.find(([x, y]) => fld[x + y * w.W] >= 3 && fld[x + y * w.W] <= 6) || [pr.tx + a, pr.ty + b];
-          reset(); const [px, pz] = w.center(pr.tx, pr.ty); P.x = px; P.z = pz; P.y = w.topAt(pr.tx, pr.ty); P.grounded = true; tick(2);
-          c.prop = { top: +w.topAt(pr.tx, pr.ty).toFixed(2), playerY: +P.y.toFixed(2), ...chase(w, from, 20, (en, b) => b > 0) }; } }
+      if (!c.prop) { __T.hideEnemies(); const low = w.d.props.filter(p => isFinite(w.topAt(p.tx, p.ty)) && w.topAt(p.tx, p.ty) < 1.1).map(p => p.kind), np = low.length ? __T.nearestProp(low, w.center(...w.d.start)[0], w.center(...w.d.start)[1], 1.4) : null;   // nearest climbable prop to the start with an open side (tools/test-helpers.mjs), not the first in the list
+        if (np) { const pr = np.p, top = w.topAt(pr.tx, pr.ty); __T.clearSite(np.x, np.z, 6); const fld = w.field(...w.tile(np.side.x, np.side.z)); const from = w.d.openTiles.find(([x, y]) => fld[x + y * w.W] >= 3 && fld[x + y * w.W] <= 6 && !w.isTube(x, y)) || w.tile(np.side.x, np.side.z);
+          reset(); P.x = np.x; P.z = np.z; P.y = top; P.grounded = true; tick(2);
+          c.prop = { top: +top.toFixed(2), playerY: +P.y.toFixed(2), ...chase(w, from, 20, (en, b, my) => my >= top - 0.05 && b > 0) }; } }
       if (!c.tube) { const t = w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 2) || w.d.tubes.find(t => t.ladder >= 1 && t.ladder < t.tiles.length - 1);
         if (t) { const up = t.tiles[t.ladder + 1]; reset(); const [px, pz] = w.center(up[0], up[1]); P.x = px; P.z = pz; P.y = 1.7; P.grounded = true; tick(2);
           c.tube = { playerY: +P.y.toFixed(2), ...chase(w, t.a, 40, en => en.y > 1.6 && wd_up(w, en)) }; } } }
@@ -700,13 +701,13 @@ for (const sec of pick) {
   if (sec.page !== pageKind && sec.page) { if (page) await page.close().catch(() => { }); page = null; pageKind = sec.page; page = await PAGES[sec.page](); }
   cur = sec.name; curPage = sec.page; ctx = {}; secFails = 0; const t0 = Date.now(), e0 = errors.length; let threw = null;
   const game = page && sec.page !== 'voices';
-  try { if (game) { await page.evaluate((s) => window.__seedRandom(s), strSeed(sec.name)); ctx = await snap(page); } await sec.fn(page); } catch (e) { threw = e; }
+  try { if (game) { const sd = strSeed(sec.name); await page.evaluate(([s, n, pinShip]) => { window.__seedRandom(s); const G = __game.G; G.forceSeed = s % 1000000; if (pinShip) G.forceShip = s % n; }, [sd, SHIPSM.SHIPS.length, SHIP == null && sec.page !== 'nominal3' && sec.page !== 'smoke']); ctx = await snap(page); } await sec.fn(page); } catch (e) { threw = e; }
   if (game) ctx = await snap(page).catch(() => ctx);
   if (threw) { fail(`${sec.name} threw: ${String(threw.message || threw).split('\n')[0]}`); if (page) await page.close().catch(() => { }); page = null; pageKind = null; }   // a crashed / wedged page: the next section opens a fresh one
   if (secFails && curPage) console.log(where());
   if (errors.length > e0) console.log(`  page errors in ${sec.name}: ${[...new Set(errors.slice(e0))].slice(0, 3).join(' | ').slice(0, 400)}`);
   const ms = Date.now() - t0; times.push([sec.name, ms]);
-  console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB`);
+  console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, ${game ? `ship=${ctx.ship ?? '-'} seed=${ctx.runSeed ?? '-'} deck=${ctx.deck ?? '-'}, ` : ''}heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB`);
 }
 if (page) await page.close().catch(() => { });
 const tot = (Date.now() - T0) / 1000, slow = times.slice().sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, ms]) => `${n} ${(ms / 1000).toFixed(1)}`).join(', ');
