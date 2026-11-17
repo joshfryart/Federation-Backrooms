@@ -197,8 +197,8 @@ function saveDeckState() {
 // the third time it lets you through. liminal.run = { ax, fixed, a, b } in tile units along the axis.
 function findLoopRun(data) {
   let best = null; const g = data.grid, W = data.W, H = data.H, open = (x, y) => g[y]?.[x] === 0 && !data.room[y]?.[x] && !data.tubeAxis?.[x + y * W];
-  for (let y = 1; y < H - 1; y++) { let x = 0; while (x < W) { if (!(open(x, y) && g[y - 1][x] === 1 && g[y + 1][x] === 1)) { x++; continue; } let e = x; while (open(e + 1, y) && g[y - 1][e + 1] === 1 && g[y + 1][e + 1] === 1) e++; if (e - x + 1 >= 6 && (!best || e - x > best.b - best.a)) best = { ax: 'x', fixed: y, a: x, b: e }; x = e + 1; } }
-  for (let x = 1; x < W - 1; x++) { let y = 0; while (y < H) { if (!(open(x, y) && g[y][x - 1] === 1 && g[y][x + 1] === 1)) { y++; continue; } let e = y; while (open(x, e + 1) && g[e + 1][x - 1] === 1 && g[e + 1][x + 1] === 1) e++; if (e - y + 1 >= 6 && (!best || e - y > best.b - best.a)) best = { ax: 'y', fixed: x, a: y, b: e }; y = e + 1; } }
+  for (let y = 1; y < H - 1; y++) { let x = 0; while (x < W) { if (!(open(x, y) && g[y - 1][x] === 1 && g[y + 1][x] === 1)) { x++; continue; } let e = x; while (open(e + 1, y) && g[y - 1][e + 1] === 1 && g[y + 1][e + 1] === 1) e++; if (e - x + 1 >= 5 && (!best || e - x > best.b - best.a)) best = { ax: 'x', fixed: y, a: x, b: e }; x = e + 1; } }
+  for (let x = 1; x < W - 1; x++) { let y = 0; while (y < H) { if (!(open(x, y) && g[y][x - 1] === 1 && g[y][x + 1] === 1)) { y++; continue; } let e = y; while (open(x, e + 1) && g[e + 1][x - 1] === 1 && g[e + 1][x + 1] === 1) e++; if (e - y + 1 >= 5 && (!best || e - y > best.b - best.a)) best = { ax: 'y', fixed: x, a: y, b: e }; y = e + 1; } }
   return best;
 }
 function loopStep() {
@@ -207,7 +207,7 @@ function loopStep() {
   if (v !== run.fixed || u < run.a || u > run.b || Math.abs(speed) < 0.5) { return; }
   const dir = Math.sign(speed), atEnd = dir > 0 ? u >= run.b - 1 : u <= run.a + 1; if (!atEnd) { L.walked = dir; return; }
   if (L.walked !== dir) return;                                   // only after really walking the run toward this end
-  const back = 3, nu = dir > 0 ? run.a + back : run.b - back, [cx, cz] = world.center(run.ax === 'x' ? nu : run.fixed, run.ax === 'x' ? run.fixed : nu);
+  const back = Math.min(3, run.b - run.a - 2), nu = dir > 0 ? run.a + back : run.b - back, [cx, cz] = world.center(run.ax === 'x' ? nu : run.fixed, run.ax === 'x' ? run.fixed : nu);
   if (run.ax === 'x') P.x = cx + (P.x - world.center(tx, ty)[0]); else P.z = cz + (P.z - world.center(tx, ty)[1]);
   if (run.ax === 'x') P.z = cz; else P.x = cx; L.count++; L.walked = 0;
   if (L.count === 1) G.say('This corridor was shorter a moment ago.', 'warn'); caption('the lights flicker'); flash('#000', 0.5);

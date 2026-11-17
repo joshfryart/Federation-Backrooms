@@ -292,9 +292,9 @@ export function buildProp(kind) {
       g.add(rbox(0.12, 1.5, 0.1, m.dark, 0, 0, -1.02, 0.03)); const mon = rbox(0.9, 0.5, 0.06, m.dark, 0, 1.25, -1.0, 0.03); mon.rotation.x = 0.15; g.add(mon);
       const scr = box(0.82, 0.42, 0.01, m.screenG, 0, 1.29, -0.962); scr.rotation.x = 0.15; g.add(scr); break; }
     case 'pillar': {   // structural pillar of a tall room (placed by gen.js, 5.6 m): footing, fluted shaft, collar rings, cap with a stripe
-      const m2 = m.metal, sh = cyl(0.36, TALL_H, m2, 0, 0, 0, 20); g.add(sh);
-      g.add(cyl(0.46, 0.22, m.dark, 0, 0, 0, 20)); g.add(cyl(0.42, 0.1, m.hazard, 0, 0.22, 0, 20)); g.add(cyl(0.44, 0.16, m.dark, 0, TALL_H - 0.16, 0, 20));
-      for (const y of [1.6, 3.4]) g.add(cyl(0.385, 0.06, m.dark, 0, y, 0, 20));
+      const m2 = m.metal, sh = cyl(0.36, 0.36, TALL_H, m2, 0, 0, 0, 20); g.add(sh);
+      g.add(cyl(0.46, 0.46, 0.22, m.dark, 0, 0, 0, 20)); g.add(cyl(0.42, 0.42, 0.1, m.hazard, 0, 0.22, 0, 20)); g.add(cyl(0.44, 0.44, 0.16, m.dark, 0, TALL_H - 0.16, 0, 20));
+      for (const y of [1.6, 3.4]) g.add(cyl(0.385, 0.385, 0.06, m.dark, 0, y, 0, 20));
       g.userData.box = [-0.46, 0.46, -0.46, 0.46]; break; }
     case 'crate': {
       const roll = R();
@@ -645,7 +645,7 @@ export class World {
     const dx = bx - ax, dz = bz - az, dist = Math.hypot(dx, dz);
     const n = Math.ceil(dist / 0.4);
     const inTube = this.isTube(...this.tile(ax, az)) || this.isTube(...this.tile(bx, bz));
-    for (let i = 1; i < n; i++) { const x = ax + dx * i / n, z = az + dz * i / n; if (this.solidAt(x, z) || (!inTube && this.isTube(...this.tile(x, z)))) return false; }
+    for (let i = 1; i < n; i++) { const x = ax + dx * i / n, z = az + dz * i / n, [tx, ty] = this.tile(x, z); if ((this.solid(tx, ty) && !this.under[tx + ty * this.W]) || (!inTube && this.isTube(tx, ty))) return false; }   // catwalk decks are walk-under: sight passes below them
     return true;
   }
 
