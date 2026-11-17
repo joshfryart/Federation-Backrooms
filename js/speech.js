@@ -34,32 +34,78 @@ export function babblePlan(text, voice = NEUTRAL_VOICE) {
 export const estimate = (text, voice) => babblePlan(text, voice || NEUTRAL_VOICE).total;
 
 // ---- Babble ----
+// the voice: a sawtooth glottal source with vibrato through three vowel formant bands, breath noise and roughness flutter, into an
+// amplitude envelope. Shared by babble (speech) and sing (the shanty video, below). ctx / dest default to the game's Sound engine.
+function voiceRig(v, f0, vol, ctx, dest, noiseBuf, vib = null) {
+  const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = f0;
+  const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); lfo.frequency.value = vib?.rate ?? 4.6 + v.vibrato * 2; lfoG.gain.value = vib?.depth ?? f0 * (0.004 + v.vibrato * 0.035); lfo.connect(lfoG); lfoG.connect(osc.frequency);
+  const mix = ctx.createGain(), amp = ctx.createGain(); amp.gain.value = 0; mix.gain.value = 1;
+  const bands = [0, 1, 2].map(i => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = [7, 9, 11][i]; const g = ctx.createGain(); g.gain.value = [1.1, 0.7, 0.35][i]; osc.connect(f); f.connect(g); g.connect(mix); return f; });
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 90; mix.connect(hp); hp.connect(amp); amp.connect(dest);
+  // breath: noise through a band, mixed in under the same envelope. rough: a fast amplitude flutter plus a little noise.
+  const nodes = [osc, lfo]; let nz = null;
+  if (noiseBuf && (v.breath > 0.03 || v.rough > 0.05)) { nz = ctx.createBufferSource(); nz.buffer = noiseBuf; nz.loop = true; const nb = ctx.createBiquadFilter(); nb.type = 'bandpass'; nb.frequency.value = 2400 * v.formant; nb.Q.value = 0.7; const ng = ctx.createGain(); ng.gain.value = Math.min(1, v.breath * 0.55 + v.rough * 0.3); nz.connect(nb); nb.connect(ng); ng.connect(amp); nodes.push(nz); }
+  if (v.rough > 0.05) { const tr = ctx.createOscillator(), trg = ctx.createGain(); tr.frequency.value = 55 + v.rough * 40; trg.gain.value = v.rough * 0.28 * vol; tr.connect(trg); trg.connect(amp.gain); nodes.push(tr); }
+  return { osc, bands, amp, mix, nodes, lfoG };
+}
+// consonant: a short burst of noise at time a
+function consonant(kind, a, v, vol, ctx, dest, noiseBuf, off = Math.random()) {
+  if ((kind !== 'plos' && kind !== 'fric') || !noiseBuf) return;
+  const b = ctx.createBufferSource(), bf = ctx.createBiquadFilter(), bg = ctx.createGain(); b.buffer = noiseBuf; bf.type = kind === 'fric' ? 'highpass' : 'bandpass'; bf.frequency.value = kind === 'fric' ? 4200 : 1800 * v.formant; bf.Q.value = 1;
+  const d = kind === 'fric' ? 0.07 : 0.025; bg.gain.setValueAtTime(0, Math.max(0, a - 0.01)); bg.gain.linearRampToValueAtTime(vol * (kind === 'fric' ? 0.5 : 0.8), a); bg.gain.linearRampToValueAtTime(0, a + d); b.connect(bf); bf.connect(bg); bg.connect(dest); b.start(Math.max(0, a - 0.01), off); b.stop(a + d + 0.02);
+}
 function babble(p, text, delay = 0, gainMul = 1) {
   const v = p.voice || NEUTRAL_VOICE, plan = babblePlan(text, v), ctx = sound?.ctx; if (!ctx || !sound.master || ctx.state === 'closed') return plan.total;
   const t0 = ctx.currentTime + 0.05 + delay, f0 = 120 * v.pitch, vol = Math.min(1, v.volume) * 0.34 * gainMul;
-  const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = f0;
-  const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); lfo.frequency.value = 4.6 + v.vibrato * 2; lfoG.gain.value = f0 * (0.004 + v.vibrato * 0.035); lfo.connect(lfoG); lfoG.connect(osc.frequency);
-  const mix = ctx.createGain(), amp = ctx.createGain(); amp.gain.value = 0; mix.gain.value = 1;
-  const bands = [0, 1, 2].map(i => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = [7, 9, 11][i]; const g = ctx.createGain(); g.gain.value = [1.1, 0.7, 0.35][i]; osc.connect(f); f.connect(g); g.connect(mix); return f; });
-  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 90; mix.connect(hp); hp.connect(amp); amp.connect(sound.master);
-  // breath: noise through a band, mixed in under the same envelope. rough: a fast amplitude flutter plus a little noise.
-  const nodes = [osc, lfo]; let nz = null;
-  if (sound.noiseBuf && (v.breath > 0.03 || v.rough > 0.05)) { nz = ctx.createBufferSource(); nz.buffer = sound.noiseBuf; nz.loop = true; const nb = ctx.createBiquadFilter(); nb.type = 'bandpass'; nb.frequency.value = 2400 * v.formant; nb.Q.value = 0.7; const ng = ctx.createGain(); ng.gain.value = Math.min(1, v.breath * 0.55 + v.rough * 0.3); nz.connect(nb); nb.connect(ng); ng.connect(amp); nodes.push(nz); }
-  if (v.rough > 0.05) { const tr = ctx.createOscillator(), trg = ctx.createGain(); tr.frequency.value = 55 + v.rough * 40; trg.gain.value = v.rough * 0.28 * vol; tr.connect(trg); trg.connect(amp.gain); nodes.push(tr); }
+  const { osc, bands, amp, mix, nodes } = voiceRig(v, f0, vol, ctx, sound.master, sound.noiseBuf);
   for (const s of plan.syl) {
     const a = t0 + s.at, e = a + s.dur, F = VOW[s.vow] || VOW.a, ph = s.at / Math.max(0.01, plan.total);
     const sustain = vol * (s.stress ? 1 : 0.8) * (s.cons === 'nasal' ? 0.75 : 1), contour = 1 + (s.stress ? 0.07 : 0) - ph * 0.08 + (s.end === '?' ? 0.18 : s.end ? -0.1 : 0);
     osc.frequency.setTargetAtTime(f0 * contour, a, 0.025);
     bands.forEach((b, i) => b.frequency.setTargetAtTime(F[i] * v.formant * (v.size > 0.8 ? 0.97 : 1), a, 0.02));
     amp.gain.setTargetAtTime(sustain, a, 0.012); amp.gain.setTargetAtTime(0.0001, Math.max(a + 0.02, e - 0.035), 0.012);
-    if ((s.cons === 'plos' || s.cons === 'fric') && sound.noiseBuf) {   // consonant: a short burst of noise
-      const b = ctx.createBufferSource(), bf = ctx.createBiquadFilter(), bg = ctx.createGain(); b.buffer = sound.noiseBuf; bf.type = s.cons === 'fric' ? 'highpass' : 'bandpass'; bf.frequency.value = s.cons === 'fric' ? 4200 : 1800 * v.formant; bf.Q.value = 1;
-      const d = s.cons === 'fric' ? 0.07 : 0.025; bg.gain.setValueAtTime(0, a - 0.01); bg.gain.linearRampToValueAtTime(vol * (s.cons === 'fric' ? 0.5 : 0.8), a); bg.gain.linearRampToValueAtTime(0, a + d); b.connect(bf); bf.connect(bg); bg.connect(sound.master); b.start(a - 0.01, Math.random()); b.stop(a + d + 0.02);
-    }
+    consonant(s.cons, a, v, vol, ctx, sound.master, sound.noiseBuf);
   }
   const end = t0 + plan.total + 0.1; for (const n of nodes) { n.start(t0 - 0.02); n.stop(end); }
   osc.onended = () => { try { amp.disconnect(); mix.disconnect(); } catch (e) { /* already gone */ } };
   return plan.total;
+}
+
+// ---- Sing (shanty video only: tools/video/choir.js; inert unless the page has ?video=1) ----
+// The babble voice held on melody notes: each syllable gets a note pitch in the singer's own register (octave picked from voice.pitch),
+// its vowel's formants held for the note, portamento between notes, vibrato that eases in on long notes, the person's breath / rough.
+export const SING = typeof location !== 'undefined' && /[?&]video=1\b/.test(location.search);
+const midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+/** notes: [{ at, dur, midi, w }] (seconds, MIDI, sung text) -> [{ at, dur, f, vow, cons, stress }] in the voice's register */
+export function singPlan(notes, voice = NEUTRAL_VOICE, { octave = null } = {}) {
+  const v = voice; let k = octave;
+  if (k == null) { const centre = 120 * v.pitch * 1.6, mid = midiHz(65); k = Math.round(Math.log2(centre / mid)); }   // the tune's middle (F4) moved by octaves toward ~1.6x the speaking pitch
+  return notes.map((n, i) => {
+    const lw = String(n.w || 'a').toLowerCase().replace(/[^a-z]/g, ''), g = lw.match(/[aeiouy]+/), vow = g ? g[0][0] : 'a';
+    return { at: n.at, dur: n.dur, f: midiHz(n.midi) * Math.pow(2, k), vow: vow === 'u' && /^(up|drun|scrub)/.test(lw) ? 'o' : vow, cons: CONS[lw[0]] || (g && g.index > 0 ? 'liq' : ''), stress: i === 0 || n.dur >= 0.4 };
+  });
+}
+/** schedule a sung phrase on ctx (default: the game's Sound engine). opts: { ctx, dest, noiseBuf, gain, jitter (s), detune (cents), octave } -> phrase length (s) */
+export function sing(p, notes, opts = {}) {
+  if (!SING) return 0;
+  const v = p.voice || NEUTRAL_VOICE, ctx = opts.ctx || sound?.ctx, dest = opts.dest || sound?.master, nb = opts.noiseBuf || sound?.noiseBuf; if (!ctx || !dest || !notes.length) return 0;
+  const plan = singPlan(notes, v, opts), det = Math.pow(2, (opts.detune || 0) / 1200), vol = Math.min(1, v.volume) * 0.34 * (opts.gain ?? 1), j = opts.jitter || 0;
+  const f0 = plan[0].f * det, rig = voiceRig(v, f0, vol, ctx, dest, nb, { rate: 4.8 + v.vibrato * 1.6, depth: 0 });
+  const { osc, bands, amp, nodes, lfoG } = rig, t0 = plan[0].at + j, end = plan[plan.length - 1].at + plan[plan.length - 1].dur + j;
+  osc.frequency.setValueAtTime(f0, Math.max(0, t0 - 0.03));
+  for (const s of plan) {
+    const a = s.at + j, e = a + s.dur, F = VOW[s.vow] || VOW.a, f = s.f * det, sustain = vol * (s.stress ? 1 : 0.85) * (s.cons === 'nasal' ? 0.8 : 1);
+    osc.frequency.setTargetAtTime(f, a, 0.028);   // portamento into the note
+    lfoG.gain.setTargetAtTime(0, a, 0.02); if (s.dur > 0.3) lfoG.gain.setTargetAtTime(f * (0.008 + v.vibrato * 0.03), a + 0.18, 0.12);   // vibrato eases in on held notes
+    bands.forEach((b, i) => b.frequency.setTargetAtTime(F[i] * v.formant * (v.size > 0.8 ? 0.97 : 1), a, 0.03));
+    amp.gain.setTargetAtTime(sustain * (s.cons === 'plos' ? 0.5 : 0.75), Math.max(0, a - 0.01), 0.006); amp.gain.setTargetAtTime(sustain, a + 0.02, 0.03);   // a small dip on each syllable's onset
+    amp.gain.setTargetAtTime(sustain * 0.82, a + Math.min(0.5, s.dur * 0.6), 0.25);   // long notes relax a little
+    consonant(s.cons, a, v, vol * 0.7, ctx, dest, nb);
+    void e;
+  }
+  amp.gain.setTargetAtTime(0.0001, end - 0.05, 0.03);
+  for (const n of nodes) { n.start(Math.max(0, t0 - 0.05)); n.stop(end + 0.3); }
+  return end - t0;
 }
 
 // ---- speechSynthesis ----

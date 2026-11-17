@@ -1,5 +1,5 @@
 // The shanty: "What Shall We Do with the Drunken Sailor" (traditional, public domain), ship-flavoured verses written for this video.
-// One source of truth for the audio synth (tools/video/synth.py reads song.json) and the renderer (karaoke captions, jaw motion,
+// One source of truth for the audio (tools/video/choir.js) and the renderer (karaoke captions, jaw motion,
 // shot timing). node tools/video/song.mjs  -> writes tools/video/out/song.json and prints the lyric sheet.
 // Time unit: an eighth note ("e"). 132 bpm quarter -> e = 0.2273 s, a line = 2 bars of 4/4 = 16 e = 3.64 s, a block (4 lines) = 14.55 s.
 import { writeFileSync, mkdirSync } from 'node:fs';

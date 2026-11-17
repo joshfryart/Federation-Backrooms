@@ -7,20 +7,7 @@ export class Sound {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     const ctx = this.ctx = new AC();
-    this.master = ctx.createGain(); this.master.gain.value = this.vol ?? 0.8;
-    // cavernous reverb: everything sounds like an empty hallway
-    const irLen = Math.floor(ctx.sampleRate * 2.6), ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
-    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < irLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.6); }
-    const conv = ctx.createConvolver(); conv.buffer = ir; const wet = ctx.createGain(); wet.gain.value = 0.34;
-    const dry = ctx.createGain(); dry.gain.value = 0.9;
-    this.muffle = ctx.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 20000; this.muffle.connect(ctx.destination);   // inside a Jiffy tube everything outside is muffled (setMuffle)
-    this.master.connect(dry); dry.connect(this.muffle); this.master.connect(conv); conv.connect(wet); wet.connect(this.muffle);
-
-    // noise buffer
-    const len = ctx.sampleRate * 2;
-    this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = this.noiseBuf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this._bus(ctx);
 
     // ship hum
     this.hum = ctx.createGain(); this.hum.gain.value = 0.035; this.hum.connect(this.master);
@@ -86,6 +73,27 @@ export class Sound {
     airlock: { f: 250, q: 0.5, g: 0.012 },
     jefferies: { f: 180, q: 0.5, g: 0.02, t: [48, 0.015, 'sawtooth'], ev: ['clang', 11] },
   };
+  // master -> dry + cavernous reverb -> muffle -> destination, and the shared noise buffer (init, and offline renders)
+  _bus(ctx, wetGain = 0.34, irSecs = 2.6) {
+    this.master = ctx.createGain(); this.master.gain.value = this.vol ?? 0.8;
+    // cavernous reverb: everything sounds like an empty hallway
+    const irLen = Math.floor(ctx.sampleRate * irSecs), ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < irLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.6); }
+    const conv = ctx.createConvolver(); conv.buffer = ir; const wet = ctx.createGain(); wet.gain.value = wetGain;
+    const dry = ctx.createGain(); dry.gain.value = 0.9;
+    this.muffle = ctx.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 20000; this.muffle.connect(ctx.destination);   // inside a Jiffy tube everything outside is muffled (setMuffle)
+    this.master.connect(dry); dry.connect(this.muffle); this.master.connect(conv); conv.connect(wet); wet.connect(this.muffle);
+
+    // noise buffer
+    const len = ctx.sampleRate * 2;
+    this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = this.noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+  // the same engine on an OfflineAudioContext (tools/video renders the shanty with it): bus + noise, no ambience. tone() / noise() /
+  // thud() then schedule at their `delay` in seconds from the start of the render.
+  static offline(ctx, { wet = 0.34, ir = 2.6 } = {}) { const s = new Sound(); s.ctx = ctx; s._bus(ctx, wet, ir); return s; }
+
   setRoom(key) {
     if (!this.ctx || this.roomKey === key) return; this.roomKey = key; const a = Sound.ROOM_AMB[key], t = this.ctx.currentTime;
     this.roomAmb = a || null; this.roomT = 2 + Math.random() * 3;
@@ -175,7 +183,7 @@ export class Sound {
   whir(vol = 0.12) { this.tone(240, 0.8, 'sawtooth', vol, 160); this.tone(120, 0.9, 'square', vol * 0.5, 80); }
   giggle(vol = 0.15) { for (let i = 0; i < 5; i++) this.tone(900 + (i % 2) * 220, 0.08, 'sine', vol, 150, i * 0.1); this.tone(1800, 0.5, 'triangle', vol * 0.3, -600, 0.1); }
   skitter(vol = 0.15) { for (let i = 0; i < 8; i++) this.noise(0.03, vol, 3500 + Math.random() * 1500, 4, 'highpass', i * 0.04); }
-  thud(vol = 0.3) { this.tone(55, 0.25, 'sine', vol, -20); this.noise(0.12, vol * 0.5, 150, 0.7, 'lowpass'); }
+  thud(vol = 0.3, delay = 0) { this.tone(55, 0.25, 'sine', vol, -20, delay); this.noise(0.12, vol * 0.5, 150, 0.7, 'lowpass', delay); }
   klaxon() { for (let i = 0; i < 3; i++) { this.tone(520, 0.35, 'sawtooth', 0.08, 120, i * 0.5); this.tone(380, 0.35, 'square', 0.04, 80, i * 0.5); } }
   // per-alert klaxon / chime patterns (js/alerts.js ALERTS[id].klaxon)
   alertTone(id) {

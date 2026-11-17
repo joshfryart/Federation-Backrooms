@@ -1,8 +1,8 @@
 // Renders the shanty video frame by frame with headless Chromium + the software renderer, resumable, in parallel workers.
 //   (the repo is served to the page by request interception; pass --server to use `python3 -m http.server 8123` instead)
 //   node tools/video/song.mjs               (song.json)
-//   node tools/video/render.mjs cast        (cast.json: who is where, verse leads -> the synth uses their voice types)
-//   python3 tools/video/synth.py            (shanty.wav)
+//   node tools/video/render.mjs cast        (cast.json: who is where, the verse leads)
+//   node tools/video/render.mjs audio       (shanty.wav: the singing, rendered offline by the game audio engine, tools/video/choir.js)
 //   node tools/video/render.mjs frames [--from 0 --to 146 --workers 3 --fps 24 --w 1280 --h 720 --quality low]
 //   node tools/video/render.mjs mux [--out docs/video/shanty.mp4 --from 0 --to 146]
 // Frames go to tools/video/out/frames/f00000.jpg (global frame index = round(t * fps)); existing frames are skipped, so a killed
@@ -53,7 +53,7 @@ async function openPage() {
   if (!argv.includes('--server')) await serveRepo(page);   // files straight from the repo (no http server needed); --server uses one on --port
   page.on('console', m => { if (m.type() === 'error') console.log('console', m.text()); });
   await page.addInitScript(() => { HTMLCanvasElement.prototype.requestPointerLock = function () { return Promise.resolve(); }; try { localStorage.setItem('fb_navtour', '1'); } catch (e) { } });
-  await page.goto(`http://localhost:${PORT}/index.html?brief=0&mode=nominal&video=1`);
+  await page.goto(`http://localhost:${PORT}/index.html?brief=0&mode=nominal&video=1`, { timeout: 300000 });
   await page.waitForFunction(() => window.__game && window.__game.ready, null, { timeout: 300000 }); await page.evaluate(() => __game.ready); await page.evaluate(() => __game.warmed);
   await page.addScriptTag({ type: 'module', url: `http://localhost:${PORT}/tools/video/stage.js` });
   await page.waitForFunction(() => window.__V, null, { timeout: 60000 });
@@ -97,6 +97,27 @@ if (cmd === 'cast') {
   }
   console.log(`worker ${k}: ${done} frames in ${((Date.now() - t0) / 60000).toFixed(1)} min`);
   await browser.close();
+} else if (cmd === 'audio') {   // the singing, rendered in the page by the game's own audio engine (tools/video/choir.js) -> out/shanty.wav
+  // one OfflineAudioContext per song block (+ reverb tail), cached in out/audio/ (resumable), overlap-added here, peak-normalised, 16-bit WAV
+  const E = song.E, cuts = [0, song.intro * E, ...song.blocks.map(b => b.e1 * E)], segs = cuts.map((c, i) => [c, i + 1 < cuts.length ? cuts[i + 1] : DUR]).filter(([a, b]) => b > a);
+  const AD = join(OUT, 'audio'); mkdirSync(AD, { recursive: true }); const segFile = (i) => join(AD, `seg${String(i).padStart(2, '0')}.json`);
+  const todo = segs.map((s, i) => i).filter(i => !existsSync(segFile(i)));
+  if (todo.length) {
+    const t0 = Date.now(), { browser, page } = await openPage();
+    await page.addScriptTag({ type: 'module', url: `http://localhost:${PORT}/tools/video/choir.js` }); await page.waitForFunction(() => window.__CHOIR, null, { timeout: 60000 });
+    for (const i of todo) {
+      const ts = Date.now(), [from, to] = segs[i], r = await page.evaluate(async ({ song, from, to }) => __CHOIR.render(song, { from, to }), { song, from, to });
+      writeFileSync(segFile(i), JSON.stringify(r)); console.log(`segment ${i} ${from.toFixed(2)}-${to.toFixed(2)} s: ${JSON.stringify(r.stats)} in ${((Date.now() - ts) / 1000).toFixed(0)} s`);
+    }
+    console.log(`audio segments in ${((Date.now() - t0) / 60000).toFixed(1)} min`); await browser.close();
+  }
+  const SR = 44100, N = Math.ceil((DUR + 1.5) * SR), L = new Float32Array(N), R = new Float32Array(N);
+  segs.forEach(([from], i) => { const r = JSON.parse(readFileSync(segFile(i), 'utf8')), a = Math.round(from * SR); for (const [ch, out] of [[r.L, L], [r.R, R]]) { const b = Buffer.from(ch, 'base64'), f = new Float32Array(b.buffer, b.byteOffset, b.length / 4); for (let k = 0; k < f.length && a + k < N; k++) out[a + k] += f[k]; } });
+  let pk = 1e-9; for (let k = 0; k < N; k++) pk = Math.max(pk, Math.abs(L[k]), Math.abs(R[k]));
+  const fo = Math.round(1.2 * SR), g = Math.pow(10, -1 / 20) / pk, wav = Buffer.alloc(44 + N * 4);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + N * 4, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(2, 22); wav.writeUInt32LE(SR, 24); wav.writeUInt32LE(SR * 4, 28); wav.writeUInt16LE(4, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(N * 4, 40);
+  for (let k = 0; k < N; k++) { const f = g * Math.min(1, (N - k) / fo); wav.writeInt16LE(Math.round(Math.max(-1, Math.min(1, L[k] * f)) * 32767), 44 + k * 4); wav.writeInt16LE(Math.round(Math.max(-1, Math.min(1, R[k] * f)) * 32767), 46 + k * 4); }
+  writeFileSync(join(OUT, 'shanty.wav'), wav); console.log('wrote out/shanty.wav', (N / SR).toFixed(2), 's, peak before normalising', pk.toFixed(3));
 } else if (cmd === 'stills') {   // node tools/video/render.mjs stills 12.5 30 61.2 ...  -> out/stills/t012.50.jpg (one frame each, for checking)
   const ts = argv.slice(1).filter(a => !a.startsWith('--') && !isNaN(+a)).map(Number), dir = join(OUT, 'stills'); mkdirSync(dir, { recursive: true });
   const { browser, page } = await openPage(); let last = null;
