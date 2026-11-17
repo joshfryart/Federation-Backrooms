@@ -88,13 +88,13 @@ export function singPlan(notes, voice = NEUTRAL_VOICE, { octave = null } = {}) {
 /** schedule a sung phrase on ctx (default: the game's Sound engine). opts: { ctx, dest, noiseBuf, gain, jitter (s), detune (cents), octave } -> phrase length (s) */
 export function sing(p, notes, opts = {}) {
   if (!SING) return 0;
-  const v = p.voice || NEUTRAL_VOICE, ctx = opts.ctx || sound?.ctx, dest = opts.dest || sound?.master, nb = opts.noiseBuf || sound?.noiseBuf; if (!ctx || !dest || !notes.length) return 0;
+  const v0 = p.voice || NEUTRAL_VOICE, v = { ...v0, breath: v0.breath * 0.35 * (opts.breath ?? 1), rough: v0.rough * 0.6 }, ctx = opts.ctx || sound?.ctx, dest = opts.dest || sound?.master, nb = opts.noiseBuf || sound?.noiseBuf; if (!ctx || !dest || !notes.length) return 0;   // sung, the breath / rasp are steadier than in speech (and a crowd of them is a hiss)
   const plan = singPlan(notes, v, opts), det = Math.pow(2, (opts.detune || 0) / 1200), vol = Math.min(1, v.volume) * 0.34 * (opts.gain ?? 1), j = opts.jitter || 0;
   const f0 = plan[0].f * det, rig = voiceRig(v, f0, vol, ctx, dest, nb, { rate: 4.8 + v.vibrato * 1.6, depth: 0 });
-  const { osc, bands, amp, nodes, lfoG } = rig, t0 = plan[0].at + j, end = plan[plan.length - 1].at + plan[plan.length - 1].dur + j;
+  const { osc, bands, amp, nodes, lfoG } = rig, t0 = Math.max(0.05, plan[0].at + j), end = plan[plan.length - 1].at + plan[plan.length - 1].dur + j;
   osc.frequency.setValueAtTime(f0, Math.max(0, t0 - 0.03));
   for (const s of plan) {
-    const a = s.at + j, e = a + s.dur, F = VOW[s.vow] || VOW.a, f = s.f * det, sustain = vol * (s.stress ? 1 : 0.85) * (s.cons === 'nasal' ? 0.8 : 1);
+    const a = Math.max(0.06, s.at + j), e = a + s.dur, F = VOW[s.vow] || VOW.a, f = s.f * det, sustain = vol * (s.stress ? 1 : 0.85) * (s.cons === 'nasal' ? 0.8 : 1);
     osc.frequency.setTargetAtTime(f, a, 0.028);   // portamento into the note
     lfoG.gain.setTargetAtTime(0, a, 0.02); if (s.dur > 0.3) lfoG.gain.setTargetAtTime(f * (0.008 + v.vibrato * 0.03), a + 0.18, 0.12);   // vibrato eases in on held notes
     bands.forEach((b, i) => b.frequency.setTargetAtTime(F[i] * v.formant * (v.size > 0.8 ? 0.97 : 1), a, 0.03));

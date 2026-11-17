@@ -51,3 +51,17 @@ frame range can be (re)rendered on its own.
   quarters); a deck with fewer than 8 people gets off-watch visitors from the busiest deck. Medical stays in sickbay.
 * Bodies are the game's own crew models and clips (`makeSurvivor` + `dressCrew`), posed by an additive layer; no IK, so
   claps are close, not exact.
+
+## This render (ship 1, seed 1)
+
+* `docs/video/shanty.mp4`: 146.4 s, 1280x720, 24 fps, H.264 (crf 25) + AAC 160k, 40.7 MB, -15.8 LUFS integrated.
+* Coverage (`node tools/video/render.mjs mux` -> `out/coverage.json`): all 9 decks; 19 spaces of 16 room types (bridge,
+  holodeck, computer core, sickbay, lounge, mess, atrium, lab, shuttle bay, brig, transporter x2, stores, armory, cargo x2,
+  workshop, engineering x2) plus the turbolift on every deck; 83 of 91 crew on screen singing for at least half a second;
+  all 8 departments. Not on screen: 8 people in rooms the shot list does not visit (gym, quarters, part of deck 3's
+  holodeck, deck 7 cargo, deck 5 stores).
+* Render time (4-core container, software GL): frames 102 min with 3 workers (~1.7 s per frame per worker),
+  audio 3.5 min (11 offline segments), mux 1 min.
+* Rough spots: the lift doors stop short of meeting; deck 9's call close-up is framed half on a louvred wall; the
+  shot list spends 2 bars of every block in the lift; no IK, so claps and mug raises are close, not exact; in the
+  big tall rooms (engineering) the crew read small.

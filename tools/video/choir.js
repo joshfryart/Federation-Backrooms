@@ -28,21 +28,22 @@ async function render(song, { from = 0, to = song.dur, tail = 2.5 } = {}) {
   const phrase = (o, notes, gain, opt = {}) => {
     if (!notes.length || !inSeg(notes[0].at)) return; notes = notes.map(n => ({ ...n, at: sh(n.at) }));
     const h = habit.get(o.p.id), pan = ctx.createStereoPanner(); pan.pan.value = opt.pan ?? h.pan; pan.connect(snd.master);
-    sing(o.p, notes, { ctx, dest: pan, noiseBuf: snd.noiseBuf, gain, jitter: opt.jitter ?? h.late, detune: opt.det ?? h.det });
+    sing(o.p, notes, { ctx, dest: pan, noiseBuf: snd.noiseBuf, gain, jitter: opt.jitter ?? h.late, detune: opt.det ?? h.det, breath: opt.breath ?? 0 });   // a crowd's breath noise sums to a hiss: only the soloist breathes audibly
     stats.phrases++; stats.singers.add(o.p.id);
   };
   for (const line of song.lines) {
     const blk = song.blocks[line.block], deck = blk ? blk.deck : null, notes = song.notes.filter(n => n.block === line.block && n.li === line.li && !!n.tag === !!line.tag);
     const mel = notes.map(n => ({ at: n.e * E, dur: n.n * E * 0.97, midi: n.midi, w: n.w }));
     if (line.part === 'lead') {   // the call: the deck's senior officer alone, a little forward and centred
-      const L = people.find(o => o.p.id === V.leads[line.block]?.id); if (L) phrase(L, mel, 2.4, { pan: 0, jitter: 0, det: 0 });
+      const L = people.find(o => o.p.id === V.leads[line.block]?.id); if (L) phrase(L, mel, 2.4, { pan: 0, jitter: 0, det: 0, breath: 1 });
       continue;
     }
     const chorus = !blk || blk.kind === 'chorus' || line.tag;
     const voices = deck == null ? people : [...people.filter(o => o.deckNo === deck), ...(chorus ? section(deck) : [])];
     for (const o of voices) {
       const onDeck = deck == null || o.deckNo === deck;   // verses: the deck's crew; choruses and the tag: the whole ship (the deck on screen forward)
-      const gain = (onDeck ? 0.62 : 0.4) * (line.tag ? 1.15 : 1);
+      const nDeck = voices.filter(q => deck == null || q.deckNo === deck).length;
+      const gain = (onDeck ? 0.62 * Math.min(1, Math.sqrt(10 / nDeck)) : 0.3) * (line.tag ? 1.15 : 1);   // a crowd gets louder, not 9x louder
       // low male voices take the chord roots in the choruses (a bass line under the tune)
       const bass = chorus && !female(o.p) && (o.p.voice?.pitch ?? 1) < 0.9;
       const notesFor = bass ? notes.map(n => ({ at: n.e * E, dur: n.n * E * 0.97, midi: ROOT[chordAt(n.e)] + 12, w: n.w })) : mel;
@@ -50,7 +51,7 @@ async function render(song, { from = 0, to = song.dur, tail = 2.5 } = {}) {
     }
   }
   // squeezebox: oom-pah on the chords (root on the beat, the triad on the off-beat), the tune in the intro, a held chord at the end
-  const reed = (m, t, dur, vol) => { if (!inSeg(t)) return; t = sh(t); const f = 440 * Math.pow(2, (m - 69) / 12); snd.tone(f, dur, 'sawtooth', vol, 0, t); snd.tone(f * 1.004, dur, 'square', vol * 0.45, 0, t); };
+  const reed = (m, t, dur, vol) => { if (!inSeg(t)) return; t = sh(t); const f = 440 * Math.pow(2, (m - 69) / 12); snd.tone(f, dur, 'sawtooth', vol * 2.2, 0, t); snd.tone(f * 1.004, dur, 'square', vol * 1.0, 0, t); };
   const thud = (vol, t) => { if (inSeg(t)) snd.thud(vol, sh(t)); }, noise = (d, v, f, q, ty, t) => { if (inSeg(t)) snd.noise(d, v, f, q, ty, sh(t)); };
   for (const c of song.chords) {
     for (let b = 0; b < c.n / 2; b++) {
@@ -66,7 +67,7 @@ async function render(song, { from = 0, to = song.dur, tail = 2.5 } = {}) {
   const leadSpans = song.lines.filter(l => l.part === 'lead').map(l => [l.e0, l.e0 + 16]);
   for (let e = 0; e < song.tagE; e += 2) {
     const beat = (e / 2) % 4, t = e * E, solo = leadSpans.some(([a, b]) => e >= a && e < b);
-    if (beat === 0 || beat === 2) for (let k = 0; k < (solo ? 3 : 6); k++) thud((beat === 0 ? 0.11 : 0.08), Math.max(0, t + (hashN('st', e, k) - 0.5) * 0.03));
+    if (beat === 0 || beat === 2) for (let k = 0; k < (solo ? 3 : 6); k++) thud((beat === 0 ? 0.16 : 0.12), Math.max(0, t + (hashN('st', e, k) - 0.5) * 0.03));
     else if (!solo && e >= 8) for (let k = 0; k < 8; k++) { const d = Math.max(0, t + (hashN('cl', e, k) - 0.5) * 0.025); noise(0.05, 0.05, 1300 + hashN('cf', e, k) * 900, 1.3, 'bandpass', d); noise(0.1, 0.018, 900, 0.8, 'bandpass', d + 0.004); }
   }
   for (let k = 0; k < 10; k++) thud(0.16, (song.endE - 4) * E + (hashN('fin', k) - 0.5) * 0.03);

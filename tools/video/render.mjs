@@ -12,6 +12,7 @@ import { mkdirSync, existsSync, writeFileSync, readFileSync, readdirSync, statSy
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { buildSong } from './song.mjs';
 import { shotList } from './shots.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, '..', '..'), OUT = join(HERE, 'out');
@@ -100,7 +101,8 @@ if (cmd === 'cast') {
 } else if (cmd === 'audio') {   // the singing, rendered in the page by the game's own audio engine (tools/video/choir.js) -> out/shanty.wav
   // one OfflineAudioContext per song block (+ reverb tail), cached in out/audio/ (resumable), overlap-added here, peak-normalised, 16-bit WAV
   const E = song.E, cuts = [0, song.intro * E, ...song.blocks.map(b => b.e1 * E)], segs = cuts.map((c, i) => [c, i + 1 < cuts.length ? cuts[i + 1] : DUR]).filter(([a, b]) => b > a);
-  const AD = join(OUT, 'audio'); mkdirSync(AD, { recursive: true }); const segFile = (i) => join(AD, `seg${String(i).padStart(2, '0')}.json`);
+  const AD = join(OUT, 'audio'); mkdirSync(AD, { recursive: true }); const ver = createHash('sha1').update(['tools/video/choir.js', 'js/speech.js', 'js/audio.js', 'tools/video/song.mjs'].map(f => readFileSync(join(ROOT, f), 'utf8')).join('|') + JSON.stringify(JSON.parse(readFileSync(join(OUT, 'cast.json'), 'utf8')).leads)).digest('hex').slice(0, 8);
+  const segFile = (i) => join(AD, `seg${String(i).padStart(2, '0')}-${ver}.json`);   // cache keyed by the sources: an edit re-renders
   const todo = segs.map((s, i) => i).filter(i => !existsSync(segFile(i)));
   if (todo.length) {
     const t0 = Date.now(), { browser, page } = await openPage();
