@@ -98,6 +98,12 @@ const gen = (() => {
   return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen };
 })();
 console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
+{ // liminal twins (opts.liminal): two identically furnished rooms, every chip and the exit still reachable; catwalks and atria generate
+  const { generate: gen2 } = await import('../js/gen.js'); let n = 0, bad = 0, twins = 0, catwalks = 0, atria = 0;
+  for (let d = 2; d < 11; d++) for (let s = 1; s <= 40; s++) { const g = gen2(d, s * 31, { liminal: true, weights: { atrium: 2, lounge: 3, lab: 3, quarters: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }); n++; if (g.rooms.some(r => r.twin)) twins++; catwalks += g.props.filter(p => p.kind === 'catwalk').length; atria += g.rooms.filter(r => r.type === 'atrium').length;
+    if (g.chips.some(c => !(g.dist[(c.x ?? c[0]) + (c.y ?? c[1]) * g.W] >= 0))) bad++; }
+  console.log(`liminal: ${n} decks, ${twins} with twin rooms, ${catwalks} catwalks, ${atria} atria, ${bad} with unreachable chips`); if (bad || !twins || !catwalks || !atria) fail('liminal / tall rooms');
+}
 });
 S('ship-decks', null, async () => {   // every deck of every ship generates, ship-level rooms exist per shipPlan (js/gen.js in node)
 const shipTest = (() => {

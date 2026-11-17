@@ -250,6 +250,17 @@ export function generate(deck, seed, opts = {}) {
     // mezzanine: tall rooms (world.js TALL_H) get catwalk modules along the walls, 2.6 m up, reached by grapple or mantle from a neighbouring prop; own random stream
     if ((r.big || r.type === 'atrium') && (r.type === 'shuttlebay' || r.type === 'cargo' || r.type === 'engineering' || r.type === 'arboretum' || r.type === 'mess' || r.type === 'atrium')) { const n = r.type === 'shuttlebay' ? 2 : 3; for (let i = 0; i < n; i++) ringPut(r, 'catwalk', { along: true, free: true }); }
   }
+  // liminal (opts.liminal, madness mode from deck 3): two rooms of one type and size are furnished identically, so walking into the second feels like the first again.
+  // Only plain rooms (no ship hardware): B's props are removed and A's re-placed through safePut, so reachability rules still hold.
+  if (opts.liminal && deck >= 2) {
+    const OK = new Set(['lounge', 'lab', 'gym', 'quarters', 'stores', 'laundry', 'cargo', 'workshop']);
+    outer: for (const A of rooms) { if (!OK.has(A.type) || A.required) continue; for (const B of rooms) {
+      if (B === A || B.type !== A.type || B.w !== A.w || B.h !== A.h || B.required) continue;
+      const srcP = props.filter(p => inRect(A, p.tx, p.ty)); if (!srcP.length) continue;
+      for (let i = props.length - 1; i >= 0; i--) if (inRect(B, props[i].tx, props[i].ty)) { grid[props[i].ty][props[i].tx] = 0; props.splice(i, 1); }
+      for (const p of srcP) { const { kind, tx, ty, rot, ...rest } = p; delete rest.front; safePut(B, tx - A.x + B.x, ty - A.y + B.y, kind, { ...rest, rot }); }
+      B.twin = A.type + '@' + A.x + ',' + A.y; break outer; } }
+  }
   // connectivity safety: a tile put as prop must not isolate things. Verify below.
 
   // BFS helpers on generated grid
