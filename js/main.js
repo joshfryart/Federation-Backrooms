@@ -921,7 +921,7 @@ G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
 G.glitch = (sec) => { G.glitchT = sec; };
 // a latched clinger must never outlive the moment: death, deck change and new runs all drop it and its overlay
-function releaseCling() { P.clung = 0; P.clungMax = 0; const c = $('clung'); if (c) { c.style.opacity = 0; c.style.transform = ''; } const b = $('clungbar'); if (b) b.style.width = '100%'; }
+function releaseCling() { P.hidden = null; { const o = $('hidefx'); if (o) o.style.opacity = 0; } P.clung = 0; P.clungMax = 0; const c = $('clung'); if (c) { c.style.opacity = 0; c.style.transform = ''; } const b = $('clungbar'); if (b) b.style.width = '100%'; }
 G.clingOn = (c) => { G.director?.bump(0.3, 'face-hugged'); P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
 G.dragDown = (e) => { G.director?.bump(0.2, 'dragged down'); const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9 * G.fx.knockMul; P.kbz = -dz / d * 9 * G.fx.knockMul; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
 G.hitPlayer = (gorn, dmg) => {
@@ -1019,7 +1019,13 @@ function dutyHere() {
   const near = (spot) => !spot || ['door', 'corridor', 'lift', 'any', 'post'].includes(spot) || world.d.props.some(p => p.kind === spot && Math.hypot(world.center(p.tx, p.ty)[0] - P.x, world.center(p.tx, p.ty)[1] - P.z) < 3.6) || !world.d.props.some(p => p.kind === spot && world.d.room[p.ty]?.[p.tx] === room);
   return D.loops.find(l => l.state === 'due' && l.room === room && near(l.spot)) || D.tasks.find(t => t.state === 'active' && t.room === room && near(t.spot)) || null;
 }
+// hiding (madness mode): E on a rack / drawer bank / shelving within reach while crouched crouches you behind it. Hunters only spot a hidden player within 1.8 m, ignore her noise, and lose the chase. Moving or E steps out.
+const HIDE_KINDS = new Set(['suitrack', 'drawers', 'shelving', 'weaponrack', 'tank']);
+function enterHide(lp) { P.hidden = { tx: lp.tx, ty: lp.ty }; P.vx = P.vz = 0; G.say('You crouch out of sight. Hunters only find you up close. [E] or move to step out.', 'good'); const o = $('hidefx'); if (o) o.style.opacity = 1; for (const g of gorns) if (g.state === S.CHASE && Math.hypot(g.x - P.x, g.z - P.z) > 3.5) { g.state = S.SEARCH; g.timer = 6; } }
+function exitHide() { if (!P.hidden) return; P.hidden = null; const o = $('hidefx'); if (o) o.style.opacity = 0; }
 function interact() {
+  if (P.hidden) { exitHide(); return; }
+  if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && (P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft)) { enterHide(lp); return; } }
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
   if (NOM() && G.combat?.interact()) return;   // the armory arms locker (draw a phaser) / someone knocked down or in a fight (js/grapple.js)
@@ -1166,6 +1172,7 @@ function step(dt, t) {
   // movement
   let fx = 0, fz = 0;
   if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
+  if (P.hidden) { fx = fz = 0; if (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || pressed.jump) exitHide(); }   // hiding: stand still; any move key steps out
   const moving = fx || fz;
   P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
   movePlayer(dt, P, world, { fx, fz, sprint: !!(keys.ShiftLeft || keys.ShiftRight), crouch: !!(keys.KeyC || keys.ControlLeft), crouchPressed: pressed.crouch, jump: pressed.jump && !(P.clung > 0), grappleCancel: pressed.grappleCancel }, moveApi);
