@@ -228,6 +228,7 @@ export function generate(deck, seed, opts = {}) {
       case 'lab': for (const [x, y] of interior) if (x === cx && y === cy) put(x, y, 'charttable', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); else if ((x + y) % 2 === 0) put(x, y, (x + y) % 4 === 0 ? 'console' : 'labbench');   // SCI-3 chart table at the centre
         for (const k of ['spectrometer', 'sensorstation', 'fumehood']) wallPut(r, interior, k); ringPut(r, 'samplefridge', { only: 'corner', free: true }); ringPut(r, 'specimen_tank'); break;   // SCI-4, SCI-8, SCI-2, SCI-9, SCI-5 on the walls
       case 'laundry': put(cx, cy, 'washer'); wallPut(r, interior, 'dryer'); ringPut(r, 'folding_table', { corner: true, free: true }); ringPut(r, 'linen_cart', { only: 'corner', free: true }); break;   // SVC-15
+      case 'atrium': { put(cx, cy, 'tree'); for (const [x, y] of interior) if (grid[y][x] === 0 && (x + y) % 3 === 0 && !(x === cx && y === cy)) put(x, y, (x + y) % 2 ? 'plant' : 'tree'); ringPut(r, 'sofa', { along: true }); ringPut(r, 'sofa', { along: true }); break; }   // garden court under a 5.6 m ceiling
       case 'lounge': ringPut(r, 'bar'); wallPut(r, interior, 'arcade');   // SVC-3 bar (+ back bar) on one wall, SVC-16 games
         if (interior.length >= 3) safePut(r, cx, cy, 'pool_table', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); if (interior.length >= 5) anyPut(r, interior, 'card_table', { min: [cx, cy, 2] });
         for (const [x, y] of interior) if (grid[y][x] === 0 && (x + y) % 2 === 0) safePut(r, x, y, (x * 3 + y) % 4 === 0 ? 'table' : (x + 2 * y) % 3 === 0 ? 'lonechair' : 'sofa'); break;
@@ -247,7 +248,7 @@ export function generate(deck, seed, opts = {}) {
       case 'washroom': put(cx, cy, 'sinkunit'); break;
     }
     // mezzanine: tall rooms (world.js TALL_H) get catwalk modules along the walls, 2.6 m up, reached by grapple or mantle from a neighbouring prop; own random stream
-    if (r.big && (r.type === 'shuttlebay' || r.type === 'cargo' || r.type === 'engineering' || r.type === 'arboretum' || r.type === 'mess')) { const n = r.type === 'shuttlebay' ? 2 : 3; for (let i = 0; i < n; i++) ringPut(r, 'catwalk', { along: true, free: true }); }
+    if ((r.big || r.type === 'atrium') && (r.type === 'shuttlebay' || r.type === 'cargo' || r.type === 'engineering' || r.type === 'arboretum' || r.type === 'mess' || r.type === 'atrium')) { const n = r.type === 'shuttlebay' ? 2 : 3; for (let i = 0; i < n; i++) ringPut(r, 'catwalk', { along: true, free: true }); }
   }
   // connectivity safety: a tile put as prop must not isolate things. Verify below.
 

@@ -48,6 +48,7 @@ export const ICONS = {
   morgue: 'M4 5h16v14H4z M4 12h16 M10 8.5h4 M10 15.5h4',
   datacore: 'M4 4h16v6H4z M4 14h16v6H4z M7 7h.01 M7 17h.01 M11 7h6 M11 17h6',
   stores: 'M4 3v18 M20 3v18 M4 9h16 M4 15h16 M7 6h4 M13 12h4 M7 18h5',
+  atrium: 'M12 3c-4 3-6 6-6 9a6 6 0 0 0 12 0c0-3-2-6-6-9zm0 6v12',
   washroom: 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z',
   airlock: 'M6 21V8a6 6 0 0 1 12 0v13z M12 8v5 M9 13h6',
   jefferies: 'M4 9h16 M4 15h16 M4 9a3 3 0 0 0 0 6 M20 9a3 3 0 0 1 0 6',

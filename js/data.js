@@ -27,6 +27,7 @@ export const ROOMS = {
   morgue:      { label: 'Morgue',            floor: 0x70828a, weight: 0, size: [3, 3] },
   datacore:    { label: 'Computer Core',     floor: 0x384660, weight: 0, size: [3, 5] },
   stores:      { label: 'Stores',            floor: 0x655e4c, weight: 0, size: [3, 5] },
+  atrium:      { label: 'Atrium',            floor: 0x5f7060, weight: 0, size: [5, 7] },   // tall (5.6 m) garden court, Habitat only (ships.js); catwalk mezzanine, trees and benches
   washroom:    { label: 'Washroom',          floor: 0x7a9098, weight: 0, size: [3, 3] },
   airlock:     { label: 'EVA Prep',          floor: 0x555a60, weight: 0, size: [3, 3] },
   jefferies:   { label: 'Jiffy Tube',          floor: 0x3a3d42, weight: 0, size: [1, 1] },   // crawl ducts; carved by generate(), never rolled as a room

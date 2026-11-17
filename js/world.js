@@ -16,7 +16,7 @@ installIcons();   // U-1 / U-2: the handheld glyphs and the flight / operations 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
 export const TALL_H = 5.6;  // ceiling of a tall room (big shuttlebay / cargo / engineering / arboretum)
-export const TALL_TYPES = new Set(['shuttlebay', 'cargo', 'engineering', 'arboretum', 'mess']);   // big variants only (mess = the galley hall)
+export const TALL_TYPES = new Set(['shuttlebay', 'cargo', 'engineering', 'arboretum', 'mess', 'atrium']);   // big variants only (mess = the galley hall)
 const JUNCTION_FACES = 21;   // one per ship system (js/crew.js SYSTEMS): wall faces kept bare for repair junctions
 export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
 export const TUBE_UP = 1.7; // floor height of a tube's upper run (reached by ladder)
@@ -560,7 +560,7 @@ export class World {
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
     this.tall = new Uint8Array(this.W * this.H);   // 1 = tile of a tall room (ceiling TALL_H)
-    for (const r of data.rooms || []) if (r.big && TALL_TYPES.has(r.type)) for (let ty = r.y; ty < r.y + r.h; ty++) for (let tx = r.x; tx < r.x + r.w; tx++) if (data.room[ty]?.[tx] === r.type) this.tall[tx + ty * this.W] = 1;
+    for (const r of data.rooms || []) if ((r.big || r.type === 'atrium') && TALL_TYPES.has(r.type)) for (let ty = r.y; ty < r.y + r.h; ty++) for (let tx = r.x; tx < r.x + r.w; tx++) if (data.room[ty]?.[tx] === r.type) this.tall[tx + ty * this.W] = 1;
     this.under = {};   // prop tiles you can walk under (catwalk decks): no collision below the deck
     this.tops = {}; this.propExt = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
     OWN = this.own = [];

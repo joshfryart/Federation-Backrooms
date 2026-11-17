@@ -79,6 +79,7 @@ export class Sound {
     armory: { f: 500, q: 0.8, g: 0.004 },
     mess: { f: 700, q: 0.6, g: 0.012, ev: ['clang', 12] },
     lounge: { f: 500, q: 0.5, g: 0.008 },
+    atrium: { f: 380, q: 0.4, g: 0.01, ev: ['drip', 3.5] },
     quarters: { f: 350, q: 0.6, g: 0.004 },
     workshop: { f: 900, q: 0.7, g: 0.008, ev: ['zap', 12] },
     transporter: { f: 1000, q: 1.2, g: 0.006, t: [220, 0.008, 'sine'] },

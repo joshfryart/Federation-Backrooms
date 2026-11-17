@@ -16,7 +16,7 @@ const D8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]
 export const ROOM_CAT = {
   bridge: 'command', readyroom: 'command', datacore: 'science', lab: 'science', arboretum: 'science', sickbay: 'medical', morgue: 'medical',
   engineering: 'engineering', workshop: 'engineering', plant: 'engineering', airlock: 'engineering', jefferies: 'engineering',
-  quarters: 'crew', lounge: 'crew', gym: 'crew', washroom: 'crew', lift: 'crew',
+  quarters: 'crew', lounge: 'crew', atrium: 'crew', gym: 'crew', washroom: 'crew', lift: 'crew',
   mess: 'services', holodeck: 'services', transporter: 'services', laundry: 'services', stores: 'services', shuttlebay: 'services', cargo: 'services',
   armory: 'security', brig: 'security',
 };
