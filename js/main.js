@@ -120,7 +120,7 @@ function screenSplat(n, persist = false) {
 }
 function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e => e.remove()); }
 
-const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high' }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
+const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high', calm: false }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
 function setQuality(q) {
@@ -156,7 +156,7 @@ G.say = function (msg, cls = '') {
 };
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('show', s.id === id); }
 function hideScreens() { for (const s of document.querySelectorAll('.screen')) s.classList.remove('show'); }
-function flash(color = '#c00', op = 0.6) { const f = $('flash'); f.style.background = color; f.style.transition = 'none'; f.style.opacity = op; requestAnimationFrame(() => { f.style.transition = 'opacity .5s'; f.style.opacity = 0; }); }
+function flash(color = '#c00', op = 0.6) { if (CFG.calm) op *= 0.3; const f = $('flash'); f.style.background = color; f.style.transition = 'none'; f.style.opacity = op; requestAnimationFrame(() => { f.style.transition = 'opacity .5s'; f.style.opacity = 0; }); }
 function fade(to, ms = 700) { const f = $('fade'); f.style.transition = `opacity ${ms}ms`; f.style.opacity = to; }
 
 function updateHUD() {
@@ -191,7 +191,7 @@ function saveDeckState() {
 }
 
 function loadDeck(n) {
-  saveDeckState();
+  saveDeckState(); releaseCling();
   clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
   resetMover(P); rope.visible = hook.visible = false;
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
@@ -744,6 +744,7 @@ function summaryHTML(title, lead) {
     <h4>Crew opinion of you</h4><div>${Math.round(sm.trust * 100)}% trust · ${sm.stats.caught} times caught · ${sm.stats.orders} orders (${sm.stats.refused} refused) · ${sm.stats.delegated} delegated</div>`;
 }
 function nomDie(cause) {
+  releaseCling();
   if (G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomdead'; document.exitPointerLock?.(); sound.death?.(); G.hp = 0; $('danger').style.opacity = 0;
   const old = G.player; old.status = 'dead'; G.duty.chain.push(`${old.short} (${old.title}) died: ${cause}`);
   const near = G.roster.people.filter(p => !p.isPlayer && !['dead', 'corpse', 'crazed', 'evacuated'].includes(p.status));
@@ -824,6 +825,7 @@ let DUTIES = { billets: {} };
 async function loadDuties() { try { DUTIES = await (await fetch('./assets/data/duties.json')).json(); } catch (e) { console.warn('duties not loaded', e); } return DUTIES; }
 
 function newRun() {
+  releaseCling();
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: G.forceSeed ?? Math.floor(Math.random() * 1e6) });   // G.forceSeed: tools/test.mjs seed-set smoke runs
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
@@ -894,7 +896,7 @@ function choosePerk(id) {
 function fmtTime(s) { s |= 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 function die(by, line = null) {
-  G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
+  releaseCling(); G.phase = 'dying'; G.dyingT = 0; sound.death(); document.exitPointerLock?.();
   bloodBurst(P.x, 1.0, P.z, 120, 5); for (let i = 0; i < 6; i++) decals.floor('blood', P.x + (Math.random() - 0.5) * 2, P.z + (Math.random() - 0.5) * 2, 1.2 + Math.random(), 1);
   screenSplat(14, true); sound.roar(0.35); by.roar = 1.5; $('danger').style.opacity = 1; $('prompt').textContent = '';
   const deckReached = G.deck;
@@ -912,6 +914,8 @@ G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
 G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };
 G.glitch = (sec) => { G.glitchT = sec; };
+// a latched clinger must never outlive the moment: death, deck change and new runs all drop it and its overlay
+function releaseCling() { P.clung = 0; P.clungMax = 0; const c = $('clung'); if (c) { c.style.opacity = 0; c.style.transform = ''; } const b = $('clungbar'); if (b) b.style.width = '100%'; }
 G.clingOn = (c) => { G.director?.bump(0.3, 'face-hugged'); P.clung = 4.5; P.clungMax = 4.5; G.say('SOMETHING IS ON YOUR FACE! Mash E to tear it off!', 'warn'); $('clung').style.opacity = 1; sound.squelch(); G.hp -= 6; flash('#600', 0.5); bloodBurst(P.x, 1.5, P.z, 20, 2); if (G.hp <= 0) die(c); };
 G.dragDown = (e) => { G.director?.bump(0.2, 'dragged down'); const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; P.kbx = -dx / d * 9 * G.fx.knockMul; P.kbz = -dz / d * 9 * G.fx.knockMul; P.vy = 2; P.grounded = false; if (P.mode !== 'grapple') P.mode = 'air'; P.shake = 0.5; G.hp -= 6; flash('#c00', 0.4); sound.hit(); G.say(e.name + ' drags you down!', 'warn'); updateHUD(); if (G.hp <= 0) die(e); };
 G.hitPlayer = (gorn, dmg) => {
@@ -943,7 +947,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyX' && G.kit) G.kit.useJob();
     if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
-    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); } else interact(); }
+    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); const m = $('clungmash'); if (m) { m.style.transform = 'scale(1.35)'; setTimeout(() => { m.style.transform = 'scale(1)'; }, 70); } } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
@@ -961,6 +965,8 @@ function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
 $('qsel').onchange = (e) => setQuality(e.target.value);
+post.setCalm(CFG.calm);
+{ const cl = $('calm'); if (cl) { cl.checked = !!CFG.calm; cl.onchange = (e) => { CFG.calm = e.target.checked; post.setCalm?.(CFG.calm); saveCfg(); }; } }
 $('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(G.player, 'Crew voice check.'); };
 $('vsel').value = voiceMode(); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
 if (CFG.quality === 'low') setQuality('low');
@@ -1165,6 +1171,7 @@ function step(dt, t) {
   const legs = perk('legs');
   if (P.sprint && P.grounded) G.stamina -= dt * (20 - legs * 3.5) * (1 - P.flow * 0.35); else if (P.mode === 'wallrun' || P.mode === 'grapple' || P.mode === 'mantle') { } else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2) * G.fx.staminaRegen);
   if (G.stamina < 0) G.stamina = 0;
+  if (P.clung > 0) { const cb = $('clungbar'); if (cb) cb.style.width = Math.max(0, P.clung / (P.clungMax || 4.5) * 100) + '%'; }
   if (P.clung > 0) { P.clung -= dt; G.hp -= 2.5 * dt; $('clung').style.transform = `translate(${(Math.random() - 0.5) * 6}px,${(Math.random() - 0.5) * 6}px)`; if (P.clung <= 0) { $('clung').style.opacity = 0; G.say('You tear it off and hurl it away!', 'good'); bloodBurst(P.x, 1.5, P.z, 25, 3); if (G.hp <= 0) { die(gorns.find(g => g.kind === 'clinger') || gorns[0]); return; } } updateHUD(); }
   if (G.glitchT > 0) G.glitchT -= dt;
 
@@ -1236,6 +1243,7 @@ function step(dt, t) {
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
         H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
         if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) { fidgetStep(e, dt, d); wearStep(e, dt, d, G, world); } }   // impostors never blink
+        if (e.fake && d < 5) { e.tellT = (e.tellT ?? 2 + Math.random() * 3) - dt; if (e.tellT <= 0) { e.tellT = 3.5 + Math.random() * 3; sound.tell?.(); } }   // impostor tell: a faint wet tick, only heard up close
         H.update(dt * (e.fake ? 0.82 : 1));
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
@@ -1313,13 +1321,13 @@ function step(dt, t) {
   if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
     { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play' && !NOM(); }
   // camera
-  P.shake = Math.max(0, P.shake - dt * 1.5);
+  P.shake = Math.max(0, P.shake - dt * 1.5); const shakeK = CFG.calm ? 0.2 : 1;
   const onFoot = P.grounded && P.mode !== 'slide';
   const bobY = onFoot ? Math.sin(P.bob * 2.2) * (0.04 + P.flow * 0.02) * Math.min(1, speedNow / 3) : 0;
   const dip = Math.sin(Math.min(1, P.land) * Math.PI) * 0.14 * Math.min(1, P.land * 2);
   camera.position.set(P.x, P.y + P.eye + bobY - dip, P.z);
   camera.rotation.order = 'YXZ';
-  camera.rotation.set(P.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * 0.05, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * 0.05, P.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
+  camera.rotation.set(P.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * 0.05 * shakeK, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * 0.05 * shakeK, P.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
   const fovT = 75 + Math.max(0, Math.min(1, (speedNow - 3.6) / 6)) * 15 + (P.mode === 'grapple' ? 7 : 0) + (P.mode === 'slide' ? 4 : 0);
   camera.fov += (fovT - camera.fov) * Math.min(1, dt * 5); camera.updateProjectionMatrix();
   $('grap').className = P.mode === 'grapple' ? 'on' : P.grapCd > 0 ? 'cd' : ''; $('grap').firstElementChild.style.width = (100 - Math.min(1, P.grapCd / MOVE.grapCooldown) * 100) + '%';

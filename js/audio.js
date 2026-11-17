@@ -191,6 +191,7 @@ export class Sound {
   clang(vol = 0.25) { this.tone(160 + Math.random() * 80, 0.9, 'triangle', vol, -60); this.noise(0.3, vol * 0.6, 900, 4, 'bandpass'); }
   zap() { this.noise(0.25, 0.22, 2500, 1.5, 'bandpass'); this.tone(1200, 0.12, 'sawtooth', 0.06, -900); }
   chirp() { this.tone(1760, 0.07, 'sine', 0.1); this.tone(2349, 0.09, 'sine', 0.1, 0, 0.08); }
+  tell() { this.noise(0.12, 0.05, 700, 6, 'bandpass', 0.02); }   // Slimeling impostor tell: quiet wet tick
   squelch() { this.noise(0.35, 0.4, 400, 2, 'lowpass'); this.noise(0.2, 0.25, 1500, 3, 'bandpass', 0.05); }
   breath(vol = 0.12) { this.noise(0.45, vol, 900, 0.5, 'bandpass'); }
   setVolume(v) { if (this.master) this.master.gain.value = v; this.vol = v; }
