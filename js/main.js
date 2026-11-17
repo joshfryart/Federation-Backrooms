@@ -79,6 +79,8 @@ post = new Post(renderer, scene, camera, { scene: vmScene, camera: vmCam });
 const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
 const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
+const smoke = new Particles(scene, 220, { size: 1.3, opacity: 0.2, gravity: 0.05, drag: 0.6 });   // alert smoke (fire / contamination / abandon): dark haze pooling under the ceiling near the player
+const SMOKE_COL = new THREE.Color(0x2a2724);
 const decals = new Decals(scene);
 const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
@@ -192,7 +194,7 @@ function saveDeckState() {
 
 function loadDeck(n) {
   saveDeckState(); releaseCling();
-  clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); clearSplats();
+  clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); smoke.clear(); clearSplats();
   resetMover(P); rope.visible = hook.visible = false;
   G.deck = n; G.chips = 0; G.deckTime = 0; G.shield = !!perk('shield');
   ship = G.ship;
@@ -1287,7 +1289,7 @@ function step(dt, t) {
   lamp.intensity = 9 * (0.15 + 0.85 * world.powerAmt);
 
   // particles & ambient events
-  blood.update(dt); sparks.update(dt); steam.update(dt); water.update(dt); dust.update(dt, P.x, P.z, camera, P.torch);
+  blood.update(dt); sparks.update(dt); steam.update(dt); smoke.update(dt); water.update(dt); dust.update(dt, P.x, P.z, camera, P.torch);
   updatePanelLights(dt);
   // rolling blackouts: the hum stops, the lights die, something is still walking
   if (G.blackout > 0) { G.blackout -= dt; if (G.blackout <= 0) { world.setPower(true); sound.setPower(true); sound.powerUp(); } }
@@ -1308,6 +1310,10 @@ function step(dt, t) {
       if (d < 22) { for (let i = 0; i < 14; i++) sparks.add(sp.x, 1.1, sp.z, (Math.random() - 0.5) * 3, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3, SPARK, 0.5 + Math.random() * 0.5); if (d < 14) sound.zap(); }
     }
   }
+  { const top = G.comms?.alerts?.top?.(), id = top?.def?.id;   // smoke only under alerts that mean smoke; the closer to the player the denser
+    if (top && (id === 'fire' || id === 'contamination' || id === 'abandon_ship' || id === 'hull_breach') && world && Math.random() < dt * 16) {
+      const a = Math.random() * 6.283, r = 3 + Math.random() * 11, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r, [tx, ty] = world.tile(x, z);
+      if (!world.solid(tx, ty)) smoke.add(x, world.ceilAt(tx, ty) - 0.4, z, (Math.random() - 0.5) * 0.5, -0.05 - Math.random() * 0.1, (Math.random() - 0.5) * 0.5, SMOKE_COL, 5 + Math.random() * 3); } }
   for (const st of world.steamers) {
     st.t -= dt;
     if (st.t <= 0 && Math.hypot(st.x - P.x, st.z - P.z) < 20) { st.t = 0.08; steam.add(st.x, 0.3, st.z, (Math.random() - 0.5) * 0.4, 1.2 + Math.random(), (Math.random() - 0.5) * 0.4, STEAM, 2.2); }
