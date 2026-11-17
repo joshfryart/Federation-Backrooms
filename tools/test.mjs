@@ -428,6 +428,18 @@ const tj = await page.evaluate(async () => {
 console.log('tube junction:', JSON.stringify(tj));
 if (!(tj.found && tj.reached && tj.ducked && tj.strayed === 0)) fail('tube junction crawl ' + JSON.stringify(tj));
 });
+S('anims', 'madness', async (page) => {   // authored clips (js/proc-anims.js): shamble / vault / climb exist on every body and visibly move the bones away from the idle pose
+const an = await page.evaluate(async () => {
+  await __game.ready; const m = await import('/js/humans.js'), out = { kinds: {} }, ang = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(a.dot(b))));
+  for (const kind of ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy']) { const h = m.makeHuman({ kind, kit: false }); if (!h) { out.kinds[kind] = null; continue; } const H = h.userData.human, r = { has: ['shamble', 'vault', 'climb'].every(k => H.has(k)) };
+    H.pose('idle', 0.3); H.mixer.update(0.001); const base = { th: H.bones.thigh_l.quaternion.clone(), sp: H.bones.spine_02.quaternion.clone(), ua: H.bones.upperarm_l.quaternion.clone() };
+    for (const [k, at] of [['vault', 0.5], ['climb', 0.02], ['shamble', 0.4]]) { H.pose(k, at); H.mixer.update(0.001); r[k] = { thigh: +ang(base.th, H.bones.thigh_l.quaternion).toFixed(2), spine: +ang(base.sp, H.bones.spine_02.quaternion).toFixed(2), arm: +ang(base.ua, H.bones.upperarm_l.quaternion).toFixed(2) }; }
+    out.kinds[kind] = r; }
+  return out;
+});
+console.log('anims:', JSON.stringify(an));
+for (const [kind, r] of Object.entries(an.kinds)) { if (!r || !r.has) fail('anims: ' + kind + ' lacks shamble / vault / climb'); else if (!(r.vault.thigh > 0.6 && r.vault.spine > 0.3 && r.climb.arm > 0.6 && r.shamble.spine > 0.1)) fail('anims: ' + kind + ' clips do not move the rig ' + JSON.stringify(r)); }
+});
 S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach
 await installHelpers(page);
 const srch = await page.evaluate(async () => {

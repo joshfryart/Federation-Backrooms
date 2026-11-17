@@ -1,6 +1,7 @@
 // Rigged human characters (MakeHuman-based CC0 meshes from the dramatis3d samples) driven by Quaternius' Universal
 // Animation Library (CC0). Both share one rest pose, so every clip plays on every body. See CREDITS.md.
 import * as THREE from 'three';
+import { procClips } from './proc-anims.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { has, get } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
@@ -26,6 +27,7 @@ function info(kind) {
     for (const t of cc.tracks) if (t.name === 'pelvis.position') { t.values = t.values.slice(); for (let i = 0; i < t.values.length; i++) t.values[i] *= k; }
     clips[c.name.replace(/_Loop$/, '').toLowerCase()] = cc;
   }
+  Object.assign(clips, procClips(clips, k));   // shamble / vault / climb (js/proc-anims.js)
   // paint a dark undershirt onto the torso skin (vertex colours from skin weights) so cropped tops read as uniforms
   if (kind !== 'suit') src.scene.traverse(o => {
     if (!o.isSkinnedMesh || o.material.name !== 'body') return;
@@ -316,7 +318,7 @@ export function makeHuman(opts = {}) {
       if (cur && cur !== a) { a.crossFadeFrom(cur, fade, false); } a.play(); cur = a; curKey = key;
     },
     get current() { return curKey; },
-    pose(key, at = 1) { H.play(key, { loop: false, fade: 0 }); const d = inf.clips[key].duration; mixer.setTime(d * at - 0.001); },
+    pose(key, at = 1) { mixer.stopAllAction(); cur = null; curKey = ''; H.play(key, { loop: false, fade: 0 }); const d = inf.clips[key].duration; mixer.setTime(d * at - 0.001); },
     face(w) { Object.assign(H.faceW, w); for (const m of faces) for (const k in H.faceW) { const i = m.morphTargetDictionary[k]; if (i !== undefined) m.morphTargetInfluences[i] = H.faceW[k]; } },
     update(dt) {
       mixer.update(dt); holoTime.value = performance.now() / 1000;
