@@ -285,6 +285,10 @@ function spawnThreats(data, n, rnd) {
   for (let i = 0; i < nc; i++) { const t = data.pickTile(([x, y]) => !data.room[y][x] && data.dist[x + y * data.W] > data.maxD * 0.15); if (t) { gorns.push(makeEnemy('clinger', world, t, n, 0, scene, sound)); made++; } }
   if (made) G.threats.push('clinger');
   if (n >= 2 && ents.some(e => e.fake)) G.threats.push('slimeling');
+  // tutorial beyond deck 1: the first deck a threat appears on, one plain line about how to deal with it (once per run, a few seconds in)
+  const TEACH = { gronk: 'Gronk: it cannot climb or crawl. Jump onto a crate, or duck into a Jiffy tube.', drone: 'Compliance Drone: a stun slows it, but it adapts to your zapper. Break line of sight.', phantom: 'Mr. Grinsworth only moves when you look away. Keep it in view and back off, or find the light.',
+    clinger: 'Clingon Crawlers drop from the ceiling. Watch for dark patches overhead; grapple (Q) one off, or mash E if it lands.', slimeling: 'Some survivors are not. If one never blinks or ticks wetly when close, do not hug it.' };
+  if (!NOM()) for (const k of G.threats) if (TEACH[k] && !G.taught[k]) { G.taught[k] = 1; later(() => { if (G.phase === 'play') G.say(TEACH[k], ''); }, 5000 + Object.keys(G.taught).length * 6500); }
 }
 function showCard(n, ship, flooded) {
   const c = $('card'); c.innerHTML = `<small>${ship.cls.toUpperCase()}-CLASS</small><b>DECK ${n}</b><span>${ship.name} · ${ship.reg} · ship deck ${String(G.shipDeck + 1).padStart(2, '0')} of ${ship.decks}</span>${flooded ? '<em>Coolant leak — deck flooded</em>' : ''}<div class="thr">${(G.threats || []).map(t => '<i>▲</i>' + THREATS[t]).join('<br>')}</div>`;
@@ -827,7 +831,7 @@ let DUTIES = { billets: {} };
 async function loadDuties() { try { DUTIES = await (await fetch('./assets/data/duties.json')).json(); } catch (e) { console.warn('duties not loaded', e); } return DUTIES; }
 
 function newRun() {
-  releaseCling();
+  releaseCling(); G.taught = {};
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: G.forceSeed ?? Math.floor(Math.random() * 1e6) });   // G.forceSeed: tools/test.mjs seed-set smoke runs
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];

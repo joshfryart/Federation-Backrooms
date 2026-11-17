@@ -398,7 +398,9 @@ export class Phantom extends Enemy {
     // is the player looking at it? (needs line of sight; the hologram itself ignores walls)
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
     const dot = dist > 0.01 ? (dx * -fx + dz * -fz) / dist : 1;
-    this.seen = dot > 0.55 && dist < 30 && this.w.los(p.x, p.z, this.x, this.z);
+    // darkness shortens how far you can see it: in a blackout only your torch (14 m) or a few metres of afterglow (5 m) count; looking steeply up / down does not
+    const seeR = (this.w.powerAmt ?? 1) < 0.5 ? (p.torch ? 14 : 5) : 30;
+    this.seen = dot > 0.55 && dist < seeR && Math.abs(p.pitch || 0) < 1.15 && this.w.los(p.x, p.z, this.x, this.z);
     let speed = 0;
     if (!this.seen) {
       this.unseenT += dt; speed = (2.3 + Math.min(this.deck, 8) * 0.12 + (dist > 14 ? 1.4 : 0)) * (game.fx?.holoMul || 1);   // holo-playroom safeties
