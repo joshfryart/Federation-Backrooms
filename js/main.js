@@ -224,7 +224,7 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high');
+  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
@@ -1075,8 +1075,19 @@ function dutyHere() {
 const HIDE_KINDS = new Set(['suitrack', 'drawers', 'shelving', 'weaponrack', 'tank']);
 function enterHide(lp) { P.hidden = { tx: lp.tx, ty: lp.ty }; P.hideR = perk('ghost') ? 1.0 : 1.8; P.vx = P.vz = 0; G.say('You crouch out of sight. Hunters only find you up close. [E] or move to step out.', 'good'); const o = $('hidefx'); if (o) o.style.opacity = 1; for (const g of gorns) if (g.state === S.CHASE && Math.hypot(g.x - P.x, g.z - P.z) > 3.5) { g.state = S.SEARCH; g.timer = 6; } }
 function exitHide() { if (!P.hidden) return; P.hidden = null; const o = $('hidefx'); if (o) o.style.opacity = 0; }
+// service ladder well (Systems Nominal): E at the ship's ladder in a dead-end corridor climbs down to the next deck (Shift+E up); you arrive at that deck's own ladder well. Fades out and in over ~1.7 s.
+function climbWell(dir) {
+  if (G.phase !== 'play' || !NOM() || !G.ship) return false; const D = G.ship.decks; let to = G.shipDeck + dir; if (to < 0 || to >= D) { to = G.shipDeck - dir; if (to < 0 || to >= D) return false; }
+  if (!G.shipDecks?.[to]?.data?.ladderWell) { G.say('The ladder ends at a sealed hatch.', 'warn'); sound.denied?.(); return true; }   // the far deck has no ladder well
+  const down = to > G.shipDeck; G.phase = 'lift'; sound.clang(0.3); fade(1, 500);
+  later(() => { loadDeck(to + 1); const w = world.d.ladderWell; if (w) { const [wx, wy, dx, dy] = w, [cx, cz] = world.center(wx + dx, wy + dy); P.x = cx; P.z = cz; P.vx = P.vz = 0; P.yaw = Math.atan2(dx, dy); P.pitch = 0; }
+    G.phase = 'play'; fade(0, 500); G.say(`You climb ${down ? 'down' : 'up'} the service ladder to Deck ${to + 1}.`, 'good'); }, 700);
+  return true;
+}
+G.climbWell = climbWell;
 function interact() {
   if (P.hidden) { exitHide(); return; }
+  if (NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 4.2 && climbWell(keys.ShiftLeft || keys.ShiftRight ? -1 : 1)) return; }
   if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(), top = lp && lp.kind === 'catwalk' ? world.topAt(lp.tx, lp.ty) : 0;   // E at a catwalk module: climb the ladder rungs up onto its deck (a scripted 1.8 s mantle; step off an edge to come down)
     if (top > 1 && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.4) { P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: (lp.tx + 0.5) * 2.5, z: (lp.ty + 0.5) * 2.5, top, dx: 0, dz: 0, t: 0, dur: 1.8, exit: 0, fast: false }; G.say('You climb onto the catwalk.', 'good'); return; } }
   if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && (P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft)) { enterHide(lp); return; } }
@@ -1329,7 +1340,7 @@ function step(dt, t) {
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
   if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
   if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
-  if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
+  if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (lp && lp.kind === 'ship_ladder') prompt = `[E] Climb down to Deck ${G.shipDeck + 2 <= G.ship.decks ? G.shipDeck + 2 : G.shipDeck} · [Shift+E] up`; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   if (!prompt && rp) prompt = `${SYS[rp.sys].name} — nominal`;   // status label last: a junction beside a fixture, clutter or terminal must not hide what [E] does there
   $('prompt').textContent = prompt;

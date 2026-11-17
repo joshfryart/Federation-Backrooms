@@ -768,6 +768,7 @@ export class World {
       const shell = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.8) });
       const inner = new THREE.MeshStandardMaterial({ color: 0x4a4f57, metalness: 0.7, roughness: 0.5, normalMap: T.d.deck.normal, normalScale: new THREE.Vector2(0.4, 0.4) });
       const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2) });
+      const grilleMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 0.95, 0.7) });   // the lit room glowing through a tube-wall vent
       const inst = (geo, mat, list) => { if (!list.length) return null; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([px, py, pz, ry], i) => { dummy.position.set(px, py, pz); dummy.rotation.set(0, ry || 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); im.castShadow = im.receiveShadow = true; g.add(im); return im; };
       const headLo = [], headHi = [], base = [], side = [], sideTall = [], rib = [], strip = [], pipe = [], post = [], bar = [], rail = [], rung = [];
       const o = TS / 2 - TUBE_SIDE / 2, hw = TS / 2 - TUBE_SIDE, FULL = TUBE_UP + TUBE_H;   // side-wall offset, half width of the crawlway, shaft height
@@ -790,6 +791,9 @@ export class World {
         for (const sg of [-1, 1]) {
           let q = P(0, sg * o); (kind === 'lad' ? sideTall : side).push([q[0], kind === 'lad' ? FULL / 2 : y0 + TUBE_H / 2, q[1], ry]);
           q = P(0, sg * (hw - 0.02)); strip.push([q[0], y0 + 0.025, q[1], ry]);
+          { const nx = x + (ax === 'x' ? 0 : sg), ny = y + (ax === 'x' ? sg : 0), nr = d.room[ny]?.[nx];   // the wall beyond is a room: a vent grille in the tube wall with the room's light behind it
+            if (kind === 'lo' && nr && nr !== 'jefferies' && (x * 7 + y * 13) % 3 === 0) { const gq = P(0, sg * (hw - 0.012)), gm = new THREE.Mesh(new THREE.BoxGeometry(ax === 'x' ? 0.8 : 0.03, 0.34, ax === 'x' ? 0.03 : 0.8), grilleMat); gm.position.set(gq[0], y0 + 0.72, gq[1]); g.add(gm);
+              for (let s2 = 0; s2 < 5; s2++) { const sl = new THREE.Mesh(new THREE.BoxGeometry(ax === 'x' ? 0.8 : 0.045, 0.02, ax === 'x' ? 0.045 : 0.8), shell); sl.position.set(gq[0] - (ax === 'x' ? 0 : sg * 0.01), y0 + 0.58 + s2 * 0.07, gq[1] - (ax === 'x' ? sg * 0.01 : 0)); g.add(sl); } } }
           if (kind !== 'lad') { q = P(0, sg * (hw - 0.07)); pipe.push([q[0], y0 + TUBE_H - 0.08, q[1], ry]); for (const al of [-TS / 4, TS / 4]) { q = P(al, sg * (hw - 0.03)); rib.push([q[0], y0 + TUBE_H / 2, q[1], ry]); } }
         }
         if (kind !== 'lad') for (const al of [-TS / 4, TS / 4]) { const q = P(al, 0); bar.push([q[0], y0 + TUBE_H - 0.03, q[1], ry]); }
@@ -810,6 +814,12 @@ export class World {
         for (const yy of y0 ? [y0 + TUBE_H + 0.07, y0 - 0.07] : [TUBE_H + 0.07]) { const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.28, 0.14, 0.14), m.hazard); top.position.set(bx + sx, yy, bz + sz); top.rotation.y = ry; g.add(top); }
         if (!y0) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), amber); lamp.position.set(bx + sx * 3, TUBE_H + 0.24, bz + sz * 3); lamp.rotation.y = ry; g.add(lamp); }
         this.tubeMouths.push({ x: bx, z: bz, y: y0 });
+        // sliding hatch leaf in the frame: slides up behind the header while anyone (player, crew, hostile) is within ~2.6 m (World.update, nearFn set by main.js); visual only, collision never blocks
+        { const leaf = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.1, TUBE_H - 0.1, 0.05), new THREE.MeshStandardMaterial({ color: 0x59606a, metalness: 0.75, roughness: 0.45 }));
+          leaf.position.set(bx + sx * 0.5, y0 + (TUBE_H - 0.1) / 2, bz + sz * 0.5); leaf.rotation.y = ry; leaf.castShadow = true;
+          const slat = new THREE.Mesh(new THREE.BoxGeometry(hw * 1.5, 0.28, 0.056), new THREE.MeshBasicMaterial({ color: 0x14181e })); slat.position.set(0, 0.2, 0); leaf.add(slat);
+          const stripe = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.1, 0.1, 0.056), m.hazard); stripe.position.set(0, -0.35, 0); leaf.add(stripe);
+          g.add(leaf); (this.hatches || (this.hatches = [])).push({ leaf, x: bx, z: bz, y0, open: 0 }); }
       }
       inst(new THREE.BoxGeometry(TS, WH - TUBE_H, TS), shell, headLo);
       inst(new THREE.BoxGeometry(TS, WH - FULL, TS), shell, headHi);
@@ -1448,6 +1458,10 @@ export class World {
   }
   update(dt, t) {
     SPACE_T.value = t;
+    if (this.hatches) for (const h of this.hatches) {   // tube hatches: open while anyone is near, close again behind them
+      const want = this.nearFn ? (this.nearFn(h.x, h.z, 2.6) ? 1 : 0) : 0; h.open += (want - h.open) * Math.min(1, dt * 6);
+      h.leaf.position.y = h.y0 + (TUBE_H - 0.1) / 2 + h.open * (TUBE_H + 0.05); h.leaf.visible = h.open < 0.98;
+    }
     this.directory?.userData.pulse?.(t);   // "you are here" lamp
     const lv = (id) => this.shipState?.level?.(id) || 0;   // 0 nominal, 1 degraded, 2 offline (main.js sets world.shipState)
     if (this.fieldMats) { const L = lv('security'), on = L >= 2 ? 0 : this.powerAmt * (L === 1 && Math.sin(t * 23) + Math.sin(t * 7.7) > 1.1 ? 0.25 : 1);
@@ -1494,7 +1508,7 @@ export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttl
   'growbed', 'nutrient_tanks', 'sensorstation', 'charttable', 'spectrometer', 'samplefridge', 'fumehood', 'fuelbowser', 'pallet', 'pallet_loaded', 'hoversled', 'reachin_cooler',
   'navstation', 'opsstation', 'commsstation', 'relayrack', 'buffertank', 'plottable', 'cellfield', 'chargerack', 'issuecounter',
   'briefing_table', 'platform_bed', 'workpod', 'maint_stand', 'cargo_pad', 'injector_crate', 'knee_mill', 'drill_press', 'scan_arch', 'specimen_tank', 'mat', 'grapple_dummy', 'sparring_set',
-  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk', 'pillar'];
+  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk', 'pillar', 'ship_ladder'];
 // everything the art batches built (PROP_KINDS above = the floor props gen.js places; the rest are variants, chairs, stools, wall / ceiling pieces and add-ons)
 export const PROP_GALLERY = [...PROP_KINDS, ...PROP_ART_KINDS.filter(k => !PROP_KINDS.includes(k))];
 export { PROP_ART, PROP_ART_FIXTURES };

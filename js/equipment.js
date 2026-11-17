@@ -173,6 +173,7 @@ export const EQUIPMENT = {
     platform_bed: like('bunk', { name: 'platform bed', props: ['platform_bed'], seat: 0.55, box: [-0.72, 0.72, -1.05, 1.0], spots: [[1.01, 0.1, PI / 2], [-1.01, 0.1, -PI / 2]] }),
     workpod: like('shuttle', { name: 'work pod', props: ['workpod'], box: [-0.75, 0.75, -1.15, 1.15], spots: [[0, 1.5, PI], [0, -1.45, 0]] }),
     maint_stand: like('workbench', { name: 'maintenance stand', props: ['maint_stand'], box: [-0.65, 0.65, -0.75, 1.0], spots: [[0, 1.25, PI]] }),
+    ship_ladder: like('crate', { name: 'service ladder', props: ['ship_ladder'], box: [-0.32, 0.32, -0.25, 1.5], spots: [[0, 1.9, PI]] }),   // nominal mode: climbs to the next deck (main.js climbWell)
     pillar: like('crate', { name: 'structural pillar', props: ['pillar'], box: [-0.46, 0.46, -0.46, 0.46], spots: [[0, 0.8, PI]] }),
     catwalk: like('crate', { name: 'catwalk module', props: ['catwalk'], box: [-1.25, 1.25, -0.5, 0.5], spots: [[0, 0.95, PI]] }),   // tall rooms: the deck is 2.6 m up (grapple), crew only stand at its foot
     cargo_pad: like('pad', { name: 'cargo pad', props: ['cargo_pad'], box: [-1.15, 1.15, -1.15, 1.15], spots: [[0, 1.45, PI]] }),

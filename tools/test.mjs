@@ -84,7 +84,7 @@ S('room-props', null, async () => {
 const GEN = await imp('js/gen.js'), SHIPSM = await imp('js/ships.js'), TUBEM = await imp('js/tube.js');
 S('generator', null, async () => {   // every chip and the exit are reachable on decks 0-11 x 25 seeds (js/gen.js in node)
 const gen = (() => {
-  const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM; const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0, bends = 0, bendLadders = 0, twoBends = 0, junctions = 0;
+  const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM; const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0, bends = 0, bendLadders = 0, twoBends = 0, junctions = 0, xJunctions = 0;
   for (let deck = 0; deck < 12; deck++) for (let seed = 1; seed <= 25; seed++) {
     const ship = SHIPS[(deck + seed) % SHIPS.length], sd = Math.round(Math.min(deck, 7) / 7 * (ship.decks - 1)); const d = generate(deck, seed * 7919 + deck, deckOptions(ship, sd)); n++;
     const wallCount = d.grid.reduce((a, r) => a + r.reduce((b, c) => b + (c === 1 ? 1 : 0), 0), 0); if (d.W > 2 * Math.min(6 + Math.floor(deck * 0.7), 11) + 1) masked++; minOpen = Math.min(minOpen, d.openTiles.length);
@@ -97,13 +97,13 @@ const gen = (() => {
     // and the open-edge rule lets you walk it end to end but never leave it sideways
     for (const t of d.tubes) {
       const where = `deck ${deck} seed ${seed} tube ${t.a}->${t.b}`, chain = [t.a, ...t.tiles, t.b], id = ([x, y]) => x + y * W; let turns = 0;
-      if (t.branch) { if (t.tiles.length < 1 || d.tubeAxis[id(t.a)] !== 'xy' || d.tubeBend[id(t.a)]?.length !== 3 || d.tubeAxis[id(t.b)] || d.grid[t.b[1]][t.b[0]] !== 0 || t.ladder !== -1 || t.bends.length) bad.push(where + ': a branch starts at a three-way junction tile and ends on an open non-tube tile'); junctions++; }
+      if (t.branch) { if (t.tiles.length < 1 || d.tubeAxis[id(t.a)] !== 'xy' || !(d.tubeBend[id(t.a)]?.length >= 3) || d.tubeAxis[id(t.b)] || d.grid[t.b[1]][t.b[0]] !== 0 || t.ladder !== -1 || t.bends.length) bad.push(where + ': a branch starts at a three-way junction tile and ends on an open non-tube tile'); junctions++; if (d.tubeBend[id(t.a)]?.length === 4) xJunctions++; }
       else if (t.tiles.length < 1 || d.tubeAxis[id(t.a)] || d.tubeAxis[id(t.b)] || d.grid[t.a[1]][t.a[0]] !== 0 || d.grid[t.b[1]][t.b[0]] !== 0) bad.push(where + ': mouths must be open non-tube tiles');
       for (let i = 1; i < chain.length; i++) { const [dx, dy] = [chain[i][0] - chain[i - 1][0], chain[i][1] - chain[i - 1][1]]; if (Math.abs(dx) + Math.abs(dy) !== 1) { bad.push(where + ': not contiguous'); break; } if (!TUBEM.tubeStep(d, id(chain[i - 1]), id(chain[i]), dx, dy) || !TUBEM.tubeStep(d, id(chain[i]), id(chain[i - 1]), -dx, -dy)) bad.push(where + `: mouth chain blocked at step ${i}`); }
       t.tiles.forEach((tl, i) => {
         const k = id(tl), pv = chain[i], nx = chain[i + 2], din = [tl[0] - pv[0], tl[1] - pv[1]], dout = [nx[0] - tl[0], nx[1] - tl[1]], straight = din[0] === dout[0] && din[1] === dout[1], ax = d.tubeAxis[k];
         if (d.grid[tl[1]][tl[0]] !== 0 || d.room[tl[1]][tl[0]] !== 'jefferies' || !d.tubeLevel[k]) bad.push(where + ': tile not a jefferies tile');
-        const jn = ax === 'xy' && d.tubeBend[k]?.length === 3;   // a T junction on this tube: the chain's two directions plus the branch
+        const jn = ax === 'xy' && d.tubeBend[k]?.length >= 3;   // a T junction on this tube: the chain's two directions plus the branch
         if (jn) { if (!straight || !d.tubeBend[k].some(([a2, b2]) => a2 === -din[0] && b2 === -din[1]) || !d.tubeBend[k].some(([a2, b2]) => a2 === dout[0] && b2 === dout[1])) bad.push(where + `: junction tile ${i} does not carry the chain directions`); }
         else if (straight ? ax !== (din[0] ? 'x' : 'y') : (ax !== 'xy' || JSON.stringify(d.tubeBend[k]) !== JSON.stringify([[-din[0], -din[1]], dout]))) bad.push(where + `: tile ${i} axis ${ax} does not match its neighbours`);
         if (!straight) { turns++; if (!(t.bends || []).includes(i)) bad.push(where + ': t.bends index'); if (d.tubeLevel[k] === 'lad') bad.push(where + ': ladder on the bend'); }
@@ -116,9 +116,9 @@ const gen = (() => {
     }
     tubes += d.tubes.length; if (d.tubes.length) withTubes++; ladders += d.tubes.filter(t => t.ladder > 0).length; bigRooms += d.rooms.filter(r => r.big).length;
   }
-  return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen, bends, bendLadders, twoBends, junctions };
+  return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen, bends, bendLadders, twoBends, junctions, xJunctions };
 })();
-console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders, ${gen.bends} with a bend (${gen.twoBends} with two), ${gen.junctions} T junctions, ${gen.bendLadders} bent + laddered), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bends < gen.tubes * 0.15) fail('too few bent tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
+console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders, ${gen.bends} with a bend (${gen.twoBends} with two), ${gen.junctions} junction branches (${gen.xJunctions} on X junctions), ${gen.bendLadders} bent + laddered), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bends < gen.tubes * 0.15) fail('too few bent tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
 { // liminal twins (opts.liminal): two identically furnished rooms, every chip and the exit still reachable; catwalks and atria generate
   const { generate: gen2 } = await import('../js/gen.js'); let n = 0, bad = 0, twins = 0, catwalks = 0, atria = 0;
   for (let d = 2; d < 11; d++) for (let s = 1; s <= 40; s++) { const g = gen2(d, s * 31, { liminal: true, weights: { atrium: 2, lounge: 3, lab: 3, quarters: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }); n++; if (g.rooms.some(r => r.twin)) twins++; catwalks += g.props.filter(p => p.kind === 'catwalk').length; atria += g.rooms.filter(r => r.type === 'atrium').length;
@@ -483,6 +483,23 @@ const br = await page.evaluate(async () => {
 });
 console.log('breach:', JSON.stringify(br));
 if (!(br.breach && br.spot && br.pulled > 0.5 && br.hpLost > 1 && br.sealed)) fail('breach ' + JSON.stringify(br));
+});
+S('ladder-well', 'nominal', async (page) => {   // the service ladder in a dead-end corridor climbs to the next deck (and back up with Shift)
+await installHelpers(page);
+const lw = await page.evaluate(async () => {
+  const g = __game, G = g.G, P = g.P; G.forceShip = 0; g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+  for (let run = 0; run < 10; run++) { G.forceSeed = 600 + run * 53; g.newRun(); await new Promise(r => setTimeout(r, 120)); if (G.shipDecks[0]?.data?.ladderWell && G.shipDecks[1]?.data?.ladderWell) break; }   // a ship whose first two decks both have a ladder well
+  G.phase = 'play'; const out = { start: G.shipDeck, well: !!g.world.d.ladderWell, kind: null };
+  const w0 = g.world.d.ladderWell; if (!w0) return out; out.kind = g.world.d.props.find(p => p.tx === w0[0] && p.ty === w0[1])?.kind;
+  const [wx, wy, dx, dy] = w0, [cx, cz] = g.world.center(wx + dx, wy + dy); P.x = cx; P.z = cz; P.yaw = Math.atan2(dx, dy); P.pitch = 0; G.phase = 'play';
+  out.climbed = G.climbWell(1); for (let i = 0; i < 80; i++) g.step(0.05, 1 + i * 0.05);   // 'later' runs on the test clock
+  out.down = G.shipDeck; out.phase = G.phase; const w1 = g.world.d.ladderWell; out.well1 = !!w1;
+  if (w1) { const [tx, ty] = g.world.tile(P.x, P.z); out.atWell = Math.abs(tx - (w1[0] + w1[2])) + Math.abs(ty - (w1[1] + w1[3])) === 0; }
+  out.up = G.climbWell(-1); for (let i = 0; i < 80; i++) g.step(0.05, 10 + i * 0.05); out.back = G.shipDeck;
+  return out;
+});
+console.log('ladder well:', JSON.stringify(lw));
+if (!(lw.well && lw.kind === 'ship_ladder' && lw.climbed && lw.down === lw.start + 1 && lw.phase === 'play' && lw.well1 && lw.atWell && lw.up && lw.back === lw.start)) fail('ladder well ' + JSON.stringify(lw));
 });
 S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach
 await installHelpers(page);

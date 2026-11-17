@@ -359,16 +359,25 @@ export function generate(deck, seed, opts = {}) {
       if (t.branch) continue;
       for (let i = 1; i < t.tiles.length - 1; i++) {
         const [jx, jy] = t.tiles[i], id = jx + jy * W, ax = tubeAxis[id]; if ((ax !== 'x' && ax !== 'y') || tubeLevel[id] !== 'lo') continue;
-        for (const sg of rnd() < 0.5 ? [1, -1] : [-1, 1]) {
-          const bd = ax === 'x' ? [0, sg] : [sg, 0]; let n = 0; while (n < 5 && wallT(jx + bd[0] * (n + 1), jy + bd[1] * (n + 1))) n++;
+        // tryBranch: bore one branch from this tile in direction bd (sideways through solid bulkhead to an open tile); false when it does not fit
+        const tryBranch = (bd, dry = false) => {
+          let n = 0; while (n < 5 && wallT(jx + bd[0] * (n + 1), jy + bd[1] * (n + 1))) n++;
           const ex = jx + bd[0] * (n + 1), ey = jy + bd[1] * (n + 1);
-          if (n < 1 || ex < 1 || ey < 1 || ex > W - 2 || ey > H - 2 || grid[ey][ex] !== 0 || tubeAxis[ex + ey * W]) continue;
+          if (n < 1 || ex < 1 || ey < 1 || ex > W - 2 || ey > H - 2 || grid[ey][ex] !== 0 || tubeAxis[ex + ey * W]) return false;
           const bt = []; for (let k = 1; k <= n; k++) bt.push([jx + bd[0] * k, jy + bd[1] * k]);
-          if (bt.some(([bx, by]) => [[0, 0], ...DIRS].some(([a2, b2]) => { const nx = bx + a2, ny = by + b2; return tubeAxis[nx + ny * W] && !(nx === jx && ny === jy); }))) continue;   // keep apart from every other tube tile except the junction
-          const dAB = bfsFrom(ex, ey)[t.a[0] + t.a[1] * W]; if (dAB >= 0 && dAB < 3) continue;   // not a trivial hop back to the parent's own mouth
+          if (bt.some(([bx, by]) => [[0, 0], ...DIRS].some(([a2, b2]) => { const nx = bx + a2, ny = by + b2; return tubeAxis[nx + ny * W] && !(nx === jx && ny === jy); }))) return false;   // keep apart from every other tube tile except the junction
+          const dAB = bfsFrom(ex, ey)[t.a[0] + t.a[1] * W]; if (dAB >= 0 && dAB < 3) return false;   // not a trivial hop back to the parent's own mouth
+          if (dry) return true;
           bt.forEach(([bx, by]) => { const bid = bx + by * W; grid[by][bx] = 0; room[by][bx] = 'jefferies'; tubeLevel[bid] = 'lo'; tubeAxis[bid] = bd[0] ? 'x' : 'y'; });
-          const dirs = [...(ax === 'x' ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]]), bd]; tubeAxis[id] = 'xy'; tubeBend[id] = dirs;
+          tubeBend[id] = [...(tubeAxis[id] === 'xy' ? tubeBend[id] : (ax === 'x' ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]])), bd]; tubeAxis[id] = 'xy';
           tubes.push({ tiles: bt, a: [jx, jy], b: [ex, ey], axis: bd[0] ? 'x' : 'y', bend: -1, bends: [], ladder: -1, branch: true, parent: i });
+          return true;
+        };
+        { const b1 = ax === 'x' ? [0, 1] : [1, 0], b2 = [-b1[0], -b1[1]]; if (tryBranch(b1, true) && tryBranch(b2, true) && rnd() < 0.6) { tryBranch(b1); tryBranch(b2); break outerJ; } }   // both sides fit: an X junction (four mouths)
+        for (const sg of rnd() < 0.5 ? [1, -1] : [-1, 1]) {
+          const bd = ax === 'x' ? [0, sg] : [sg, 0];
+          if (!tryBranch(bd)) continue;
+          if (rnd() < 0.5) tryBranch([-bd[0], -bd[1]]);   // an X junction: a second branch straight across from the first (four mouths)
           break outerJ;
         }
       }
@@ -412,6 +421,24 @@ export function generate(deck, seed, opts = {}) {
   const exitDir = DIRS.find(([dx, dy]) => grid[exit[1] + dy]?.[exit[0] + dx] === 0) || [1, 0];
   if (exitBlocks) grid[exit[1]][exit[0]] = 2;
 
+  // service ladder well (Systems Nominal only): a ship's ladder fixed in a dead-end corridor, 4+ tiles from the lift, climbs to the neighbouring deck (js/main.js climbWell)
+  let ladderWell = null;
+  if (opts.require) {
+    const dead = openTiles.filter(([x, y]) => grid[y][x] === 0 && openNeighbors(x, y) === 1 && !room[y][x] && !tubeAxis[x + y * W] && !(x === start[0] && y === start[1]) && !(x === exit[0] && y === exit[1]) && Math.abs(x - exit[0]) + Math.abs(y - exit[1]) >= 4).sort((p, q) => dist(q[0], q[1]) - dist(p[0], p[1]));
+    if (dead.length) { const [wx, wy] = dead[Math.floor(rnd() * Math.min(3, dead.length))], dd = DIRS.find(([dx, dy]) => grid[wy + dy]?.[wx + dx] === 0); if (dd) { put(wx, wy, 'ship_ladder', { rot: faceTo(dd[0], dd[1]) }); ladderWell = [wx, wy, dd[0], dd[1]]; } }
+    if (!ladderWell) {   // no free dead end: carve an alcove off a corridor (a wall tile with exactly one open, non-room neighbour, away from the start, the lift and props)
+      let best = null;
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        if (grid[y][x] !== 1 || !hull(x, y)) continue;
+        const nb = DIRS.filter(([dx, dy]) => grid[y + dy][x + dx] === 0); if (nb.length !== 1) continue;
+        const [nx, ny] = [x + nb[0][0], y + nb[0][1]]; if (room[ny][nx] || tubeAxis[nx + ny * W] || (nx === start[0] && ny === start[1]) || (nx === exit[0] && ny === exit[1]) || Math.abs(nx - exit[0]) + Math.abs(ny - exit[1]) < 3) continue;
+        if (DIRS.some(([dx, dy]) => grid[y + dy]?.[x + dx] === 2) || tubeAxis[x + y * W]) continue;
+        const dd2 = dist(nx, ny); if (!best || dd2 > best.dd) best = { x, y, dd: dd2, nb: nb[0] };
+      }
+      if (best) { grid[best.y][best.x] = 0; openTiles.push([best.x, best.y]); reach[best.x + best.y * W] = best.dd + 1; put(best.x, best.y, 'ship_ladder', { rot: faceTo(best.nb[0], best.nb[1]) }); ladderWell = [best.x, best.y, best.nb[0], best.nb[1]]; }
+    }
+  }
+
   const used = new Set([start.join(','), exit.join(',')]);
   for (const t of tubes) for (const [x, y] of t.tiles) used.add(x + ',' + y);   // nothing spawns in a tube by accident
   const free = () => openTiles.filter(([x, y]) => grid[y][x] === 0 && !used.has(x + ',' + y));
@@ -438,7 +465,7 @@ export function generate(deck, seed, opts = {}) {
 
   const data = { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis, tubeLevel, tubeBend,
            masked: !!opts.inside, inHull: hull, missing,
-           openTiles, maxD, dist: reach, rnd, used, pickTile, bfsFrom };
+           openTiles, maxD, dist: reach, rnd, used, pickTile, bfsFrom, ladderWell };
   furnish(data);
   return data;
 }
