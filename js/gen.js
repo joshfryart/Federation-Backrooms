@@ -313,6 +313,22 @@ export function generate(deck, seed, opts = {}) {
           }
         }
       }
+  // two bends (S or U): legs k1, k2, k3 along d1, d2 (perpendicular), d3 (= d1 for an S, = -d1 for a U); scored 5 below a straight bore so about one tube in ten has two
+  for (const [dx, dy] of DIRS) for (const sg of [-1, 1]) for (const back of [false, true]) {
+    const d2x = dy ? sg : 0, d2y = dy ? 0 : sg, d3x = back ? -dx : dx, d3y = back ? -dy : dy;
+    for (let k1 = 1; k1 <= 4 && wall(x + dx * k1, y + dy * k1); k1++) {
+      const c1x = x + dx * k1, c1y = y + dy * k1;
+      for (let k2 = back ? 2 : 1; k1 + k2 <= 6 && wall(c1x + d2x * k2, c1y + d2y * k2); k2++) {
+        const c2x = c1x + d2x * k2, c2y = c1y + d2y * k2;
+        for (let k3 = 1; k1 + k2 + k3 <= 7 && wall(c2x + d3x * k3, c2y + d3y * k3); k3++) {
+          const ex = c2x + d3x * (k3 + 1), ey = c2y + d3y * (k3 + 1);
+          if (ex < 1 || ey < 1 || ex > W - 2 || ey > H - 2 || grid[ey][ex] !== 0) continue;
+          const tiles = []; for (let i = 1; i <= k1; i++) tiles.push([x + dx * i, y + dy * i]); for (let i = 1; i <= k2; i++) tiles.push([c1x + d2x * i, c1y + d2y * i]); for (let i = 1; i <= k3; i++) tiles.push([c2x + d3x * i, c2y + d3y * i]);
+          cands.push({ x, y, dx, dy, n: k1 + k2 + k3, ex, ey, s: k1 + k2 + k3 - 5 + rnd() * 1.5, tiles, corner: k1 - 1, two: true });
+        }
+      }
+    }
+  }
     }
     cands.sort((a, b) => b.s - a.s);
     for (const c of cands.slice(0, 120)) {
@@ -321,14 +337,41 @@ export function generate(deck, seed, opts = {}) {
       if (tiles.some(([tx, ty]) => !hull(tx, ty))) continue;                                                             // never tunnel through open space
       if (tiles.some(([tx, ty]) => [[0, 0], ...DIRS].some(([a, b]) => tubeAxis[(tx + a) + (ty + b) * W]))) continue;   // keep tubes apart
       const dAB = bfsFrom(c.x, c.y)[c.ex + c.ey * W]; if (dAB >= 0 && dAB < (c.n >= 2 ? 8 : 14)) continue;                // not a shortcut
-      // longer tubes usually climb: lower run from mouth a, a ladder shaft (never on the bend), then an upper run that opens high in the wall at b
+      // longer tubes usually climb: lower run from mouth a, a ladder shaft (never on a bend), then an upper run that opens high in the wall at b
+      const chain = [[c.x, c.y], ...tiles, [c.ex, c.ey]], corners = [];
+      tiles.forEach(([tx, ty], i) => { const din = [tx - chain[i][0], ty - chain[i][1]], dout = [chain[i + 2][0] - tx, chain[i + 2][1] - ty]; if (din[0] !== dout[0] || din[1] !== dout[1]) corners.push(i); });
       let ladder = -1;
-      if (c.n >= 3 && rnd() < 0.65) { const ok = []; for (let i = 1; i <= c.n - 2; i++) if (i !== c.corner) ok.push(i); if (ok.length) ladder = ok[Math.floor(rnd() * ok.length)]; }
+      if (c.n >= 3 && rnd() < 0.65) { const ok = []; for (let i = 1; i <= c.n - 2; i++) if (!corners.includes(i)) ok.push(i); if (ok.length) ladder = ok[Math.floor(rnd() * ok.length)]; }
       tiles.forEach(([tx, ty], i) => {
         const id = tx + ty * W; grid[ty][tx] = 0; room[ty][tx] = 'jefferies'; tubeLevel[id] = ladder < 0 || i < ladder ? 'lo' : i === ladder ? 'lad' : 'up';
-        if (bent && i === c.corner) { tubeAxis[id] = 'xy'; tubeBend[id] = [[-c.d1[0], -c.d1[1]], c.d2]; } else tubeAxis[id] = (i > c.corner && bent ? c.d2[0] : c.dx) ? 'x' : 'y';
+        const din = [tx - chain[i][0], ty - chain[i][1]], dout = [chain[i + 2][0] - tx, chain[i + 2][1] - ty];
+        if (corners.includes(i)) { tubeAxis[id] = 'xy'; tubeBend[id] = [[-din[0], -din[1]], dout]; } else tubeAxis[id] = din[0] ? 'x' : 'y';
       });
-      tubes.push({ tiles, a: [c.x, c.y], b: [c.ex, c.ey], axis: bent ? 'xy' : c.dx ? 'x' : 'y', bend: bent ? c.corner : -1, ladder });
+      tubes.push({ tiles, a: [c.x, c.y], b: [c.ex, c.ey], axis: corners.length ? 'xy' : c.dx ? 'x' : 'y', bend: corners.length ? corners[0] : -1, bends: corners, ladder });
+    }
+  }
+
+  // T junction: on decks with a tube, one branch is bored off a straight lower-run tile of a tube (never next to its mouths) sideways through solid bulkhead to an open tile.
+  // The junction tile becomes tubeAxis 'xy' with three open edges; the branch is its own tubes entry (branch: true, a = the junction tile, b = its open mouth, never a ladder).
+  if (deck >= 2 && tubes.length && rnd() < 0.7) {
+    const wallT = (tx, ty) => grid[ty]?.[tx] === 1 && hull(tx, ty);
+    outerJ: for (const t of tubes.slice().sort(() => rnd() - 0.5)) {
+      if (t.branch) continue;
+      for (let i = 1; i < t.tiles.length - 1; i++) {
+        const [jx, jy] = t.tiles[i], id = jx + jy * W, ax = tubeAxis[id]; if ((ax !== 'x' && ax !== 'y') || tubeLevel[id] !== 'lo') continue;
+        for (const sg of rnd() < 0.5 ? [1, -1] : [-1, 1]) {
+          const bd = ax === 'x' ? [0, sg] : [sg, 0]; let n = 0; while (n < 5 && wallT(jx + bd[0] * (n + 1), jy + bd[1] * (n + 1))) n++;
+          const ex = jx + bd[0] * (n + 1), ey = jy + bd[1] * (n + 1);
+          if (n < 1 || ex < 1 || ey < 1 || ex > W - 2 || ey > H - 2 || grid[ey][ex] !== 0 || tubeAxis[ex + ey * W]) continue;
+          const bt = []; for (let k = 1; k <= n; k++) bt.push([jx + bd[0] * k, jy + bd[1] * k]);
+          if (bt.some(([bx, by]) => [[0, 0], ...DIRS].some(([a2, b2]) => { const nx = bx + a2, ny = by + b2; return tubeAxis[nx + ny * W] && !(nx === jx && ny === jy); }))) continue;   // keep apart from every other tube tile except the junction
+          const dAB = bfsFrom(ex, ey)[t.a[0] + t.a[1] * W]; if (dAB >= 0 && dAB < 3) continue;   // not a trivial hop back to the parent's own mouth
+          bt.forEach(([bx, by]) => { const bid = bx + by * W; grid[by][bx] = 0; room[by][bx] = 'jefferies'; tubeLevel[bid] = 'lo'; tubeAxis[bid] = bd[0] ? 'x' : 'y'; });
+          const dirs = [...(ax === 'x' ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]]), bd]; tubeAxis[id] = 'xy'; tubeBend[id] = dirs;
+          tubes.push({ tiles: bt, a: [jx, jy], b: [ex, ey], axis: bd[0] ? 'x' : 'y', bend: -1, bends: [], ladder: -1, branch: true, parent: i });
+          break outerJ;
+        }
+      }
     }
   }
 

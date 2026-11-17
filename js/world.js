@@ -802,7 +802,7 @@ export class World {
         }
       });
       // hazard-striped hatch frame on each mouth (the far mouth of a laddered tube sits high in the wall)
-      for (const t of d.tubes) for (const [end, first] of [[t.a, t.tiles[0]], [t.b, t.tiles[t.tiles.length - 1]]]) {
+      for (const t of d.tubes) for (const [end, first] of (t.branch ? [[t.b, t.tiles[t.tiles.length - 1]]] : [[t.a, t.tiles[0]], [t.b, t.tiles[t.tiles.length - 1]]])) {   // a branch has one mouth (its far end); its near end is the junction
         const y0 = d.tubeLevel[first[0] + first[1] * W] === 'up' ? TUBE_UP : 0;
         const bx = ((end[0] + first[0]) / 2 + 0.5) * TS, bz = ((end[1] + first[1]) / 2 + 0.5) * TS, hz = end[0] !== first[0], ry = hz ? Math.PI / 2 : 0;   // the mouth's own direction (the first / last tile may be the bend)
         const ox = hz ? 0 : 1, oz = hz ? 1 : 0, sx = Math.sign(end[0] - first[0]) * 0.05, sz = Math.sign(end[1] - first[1]) * 0.05;

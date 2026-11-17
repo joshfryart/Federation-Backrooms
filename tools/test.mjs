@@ -84,7 +84,7 @@ S('room-props', null, async () => {
 const GEN = await imp('js/gen.js'), SHIPSM = await imp('js/ships.js'), TUBEM = await imp('js/tube.js');
 S('generator', null, async () => {   // every chip and the exit are reachable on decks 0-11 x 25 seeds (js/gen.js in node)
 const gen = (() => {
-  const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM; const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0, bends = 0, bendLadders = 0;
+  const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM; const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0, bends = 0, bendLadders = 0, twoBends = 0, junctions = 0;
   for (let deck = 0; deck < 12; deck++) for (let seed = 1; seed <= 25; seed++) {
     const ship = SHIPS[(deck + seed) % SHIPS.length], sd = Math.round(Math.min(deck, 7) / 7 * (ship.decks - 1)); const d = generate(deck, seed * 7919 + deck, deckOptions(ship, sd)); n++;
     const wallCount = d.grid.reduce((a, r) => a + r.reduce((b, c) => b + (c === 1 ? 1 : 0), 0), 0); if (d.W > 2 * Math.min(6 + Math.floor(deck * 0.7), 11) + 1) masked++; minOpen = Math.min(minOpen, d.openTiles.length);
@@ -97,25 +97,28 @@ const gen = (() => {
     // and the open-edge rule lets you walk it end to end but never leave it sideways
     for (const t of d.tubes) {
       const where = `deck ${deck} seed ${seed} tube ${t.a}->${t.b}`, chain = [t.a, ...t.tiles, t.b], id = ([x, y]) => x + y * W; let turns = 0;
-      if (t.tiles.length < 1 || d.tubeAxis[id(t.a)] || d.tubeAxis[id(t.b)] || d.grid[t.a[1]][t.a[0]] !== 0 || d.grid[t.b[1]][t.b[0]] !== 0) bad.push(where + ': mouths must be open non-tube tiles');
+      if (t.branch) { if (t.tiles.length < 1 || d.tubeAxis[id(t.a)] !== 'xy' || d.tubeBend[id(t.a)]?.length !== 3 || d.tubeAxis[id(t.b)] || d.grid[t.b[1]][t.b[0]] !== 0 || t.ladder !== -1 || t.bends.length) bad.push(where + ': a branch starts at a three-way junction tile and ends on an open non-tube tile'); junctions++; }
+      else if (t.tiles.length < 1 || d.tubeAxis[id(t.a)] || d.tubeAxis[id(t.b)] || d.grid[t.a[1]][t.a[0]] !== 0 || d.grid[t.b[1]][t.b[0]] !== 0) bad.push(where + ': mouths must be open non-tube tiles');
       for (let i = 1; i < chain.length; i++) { const [dx, dy] = [chain[i][0] - chain[i - 1][0], chain[i][1] - chain[i - 1][1]]; if (Math.abs(dx) + Math.abs(dy) !== 1) { bad.push(where + ': not contiguous'); break; } if (!TUBEM.tubeStep(d, id(chain[i - 1]), id(chain[i]), dx, dy) || !TUBEM.tubeStep(d, id(chain[i]), id(chain[i - 1]), -dx, -dy)) bad.push(where + `: mouth chain blocked at step ${i}`); }
       t.tiles.forEach((tl, i) => {
         const k = id(tl), pv = chain[i], nx = chain[i + 2], din = [tl[0] - pv[0], tl[1] - pv[1]], dout = [nx[0] - tl[0], nx[1] - tl[1]], straight = din[0] === dout[0] && din[1] === dout[1], ax = d.tubeAxis[k];
         if (d.grid[tl[1]][tl[0]] !== 0 || d.room[tl[1]][tl[0]] !== 'jefferies' || !d.tubeLevel[k]) bad.push(where + ': tile not a jefferies tile');
-        if (straight ? ax !== (din[0] ? 'x' : 'y') : (ax !== 'xy' || JSON.stringify(d.tubeBend[k]) !== JSON.stringify([[-din[0], -din[1]], dout]))) bad.push(where + `: tile ${i} axis ${ax} does not match its neighbours`);
-        if (!straight) { turns++; if (t.bend !== i) bad.push(where + ': t.bend index'); if (d.tubeLevel[k] === 'lad') bad.push(where + ': ladder on the bend'); }
+        const jn = ax === 'xy' && d.tubeBend[k]?.length === 3;   // a T junction on this tube: the chain's two directions plus the branch
+        if (jn) { if (!straight || !d.tubeBend[k].some(([a2, b2]) => a2 === -din[0] && b2 === -din[1]) || !d.tubeBend[k].some(([a2, b2]) => a2 === dout[0] && b2 === dout[1])) bad.push(where + `: junction tile ${i} does not carry the chain directions`); }
+        else if (straight ? ax !== (din[0] ? 'x' : 'y') : (ax !== 'xy' || JSON.stringify(d.tubeBend[k]) !== JSON.stringify([[-din[0], -din[1]], dout]))) bad.push(where + `: tile ${i} axis ${ax} does not match its neighbours`);
+        if (!straight) { turns++; if (!(t.bends || []).includes(i)) bad.push(where + ': t.bends index'); if (d.tubeLevel[k] === 'lad') bad.push(where + ': ladder on the bend'); }
         // sealed sides: every neighbour that is not the previous / next tile of the chain must be unreachable from this tile
-        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = [tl[0] + a, tl[1] + b]; if ((n[0] === pv[0] && n[1] === pv[1]) || (n[0] === nx[0] && n[1] === nx[1])) continue; if (d.grid[n[1]]?.[n[0]] === 0 && TUBEM.tubeStep(d, k, id(n), a, b)) bad.push(where + `: tile ${i} leaks sideways to ${n}`); }
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = [tl[0] + a, tl[1] + b]; if ((n[0] === pv[0] && n[1] === pv[1]) || (n[0] === nx[0] && n[1] === nx[1]) || (jn && d.tubeBend[k].some(([a2, b2]) => a2 === a && b2 === b))) continue; if (d.grid[n[1]]?.[n[0]] === 0 && TUBEM.tubeStep(d, k, id(n), a, b)) bad.push(where + `: tile ${i} leaks sideways to ${n}`); }
       });
-      if (turns > 1) bad.push(where + ': more than one bend'); if ((t.bend >= 0) !== (turns === 1)) bad.push(where + ': t.bend flag');
+      if (turns > 2) bad.push(where + ': more than two bends'); if ((t.bend >= 0) !== (turns >= 1) || (t.bends || []).length !== turns) bad.push(where + ': t.bend flag'); if (turns === 2) twoBends++;
       const lv = t.tiles.map(tl => d.tubeLevel[id(tl)]).join(' '); if (!/^lo( lo)*( lad( up)+)?$/.test(lv)) bad.push(where + ': level order ' + lv);
       if (turns) { bends++; if (t.ladder > 0) bendLadders++; }
     }
     tubes += d.tubes.length; if (d.tubes.length) withTubes++; ladders += d.tubes.filter(t => t.ladder > 0).length; bigRooms += d.rooms.filter(r => r.big).length;
   }
-  return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen, bends, bendLadders };
+  return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen, bends, bendLadders, twoBends, junctions };
 })();
-console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders, ${gen.bends} with a bend, ${gen.bendLadders} bent + laddered), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bends < gen.tubes * 0.15) fail('too few bent tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
+console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders, ${gen.bends} with a bend (${gen.twoBends} with two), ${gen.junctions} T junctions, ${gen.bendLadders} bent + laddered), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bends < gen.tubes * 0.15) fail('too few bent tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
 { // liminal twins (opts.liminal): two identically furnished rooms, every chip and the exit still reachable; catwalks and atria generate
   const { generate: gen2 } = await import('../js/gen.js'); let n = 0, bad = 0, twins = 0, catwalks = 0, atria = 0;
   for (let d = 2; d < 11; d++) for (let s = 1; s <= 40; s++) { const g = gen2(d, s * 31, { liminal: true, weights: { atrium: 2, lounge: 3, lab: 3, quarters: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }); n++; if (g.rooms.some(r => r.twin)) twins++; catwalks += g.props.filter(p => p.kind === 'catwalk').length; atria += g.rooms.filter(r => r.type === 'atrium').length;
@@ -387,6 +390,43 @@ const lim = await page.evaluate(async () => {
 console.log('liminal:', JSON.stringify(lim));
 if (!(lim.catwalk && lim.catwalk.y >= lim.catwalk.top - 0.05 && lim.catwalk.tall && lim.catwalk.under)) fail('liminal: catwalk climb / tall room / walk-under ' + JSON.stringify(lim.catwalk));
 if (!(lim.loop && lim.loop.loops === 2 && lim.loop.count === 2)) fail('liminal: corridor loop ' + JSON.stringify(lim.loop));
+});
+S('tube-bends2', 'madness', async (page) => {   // a two-bend (S / U) ladder-free Jiffy tube is crawled end to end: ducks, stays inside the chain, comes out of the far mouth
+await installHelpers(page);
+const tb = await page.evaluate(async () => {
+  const g = __game, G = g.G, P = g.P; g.setQuality('low'); let bw = null, bt = null;
+  for (let run = 0; run < 12 && !bt; run++) { G.forceSeed = 9000 + run * 131; G.forceShip = run % 10; g.newRun(); __T.hideEnemies(); for (let d = 1; d <= 9 && !bt; d++) { g.loadDeck(d); const t = g.world.d.tubes.find(t => (t.bends || []).length === 2 && t.ladder < 0); if (t) { bw = g.world; bt = t; } } }
+  if (!bt) return { found: false };
+  __T.hideEnemies(); for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
+  const pts = [bt.a, ...bt.tiles, bt.b].map(([x, y]) => bw.center(x, y)), ok = new Set([bt.a, ...bt.tiles, bt.b].map(([x, y]) => x + ',' + y));
+  P.x = pts[0][0]; P.z = pts[0][1]; P.y = 0; P.vx = P.vz = 0; G.phase = 'play'; dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+  let k = 1, ducked = false, strayed = 0, secs = 0; const cornersHit = new Set();
+  for (let i = 0; i < 60 * 50 && k < pts.length; i++) { const [tx, tz] = pts[k]; P.yaw = Math.atan2(P.x - tx, P.z - tz); G.phase = 'play'; P.clung = 0; g.step(1 / 60, 20 + i / 60); secs++;
+    const [px, py] = bw.tile(P.x, P.z); if (bw.isTube(px, py)) { if (P.crouch) ducked = true; bt.bends.forEach(b => { if (px === bt.tiles[b][0] && py === bt.tiles[b][1] && P.crouch) cornersHit.add(b); }); } if (!ok.has(px + ',' + py)) strayed++; if (Math.hypot(P.x - tx, P.z - tz) < 0.45) k++; }
+  dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+  return { found: true, len: bt.tiles.length, bends: bt.bends, ducked, corners: cornersHit.size, strayed, secs: +(secs / 60).toFixed(1), reached: k >= pts.length };
+});
+console.log('tube bends (two):', JSON.stringify(tb));
+if (!(tb.found && tb.reached && tb.ducked && tb.corners === 2 && tb.strayed === 0)) fail('two-bend tube crawl ' + JSON.stringify(tb));
+});
+S('tube-junction', 'madness', async (page) => {   // a T junction: crawl from the branch mouth through the junction and out of the parent tube's near mouth, staying inside the tube tiles
+await installHelpers(page);
+const tj = await page.evaluate(async () => {
+  const g = __game, G = g.G, P = g.P; g.setQuality('low'); let bw = null, br = null, parent = null;
+  for (let run = 0; run < 16 && !br; run++) { G.forceSeed = 12000 + run * 211; G.forceShip = run % 10; g.newRun(); __T.hideEnemies(); for (let d = 1; d <= 9 && !br; d++) { g.loadDeck(d); const w = g.world, b = w.d.tubes.find(t => t.branch); if (b) { const par = w.d.tubes.find(t => !t.branch && t.tiles.some(([x, y]) => x === b.a[0] && y === b.a[1])); if (par) { bw = w; br = b; parent = par; } } } }
+  if (!br) return { found: false };
+  __T.hideEnemies(); for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
+  const ji = parent.tiles.findIndex(([x, y]) => x === br.a[0] && y === br.a[1]);
+  const chain = [br.b, ...br.tiles.slice().reverse(), br.a, ...parent.tiles.slice(0, ji).reverse(), parent.a], pts = chain.map(([x, y]) => bw.center(x, y)), ok = new Set([...parent.tiles, ...br.tiles, parent.a, parent.b, br.b].map(([x, y]) => x + ',' + y));
+  P.x = pts[0][0]; P.z = pts[0][1]; P.y = 0; P.vx = P.vz = 0; G.phase = 'play'; dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+  let k = 1, ducked = false, strayed = 0, secs = 0;
+  for (let i = 0; i < 60 * 50 && k < pts.length; i++) { const [tx, tz] = pts[k]; P.yaw = Math.atan2(P.x - tx, P.z - tz); G.phase = 'play'; P.clung = 0; g.step(1 / 60, 20 + i / 60); secs++;
+    const [px, py] = bw.tile(P.x, P.z); if (bw.isTube(px, py) && P.crouch) ducked = true; if (!ok.has(px + ',' + py)) strayed++; if (Math.hypot(P.x - tx, P.z - tz) < 0.45) k++; }
+  dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+  return { found: true, branchLen: br.tiles.length, parentLen: parent.tiles.length, junction: ji, ducked, strayed, secs: +(secs / 60).toFixed(1), reached: k >= pts.length };
+});
+console.log('tube junction:', JSON.stringify(tj));
+if (!(tj.found && tj.reached && tj.ducked && tj.strayed === 0)) fail('tube junction crawl ' + JSON.stringify(tj));
 });
 S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach
 await installHelpers(page);

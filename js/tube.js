@@ -1,6 +1,7 @@
 // Jiffy-tube topology shared by the generator, World, the nav fields, hostile / crew pathing and the tests (pure data, no three.js).
 // A tube tile is straight (tubeAxis 'x' | 'y': open on the two edges along the axis) or a bend (tubeAxis 'xy': open on exactly two
-// perpendicular edges, listed in d.tubeBend[i] = [[dx, dy], [dx, dy]] = the directions toward the previous and the next tile).
+// perpendicular edges, listed in d.tubeBend[i] = [[dx, dy], [dx, dy]] = the directions toward the previous and the next tile) or a T junction (three entries: the
+// two chain directions plus the branch). A branch is its own d.tubes entry with branch: true, `a` = the junction tile and `b` its open mouth.
 // Every reader asks the same question through these helpers so the "tubes are entered end-on only" rule has one definition.
 
 /** can you leave tile i of this deck in direction (dx, dy)? True for any tile that is not a tube. */
@@ -28,7 +29,7 @@ export function tubeBoxes(d, i, TS, SIDE) {
     if (tubeOpen(d, i, dx, dy)) continue;   // an open edge has no wall
     out.push(dx ? [dx * o, 0, s, h] : [0, dy * o, h, s]);
   }
-  const bend = d.tubeAxis[i] === 'xy' ? d.tubeBend[i] : null;
-  if (bend) { const cx = bend[0][0] + bend[1][0], cy = bend[0][1] + bend[1][1]; out.push([cx * o, cy * o, s, s]); }
+  const dirs = d.tubeAxis[i] === 'xy' ? d.tubeBend[i] : null;   // a bend (2 open edges) or a junction (3): a square pillar at every corner between two open edges
+  if (dirs) for (let p = 0; p < dirs.length; p++) for (let q = p + 1; q < dirs.length; q++) { const [ax, ay] = dirs[p], [bx, by] = dirs[q]; if (ax * bx + ay * by !== 0) continue; out.push([(ax + bx) * o, (ay + by) * o, s, s]); }
   return out;
 }
