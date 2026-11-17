@@ -1388,7 +1388,10 @@ function step(dt, t) {
     else {
       if (!G.breach || G.breach.deck !== G.deck) { const t = world.d.pickTile(([x, y]) => !world.d.room[y][x] && world.d.dist[x + y * world.W] > world.d.maxD * 0.3) || world.d.start; const [bx, bz] = world.center(t[0], t[1]); G.breach = { deck: G.deck, x: bx, z: bz }; G.say('HULL BREACH on this deck — air is venting. Get away from the roar.', 'warn'); caption('air venting', bx, bz); }
       const B = G.breach, dx = B.x - P.x, dz = B.z - P.z, d = Math.hypot(dx, dz);
-      if (d < 14 && world.los(P.x, P.z, B.x, B.z)) { const pull = (1 - d / 14) * 4.5; P.kbx += dx / (d || 1) * pull * dt * 6; P.kbz += dz / (d || 1) * pull * dt * 6; if (Math.random() < dt * 8) steam.add(B.x, 0.3 + Math.random() * 1.8, B.z, (Math.random() - 0.5) * 3, 0.4, (Math.random() - 0.5) * 3, STEAM, 1.2); if (d < 3) { G.hp -= (G.carry?.item === 'breather' ? 3 : 7) * dt; P.shake = Math.max(P.shake, 0.2); if (G.hp <= 0) { NOM() ? nomDie('decompression at the hull breach') : G.hp = 1; } } }
+      if (!B.sealed && d < 3.2 && keys.KeyE) { B.t = (B.t || 0) + dt * (G.carry?.item === 'patch_plate' ? 2 : 1); if (Math.random() < dt * 4) sound.clang?.(0.12); if (B.t >= 8) { B.sealed = true; G.say('Breach sealed. The roar dies away.', 'good'); caption('air stops venting'); } else if (!B.hinted2) { B.hinted2 = 1; } }
+      else if (!keys.KeyE && B.t && !B.sealed) B.t = Math.max(0, B.t - dt);   // let go and the patch slips
+      if (!B.sealed && !B.hinted && d < 12) { B.hinted = 1; G.say('Hold E at the breach to patch it (a hull patch plate in hand halves the time).', ''); }
+      if (!B.sealed && d < 14 && world.los(P.x, P.z, B.x, B.z)) { const pull = (1 - d / 14) * 4.5; P.kbx += dx / (d || 1) * pull * dt * 6; P.kbz += dz / (d || 1) * pull * dt * 6; if (Math.random() < dt * 8) steam.add(B.x, 0.3 + Math.random() * 1.8, B.z, (Math.random() - 0.5) * 3, 0.4, (Math.random() - 0.5) * 3, STEAM, 1.2); if (d < 3) { G.hp -= (G.carry?.item === 'breather' ? 3 : 7) * dt; P.shake = Math.max(P.shake, 0.2); if (G.hp <= 0) { NOM() ? nomDie('decompression at the hull breach') : G.hp = 1; } } }
     } }
   for (const st of world.steamers) {
     st.t -= dt;
