@@ -6,6 +6,19 @@
 <title>Starfarers: The Backdecks</title>
 <style>
   /* Fleet maintenance console: chamfered panels, segmented meters, amber/teal on navy, condensed caps + monospace readouts. */
+  /* loading overlay (js/loading.js): static markup + CSS-only motion so it shows and animates before any script runs */
+  #boot { position:fixed; inset:0; z-index:9999; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:radial-gradient(ellipse at 50% 42%,#14213a 0%,#070b14 55%,#02040a 100%); color:var(--ink,#e8eef6); text-align:center; padding:20px; opacity:1; transition:opacity .45s ease; }
+  #boot.show { display:flex; } #boot.instant { transition:none; }
+  #boot .bcrest { width:96px; height:96px; color:#f2a03d; animation:bootspin 7s linear infinite; filter:drop-shadow(0 0 14px rgba(242,160,61,.45)); } @keyframes bootspin { to { transform:rotate(360deg); } }
+  #boot h1 { margin:0; font:800 clamp(20px,3.4vw,36px)/1.1 var(--f-d,Arial,sans-serif); letter-spacing:.16em; text-transform:uppercase; } #boot h1 b { color:#f2a03d; }
+  #boot .bsub { font:700 12px var(--f-m,monospace); letter-spacing:.2em; text-transform:uppercase; color:#8fa0b6; min-height:1.4em; }
+  #boot .btrack { position:relative; width:min(520px,80vw); height:10px; background:rgba(255,255,255,.1); overflow:hidden; clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%); }
+  #boot .bfill { position:absolute; inset:0; transform:scaleX(0); transform-origin:left center; background:linear-gradient(90deg,#c97a1c,#f2a03d,#ffd9a0); transition:transform .25s ease-out; }   /* a transform, not a width: it stays smooth while the main thread is busy */
+  #boot .bshine { position:absolute; inset:0; width:35%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent); animation:bootshine 1.3s ease-in-out infinite; } @keyframes bootshine { from { transform:translateX(-120%); } to { transform:translateX(320%); } }
+  #boot .brow { display:flex; justify-content:space-between; width:min(520px,80vw); font:700 12px var(--f-m,monospace); letter-spacing:.12em; color:#aebdd2; }
+  #boot button { display:none; margin-top:10px; padding:12px 34px; font:800 15px var(--f-d,Arial,sans-serif); letter-spacing:.24em; text-transform:uppercase; color:#08101c; background:#f2a03d; border:0; cursor:pointer; clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%); animation:bootpulse 1.4s ease-in-out infinite alternate; } @keyframes bootpulse { from { box-shadow:0 0 0 rgba(242,160,61,0); filter:brightness(1); } to { filter:brightness(1.18); } }
+  #boot .bnote { max-width:560px; font-size:12px; color:#6f8197; line-height:1.5; }
+  @media (prefers-reduced-motion: reduce) { #boot .bcrest, #boot .bshine, #boot button { animation:none; } }
   #keyhint kbd { display:inline-block; min-width:30px; padding:5px 9px; margin:0 5px; border:1px solid var(--lc1); border-radius:5px; background:rgba(7,11,19,.8); color:var(--lc4); font:700 15px var(--f-m,monospace); animation:kglow 1.4s ease-in-out infinite alternate; } @keyframes kglow { from { box-shadow:0 0 4px rgba(242,160,61,.3); } to { box-shadow:0 0 16px rgba(242,160,61,.95); } }
   #liftrows .bds { display:block; text-decoration:none; margin-top:2px; } #liftrows .bds em { display:inline-block; width:14px; height:14px; margin-right:3px; vertical-align:middle; opacity:.85; }
   #liftrows .lr.pinned { outline:1px solid var(--lc1); box-shadow:0 0 10px rgba(242,160,61,.55) inset; } #liftrows .lr.pinned b::after { content:'  ◆ guide'; color:var(--lc1); font-size:.8em; letter-spacing:.1em; }
@@ -165,6 +178,17 @@
 <link rel="stylesheet" href="css/hud-skin.css">
 </head>
 <body>
+<div id="boot" class="show" role="status" aria-live="polite">
+  <svg class="bcrest"><use href="#crest"/></svg>
+  <h1>Starfarers: <b>The Backdecks</b></h1>
+  <div class="bsub" id="boot-title">Powering up</div>
+  <div class="btrack"><div class="bfill" id="boot-fill"></div><div class="bshine"></div></div>
+  <div class="brow"><span id="boot-status">Starting…</span><span id="boot-pct">0%</span></div>
+  <div class="bsub" id="boot-sub">The page stays responsive while the ship's systems load</div>
+  <button id="boot-go" type="button">Enter the ship</button>
+  <noscript><div class="bnote">This game needs JavaScript.</div></noscript>
+</div>
+
 <canvas id="view"></canvas>
 <div class="layer" id="vignette"></div>
 <div class="layer" id="scan"></div>

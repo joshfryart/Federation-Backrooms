@@ -251,9 +251,11 @@ export class Menus {
 
   // render every crew portrait quietly in the background during play (one every ~0.35 s, the player's department first) so opening the radio or the duty
   // board never has to render dozens of heads (and compile the skin shader) at once
+  /** every crew member, the player first then their own department by rank: the order portraits are rendered in (background warm-up and the loading screen) */
+  portraitOrder() { const G = this.G, me = G.player, rank = (p) => (p.dept === me?.dept ? 0 : 1000) - p.rank * 10; return [me, ...G.roster.people.filter(p => p !== me).sort((a, b) => rank(a) - rank(b))].filter(Boolean); }
   warmPortraits(dt) {
     const G = this.G; if (G.phase !== 'play' || this.UI.frozen || !G.roster) return;
-    if (this._wr !== G.roster) { this._wr = G.roster; const me = G.player, rank = (p) => (p.dept === me?.dept ? 0 : 1000) - p.rank * 10; this._wl = [me, ...G.roster.people.filter(p => p !== me).sort((a, b) => rank(a) - rank(b))].filter(Boolean); this._wi = 0; this._wt = 1.2; }
+    if (this._wr !== G.roster) { this._wr = G.roster; this._wl = this.portraitOrder(); this._wi = 0; this._wt = 1.2; }
     if ((this._wt -= dt) > 0 || dt > 0.05 || this._wi >= this._wl.length) return; this._wt = 0.35; this.portraits.get(this._wl[this._wi++]);
   }
   // ---------------------------------------------------------------- per animation frame (runs while the world is paused)

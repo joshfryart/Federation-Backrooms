@@ -10,9 +10,9 @@ const cache = {};
 
 export const MODEL_FILES = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy', 'suit', 'human_anims', 'ph_crate', 'ph_barrel', 'ph_plant', 'ph_utilbox', 'ph_armchair'];
 
-export function loadModels(names = MODEL_FILES) {
+export function loadModels(names = MODEL_FILES, onEach = null) {   // onEach(name): called as each file finishes (loading screen progress)
   return Promise.all(names.map(n => new Promise(res => {
-    loader.load(`./assets/models/${n}.glb`, g => { cache[n] = g; res(); }, undefined, e => { console.warn('model failed:', n, e); res(); });
+    loader.load(`./assets/models/${n}.glb`, g => { cache[n] = g; onEach?.(n); res(); }, undefined, e => { console.warn('model failed:', n, e); onEach?.(n); res(); });
   })));
 }
 export const has = (n) => !!cache[n];
@@ -68,12 +68,13 @@ const pbrSets = {};
 export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil', 'wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime'];
 // generated sets pack ambient occlusion / roughness / metalness into the R / G / B channels of <name>_r.webp
 export const ORM_SETS = new Set(['wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime']);
-export function loadTextures(names = PBR_SETS) {
+export function loadTextures(names = PBR_SETS, onEach = null) {   // onEach(name): called as each set finishes
   const tl = new THREE.TextureLoader();
   const one = (url, srgb) => new Promise(res => tl.load(url, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, () => res(null)));
   return Promise.all(names.map(async n => {
     const [c, nm, r] = await Promise.all([one(`./assets/textures/${n}_c.webp`, true), one(`./assets/textures/${n}_n.webp`), one(`./assets/textures/${n}_r.webp`)]);
     if (c && nm && r) pbrSets[n] = { c, n: nm, r, orm: ORM_SETS.has(n) };
+    onEach?.(n);
   }));
 }
 export const pbr = (n) => pbrSets[n];

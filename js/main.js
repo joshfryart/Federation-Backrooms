@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { iconSvg } from './icons.js';
 import { setMapPalette } from './minimap.js';
+import { Loading, paint } from './loading.js';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { tubeStep } from './tube.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
-import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
+import { loadModels, loadEnv, loadTextures, has as hasModel, instance, MODEL_FILES, PBR_SETS } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, dressCrew, prewarmOutfits } from './actors.js';
 import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
@@ -863,7 +864,7 @@ function metaEnd(deck, won) { try { const M = metaGet(); M.runs++; M.bestDeck = 
 const META_UNLOCKS = [[(M) => M.bestDeck >= 3, 'boots', 'Reached deck 3'], [(M) => M.kills >= 8, 'cell', '8 hostiles stunned or downed'], [(M) => M.wins >= 1, 'legs', 'Escaped a ship'], [(M) => M.runs >= 5, 'hypo', '5 shifts survived or not']];
 function metaGrant() { const M = metaGet(), got = []; for (const [ok, id, why] of META_UNLOCKS) if (ok(M)) { G.perks[id] = (G.perks[id] || 0) + 1; if (id === 'hypo') { G.maxHp += 25; G.hp = G.maxHp; } if (id === 'cell') { G.maxPhaser++; G.phaser++; } got.push(`${PERKS.find(p => p.id === id).name} (${why})`); } G.metaBonus = got; if (got.length) later(() => { if (G.phase === 'play') G.say('Career bonus: ' + got.join(', '), 'good'); }, 3500); }
 G.metaGet = metaGet;
-function newRun() {
+function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 'loading' and return enter() (the loading screen's button calls it from a click, so pointer lock is allowed)
   releaseCling(); G.taught = {}; G.visits = {};
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: G.forceSeed ?? Math.floor(Math.random() * 1e6) });   // G.forceSeed: tools/test.mjs seed-set smoke runs
   if (!NOM()) metaGrant();
@@ -883,9 +884,33 @@ function newRun() {
   setupDuty();
   hideScreens(); fade(0);
   loadDeck(1);
-  if (NOM() && G.duty && !navigator.webdriver && new URLSearchParams(location.search).get('brief') !== '0') { G.phase = 'briefing'; document.exitPointerLock?.(); G.hud2.showBriefing(makeBriefing(G.player, G.roster, G.mission, DUTIES, MISSIONS), () => { G.phase = 'play'; requestLock(); }); briefNotes(G.hud2, G.social, G.player); return; }
-  requestLock();
-  G.phase = 'play';
+  const enter = () => {
+    if (NOM() && G.duty && !navigator.webdriver && new URLSearchParams(location.search).get('brief') !== '0') { G.phase = 'briefing'; document.exitPointerLock?.(); G.hud2.showBriefing(makeBriefing(G.player, G.roster, G.mission, DUTIES, MISSIONS), () => { G.phase = 'play'; requestLock(); }); briefNotes(G.hud2, G.social, G.player); return; }
+    requestLock();
+    G.phase = 'play';
+  };
+  if (opts.hold) { G.phase = 'loading'; return enter; }
+  enter();
+}
+// Begin / retry: loading screen -> build the run (ship, crew, systems, deck 1: the heavy synchronous part) -> compile shaders -> render every crew portrait (so the radio, duty board and
+// wheel never render heads mid-play) -> an "Enter the ship" button (a click, so pointer lock is allowed). Nothing plays until all of it is done.
+let runLoading = false;
+async function startRun() {
+  if (runLoading || G.phase === 'loading') return; runLoading = true;
+  try {
+    document.exitPointerLock?.(); Loading.show('Boarding', NOM() ? 'Generating the ship, its crew and their schedules' : 'Generating the ship'); Loading.set(0.03, 'Preparing…'); await paint();
+    Loading.set(0.08, 'Generating the ship, crew and first deck…'); await paint();
+    const enter = newRun({ hold: true });   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
+    Loading.set(0.5, 'Compiling shaders…'); await paint();
+    try { world && renderer.compile(scene, camera); } catch (e) { console.warn('compile', e.message); }
+    if (NOM() && G.menus && !TEST_MODE) {
+      const list = G.menus.portraitOrder(), n = list.length;
+      for (let i = 0; i < n; i++) { Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i + 1} / ${n}`); G.portraits.renderNow(list[i]); await paint(); }
+    }
+    Loading.set(0.99, 'Almost ready…'); await paint();
+    Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);
+  } catch (e) { console.error('startRun failed', e); Loading.hide(true); G.phase = 'title'; showScreen('title'); }
+  finally { runLoading = false; }
 }
 
 function requestLock() {
@@ -1005,7 +1030,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8 + 0.5 * perk('tough'); sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); const m = $('clungmash'); if (m) { m.style.transform = 'scale(1.35)'; setTimeout(() => { m.style.transform = 'scale(1)'; }, 70); } } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
-  if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
+  if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) startRun();
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; if (e.code === 'Tab') showStatus(false); });
@@ -1030,7 +1055,7 @@ $('vsel').value = voiceMode(); $('sens').value = CFG.sens; $('vol').value = CFG.
 if (CFG.quality === 'low') setQuality('low');
 $('resume').onmousedown = (e) => e.stopPropagation();
 $('credbtn').onclick = () => showScreen('credits'); $('companybtn').onclick = (e) => { e.stopPropagation(); showCompany(); }; $('companyback').onclick = (e) => { e.stopPropagation(); showScreen('pause'); }; $('credback').onclick = () => showScreen('title');
-$('begin').onclick = newRun; $('again').onclick = newRun; $('again2').onclick = newRun; $('resume').onclick = resumeGame;
+$('begin').onclick = startRun; $('again').onclick = startRun; $('again2').onclick = startRun; $('resume').onclick = resumeGame;
 G.pace = readPace(location.search, localStorage, navigator.webdriver); mountPaceControl(document, G.pace, (p) => { G.pace = p; savePace(p.id, localStorage); });   // title screen: shift length (js/pace.js)
 $('cont').onclick = () => { G.endless = true; hideScreens(); fade(0, 600); offerPerks(); };
 
@@ -1870,7 +1895,7 @@ function frame() {
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
   if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
-  render(dt, elapsed);
+  if (G.phase !== 'loading') render(dt, elapsed);   // the loading overlay is opaque: do not spend the GPU drawing behind it
 }
 function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
   if (G.phase === 'play' && world) step(dt, t);
@@ -1895,7 +1920,22 @@ function runTimers(dt) { manT += dt; for (let i = 0; i < timers.length; i++) if 
 
 // expose for debugging/tests
 let warmed = null;   // duty-clothes prewarm (js/actors.js prewarmOutfits): tests await __game.warmed so no idle job lands mid-section
-const ready = Promise.all([loadPersonas(), loadModels(), loadEnv(renderer, 'lobby'), loadTextures(), loadItems(), loadCommsData(), loadDuties()]).then(([, , env]) => { if (env) scene.environment = env; buildViewmodel(); warmed = prewarmOutfits(); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift'; });
+// Boot: models, textures, lighting, crew data and the uniform prewarm, with a real progress bar on the loading screen (js/loading.js); the title only appears once all of it is done.
+const BOOT_W = { models: MODEL_FILES.length, tex: PBR_SETS.length, env: 3, small: 4, warm: 4 }, BOOT_TOTAL = Object.values(BOOT_W).reduce((a, b) => a + b, 0); let bootDone = 0;
+const bump = (n, label) => { bootDone += n; Loading.set(bootDone / BOOT_TOTAL, label); };
+const ready = (async () => {
+  Loading.show('Powering up', "The ship's systems are coming online"); Loading.set(0.01, 'Starting…');
+  const small = Promise.all([loadPersonas(), loadItems(), loadCommsData(), loadDuties()]).then(() => bump(BOOT_W.small, 'Crew files read'));
+  const models = loadModels(undefined, () => bump(1, 'Loading models…'));
+  const envP = loadEnv(renderer, 'lobby').then((e) => { bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
+  const tex = loadTextures(undefined, () => bump(1, 'Loading textures…'));
+  const [, , env] = await Promise.all([small, models, envP, tex]);
+  if (env) scene.environment = env; buildViewmodel();
+  warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true, onStep: (i, n) => Loading.set((bootDone + BOOT_W.warm * i / n) / BOOT_TOTAL, `Tailoring uniforms ${i} / ${n}`) });
+  if (!TEST_MODE) await warmed;   // tests await __game.warmed themselves
+  bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
+  Loading.hide(TEST_MODE);
+})();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
