@@ -440,6 +440,50 @@ const an = await page.evaluate(async () => {
 console.log('anims:', JSON.stringify(an));
 for (const [kind, r] of Object.entries(an.kinds)) { if (!r || !r.has) fail('anims: ' + kind + ' lacks shamble / vault / climb'); else if (!(r.vault.thigh > 0.6 && r.vault.spine > 0.3 && r.climb.arm > 0.6 && r.shamble.spine > 0.1)) fail('anims: ' + kind + ' clips do not move the rig ' + JSON.stringify(r)); }
 });
+S('mechanics', 'madness', async (page) => {   // hiding (and Silent Running), thrown-tool distraction, sound captions, career bonuses, first-person hands
+await installHelpers(page);
+const mech = await page.evaluate(async () => {
+  const g = __game, G = g.G, P = g.P, out = {}; g.setQuality('low'); try { localStorage.removeItem('fb_meta'); } catch (e) { /* private */ }
+  g.newRun(); __T.hideEnemies(); G.phase = 'play'; const E = await import('/js/enemies.js');
+  // a hunter placed in the open in sight of the player
+  const h = g.makeEnemy('gronk', g.world, g.world.tile(P.x, P.z), 1, 0, g.scene, g.sound); g.gorns.push(h); h.active = true; h.state = E.S.PATROL;
+  const spot = __T.standNear({ x: h.x, z: h.z, mesh: { rotation: { y: 0 } } }, 6); h.yaw = Math.atan2(P.x - h.x, P.z - h.z);
+  if (spot) { out.sightFar = h.seesPlayer(P, 30);                       // unhidden at 6 m: seen
+    g.enterHide({ tx: 0, ty: 0 }); out.hiddenFar = h.seesPlayer(P, 30); out.hideR = P.hideR;   // hidden at 6 m: not seen
+    const dx = h.x - P.x, dz = h.z - P.z, d = Math.hypot(dx, dz); P.x += dx / d * (d - 1.2); P.z += dz / d * (d - 1.2); out.hiddenNear = h.seesPlayer(P, 30);   // hidden at 1.2 m: seen
+    g.exitHide(); G.perks.ghost = 1; g.enterHide({ tx: 0, ty: 0 }); out.ghostR = P.hideR; g.exitHide(); G.perks.ghost = 0; }
+  // distraction: a patrolling hunter within range goes to investigate the noise
+  const s2 = __T.standNear(h, 8); h.state = E.S.PATROL; h.active = true; const n = G.distract(P.x, P.z, 24); out.distract = { n, state: h.state, investigate: h.state === E.S.INVESTIGATE };
+  // captions
+  g.CFG.caps = true; G.caption('test roar', P.x + 5, P.z); const capEl = document.getElementById('caps'); out.caption = capEl?.lastChild?.textContent || null; g.CFG.caps = false;
+  // career bonuses: milestones grant starting perks on the next madness run
+  localStorage.setItem('fb_meta', JSON.stringify({ runs: 9, bestDeck: 5, kills: 20, wins: 1 })); g.newRun(); out.meta = { perks: Object.keys(G.perks).sort(), bonus: (G.metaBonus || []).length }; localStorage.removeItem('fb_meta');
+  // hands: shown for parkour verbs, hidden otherwise
+  const A = await import('/js/actors.js'), hd = A.makeHands(); for (let i = 0; i < 30; i++) hd.pose('mantle', 0.8, 0.05, { time: i * 0.05 }); const shown = hd.group.visible; for (let i = 0; i < 60; i++) hd.pose('none', 0, 0.05); out.hands = { shown, hiddenAgain: !hd.group.visible };
+  return out;
+});
+console.log('mechanics:', JSON.stringify(mech));
+if (mech.sightFar !== undefined && !(mech.sightFar === true && mech.hiddenFar === false && mech.hiddenNear === true && mech.hideR === 1.8 && mech.ghostR === 1)) fail('mechanics: hiding ' + JSON.stringify(mech));
+if (!(mech.distract?.n >= 1 && mech.distract.investigate)) fail('mechanics: distraction ' + JSON.stringify(mech.distract));
+if (!/^\[test roar\]/.test(mech.caption || '')) fail('mechanics: caption ' + JSON.stringify(mech.caption));
+if (!(mech.meta && ['boots', 'cell', 'hypo', 'legs'].every(p => mech.meta.perks.includes(p)) && mech.meta.bonus === 4)) fail('mechanics: career bonuses ' + JSON.stringify(mech.meta));
+if (!(mech.hands?.shown && mech.hands.hiddenAgain)) fail('mechanics: hands ' + JSON.stringify(mech.hands));
+});
+S('breach', 'nominal', async (page) => {   // a hull breach pulls and hurts, and holding E at it seals it
+await installHelpers(page);
+const br = await page.evaluate(async () => {
+  const g = __game, G = g.G, P = g.P; g.G.forceShip = 0; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); await new Promise(r => setTimeout(r, 300)); G.phase = 'play';
+  G.comms.alerts.raise('hull_breach'); for (let i = 0; i < 5; i++) { G.phase = 'play'; g.step(0.05, i * 0.05); }
+  const B = G.breach; if (!B) return { breach: null };
+  const w = g.world; let spot = null; for (const [a, b] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) { const x = B.x + a, z = B.z + b; if (!w.solidAt(x, z) && w.los(x, z, B.x, B.z)) { spot = [x, z]; break; } }
+  if (!spot) return { breach: true, spot: null };
+  P.x = spot[0]; P.z = spot[1]; G.hp = G.maxHp = 1e6; const hp0 = G.hp, d0 = Math.hypot(B.x - P.x, B.z - P.z); for (let i = 0; i < 20; i++) { G.phase = 'play'; g.step(0.05, 1 + i * 0.05); } const hpLost = hp0 - G.hp, d1 = Math.hypot(B.x - P.x, B.z - P.z);
+  dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })); for (let i = 0; i < 220 && !B.sealed; i++) { G.phase = 'play'; G.hp = 1e6; g.step(0.05, 5 + i * 0.05); } dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
+  return { breach: true, spot: true, pulled: +(d0 - d1).toFixed(2), hpLost: +hpLost.toFixed(1), sealed: !!B.sealed };
+});
+console.log('breach:', JSON.stringify(br));
+if (!(br.breach && br.spot && br.pulled > 0.5 && br.hpLost > 1 && br.sealed)) fail('breach ' + JSON.stringify(br));
+});
 S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach
 await installHelpers(page);
 const srch = await page.evaluate(async () => {
