@@ -1,37 +1,118 @@
-# Starfarers: The Backdecks
+# Starfarers: The Backdecks — Systems Nominal
 
-A liminal-space horror roguelike built with three.js (a parody/homage — see [CREDITS.md](CREDITS.md)).
-You are alone aboard the United Starfarers' Fleet provincial squadron — ten ships named for the Canadian provinces, in five hull classes (see `ships.html` for the schematics) — hunted by something. Find the logic chips, power the tubelift, descend, pick a requisition, repeat. Permadeath.
+A first-person ship-life sim built with three.js. You are dealt a random billet aboard a fully working
+United Starfarers' Fleet ship — from Captain down to Cargo Handler — and you can do that person's job, cut
+corners, or ignore it. The ship, and the 60–90 named crew aboard it, answer back. (A parody/homage; see [CREDITS.md](CREDITS.md).)
 
-## Threats
-A **Gronk** (reptilian ambusher), a **Compliance Drone** (slow, relentless, adapts to your zapper), **Mr. Grinsworth** (a rogue hologram that only moves when you look away — and walks through walls), **Space madness** (one crew member at a time loses it, lowest rank first; they hunt the other crew before you, and when you put one down, the next one turns), **Clingon Crawlers** (they wait on the ceiling), and **Slimeling** impostors posing as survivors. Each deck rolls a different mix.
+> **Status:** Systems Nominal is the default mode and the focus of development. Everything below describes it.
+> Nothing here has been tuned on real hardware yet; the screenshots are captured headless with a software renderer.
+
+![Your duty board: rounds and mission tasks across the watch](docs/screenshots/08-duty-board.png)
+
+## The idea
+
+At the start of a watch the game picks a ship, a mission, and one crew member to be **you**. You get their name,
+rank, uniform, superior, subordinates and duty card. The ship is running normally; every duty you do properly,
+rush, fake or skip feeds a ledger that moves system health, crew trust and what your superior thinks of you.
+Nothing is scripted to fail: a ship whose duties are done stays nominal for a long time.
+
+![Briefing: who you are, your mission, your duty rounds, and a map of your first deck](docs/screenshots/02-briefing.png)
+
+## What you can do
+
+**Walk a living ship.** Ten ships (named for Canadian provinces) in five hull classes, 8–9 decks each, with
+bridges, engineering, sickbay, galley, cargo, arboretum and hundreds of fixtures. The crew follow schedules:
+they walk between stations, ride the tubelifts, eat, work and gather in groups.
+
+![The bridge, with the crew at their stations](docs/screenshots/03-corridor.png)
+
+**Do your job.** Your *duty rounds* come due at stations around the ship; mission tasks must be finished by the
+end of the shift. Do each one **properly** (slower, no debt) or **rushed** (faster, quietly adds duty debt).
+Press **J** for the duty board.
+
+**Learn the tools.** The first time you use a station console, tool or panel, an instruction card tells you how it
+works, then a short mini-game ties into the job. A clean run is faster; a fumbled one still gets done and is
+logged as rushed. Esc always cancels, and the job stays due.
+
+| First-use instructions | The mini-game |
+|---|---|
+| ![Instruction card for the station console](docs/screenshots/09-job-instructions.png) | ![Console sequence mini-game](docs/screenshots/10-job-minigame.png) |
+
+**Talk to people.** Press **E** on a crew member and the camera moves in for a close-up conversation while the
+world pauses. Greet, ask about duty, small talk, ask for help, give orders (rank permitting), swap items, ask
+who they hang out with. Trust shifts with what you say and what you've done.
+
+![Conversation close-up with the quick wheel and relationship bar](docs/screenshots/05-conversation.png)
+
+**Keep the ship running.** Departments' systems (reactor, life support, gravity, comms, hydroponics…) can degrade
+and cascade into each other. **Tab** shows the ship's status; faults show on the HUD and map, and a pacing
+director decides when things go wrong and when you get a breather.
+
+![Ship status schematic: every system green](docs/screenshots/06-ship-status.png)
+
+**Find your way.** A deck plan sits in the corner, a compass runs along the top, and **M** opens the full map with
+every deck, room type and lift. **G** pins a destination and draws floor chevrons to it; the lift panel marks the
+pinned deck.
+
+![Full map with deck list](docs/screenshots/07-map.png)
+
+**Fix, carry, push and fight (a little).** Hold **E** to repair junctions and hardware. Pick up tools, trays and
+boxes, push carts, climb onto catwalks and service ladders. Handhelds (tricorders, phasers on stun, medical and
+engineering tools) double as improvised weapons, and fights are grappling and melee, not gunplay.
 
 ## Play
+
 Serve the folder statically (ES modules need http):
 
     python3 -m http.server 8000   # then open http://localhost:8000
 
 No build step; three.js and its addons are vendored in `vendor/`. Models, textures and the HDRI are in `assets/`.
+The first load shows a loading screen that preloads every crew portrait; press **Enter the ship** when it's ready.
+On the title screen pick a shift length: **First watch** (~50 min, guided first task), **Standard** (~20 min) or
+**Crunch** (~14 min).
 
 ## Controls
-Tab ship status · hold E repair · WASD move · Shift sprint (loud) · Space jump / climb props / wall-jump · C creep, or slide while sprinting · Q or right click grapple line · Mouse look · Click fire zapper (stuns) · E interact / shake off a Clingon · F flashlight · M map
 
-Sprint and jump along a bulkhead to wall-run. Slide into man-sized hostiles to trip them. The grapple reels you to walls, ceilings and crate tops.
+| | |
+|---|---|
+| **W A S D** | move |
+| **Shift** | sprint (loud) |
+| **Space** | jump / climb props / wall-jump |
+| **C** | creep, or slide while sprinting |
+| **Mouse** | look |
+| **E** | interact · talk · hold to repair |
+| **J** | duty board (hold: duty wheel) |
+| **Tab** (hold) | ship status |
+| **M** | map |
+| **G** | pin the next duty / cycle pins |
+| **Q** (hold) | quick wheel |
+| **H** | radio (hold: radio wheel) |
+| **V** · **1–9** | tools · belt |
+| **K** · **L** | alerts · comm log |
+| **F** | flashlight |
+| **P** · **Esc** | pause · close the top menu layer |
 
-**Ship systems** — every run is one ship with a full named crew. Its departments' systems break down as you go (blackouts, failing life support, gravity, lurching decks, a blind scan-o-matic…). Faults show on the HUD and map; find the yellow maintenance junction or the department's hardware and hold E to fix it — loudly. Left broken, failures cascade (no coolant → reactor trouble → no air). Sometimes a crew member turns up to fix it — if you keep the madman off them. A pacing director decides when things go wrong and when you get a breather (F3 shows it).
+The pause menu has **Calm visuals**, **Sound captions** and a **Colour-blind palette**.
 
-**Jiffy tubes** — yellow-framed crawl ducts cut through the bulkheads. Walk in and you duck automatically. They are shortcuts with supplies inside; the Gronk and the Drone are too big to follow, the crazed crew are not. Longer tubes have a ladder shaft up to a second crawlway that comes out high in a wall (W climbs, S or C climbs down, Space lets go).
+## Reference pages
+
+Open these from the same server:
+
+- `crew.html` — chain of command, department loadouts; break and repair any system and see its effects.
+- `ships.html` — fleet schematics (profile and deck plans for all ten ships).
+- `social.html` — the social tracker: groups, friendships, rivalries.
+- `models.html` — model viewer (`?set=crew|enemies|misc|props|moves|styles`, `?clip=<name>`).
+- `voices.html` — crew voice sampler.
+
+Design notes live in `docs/` — start with `docs/DESIGN-systems-nominal.md`; open work and handoff notes are in `TODO.md`.
+
+## Tests
+
+`node tools/test.mjs` runs the headless suite (needs Playwright + Chromium; it starts its own static server) and
+prints `OK` or `FAIL <check>` lines, each with a `replay:` command. `--gate` runs the fast node-only sections plus a
+browser smoke test (under 2 minutes); `--only a,b --seed N` replays specific sections. Details are in `TODO.md`.
 
 ## Credits
-Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **MakeHuman**, **dramatis3d** (Tonio Loewald), **Quaternius**, **Poly Haven**, **ambientCG**. Full list and licenses in [CREDITS.md](CREDITS.md).
 
-## Art review & tests
-- `crew.html` — ship's company: chain of command, department loadouts, Break/Repair any system and see its effects.
-- `ships.html` — fleet schematics (profile + deck plans for all ten ships).
-- `models.html` — model viewer (`?set=crew|enemies|misc|props`, `?clip=<name>`, drag to orbit).
-- `node tools/test.mjs` — headless test suite (needs Playwright + Chromium; starts its own static server). Prints `OK` or `FAIL <check>` lines; each FAIL is followed by `ship=… seed=… deck=…` and a `replay:` command. Modes:
-  - `--gate`: every node-only section (generator, ship decks, voices, director cascade, pace presets, the `tools/test-*.mjs` unit suites) plus one browser smoke (load, newRun, 300 test-clock frames, lift one deck down, one high-quality render). Aim: under 2 minutes.
-  - full (no flag): everything, one live browser page at a time, plus the smoke on a fixed seed set (`tools/seed-scan.mjs` picks the three ship / run-seed pairs).
-  - `--only a,b` runs just those sections (`--list` names them); `--seed N` (or env `TEST_SEED`, default 1) seeds `Math.random` in every page and re-seeds per section, so `node tools/test.mjs --only walk --seed 7` replays that section; `--ship i` pins the ship.
-  - Pages run on a test clock (`G.manual`: the render loop neither steps nor draws; sections tick with `__game.step` / `__game.advance`) with a cheap renderer (`?test=1`). Each section prints its wall time and JS heap. A page that fails to load is retried once (`RETRY page load …`); sections are never retried. Section budgets: full run ~3.5 min, `--gate` ~40 s, one browser section 1-30 s (nominal ~15-20 s, walk ~30 s); a section is never given a longer window to pass. Browser sections set up their preconditions with `tools/test-helpers.mjs` (`window.__T`, installed per page: `standNear`, `nearestProp`, `openSideOf`, `farFrom`, `clearSite`, `hideEnemies`, `quiet`, `arena`; deterministic, no `Math.random`). Every FAIL prints `ship=… seed=… deck=…   replay: node tools/test.mjs --only <section> --seed N`; run that line to reproduce. Rolled outcomes (combat grab / knock-down) are pinned like the pace-repair test pins `g.repair.roll`, never retried. Past flakes and open ones: `TODO.md` (test-suite reliability).
-- `tools/build-*.mjs` — offline scripts that re-pack the upstream CC0 assets (not needed to run the game).
+Third-party CC0 characters, animation, props, textures and HDRI, with thanks: **MakeHuman**, **dramatis3d**
+(Tonio Loewald), **Quaternius**, **Poly Haven**, **ambientCG**. Full list and licenses in [CREDITS.md](CREDITS.md).
