@@ -157,3 +157,20 @@ Ranked: real CC0 PBR textures (biggest win) → AgX/grade tuning (done) → fake
 
 ## Legal
 Parody/homage: keep all names original (no franchise marks, insignia, or likenesses). Credit every third-party asset in `CREDITS.md` and the in-game Credits screen.
+
+## Play-test pass: tall rooms, hiding, loop corridor (headless Chromium, driven by script, not by hand)
+Method: real renderer (no `?test=1`) on swiftshader, `__game.step` / `renderOnce`, screenshots. **Not** judged: hand poses (mantle / ladder / slide / grapple / wall-run), audio, Calm / captions / colour-blind visuals, real-GPU frame times. Those still need a person with a GPU.
+
+Fixed:
+- **Pillars never built correctly**: `cyl()` takes `(rTop, rBottom, h, mat, ...)` but the `pillar` prop called it as `(r, h, mat, ...)`, giving NaN `CylinderGeometry` (console error on every tall room) and invisible shafts. Now `cyl(r, r, h, ...)`.
+- **Line of sight passed through nothing / blocked by catwalks**: `World.los` treated a catwalk module's tile as solid, so hunters and crew could not see you walking under (or standing near) a deck, though the player collides with nothing there. `los` now skips walk-under tiles.
+- **Loop corridor** (`findLoopRun`): only ~22 % of madness decks had a run of 6+ tiles, so most players never saw it. Minimum is now 5 tiles (~37 %). With a 5-tile run the return jump (3 tiles) landed already at the trigger zone, so the second loop never fired; the jump is now `min(3, len - 2)`. Checked in the browser: loops twice, then lets you through.
+
+Checked OK:
+- Catwalk: E at a module climbs the ladder and ends at y = 2.6 (small overshoot to 2.68 then settles); view from the deck looks right. High quality costs one shadow light, 9 lights in total, 28 ms vs 18 ms per frame on swiftshader (relative only).
+- Hiding: crouch (C) + E at drawers / shelving enters hide (`hideR` 1.8, ghost perk 1.0), move key exits. A hunter already chasing from < 3.5 m keeps coming and finds you at hideR, which seems right.
+
+Still to look at (needs hands-on):
+- Brief text "Restore power to the tubelift" overlaps the top of the deck-plan minimap on a 960x540 viewport.
+- Whether a 5-tile loop corridor still feels "impossible" or just short; maybe prefer the longest run and skip decks with none rather than lowering the threshold further.
+- Twin rooms, sign changes between visits, perks (ghost / noisemaker / tough), career unlocks (`META_UNLOCKS`), balance numbers in `MOVE` and `spawnThreats`: read through only, no change.
