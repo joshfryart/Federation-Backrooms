@@ -93,6 +93,8 @@ export class NavHUD {
   decks() { const S = this.G.shipDecks; if (S !== this._sd) { this._sd = S; this._dd = S ? S.map(s => s.data) : null; } return this._dd; }
   from() { return { x: this.P.x / this.TS, y: this.P.z / this.TS }; }
   get pin() { return this.pins.pin; }
+  /** the deck (0-based) the pinned destination needs a ride to, or null: the lift panel highlights it */
+  rideTarget() { const l = this.plan?.legs?.find(l => l.kind === 'ride'); return l ? l.to : null; }
 
   // ---- pins
   setPin(p, sayIt = true) { this.pins.set(p); this.pins.cleared = !p; this.planKey = ''; this.tick(); if (sayIt) this.G.say?.(p ? `Guide: ${short(p.label || label(p.room || p.type), 4)}` : 'Guide off', 'comp'); return p; }

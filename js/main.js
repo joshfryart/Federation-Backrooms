@@ -285,6 +285,8 @@ function loadDeck(n) {
   $('shipcls').textContent = ship.cls + '-class';
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
+  if (NM && !G.navTour && !localStorage.getItem('fb_navtour')) { G.navTour = 1; const tips = ['Nav: M opens the big map, G cycles guide pins, Tab shows the ship schematic.', 'Nav: the compass strip and the floor chevrons lead to your pinned destination.', 'Nav: in the lift, Enter takes the deck your guide pin needs.'];
+    tips.forEach((t, i) => later(() => { if (G.phase === 'play') { G.say(t, 'good'); if (i === tips.length - 1) try { localStorage.setItem('fb_navtour', '1'); } catch (e) { /* private window */ } } }, 25000 + i * 14000)); }
   if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; later(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
   else G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
   if (n === 1 && !NM) later(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
@@ -988,7 +990,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Tab') { e.preventDefault(); if (!e.repeat && G.phase === 'play') showStatus(true); }
   if (!e.repeat) { if (e.code === 'Space') pressed.jump = true; if (e.code === 'KeyC' || e.code === 'ControlLeft') pressed.crouch = true; }
   keys[e.code] = true;
-  if (G.phase === 'select') { const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code); if (m && +m[1] >= 1 && +m[1] <= G.ship.decks) chooseDeck(+m[1] - 1); else if (e.code === 'Escape' || e.code === 'KeyE') closeLiftPanel(); }
+  if (G.phase === 'select') { const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code); if (m && +m[1] >= 1 && +m[1] <= G.ship.decks) chooseDeck(+m[1] - 1); else if (e.code === 'Enter' && NOM() && G.nav?.rideTarget?.() != null && G.nav.rideTarget() !== G.shipDeck) chooseDeck(G.nav.rideTarget()); else if (e.code === 'Escape' || e.code === 'KeyE') closeLiftPanel(); }
   if (G.phase === 'perk') { const i = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code); if (i >= 0 && G.perkChoices[i]) choosePerk(G.perkChoices[i]); }
   if (G.phase === 'play') {
     if (e.code === 'KeyF') { P.torch = !P.torch; torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high'; sound.flick(); }
@@ -1608,7 +1610,8 @@ function renderLiftPanel() {
   $('liftsub').textContent = `${G.ship.name} · ${G.ship.reg}`;
   $('liftbig').textContent = ride ? `${L.to > L.from ? '▼' : '▲'} DECK ${String(L.disp + 1).padStart(2, '0')}` : '';
   $('liftfoot').textContent = ride ? `Riding to Deck ${L.to + 1} — ${deckZone(L.to)}` : 'Press 1–' + D + ' or click a deck · Esc to step out';
-  $('liftrows').innerHTML = Array.from({ length: D }, (_, i) => { const nt = deckNotes(i); return `<div class="lr${!ride && i === G.shipDeck ? ' cur' : ''}${ride && i === L.to ? ' dest' : ''}${ride && i === L.disp ? ' here' : ''}" data-i="${i}"><i>${i + 1}</i><b>Deck ${i + 1} — ${deckZone(i)} </b><span>${nt.length ? '· ' + nt.join(' · ') : ''}</span></div>`; }).join('');
+  const pinDeck = !ride && NOM() ? G.nav?.rideTarget?.() : null;   // the pinned destination's deck is marked (and Enter picks it)
+  $('liftrows').innerHTML = Array.from({ length: D }, (_, i) => { const nt = deckNotes(i); return `<div class="lr${!ride && i === G.shipDeck ? ' cur' : ''}${pinDeck === i ? ' pinned' : ''}${ride && i === L.to ? ' dest' : ''}${ride && i === L.disp ? ' here' : ''}" data-i="${i}"><i>${i + 1}</i><b>Deck ${i + 1} — ${deckZone(i)} </b><span>${nt.length ? '· ' + nt.join(' · ') : ''}</span></div>`; }).join('');
   $('liftui').className = 'show' + (ride ? ' ride' : '');
 }
 $('liftrows').onclick = (e) => { const r = e.target.closest('.lr'); if (r && G.phase === 'select') chooseDeck(+r.dataset.i); };

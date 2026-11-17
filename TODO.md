@@ -98,7 +98,7 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 - [ ] Climbing uses the `push` clip on ladders and `crouch_fwd` for vaults — no dedicated vault/climb animations exist in the free UAL set.
 - [ ] Tubes are straight in plan. Add bends, junctions, ladders that continue between decks (an alternative to the tubelift), hatches that open/close, and grilles looking into rooms.
   Note (not attempted): bends / junctions touch every place that reads `tubeAxis` ('x' | 'y' per tile): the generator's `tubes` pass, `World._build` side walls / ribs / headers, `World.resolve` and `field`, ladder logic in `js/move.js`, enemy crawl pathing. A bend tile needs its own entry / exit axes in all of them, so plan it as a dedicated pass with its own tests.
-- [ ] Large rooms are only wider, not taller (walls are fixed at 3.2 m) and are dressed with the same props repeated; add high ceilings/mezzanines, pillars, a proper galley kitchen, cargo racking.
+- [ ] Large rooms: taller (5.6 m), catwalk mezzanines and cargo racking (4 shelving units along the walls of a big cargo bay) are done. Still open: pillars, a proper galley kitchen, less repeated dressing.
 - [ ] First-person crawl animation and hands. Done: crawl audio (`Sound.crawl`) and muffled outside sound inside tubes (`Sound.setMuffle`).
 - **Pacing director (`js/director.js`, glue `updateDirector` in `js/main.js`, F3 shows it in game):** one intensity value (rises with nearby hostiles, hits, screams, someone turning, faults, blackouts; decays when quiet) and a build → peak → relax cycle. In *build*, every 14–28 s (faster on deeper decks), if intensity is under the deck's target (0.49 on deck 1 → 0.75), it picks a pressure action: break a system (darkness/comms first when hostiles are about), force a blackout, nudge the nearest hostile toward your area, wake the next dormant hostile, or bring the next madness forward. Past 0.8 it holds a 6–11 s *peak*, then a 22–40 s *relax* where nothing new is added and the next madness waits. Faults now come only from the director and from cascades (`ShipState.auto = false`).
 - **Cascades (`CASCADES` in `js/crew.js`):** e.g. coolant offline 40 s → reactor damage; reactor offline 45 s → life support; EPS offline 30 s → lighting, 60 s → gravity; computer → comms; hydroponics → life support; helm → dampers; holo-playroom → medical hologram. Listed on `crew.html`.
@@ -119,8 +119,8 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 
 - **Navigation + visual HUD (Systems Nominal, `docs/nav.md`):** `js/nav.js` (routes, cross-deck walk/ride/walk plans, pins), `js/nav-hud.js` (glue), `js/minimap.js`, `js/compass.js`, `js/schematic.js`, `js/briefmap.js`, `World.setGuide` (floor chevrons + beacon). G cycles pins (auto-pin when due), M big map (pauses via `G.menuPause`), Tab schematic.
 - [ ] Nav: duty board rows (hud-duty.js, menus agent) could adopt the rings / ETA notch / click-to-pin from the mockup; `NavHUD.setPin()` and `dutyItems()` are ready for it.
-- [ ] Nav: lift panel (`renderLiftPanel`) could show the room-type badge rows per deck and pre-select the pinned destination deck.
-- [ ] Nav: first-run hint tour (glowing keycaps on minimap / board / compass) not built; the legend shows for the first 150 s only.
+- [x] Nav: the lift panel marks the deck the guide pin needs (`rideTarget` in `js/nav-hud.js`, `.pinned` row) and Enter takes it. Still open: room-type badge rows per deck.
+- [ ] Nav: a text-only first-run tour now runs once per browser (three tips at 25 / 39 / 53 s, `fb_navtour`); glowing keycaps on the minimap / board / compass are still not built.
 - [ ] Nav: big map under pointer lock uses a virtual cursor; once `js/ui-mode.js` owns lock release, switch it to a real cursor layer.
 - [ ] Nav: briefing flythrough shows only the current deck; stations on other decks are lift chips. A per-deck sequence would be nicer.
 

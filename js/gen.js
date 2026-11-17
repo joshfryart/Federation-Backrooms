@@ -209,7 +209,9 @@ export function generate(deck, seed, opts = {}) {
         }
         break; }
       case 'cargo': for (const [x, y] of interior) if (prnd() < 0.65) { const u = prnd(); put(x, y, u < 0.45 ? 'crate' : u < 0.75 ? 'pallet_loaded' : 'pallet'); }   // SVC-6 pallets among the crates
-        ringPut(r, 'console', { door: true }); ringPut(r, 'workbench', { door: true }); ringPut(r, 'hoversled', { door: true, along: true }); ringPut(r, 'cargo_pad'); break;
+        ringPut(r, 'console', { door: true }); ringPut(r, 'workbench', { door: true }); ringPut(r, 'hoversled', { door: true, along: true }); ringPut(r, 'cargo_pad');
+        if (r.big) for (let i = 0; i < 4; i++) ringPut(r, 'shelving', { along: true, free: true });   // cargo racking along the walls of a big bay
+        break;
       case 'arboretum': {   // SCI-1 grow beds in rows (long axis x, every other row a walkway), trees at the rim, SCI-6 dosing tanks on a wall
         let beds = 0; for (const [x, y] of interior) if ((y - iy0) % 2 === 0 && beds < 6 && prnd() < 0.9) { if (safePut(r, x, y, 'growbed', { rot: prnd() < 0.5 ? 0 : Math.PI })) beds++; } else if ((y - iy0) % 2 === 1 && prnd() < 0.3) safePut(r, x, y, 'tree');
         for (let i = 0; i < 2; i++) ringPut(r, 'tree', { only: 'corner', free: true }); if (!has(r, 'tree')) anyPut(r, interior, 'tree') || ringPut(r, 'tree');   // SYSTEMS.hydro is hosted on a tree
