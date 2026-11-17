@@ -19,6 +19,7 @@ canvas#c.recap{filter:sepia(.85) contrast(1.1) blur(.6px) brightness(.9)}
 #slug.on{opacity:1}
 #cnt{position:fixed;right:3vw;top:11vh;z-index:6;font-weight:900;font-size:clamp(20px,3.4vw,48px);color:#ffb86a;text-shadow:0 2px 8px #000;opacity:0;transition:opacity .3s;text-align:right}
 #cnt.on{opacity:1}#cnt small{display:block;font-size:.3em;letter-spacing:.2em}
+body.render #hud{display:none!important}
 #hud{position:fixed;right:10px;bottom:10px;z-index:9;display:none;gap:6px}#hud button{opacity:.5}#hud button:hover{opacity:1}
 button{font:inherit;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border:0;border-radius:99px;padding:8px 16px;background:#3a3f66;color:#fff;cursor:pointer}
 button:hover{background:#5560b0}button.big{font-size:clamp(16px,2.4vw,26px);padding:14px 38px;background:linear-gradient(#ffe27a,#f0a020);color:#2a1400;box-shadow:0 0 0 3px #2a1400,0 0 0 6px var(--gold),0 8px 24px #000a;animation:bob 1.2s ease-in-out infinite}
@@ -105,6 +106,16 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { BEATS } from './js/soap-script.js';
 
 const Q = new URLSearchParams(location.search);
+const RENDER = Q.get('render') === '1';   // offline video render: virtual clock, seeded randomness, frames stepped from outside (tools/soap-video)
+const lineLog = []; let VT = 0; if (RENDER) document.body.classList.add('render');
+if (RENDER) {
+  let seed = 20251117; Math.random = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const q = []; let nid = 1; performance.now = () => VT; Date.now = () => VT;
+  window.setTimeout = (fn, ms = 0, ...a) => { q.push({ id: nid, at: VT + Math.max(0, ms), fn, a }); return nid++; };
+  window.setInterval = (fn, ms = 0, ...a) => { q.push({ id: nid, at: VT + ms, fn, a, every: Math.max(1, ms) }); return nid++; };
+  window.clearTimeout = window.clearInterval = (id) => { const i = q.findIndex(x => x.id === id); if (i >= 0) q.splice(i, 1); };
+  window.__advance = async (ms) => { const end = VT + ms; for (;;) { q.sort((a, b) => a.at - b.at); const n = q[0]; if (!n || n.at > end) break; VT = n.at; if (n.every) n.at += n.every; else q.shift(); n.fn(...n.a); for (let k = 0; k < 6; k++) await null; } VT = end; for (let k = 0; k < 6; k++) await null; };
+}
 const TS = +(Q.get('ts') || 1);                    // timescale for waits (tests use small values)
 const $ = (id) => document.getElementById(id);
 const sleepRaw = (s) => new Promise(r => setTimeout(r, s * 1000 * TS));
@@ -126,8 +137,8 @@ const redL = new THREE.PointLight(0xff2010, 0, 30); redL.position.set(0, 3.2, 2)
 
 // ───────────────────────── audio (tiny synth: stings, chirps, klaxon, blip-voice fallback) ─────────────────────────
 let AC = null, master = null, muted = false;
-function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = 0.55; master.connect(AC.destination); } catch (e) { AC = null; } } if (AC?.state === 'suspended') AC.resume(); return AC; }
-const now = () => AC.currentTime;
+function audio() { if (!AC) { try { AC = RENDER ? new OfflineAudioContext(1, Math.ceil((+Q.get('dur') || 480) * 24000), 24000) : new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = 0.55; master.connect(AC.destination); } catch (e) { AC = null; } } if (!RENDER && AC?.state === 'suspended') AC.resume(); return AC; }
+const now = () => RENDER ? VT / 1000 : AC.currentTime;
 function tone(f, d, { type = 'sine', v = 0.18, at = 0, to = 0, atk = 0.01, lp = 0, vib = 0 } = {}) {
   if (!audio() || muted) return; const t = now() + at, o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + d);
   if (vib) { const l = AC.createOscillator(), lg = AC.createGain(); l.frequency.value = 5.5; lg.gain.value = f * 0.012 * vib; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t + d + 0.1); }
@@ -159,7 +170,7 @@ const SND = {
 };
 // robot "blip" voice: used when the browser has no speech voices (or ?blips=1); timing mirrors the script's estimate
 function blipVoice(c, text, dur) {
-  if (!audio() || muted) return; const words = text.replace(/\.\.\./g, ' ').split(/\s+/).filter(Boolean), step = dur / Math.max(1, words.length + 1);
+  if (RENDER || !audio() || muted) return; const words = text.replace(/\.\.\./g, ' ').split(/\s+/).filter(Boolean), step = dur / Math.max(1, words.length + 1);
   words.forEach((w, i) => { const syl = Math.max(1, Math.round(w.length / 3)); for (let s = 0; s < syl; s++) { const f = 120 * c.p * (1 + (Math.sin(i * 1.7 + s) * 0.25)); tone(f * 2, step / syl * 0.8, { type: 'sawtooth', at: i * step + s * (step / syl), v: 0.045, lp: 700 + (w.charCodeAt(0) % 5) * 220, atk: 0.015 }); } });
 }
 
@@ -184,9 +195,11 @@ function voiceFor(key) {
   return pool[(idx + (key.length % 2)) % pool.length];
 }
 let speakingTimer = null;
+const DURS = RENDER ? await (await fetch(Q.get('durs'))).json() : {};
 function say(key, text, wps) {
   const c = CH[key], est = text.replace(/\.\.\./g, ' ').split(/\s+/).filter(Boolean).length / wps + 0.7;
   return new Promise(res => {
+    if (RENDER) { lineLog.push({ i: window.__beat, t: VT / 1000 }); setTimeout(res, (DURS[window.__beat] || est) * 1000); return; }
     let done = false; const fin = () => { if (!done) { done = true; clearTimeout(speakingTimer); res(); } };
     const useSynth = !muted && TS >= 1 && voices.length && !Q.get('blips');
     if (!useSynth) { blipVoice(c, text, est); speakingTimer = setTimeout(fin, est * 1000 * TS); return; }
@@ -353,8 +366,9 @@ function updateCam(dt, t) {
 
 // ───────────────────────── frame loop ─────────────────────────
 const clk = new THREE.Clock(); let T = 0, onTitle = true, alert = false, shakeT = 0;
-function frame() {
-  requestAnimationFrame(frame); const dt = Math.min(0.05, clk.getDelta()); T += dt;
+function frame() { requestAnimationFrame(frame); tick(Math.min(0.05, clk.getDelta()), true); }
+function tick(dt, draw) {
+  T += dt;
   for (const a of Object.values(actors)) {
     if (!a || !a.mesh.visible) continue; const m = a.mesh;
     if (a.move) { const dx = a.move.x - m.position.x, dz = a.move.z - m.position.z, d = Math.hypot(dx, dz); if (d < 0.06) { m.position.x = a.move.x; m.position.z = a.move.z; a.move = null; a.H?.play(a.pose && a.pose !== 'walk' ? a.pose : 'idle', { fade: 0.25 }); a.moveDone?.(); a.moveDone = null; } else { const s = Math.min(d, a.move.spd * dt); m.position.x += dx / d * s; m.position.z += dz / d * s; const want = Math.atan2(dx, dz); let dy = Math.atan2(Math.sin(want - a.ry), Math.cos(want - a.ry)); a.ry += dy * Math.min(1, dt * 8); } }
@@ -366,7 +380,7 @@ function frame() {
   tickTribbles(T); stage?.userData.tick?.(T);
   if (alert) { redL.intensity = 26 + Math.sin(T * 7) * 22; hemi.intensity = 0.12; } else redL.intensity = 0;
   if (onTitle) { const a = T * 0.18; tgtPos.set(Math.sin(a * 0.6) * 5, 1.6 + Math.sin(a * 0.7) * 0.2, 10.5); tgtLook.set(0, 1.55, 0); }
-  updateCam(dt, T); R.render(scene, cam);
+  updateCam(dt, T); if (draw) R.render(scene, cam);
 }
 
 // ───────────────────────── UI overlays ─────────────────────────
@@ -426,7 +440,7 @@ act(/^That is impossible/, () => { actors.okafor.shake = 1; setTimeout(() => act
 act(/^Do not marry her/, (_, inst) => { setAlert(false); const r = actors.real; if (inst) return; r.mesh.visible = true; r.mesh.position.set(-8, 0, 2.4); r.ry = Math.PI / 2; r.mesh.userData.placed = true; r.base = { x: 1.9, z: 1.1, ry: -0.5 }; moveTo(r, 1.9, 1.1, -0.5, 4.2, 'sprint'); setTimeout(() => { r.H.play('idle'); }, 1500 * TS); });
 act(/^For six seasons/, () => { });
 act(/^Me!$/, () => { for (const k of ['okafor', 'real']) { giveItem(actors[k], 'phaser1', 'hand_r'); actors[k].play('idle_torch'); } });
-act(/^Warning\. Third Okafor/, (_, inst) => { const t = actors.third; place(t, 1.1, -3.7, 0, { animate: false, clip: 'idle' }); t.mesh.scale.setScalar(1); if (!inst) { SND.low(); const s0 = performance.now(); const up = () => { const k = Math.min(1, (performance.now() - s0) / 1800); t.mesh.position.z = -3.7 + k * 0.35; if (k < 1) requestAnimationFrame(up); }; up(); } });
+act(/^Warning\. Third Okafor/, (_, inst) => { const t = actors.third; place(t, 1.1, -3.7, 0, { animate: false, clip: 'idle' }); t.mesh.scale.setScalar(1); if (!inst) { SND.low(); const s0 = performance.now(); const up = () => { const k = Math.min(1, (performance.now() - s0) / 1800); t.mesh.position.z = -3.7 + k * 0.35; if (k < 1) setTimeout(up, 33); }; up(); } });
 act(/^Warning\. Impostor/, () => { });
 act(/^Please\. Please let/, (_, inst) => { if (inst) return; setAlert(false); hideAll(); card('', 'tbc'); });
 act(/^Both Okafors|^Auditing/, () => { });
@@ -442,6 +456,7 @@ async function runBeat(b, i, my, instant) {
     if (b.fx === 'credits') { wideShot(); }
     await doFx(b, my, instant); if (my === token && b.fx === 'title') noCard(); return;
   }
+  window.__beat = i;
   // line
   const keyMap = { COMPUTER: null, TREMBLAY: 'tremblay', OKAFOR: 'okafor', REAL: 'real', MACLEOD: 'macleod', DOC: 'doc', GORN: 'gorn', DRONE: 'drone' };
   const actor = keyMap[b.who] ? actors[keyMap[b.who]] : null; const text = trimText(b.t);
@@ -467,7 +482,7 @@ async function play(from = 0) {
   for (let j = 0; j < from; j++) await runBeat(BEATS[j], j, my, true);
   // beat 0 is the title card, beat 1 the recap line (staged by place0), then the scenes
   for (let i = from; i < BEATS.length; i++) { if (my !== token) return; const b = BEATS[i]; if (i === 1 && from <= 1) { place0(); canvas.classList.add('recap'); slug('PREVIOUSLY…'); } if (i === 2) canvas.classList.remove('recap'); await runBeat(b, i, my, false); }
-  if (my !== token) return; noCard(); hideAll(); card('<div class="t" style="font:900 clamp(24px,5vw,64px) Impact;color:#ffd24a;letter-spacing:.1em">PART TWO<br><span style="font-size:.5em;color:#fff">COMING SOON-ISH</span></div><br><button class="big" id="again">&#8635; Watch again</button>'); $('again').onclick = () => play(0);
+  if (my !== token) return; window.__endT = VT / 1000; noCard(); hideAll(); card('<div class="t" style="font:900 clamp(24px,5vw,64px) Impact;color:#ffd24a;letter-spacing:.1em">PART TWO<br><span style="font-size:.5em;color:#fff">COMING SOON-ISH</span></div><br><button class="big" id="again">&#8635; Watch again</button>'); $('again').onclick = () => play(0);
 }
 function place0() { setStage('recap'); curScene = 'recap'; const d = SC.recap; hideAll(); for (const [k, c] of Object.entries(d.cast)) { const a = actors[k]; place(a, c[0], c[1], c[2], { animate: false, clip: c[3] }); } snapCam = true; wideShot(); tgtPos.x = -1; }
 // slow lateral drift across the recap lineup
@@ -492,8 +507,14 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape') $('bmenu').onclick(
 
 // ───────────────────────── boot ─────────────────────────
 await Promise.all([loadModels(), loadTextures()]);
-build(); frame(); $('loading').remove();
-if (Q.get('at') !== null) { const at = +Q.get('at'); play(at); } else titleScreen();
+build(); $('loading').remove();
+if (RENDER) {
+  // frame-stepped output: window.__frame(dt, draw) advances the virtual clock, the animation state and the CSS animations by dt seconds
+  window.__frame = async (dt, draw) => { await window.__advance(dt * 1000); tick(dt, draw); for (const a of document.getAnimations()) { if (a.__v === undefined) { a.__v = VT; a.pause(); } a.currentTime = VT - a.__v; } };
+  window.__audioPass = async () => { const buf = await AC.startRendering(); const f = buf.getChannelData(0), i16 = new Int16Array(f.length); for (let i = 0; i < f.length; i++) i16[i] = Math.max(-1, Math.min(1, f[i])) * 32767; window.__pcm = i16; return i16.length; };
+  window.__pcmChunk = (k, n = 1500000) => { const sl = window.__pcm.subarray(k * n, (k + 1) * n); let s = ''; for (let i = 0; i < sl.length; i += 30000) s += String.fromCharCode(...new Uint8Array(sl.buffer, sl.byteOffset + i * 2, Math.min(30000, sl.length - i) * 2)); return btoa(s); };
+  window.__lineLog = lineLog; audio();
+} else { frame(); if (Q.get('at') !== null) { const at = +Q.get('at'); play(at); } else titleScreen(); }
 window.__soap = { play, titleScreen, actors, BEATS, get T() { return T; } }; window.__ready = true;
 </script>
 </body></html>
