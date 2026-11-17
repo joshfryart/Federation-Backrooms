@@ -999,7 +999,11 @@ export class World {
       });
       return signTex[key];
     };
+    // liminal: from the second visit to a deck some room signs no longer say what the room is (hash of deck, tile and visit: stable within a visit, different between visits)
+    const visit = d.visit || 1, mutate = (f, text) => { if (visit < 2) return text; const h = Math.sin((f.tx * 12.9898 + f.ty * 78.233 + d.deck * 3.7 + visit * 41.3)) * 43758.5453, u = h - Math.floor(h); if (u > 0.3) return text;
+      const alt = ['NO EXIT', 'DECK ' + ((d.deck + visit) % 9 + 1), 'YOU WERE\nHERE', 'DO NOT\nRETURN', text.split('\n').map(s => s.split('').reverse().join('')).join('\n')]; return alt[Math.floor(u / 0.3 * alt.length) % alt.length]; };
     const place = (f, text, y = 2.6, w = 1.4) => {
+      text = mutate(f, text);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: sign(text, ship.accent), color: 0xdddddd }));
       m.scale.set(1, 0.3, 1); m.position.set(f.px + f.dx * 0.01, y, f.pz + f.dy * 0.01); m.rotation.y = f.ry; g.add(m); f.sign = true;
     };
