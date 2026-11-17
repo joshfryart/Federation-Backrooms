@@ -291,6 +291,11 @@ export function buildProp(kind) {
       const arch = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.05, 8, 20, Math.PI), m.white); arch.position.set(0, 0.6, 0.1); g.add(arch);
       g.add(rbox(0.12, 1.5, 0.1, m.dark, 0, 0, -1.02, 0.03)); const mon = rbox(0.9, 0.5, 0.06, m.dark, 0, 1.25, -1.0, 0.03); mon.rotation.x = 0.15; g.add(mon);
       const scr = box(0.82, 0.42, 0.01, m.screenG, 0, 1.29, -0.962); scr.rotation.x = 0.15; g.add(scr); break; }
+    case 'pillar': {   // structural pillar of a tall room (placed by gen.js, 5.6 m): footing, fluted shaft, collar rings, cap with a stripe
+      const m2 = m.metal, sh = cyl(0.36, TALL_H, m2, 0, 0, 0, 20); g.add(sh);
+      g.add(cyl(0.46, 0.22, m.dark, 0, 0, 0, 20)); g.add(cyl(0.42, 0.1, m.hazard, 0, 0.22, 0, 20)); g.add(cyl(0.44, 0.16, m.dark, 0, TALL_H - 0.16, 0, 20));
+      for (const y of [1.6, 3.4]) g.add(cyl(0.385, 0.06, m.dark, 0, y, 0, 20));
+      g.userData.box = [-0.46, 0.46, -0.46, 0.46]; break; }
     case 'crate': {
       const roll = R();
       if (roll < 0.55 && hasModel('ph_crate')) {   // stacked ammunition-style cargo cases
@@ -1476,7 +1481,7 @@ export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttl
   'growbed', 'nutrient_tanks', 'sensorstation', 'charttable', 'spectrometer', 'samplefridge', 'fumehood', 'fuelbowser', 'pallet', 'pallet_loaded', 'hoversled', 'reachin_cooler',
   'navstation', 'opsstation', 'commsstation', 'relayrack', 'buffertank', 'plottable', 'cellfield', 'chargerack', 'issuecounter',
   'briefing_table', 'platform_bed', 'workpod', 'maint_stand', 'cargo_pad', 'injector_crate', 'knee_mill', 'drill_press', 'scan_arch', 'specimen_tank', 'mat', 'grapple_dummy', 'sparring_set',
-  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk'];
+  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk', 'pillar'];
 // everything the art batches built (PROP_KINDS above = the floor props gen.js places; the rest are variants, chairs, stools, wall / ceiling pieces and add-ons)
 export const PROP_GALLERY = [...PROP_KINDS, ...PROP_ART_KINDS.filter(k => !PROP_KINDS.includes(k))];
 export { PROP_ART, PROP_ART_FIXTURES };

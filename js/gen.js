@@ -250,6 +250,9 @@ export function generate(deck, seed, opts = {}) {
       case 'washroom': put(cx, cy, 'sinkunit'); break;
     }
     // mezzanine: tall rooms (world.js TALL_H) get catwalk modules along the walls, 2.6 m up, reached by grapple or mantle from a neighbouring prop; own random stream
+    if ((r.big || r.type === 'atrium') && (r.type === 'shuttlebay' || r.type === 'cargo' || r.type === 'engineering' || r.type === 'arboretum' || r.type === 'mess' || r.type === 'atrium')) {   // pillars hold up the tall ceiling: a lattice every third tile, only where the room stays walkable (safePut)
+      for (const [x, y] of interior) if ((x - ix0) % 3 === 1 && (y - iy0) % 3 === 1 && grid[y][x] === 0 && !reserved.has(x + ',' + y)) safePut(r, x, y, 'pillar', { rot: 0 });
+    }
     if ((r.big || r.type === 'atrium') && (r.type === 'shuttlebay' || r.type === 'cargo' || r.type === 'engineering' || r.type === 'arboretum' || r.type === 'mess' || r.type === 'atrium')) { const n = r.type === 'shuttlebay' ? 2 : 3; for (let i = 0; i < n; i++) ringPut(r, 'catwalk', { along: true, free: true }); }
   }
   // liminal (opts.liminal, madness mode from deck 3): two rooms of one type and size are furnished identically, so walking into the second feels like the first again.
