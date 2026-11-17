@@ -50,7 +50,9 @@ function humanModel(opts, cfg, fallback) {
 }
 // space madness: additive bone noise on top of the clip (the mixer rewrites the animated bones every frame, so this never accumulates): a stooped spine, a head that lolls
 // and snaps back, arms hanging forward and twitching, a lurch every second or so. No dedicated shamble clip exists in the free UAL set.
+const LURCH_CLIPS = new Set(['sprint', 'jog_fwd', 'idle']);   // clips that rewrite every bone below each frame; on others (punch, hit, death) the additive rotation would pile up frame after frame
 function lurch(H, t) {
+  if (!LURCH_CLIPS.has(H.current)) return;
   const B = (n) => H.inner.getObjectByName(n), s = Math.sin, snap = Math.max(0, s(t * 1.3 + 1.7)) ** 6;
   B('spine_01')?.rotateX(0.18 + snap * 0.12); B('spine_02')?.rotateX(0.14 + s(t * 2.1) * 0.05); B('spine_03')?.rotateZ(s(t * 1.7) * 0.08);
   B('neck_01')?.rotateZ(s(t * 3.1) * 0.12 + snap * 0.25); B('Head')?.rotateX(0.12 + s(t * 9) * 0.05);

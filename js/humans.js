@@ -39,6 +39,14 @@ function info(kind) {
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); o.material.vertexColors = true;
   });
+  // uniform style zones on the garment geometry (shared by every body of this kind): x = legs, y = forearms / hands, z = shoulders / upper chest; makeHuman styles per person from them
+  if (kind !== 'suit') src.scene.traverse(o => {
+    if (!o.isSkinnedMesh || !(o.material.name || '').startsWith('garment') || (o.material.name || '').includes('shoes')) return;
+    const g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, z = new Float32Array(n * 3), bn = o.skeleton.bones.map(b => b.name);
+    const isLeg = bn.map(s => /^(thigh|calf|foot|ball)_[lr]$/.test(s)), isCuff = bn.map(s => /^(lowerarm|hand|index|thumb|middle|ring|pinky)/.test(s)), isYoke = bn.map(s => /^(clavicle|upperarm)_[lr]$|^neck_01$/.test(s));
+    for (let i = 0; i < n; i++) { let l = 0, c = 0, y = 0, tot = 0; for (let k = 0; k < 4; k++) { const wk = sw.getComponent(i, k), b = si.getComponent(i, k); tot += wk; if (isLeg[b]) l += wk; if (isCuff[b]) c += wk; if (isYoke[b]) y += wk; } tot = tot || 1; z[i * 3] = l / tot; z[i * 3 + 1] = c / tot; z[i * 3 + 2] = y / tot; }
+    g.setAttribute('zone', new THREE.BufferAttribute(z, 3));
+  });
   return meta[kind] = { height: box.max.y - box.min.y, clips };
 }
 
@@ -249,6 +257,9 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
         diffuseColor.rgb *= 1.0 - 0.1 * pore - 0.18 * freck;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.86, 1.05), vein * (0.25 + uPale * 0.6));
         float w = sh_f(vObj * 6.5 + uSeed * 3.1); gWound = uWound * smoothstep(0.6, 0.68, w);
+        { vec3 sp = vObj * 5.2 + uSeed;   // claw slashes: three parallel gashes in a patch, only on well-wounded bodies
+          float ln = abs(fract(dot(sp.xy, vec2(0.866, 0.5)) * 1.7) - 0.5), cut = smoothstep(0.045, 0.0, ln) * smoothstep(0.58, 0.72, sh_f(vObj * 2.6 + uSeed * 7.0)) * smoothstep(0.35, 0.8, uWound);
+          gWound = max(gWound, cut); }
         float bruise = uWound * smoothstep(0.52, 0.64, sh_f(vObj * 4.0 + uSeed * 5.3 + 11.0));
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.6, 0.38, 0.5), bruise * 0.6);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.17, 0.015, 0.02), gWound);
@@ -273,6 +284,20 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
 // a human taken out of the scene for good: free its skeletons' bone textures (SkeletonUtils.clone gives every body its own Skeleton, and each one
 // uploads a bone DataTexture that nothing else frees: ~10-20 GPU textures leaked per body / portrait). Safe on a mesh that is shown again: three.js rebuilds the texture.
 export function releaseHuman(obj) { if (!obj?.traverse) return; const seen = new Set(); obj.traverse(o => { const sk = o.isSkinnedMesh && o.skeleton; if (sk && !seen.has(sk)) { seen.add(sk); sk.dispose(); } }); }
+// Uniform styles on top of the division colour, driven by the per-vertex `zone` mask baked in info(): duty = darker trousers, trim = contrast cuffs, yoke = darker shoulders / collar.
+const STYLE_MIX = { plain: [0, 0, 0], duty: [1, 0, 0], trim: [0, 1, 0], yoke: [0, 0, 1], 'trim-duty': [1, 1, 0] };
+function styleGarment(m, style, uniform) {
+  const mix = STYLE_MIX[style] || STYLE_MIX.plain; if (!mix[0] && !mix[1] && !mix[2]) return;
+  const trim = uniform.clone().lerp(new THREE.Color(0xf2efe6), 0.62), dark = new THREE.Vector3(0.42, 0.42, 0.46);
+  m.onBeforeCompile = (sh) => {
+    m.userData.styleCompiled = true;
+    sh.uniforms.uStyleMix = { value: new THREE.Vector3(...mix) }; sh.uniforms.uTrim = { value: trim }; sh.uniforms.uDark = { value: dark };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 zone; varying vec3 vZone;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvZone = zone;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vZone; uniform vec3 uStyleMix, uTrim, uDark;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.2, 0.5, vZone.x) * uStyleMix.x);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uTrim, smoothstep(0.3, 0.6, vZone.y) * uStyleMix.y);\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.35, 0.65, vZone.z) * uStyleMix.z);');
+  };
+  m.customProgramCacheKey = () => 'garstyle'; m.needsUpdate = true;
+}
 export function makeHuman(opts = {}) {
   const per = opts.person; let seed = opts.seed;
   if (seed === undefined && per) { seed = (per.id + 1) * 7919; for (const ch of (per.family || '') + (per.given || '')) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619); }
@@ -283,6 +308,7 @@ export function makeHuman(opts = {}) {
   inner.scale.setScalar(height / inf.height); g.add(inner);
   const skin = new THREE.Color(opts.skin ?? pickOf(SKINS, rnd)); if (opts.pale) skin.lerp(new THREE.Color(0xb9b3a4), opts.pale);
   const hair = opts.hair || pickOf(HAIRS, rnd); const uniform = new THREE.Color(opts.uniform ?? pickOf(DIVISIONS, rnd));
+  const style = opts.style ?? pickOf(['plain', 'plain', 'duty', 'duty', 'trim', 'yoke', 'trim-duty'], rnd);   // uniform variants (see styleGarment)
   const faces = []; const mats = {};
   inner.traverse(o => {
     if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = !opts.material;
@@ -295,7 +321,7 @@ export function makeHuman(opts = {}) {
       if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
     else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.75; }
     else if (name === 'brows') { m.color.setRGB(hair[0] * 0.6, hair[1] * 0.6, hair[2] * 0.6); m.alphaTest = 0.02; m.transparent = true; m.depthWrite = false; m.roughness = 0.8; o.castShadow = false; }
-    else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); }
+    else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); if (o.geometry.attributes.zone) styleGarment(m, style, uniform); }
     else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; }
     else if (name === 'eyes') { m.roughness = 0.08; if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
     else if (name === 'teeth') { m.alphaTest = 0.5; }
@@ -303,7 +329,9 @@ export function makeHuman(opts = {}) {
   });
   if (!opts.material && kind !== 'suit' && opts.kit !== false) addKit(kind, inner, height, uniform, opts.name ?? per?.family ?? '');
   if (opts.rank !== undefined && !opts.material && kind !== 'suit') { addPips(inner, opts.rank); g.userData.rank = RANKS[opts.rank][0]; }
-  if (kind !== 'suit' && !opts.height) { const b = 0.96 + rnd() * 0.09; inner.scale.x *= b; inner.scale.z *= b * (0.98 + rnd() * 0.04); }   // slight build variation
+  if (kind !== 'suit' && !opts.height) {   // build: lean / average / stocky, a little taller or shorter, so a crowd of four meshes does not read as four people
+    const BUILD = [[0.92, 0.95, 1.02], [1, 1, 1], [1, 1, 1], [1.1, 1.08, 0.98], [1.04, 1.02, 1.0], [0.96, 0.97, 1.05]], [wx, wz, hy] = pickOf(BUILD, rnd), b = 0.97 + rnd() * 0.07;
+    inner.scale.x *= wx * b; inner.scale.z *= wz * b * (0.98 + rnd() * 0.04); inner.scale.y *= hy; }
   if (opts.shadow !== false) { const bs = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false })); bs.rotation.x = -Math.PI / 2; bs.position.y = 0.02; g.add(bs); g.userData.blob = bs; }
   const mixer = new THREE.AnimationMixer(inner); const acts = {}; let cur = null, curKey = '';
   const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'upperarm_l', 'clavicle_l', 'clavicle_r', 'thigh_l', 'thigh_r', 'foot_l', 'foot_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
