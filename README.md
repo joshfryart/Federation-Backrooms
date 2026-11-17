@@ -29,13 +29,25 @@ they walk between stations, ride the tubelifts, eat, work and gather in groups.
 end of the shift. Do each one **properly** (slower, no debt) or **rushed** (faster, quietly adds duty debt).
 Press **J** for the duty board.
 
-**Learn the tools.** The first time you use a station console, tool or panel, an instruction card tells you how it
-works, then a short mini-game ties into the job. A clean run is faster; a fumbled one still gets done and is
-logged as rushed. Esc always cancels, and the job stays due.
+**Learn the tools.** Doing a job properly plays a short mini-game about *that* job, and the first time you meet
+each tool an instruction card tells you how it works. A sickbay ward round has you read four patient monitors and
+pick the bed that is out of range; you also dose hyposprays, check a sterile tray against its layout card, count
+controlled meds against the manifest and choose the right words in a counselling session. Engineering routes
+power between busses and bench-tests parts. Science sweeps for a signal and classifies contacts. Security checks
+badges at the door and audits the door log. The galley pulls pans off the range at the right moment and rotates
+stock, hydroponics doses the nutrient feeds, cargo matches crate codes and keeps the deck in trim, and the bridge
+plots a course through a hazard field and decodes incoming signals. Junctions still need rewiring and coolant
+valves still need bleeding. There are 22 games across the ship's 700-odd duty rounds and mission tasks, and none
+covers more than an eighth of them. Each round is seeded, so no two are quite the same. A clean run is faster; a
+fumbled one still gets done and is logged as rushed. Rushing is always one key and never a game. Esc always
+cancels, and the job stays due. Every game is keyboard-driven and honours calm visuals, sound captions and the
+colour-blind palette.
 
 | First-use instructions | The mini-game |
 |---|---|
 | ![Instruction card for the station console](docs/screenshots/09-job-instructions.png) | ![Console sequence mini-game](docs/screenshots/10-job-minigame.png) |
+
+![Vitals triage on a sickbay ward round: four patient monitors, pick the bed that is out of range](docs/screenshots/11-job-vitals.png)
 
 **Talk to people.** Press **E** on a crew member and the camera moves in for a close-up conversation while the
 world pauses. Greet, ask about duty, small talk, ask for help, give orders (rank permitting), swap items, ask

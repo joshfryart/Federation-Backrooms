@@ -20,7 +20,7 @@ import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
 import { hash01, hash } from './clock.js';
-import { toolFor, learnedStore } from './jobgames.js';   // job mini-games + first-use instruction cards (js/jobgame-ui.js)
+import { gameFor, rushNote, learnedStore } from './jobgames.js';   // job mini-games (chosen by what the job is) + first-use instruction cards (js/jobgame-ui.js)
 import { JobGameUI } from './jobgame-ui.js';
 import { liftLine, loadPersonas, bark as voiceBark, habitCue, TAG_EFFECTS } from './voice.js';
 import { speak, cue as voiceCue, attach as attachSpeech, getMode as voiceMode, setMode as setVoiceMode, MODES as VOICE_MODES } from './speech.js';
@@ -610,14 +610,15 @@ initHaul({ get gorns() { return gorns; }, killMad, nearestRepair, get world() { 
 G.nav = new NavHUD({ G, P, TS, NOM, get world() { return world; }, get repairPts() { return repairPts; } });   // js/nav-hud.js
 G.menus = new Menus({ G, P, NOM, camera, renderer, canvas, get world() { return world; }, get ents() { return ents; }, isLocked: () => locked, requestLock, resumeGame, pause: () => { G.phase = 'paused'; showScreen('pause'); }, interact, talkMenu, terminalMenu, dutyMenu, showStatus });   // js/menus.js (key router: registered before main's keydown)
 G.jobgame = new JobGameUI({ G, CFG, sound, caption: (t) => caption(t), store: learnedStore(() => CFG.learned, (v) => { CFG.learned = v; saveCfg(); }) });   // the job mini-game layer (js/jobgame-ui.js); CFG.learned = tools already explained
-// Do a duty round / mission task "properly": at a station with a tool (js/jobgames.js toolFor(spot)) that is a mini-game, after a one-time
+// Do a duty round / mission task "properly": at a station, the mini-game for what the job is (js/jobgames.js gameFor: label / room / sys, then the
+// station itself; duty loops and mission tasks alike), after a one-time
 // instruction card for that tool; the result sets the job's quality and time (win: proper and faster; fail: rushed, still done). Esc cancels:
 // nothing happens and the job stays due. No tool at the spot, no UI (headless node), or the job cannot start here: the old direct path.
 G.jobSeq = 0;
 function startJob(it) {
   const D = G.duty; if (!D) return { ok: false, why: 'no duty' };
   const run = (q, o) => it.task ? D.doTask(it.id, q) : D.perform(it.id, q, o);
-  const tool = toolFor(it.spot), c = D.check(it.id); if (!c.ok) return c;
+  const tool = gameFor({ ...it, label: it.label || it.task }), c = D.check(it.id); if (!c.ok) return c;
   if (!tool || !G.jobgame || !G.ui || G.jobgame.active) return run('proper');
   const seed = hash('jobgame', G.runSeed || 1, it.id, G.jobSeq++);
   G.jobgame.start({ tool, seed, label: it.label || it.task, apply: (res) => {
@@ -775,7 +776,7 @@ function worldPaused() { return !!(G.menuPause || G.paused); }
 G.worldPaused = worldPaused;
 function dutyMenu() {
   const D = G.duty, H = G.hud2; if (!D || !H) return; const room = D.place.room, say = G.say;
-  const doIt = (it) => H.openMenu(it.label || it.task, QUALITIES.map(q => ({ label: Q_LABEL[q], note: q === 'proper' ? `${Math.round((it.dur || 2) * 3.3 * 1.2)}s` : '', run: () => { if (q === 'proper') { H.closeMenu?.(); const r = startJob(it); if (!r.ok) say(r.why, 'warn'); return; } const r = it.task ? D.doTask(it.id, q === 'skipped' ? 'skipped' : q) : D.perform(it.id, q); if (!r.ok) say(r.why, 'warn'); else if (it.task) say(`Task ${q}: ${it.task}`, 'good'); } })), 'How will you do it?');
+  const doIt = (it) => H.openMenu(it.label || it.task, QUALITIES.map(q => ({ label: Q_LABEL[q], note: q === 'proper' ? `${Math.round((it.dur || 2) * 3.3 * 1.2)}s` : '', run: () => { if (q === 'proper') { H.closeMenu?.(); const r = startJob(it); if (!r.ok) say(r.why, 'warn'); return; } const r = it.task ? D.doTask(it.id, q === 'skipped' ? 'skipped' : q) : D.perform(it.id, q); if (!r.ok) say(r.why, 'warn'); else if (q === 'rushed') say(`Rushed: ${rushNote(gameFor({ ...it, label: it.label || it.task }), G.jobSeq++)}`, 'warn'); else if (it.task) say(`Task ${q}: ${it.task}`, 'good'); } })), 'How will you do it?');   /* rushing never plays a game: one key, one line about the corner cut */
   const here = [...D.loops.filter(l => l.state === 'due' || l.state === 'idle').map(l => ({ ...l, off: l.room !== room || l.state === 'delegated', note: l.room !== room ? `go to ${l.room}` : l.state === 'due' ? 'due' : 'not yet' })), ...D.tasks.filter(t => t.state === 'active').map(t => ({ ...t, label: t.task, off: t.room !== room, note: t.room !== room ? `go to ${t.room}` : 'now' }))];
   const top = [
     { label: 'Do a duty or task', run: () => H.openMenu('Duty / tasks', here.map(it => ({ label: it.label, note: it.note, off: it.off && false, run: () => { if (it.room !== room) say(`Do this in the ${it.room}.`, 'warn'); else doIt(it); } })).concat(here.length ? [] : [{ label: 'Nothing to do right now', off: true }]), 'digit to choose'), keepOpen: true },
