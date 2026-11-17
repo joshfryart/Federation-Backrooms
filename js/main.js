@@ -471,7 +471,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
           [gx, gz] = pick || [qx, qz]; } }
     }
   }
-  if (held && w.vanish && car && !liftWait && !atSpot) { const dc = Math.hypot(e.x - car.x, e.z - car.z);   // the player holds the car and this walker has no door spot / line place: never drift into the car, step out to the doorway side and wait there
+  if (held && w.vanish && car && (Math.hypot(e.x - car.x, e.z - car.z) < 1.3 || (!liftWait && !atSpot))) { const dc = Math.hypot(e.x - car.x, e.z - car.z);   // the player holds the car and this walker has no door spot / line place: never drift into the car, step out to the doorway side and wait there
     if (dc < 1.6) { gx = car.x + car.dx * 2.6; gz = car.z + car.dy * 2.6; slow = 1; } else if (dc < 4.5) slow = Math.min(slow, 0.05); }
   if (!liftWait) { e.liftWait = null; e.waitT0 = null; } else e.waitT0 ??= G.time;   // waitT0: since when (simBodies holds back new arrivals once someone has waited 3 s)
   const doorWait = liftWait || (slow === 0.05 && w.vanish && toEnd < 2.4);
