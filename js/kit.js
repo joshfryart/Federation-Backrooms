@@ -68,7 +68,7 @@ export class Kit {
     const t = this.target(r.range, 0.9); if (t) this.apply(t, r);
     const W = C.world; let x = P.x, z = P.z; for (let d = 0.5; d <= (t ? Math.hypot(t.x - P.x, t.z - P.z) : r.range); d += 0.25) { const nx = P.x - Math.sin(P.yaw) * d, nz = P.z - Math.cos(P.yaw) * d; if (W.solidAt(nx, nz)) break; x = nx; z = nz; }
     this.belt.splice(this.hand, 1); this.hand = -1; const mesh = makeItemMesh(h.model); mesh.position.set(x, mesh.userData.rest || 0.03, z); if (mesh.userData.lie) mesh.rotation.z = Math.PI / 2; C.scene.add(mesh);
-    G.haul?.dropped.push({ mesh, x, z, carry: null, inst: it, name: displayName(it) }); G.say(`You throw the ${h.name}${t ? '' : '.'}${r.broke ? ' It breaks.' : ''}`, r.broke ? 'warn' : ''); return true;
+    G.haul?.dropped.push({ mesh, x, z, carry: null, inst: it, name: displayName(it) }); G.distract?.(x, z, 24);   // a thrown tool clatters: hunters that are not on you go to look G.say(`You throw the ${h.name}${t ? '' : '.'}${r.broke ? ' It breaks.' : ''}`, r.broke ? 'warn' : ''); return true;
   }
   target(range, dot = 0.8) { const C = this.C, G = C.G, hostile = (C.gorns || []).filter(g => g.active && !g.dead && g.mesh?.visible !== false); return this.front([...hostile, ...this.crew().filter(e => !e.fake || G.mode !== 'madness')], range, dot); }
   // apply a hit profile to a hostile (madness: stun, hit points via the existing killMad path) or a crew member (nominal: stunned, trust)

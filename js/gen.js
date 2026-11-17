@@ -247,7 +247,7 @@ export function generate(deck, seed, opts = {}) {
       case 'washroom': put(cx, cy, 'sinkunit'); break;
     }
     // mezzanine: tall rooms (world.js TALL_H) get catwalk modules along the walls, 2.6 m up, reached by grapple or mantle from a neighbouring prop; own random stream
-    if (r.big && (r.type === 'shuttlebay' || r.type === 'cargo' || r.type === 'engineering' || r.type === 'arboretum')) { const n = r.type === 'shuttlebay' ? 2 : 3; for (let i = 0; i < n; i++) ringPut(r, 'catwalk', { along: true, free: true }); }
+    if (r.big && (r.type === 'shuttlebay' || r.type === 'cargo' || r.type === 'engineering' || r.type === 'arboretum' || r.type === 'mess')) { const n = r.type === 'shuttlebay' ? 2 : 3; for (let i = 0; i < n; i++) ringPut(r, 'catwalk', { along: true, free: true }); }
   }
   // connectivity safety: a tile put as prop must not isolate things. Verify below.
 

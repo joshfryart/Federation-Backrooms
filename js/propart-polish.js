@@ -504,7 +504,7 @@ function catwalk() {
     for (const x of [-1.22, -0.6, 0, 0.6, 1.22]) b.box(0.04, 1.1, 0.04, P.yellow, x, y, sz * 0.48);
     b.rod(P.yellow, 0.022, [-1.22, y + 1.1, sz * 0.48], [1.22, y + 1.1, sz * 0.48], 8); b.rod(P.yellow, 0.016, [-1.22, y + 0.55, sz * 0.48], [1.22, y + 0.55, sz * 0.48], 6); b.box(2.5, 0.12, 0.012, P.yellow, 0, y, sz * 0.5);
   }
-  return one(b, 'catwalk', 'engineering', { box: [-1.25, 1.25, -0.5, 0.5], size: [2.5, 3.7, 1.0], top: y, use: { deck: { x: 0, y, z: 0 } }, note: 'deck top 2.6 m: stands in tall rooms (world.TALL_H 5.6 m), climbed by grapple or ship_ladder; modules tile along x' });
+  return one(b, 'catwalk', 'engineering', { box: [-1.25, 1.25, -0.5, 0.5], size: [2.5, 3.7, 1.0], top: y, walkUnder: true, use: { deck: { x: 0, y, z: 0 } }, note: 'deck top 2.6 m: stands in tall rooms (world.TALL_H 5.6 m), climbed by grapple or ship_ladder; modules tile along x' });
 }
 function ship_ladder() {
   const P = mats(), b = new B(), top = 2.6, run = top / Math.tan(1.047);   // 60 degrees

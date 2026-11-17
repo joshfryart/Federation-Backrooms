@@ -16,7 +16,7 @@ installIcons();   // U-1 / U-2: the handheld glyphs and the flight / operations 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
 export const TALL_H = 5.6;  // ceiling of a tall room (big shuttlebay / cargo / engineering / arboretum)
-export const TALL_TYPES = new Set(['shuttlebay', 'cargo', 'engineering', 'arboretum']);
+export const TALL_TYPES = new Set(['shuttlebay', 'cargo', 'engineering', 'arboretum', 'mess']);   // big variants only (mess = the galley hall)
 const JUNCTION_FACES = 21;   // one per ship system (js/crew.js SYSTEMS): wall faces kept bare for repair junctions
 export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
 export const TUBE_UP = 1.7; // floor height of a tube's upper run (reached by ladder)
@@ -561,6 +561,7 @@ export class World {
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
     this.tall = new Uint8Array(this.W * this.H);   // 1 = tile of a tall room (ceiling TALL_H)
     for (const r of data.rooms || []) if (r.big && TALL_TYPES.has(r.type)) for (let ty = r.y; ty < r.y + r.h; ty++) for (let tx = r.x; tx < r.x + r.w; tx++) if (data.room[ty]?.[tx] === r.type) this.tall[tx + ty * this.W] = 1;
+    this.under = {};   // prop tiles you can walk under (catwalk decks): no collision below the deck
     this.tops = {}; this.propExt = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
     OWN = this.own = [];
     try { this._build(); this._details(); this._liminal(); this._dressing(); } finally { OWN = null; }
@@ -625,6 +626,7 @@ export class World {
         if (ax) { const o = TS / 2 - TUBE_SIDE / 2; for (const sgn of [-1, 1]) ax === 'x' ? push(cx, cz + sgn * o, TS / 2, TUBE_SIDE / 2) : push(cx + sgn * o, cz, TUBE_SIDE / 2, TS / 2); continue; }
         if (!this.solid(x, y)) continue;
         const prop = this.grid[y]?.[x] === 2;
+        if (prop && this.under[x + y * this.W]) continue;   // under a catwalk deck (the deck is 2.6 m up; standing on it is groundAt)
         if (prop && (p.y || 0) >= this.topAt(x, y) - 0.03) continue;   // standing on / passing over a climbable prop
         if (prop) { const [ox, oz, hx, hz] = this.propBox(x, y); push(cx + ox, cz + oz, hx, hz); continue; }   // wide art props (userData.box) reach past the default square
         push(cx, cz, TS / 2, TS / 2);
@@ -945,7 +947,7 @@ export class World {
       if (p.kind === 'drawers' && d.room[p.ty]?.[p.tx] === 'morgue' && !morgueTray) { morgueTray = true; m.add(buildPropArt('morgue_tray', null, { col: 1, row: 0, pull: 0.75 })); }   // one drawer pulled out (MED-11)
       if (m.userData.field) (this.fieldMats || (this.fieldMats = new Set())).add(m.userData.field);   // SEC-2 force-field planes (one shared material): shimmer, drop with the security grid (update)
       if (m.userData.sight) (this.sights || (this.sights = [])).push(m.userData.sight);   // OPS-6 pattern buffer sight glass: slow glow (update)
-      g.add(m); if (m.userData.top) this.tops[p.tx + p.ty * this.W] = m.userData.top;
+      g.add(m); if (m.userData.top) this.tops[p.tx + p.ty * this.W] = m.userData.top; if (m.userData.walkUnder) this.under[p.tx + p.ty * this.W] = 1;
       if (m.userData.box) {   // footprint wider than the default collision square: grow it (never shrink), rotated with the prop, kept inside the tile
         const [x0, x1, z0, z1] = m.userData.box, r = m.rotation.y, c = Math.cos(r), sn = Math.sin(r), H = this.propHalf, L = 1.15;
         const pts = [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].map(([lx, lz]) => [lx * c + lz * sn, -lx * sn + lz * c]);   // three.js rotation.y

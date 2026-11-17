@@ -922,6 +922,11 @@ function caption(text, x, z) {
   const el = $('caps'); if (!el) return; const li = document.createElement('div'); li.textContent = `[${text}]${dir}`; el.appendChild(li); while (el.children.length > 3) el.firstChild.remove(); setTimeout(() => li.remove(), 2800);
 }
 G.caption = caption;
+// distraction (madness mode): a noise made at (x, z) pulls hunters that are not chasing you to investigate that spot; the closer, the surer
+G.distract = (x, z, radius = 20) => {
+  sound.clang?.(0.25); caption('clatter', x, z); const [tx, ty] = world.tile(x, z); if (world.grid[ty]?.[tx] !== 0) return 0; let n = 0;
+  for (const g of gorns) { if (!g.active || g.dead || ![S.PATROL, S.INVESTIGATE, S.SEARCH].includes(g.state) || !g.setTarget) continue; const d = Math.hypot(g.x - x, g.z - z); if (d > radius || (d > radius * 0.6 && Math.random() < 0.4)) continue; g.state = S.INVESTIGATE; g.timer = 7; g.setTarget(tx, ty); n++; }
+  return n; };
 G.onEnemySpotted = (g) => { caption(g.name + ' roars', g.x, g.z); flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
 G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
 G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
