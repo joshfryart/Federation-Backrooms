@@ -6,6 +6,7 @@
 <title>Starfarers: The Backdecks</title>
 <style>
   /* Fleet maintenance console: chamfered panels, segmented meters, amber/teal on navy, condensed caps + monospace readouts. */
+  #liftrows .bds { display:block; text-decoration:none; margin-top:2px; } #liftrows .bds em { display:inline-block; width:14px; height:14px; margin-right:3px; vertical-align:middle; opacity:.85; }
   #liftrows .lr.pinned { outline:1px solid var(--lc1); box-shadow:0 0 10px rgba(242,160,61,.55) inset; } #liftrows .lr.pinned b::after { content:'  ◆ guide'; color:var(--lc1); font-size:.8em; letter-spacing:.1em; }
   body.cb #hpbar { background:linear-gradient(90deg,#a65f00,#ffd24a); } body.cb #toast.warn { color:#ffc447; } body.cb #toast.good { color:#7ec0ff; } body.cb .bar > i { filter:hue-rotate(0deg); }
   body.cb { --red:#ffb000; --lc2:#4aa3ff; } body.cb .good, body.cb .say.good { color:#4aa3ff !important; } body.cb .warn, body.cb .say.warn { color:#ffb000 !important; } body.cb #faults .offline { color:#ff9a00; } body.cb #faults .degraded { color:#ffe14a; }

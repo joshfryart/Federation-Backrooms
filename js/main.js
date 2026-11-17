@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { iconSvg } from './icons.js';
 import { setMapPalette } from './minimap.js';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
@@ -1602,6 +1603,8 @@ function showCompany() {
 // the car rides for 3-8 s (by distance, deck indicator ticking, hum, shake) and the doors open on the destination deck with you still inside.
 const NOTABLE = ['bridge', 'readyroom', 'engineering', 'sickbay', 'mess', 'lounge', 'gym', 'holodeck', 'lab', 'arboretum', 'shuttlebay', 'cargo', 'transporter', 'armory', 'brig', 'datacore', 'stores', 'quarters'];
 const NOTE_LABEL = { mess: 'Galley', holodeck: 'Holodeck', transporter: 'Transporter', lab: 'Lab', gym: 'Gym', lounge: 'Lounge', datacore: 'Datacore', cargo: 'Cargo', stores: 'Stores', quarters: 'Quarters', readyroom: 'Ready Room' };
+// icon badges for the lift panel: one small room-type icon per notable room on the deck (labels are the tooltips)
+const deckBadges = (i) => NOTABLE.filter(t => G.plan?.[t]?.some(r => r.deck === i)).map(t => { let s = ''; try { s = iconSvg(t, { size: 14 }) || ''; } catch (e) { /* unknown icon */ } return s ? `<em title="${NOTE_LABEL[t] || ROOMS[t].label}">${s}</em>` : ''; }).join('');
 const deckNotes = (i) => NOTABLE.filter(t => G.plan?.[t]?.some(r => r.deck === i)).map(t => NOTE_LABEL[t] || ROOMS[t].label);
 const deckZone = (i) => zoneOf(i / Math.max(1, G.ship.decks - 1)).label;
 const inCarTile = () => { const c = world?.car; if (!c) return false; const [tx, ty] = world.tile(P.x, P.z); return tx === c.tx && ty === c.ty && P.y < 0.5; };
@@ -1611,7 +1614,7 @@ function renderLiftPanel() {
   $('liftbig').textContent = ride ? `${L.to > L.from ? '▼' : '▲'} DECK ${String(L.disp + 1).padStart(2, '0')}` : '';
   $('liftfoot').textContent = ride ? `Riding to Deck ${L.to + 1} — ${deckZone(L.to)}` : 'Press 1–' + D + ' or click a deck · Esc to step out';
   const pinDeck = !ride && NOM() ? G.nav?.rideTarget?.() : null;   // the pinned destination's deck is marked (and Enter picks it)
-  $('liftrows').innerHTML = Array.from({ length: D }, (_, i) => { const nt = deckNotes(i); return `<div class="lr${!ride && i === G.shipDeck ? ' cur' : ''}${pinDeck === i ? ' pinned' : ''}${ride && i === L.to ? ' dest' : ''}${ride && i === L.disp ? ' here' : ''}" data-i="${i}"><i>${i + 1}</i><b>Deck ${i + 1} — ${deckZone(i)} </b><span>${nt.length ? '· ' + nt.join(' · ') : ''}</span></div>`; }).join('');
+  $('liftrows').innerHTML = Array.from({ length: D }, (_, i) => { const nt = deckNotes(i); return `<div class="lr${!ride && i === G.shipDeck ? ' cur' : ''}${pinDeck === i ? ' pinned' : ''}${ride && i === L.to ? ' dest' : ''}${ride && i === L.disp ? ' here' : ''}" data-i="${i}"><i>${i + 1}</i><b>Deck ${i + 1} — ${deckZone(i)} </b><span>${nt.length ? '· ' + nt.join(' · ') : ''}</span><u class="bds">${deckBadges(i)}</u></div>`; }).join('');
   $('liftui').className = 'show' + (ride ? ' ride' : '');
 }
 $('liftrows').onclick = (e) => { const r = e.target.closest('.lr'); if (r && G.phase === 'select') chooseDeck(+r.dataset.i); };

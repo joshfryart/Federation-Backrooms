@@ -191,6 +191,7 @@ export function generate(deck, seed, opts = {}) {
         else for (const [x, y] of interior) if (grid[y][x] === 0 && ((x + y) % 2 === 0 || r.w < 5)) safePut(r, x, y, 'table') || (interior.length === 1 && put(x, y, 'table'));
         if (interior.length > 1) ringPut(r, 'dishwasher');
         if (r.big) ringPut(r, 'wastebin', { corner: true });
+        if (r.big) { ringPut(r, 'range'); ringPut(r, 'servery'); ringPut(r, 'dishwasher'); }   // a proper kitchen in the galley hall: a second cooking line and dishwasher (ringPut keeps every front walkable)
         if (interior.length > 1) ringPut(r, 'feedstock_silo');                           // SVC-17
         if (r.big) ringPut(r, 'galley_trolley', { only: 'corner', free: true });         // SVC-14
         break; }
