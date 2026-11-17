@@ -81,23 +81,41 @@ S('room-props', null, async () => {
   console.log(`room props: ${levels} levels, ${Object.keys(has).length} room/prop pairs, wall props stranded ${stranded}, big sickbays with the medical set ${big5full}/${big5}, big rooms with their set ${Object.keys(bigN).map(t => t + ' ' + (bigFull[t] || 0) + '/' + bigN[t]).join(' ')}, lift in a room ${exitInRoom}${low.length ? ', too rare: ' + low.join('; ') : ''}${bigLow.length ? ', big rooms short: ' + bigLow.join('; ') : ''}`);
   if (low.length || stranded || exitInRoom || big5full < big5 || bigLow.length) fail('room props');
 });
-const GEN = await imp('js/gen.js'), SHIPSM = await imp('js/ships.js');
+const GEN = await imp('js/gen.js'), SHIPSM = await imp('js/ships.js'), TUBEM = await imp('js/tube.js');
 S('generator', null, async () => {   // every chip and the exit are reachable on decks 0-11 x 25 seeds (js/gen.js in node)
 const gen = (() => {
-  const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM; const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0;
+  const { generate } = GEN, { SHIPS, deckOptions } = SHIPSM; const bad = []; let masked = 0, minOpen = 1e9; let n = 0, tubes = 0, withTubes = 0, ladders = 0, bigRooms = 0, bends = 0, bendLadders = 0;
   for (let deck = 0; deck < 12; deck++) for (let seed = 1; seed <= 25; seed++) {
     const ship = SHIPS[(deck + seed) % SHIPS.length], sd = Math.round(Math.min(deck, 7) / 7 * (ship.decks - 1)); const d = generate(deck, seed * 7919 + deck, deckOptions(ship, sd)); n++;
     const wallCount = d.grid.reduce((a, r) => a + r.reduce((b, c) => b + (c === 1 ? 1 : 0), 0), 0); if (d.W > 2 * Math.min(6 + Math.floor(deck * 0.7), 11) + 1) masked++; minOpen = Math.min(minOpen, d.openTiles.length);
     const W = d.W, H = d.H, seen = new Uint8Array(W * H), q = [d.start]; if (d.chips.length < 2) bad.push(`deck ${deck} seed ${seed}: only ${d.chips.length} chips`); seen[d.start[0] + d.start[1] * W] = 1;
-    while (q.length) { const [x, y] = q.pop(); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + a, ny = y + b; if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[nx + ny * W] || d.grid[ny][nx] !== 0) continue; seen[nx + ny * W] = 1; q.push([nx, ny]); } }
+    while (q.length) { const [x, y] = q.pop(); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + a, ny = y + b; if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen[nx + ny * W] || d.grid[ny][nx] !== 0 || !TUBEM.tubeStep(d, x + y * W, nx + ny * W, a, b)) continue; seen[nx + ny * W] = 1; q.push([nx, ny]); } }   // tubes are entered / left only through their open ends
     // the exit tile itself may be a special tile; accept it if a neighbour is reachable
     const ok = ([x, y]) => seen[x + y * W] || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => seen[x + a + (y + b) * W]);
     if (!d.chips.every(ok) || !ok(d.exit)) bad.push(`deck ${deck} seed ${seed}`);
+    // every tube is a chain a -> tiles -> b of open tiles: contiguous, consistent per-tile axis / bend data, at most one 90-degree bend (never a ladder shaft), both mouths open non-tube tiles,
+    // and the open-edge rule lets you walk it end to end but never leave it sideways
+    for (const t of d.tubes) {
+      const where = `deck ${deck} seed ${seed} tube ${t.a}->${t.b}`, chain = [t.a, ...t.tiles, t.b], id = ([x, y]) => x + y * W; let turns = 0;
+      if (t.tiles.length < 1 || d.tubeAxis[id(t.a)] || d.tubeAxis[id(t.b)] || d.grid[t.a[1]][t.a[0]] !== 0 || d.grid[t.b[1]][t.b[0]] !== 0) bad.push(where + ': mouths must be open non-tube tiles');
+      for (let i = 1; i < chain.length; i++) { const [dx, dy] = [chain[i][0] - chain[i - 1][0], chain[i][1] - chain[i - 1][1]]; if (Math.abs(dx) + Math.abs(dy) !== 1) { bad.push(where + ': not contiguous'); break; } if (!TUBEM.tubeStep(d, id(chain[i - 1]), id(chain[i]), dx, dy) || !TUBEM.tubeStep(d, id(chain[i]), id(chain[i - 1]), -dx, -dy)) bad.push(where + `: mouth chain blocked at step ${i}`); }
+      t.tiles.forEach((tl, i) => {
+        const k = id(tl), pv = chain[i], nx = chain[i + 2], din = [tl[0] - pv[0], tl[1] - pv[1]], dout = [nx[0] - tl[0], nx[1] - tl[1]], straight = din[0] === dout[0] && din[1] === dout[1], ax = d.tubeAxis[k];
+        if (d.grid[tl[1]][tl[0]] !== 0 || d.room[tl[1]][tl[0]] !== 'jefferies' || !d.tubeLevel[k]) bad.push(where + ': tile not a jefferies tile');
+        if (straight ? ax !== (din[0] ? 'x' : 'y') : (ax !== 'xy' || JSON.stringify(d.tubeBend[k]) !== JSON.stringify([[-din[0], -din[1]], dout]))) bad.push(where + `: tile ${i} axis ${ax} does not match its neighbours`);
+        if (!straight) { turns++; if (t.bend !== i) bad.push(where + ': t.bend index'); if (d.tubeLevel[k] === 'lad') bad.push(where + ': ladder on the bend'); }
+        // sealed sides: every neighbour that is not the previous / next tile of the chain must be unreachable from this tile
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = [tl[0] + a, tl[1] + b]; if ((n[0] === pv[0] && n[1] === pv[1]) || (n[0] === nx[0] && n[1] === nx[1])) continue; if (d.grid[n[1]]?.[n[0]] === 0 && TUBEM.tubeStep(d, k, id(n), a, b)) bad.push(where + `: tile ${i} leaks sideways to ${n}`); }
+      });
+      if (turns > 1) bad.push(where + ': more than one bend'); if ((t.bend >= 0) !== (turns === 1)) bad.push(where + ': t.bend flag');
+      const lv = t.tiles.map(tl => d.tubeLevel[id(tl)]).join(' '); if (!/^lo( lo)*( lad( up)+)?$/.test(lv)) bad.push(where + ': level order ' + lv);
+      if (turns) { bends++; if (t.ladder > 0) bendLadders++; }
+    }
     tubes += d.tubes.length; if (d.tubes.length) withTubes++; ladders += d.tubes.filter(t => t.ladder > 0).length; bigRooms += d.rooms.filter(r => r.big).length;
   }
-  return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen };
+  return { n, bad, tubes, withTubes, ladders, bigRooms, masked, minOpen, bends, bendLadders };
 })();
-console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
+console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tubes} Jiffy tubes on ${gen.withTubes} levels (${gen.ladders} with ladders, ${gen.bends} with a bend, ${gen.bendLadders} bent + laddered), ${gen.bigRooms} large rooms, ${gen.masked} hull-shaped decks, smallest deck ${gen.minOpen} open tiles`); if (gen.withTubes < gen.n * 0.5) fail('too few tubes'); if (gen.bends < gen.tubes * 0.15) fail('too few bent tubes'); if (gen.bad.length) fail('generator: ' + gen.bad.slice(0, 5).join('; '));
 { // liminal twins (opts.liminal): two identically furnished rooms, every chip and the exit still reachable; catwalks and atria generate
   const { generate: gen2 } = await import('../js/gen.js'); let n = 0, bad = 0, twins = 0, catwalks = 0, atria = 0;
   for (let d = 2; d < 11; d++) for (let s = 1; s <= 40; s++) { const g = gen2(d, s * 31, { liminal: true, weights: { atrium: 2, lounge: 3, lab: 3, quarters: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }); n++; if (g.rooms.some(r => r.twin)) twins++; catwalks += g.props.filter(p => p.kind === 'catwalk').length; atria += g.rooms.filter(r => r.type === 'atrium').length;
@@ -276,12 +294,20 @@ const park = await page.evaluate(async () => {
   reset(); P.x = c[0]; P.z = c[1]; P.yaw = best.yaw; P.pitch = 0.12; tick(3); key('KeyQ'); let gp = 0, modes = new Set();
   for (let i = 0; i < 150; i++) { tick(1); gp = Math.max(gp, P.y); modes.add(P.mode); } r.grapplePeak = +gp.toFixed(2); r.modes = [...modes]; r.run = best.n; P.pitch = 0;
   // Jiffy tube: walk in from one mouth holding W; must auto-crouch and come out the other end
-  let tw = null; for (let d = 2; d < 9 && !tw; d++) { g.loadDeck(d); if (g.world.d.tubes.some(t => t.ladder > 0)) tw = g.world; }
+  let tw = null; for (let d = 2; d < 9 && !tw; d++) { g.loadDeck(d); if (g.world.d.tubes.some(t => t.ladder > 0 && t.bend < 0)) tw = g.world; }   // straight + laddered: W held along the axis
   if (tw) { for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
-    const t = tw.d.tubes.find(t => t.ladder > 0), ca = tw.center(t.a[0], t.a[1]), cb = tw.center(t.b[0], t.b[1]); reset(); P.x = ca[0]; P.z = ca[1]; P.yaw = Math.atan2(ca[0] - cb[0], ca[1] - cb[1]); g.G.phase = 'play';
+    const t = tw.d.tubes.find(t => t.ladder > 0 && t.bend < 0), ca = tw.center(t.a[0], t.a[1]), cb = tw.center(t.b[0], t.b[1]); reset(); P.x = ca[0]; P.z = ca[1]; P.yaw = Math.atan2(ca[0] - cb[0], ca[1] - cb[1]); g.G.phase = 'play';
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })); let ducked = false, minD = 1e9, topY = 0;
     for (let i = 0; i < 60 * 12; i++) { tick(1); g.G.phase = 'play'; P.clung = 0; if (tw.isTube(...tw.tile(P.x, P.z)) && P.crouch) ducked = true; topY = Math.max(topY, P.y); minD = Math.min(minD, Math.hypot(P.x - cb[0], P.z - cb[1])); }
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })); r.tube = { len: t.tiles.length, ladder: t.ladder, ducked, climbed: +topY.toFixed(2), reached: minD < 0.8 && topY > 1.6 }; }
+  // Jiffy tube bend: crawl a bent, ladder-free tube end to end (yaw steered at each tile centre in turn, W held): must duck, stay inside the L, and come out of the far mouth
+  { let bw = null, bt = null; for (const need of [1, 0]) for (let d = 1; d < 10 && !bt; d++) { g.loadDeck(d); const t = g.world.d.tubes.find(t => t.bend >= need && t.ladder < 0); if (t) { bw = g.world; bt = t; } }   // prefer a corner with straight tiles on both sides
+    if (bt) { for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
+      const pts = [bt.a, ...bt.tiles, bt.b].map(([x, y]) => bw.center(x, y)), ok = new Set([bt.a, ...bt.tiles, bt.b].map(([x, y]) => x + ',' + y)); reset(); P.x = pts[0][0]; P.z = pts[0][1]; g.G.phase = 'play';
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })); let k = 1, ducked = false, strayed = 0, secs = 0, cornerDucked = false;
+      for (let i = 0; i < 60 * 40 && k < pts.length; i++) { const [tx, tz] = pts[k]; P.yaw = Math.atan2(P.x - tx, P.z - tz); tick(1); g.G.phase = 'play'; P.clung = 0; secs++;
+        const [px, py] = bw.tile(P.x, P.z); if (bw.isTube(px, py)) { if (P.crouch) ducked = true; if (px === bt.tiles[bt.bend][0] && py === bt.tiles[bt.bend][1] && P.crouch) cornerDucked = true; } if (!ok.has(px + ',' + py)) strayed++; if (Math.hypot(P.x - tx, P.z - tz) < 0.45) k++; }
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })); r.bend = { len: bt.tiles.length, corner: bt.bend, ducked, cornerDucked, strayed, secs: +(secs / 60).toFixed(1), reached: k >= pts.length }; r.bend.ok = r.bend.reached && ducked && cornerDucked && strayed === 0; } }
   // space madness: deck 1 opener turns when you approach, hunts the other crew, dies to two hits, and the next-lowest rank turns
   { g.newRun(); g.setQuality('low'); g.G.phase = 'play'; g.G.hp = 1e6; for (const e of g.gorns) { e.dead = true; e.mesh.visible = false; } g.gorns.length = 0;
     const w2 = g.world, op = g.ents.find(e => e.opener), m = { opener: !!op };
@@ -325,7 +351,7 @@ const park = await page.evaluate(async () => {
     r.sys.roster = g.roster.people.length; r.sys.ship = g.G.ship.name; }
   return r;
 });
-console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun) || park.climb.tube.hit)   /* climbed in after you, or dragged you out of the high mouth */ && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
+console.log('parkour:', JSON.stringify(park)); if (!(park.jumpPeak > 0.5 && park.landed && park.mantled !== false && (park.run < 2 || park.grapplePeak > 0.4) && park.modes.includes('grapple') && (!park.tube || (park.tube.ducked && park.tube.reached)) && park.bend?.ok && (!park.climb.prop || (park.climb.prop.maxY >= park.climb.prop.top - 0.05 && park.climb.prop.hit)) && (!park.climb.tube || (park.climb.tube.maxY > 1.6 && park.climb.tube.upperRun) || park.climb.tube.hit)   /* climbed in after you, or dragged you out of the high mouth */ && park.mad.turned && park.mad.lowest && park.mad.red && park.mad.killedCrew > 0 && park.mad.next && park.mad.nextLowest && park.sys.repaired && park.sys.suffocate > 0 && park.sys.points >= 20)) fail('parkour');
 });
 S('director', 'madness', async (page) => {   // a crew member is dispatched to a lighting junction and fixes it (the Director / cascade half is the node section director-cascade)
 await installHelpers(page);

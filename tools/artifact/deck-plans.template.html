@@ -207,7 +207,14 @@ function drawPlan(cv, data, { small = false, hover = null } = {}) {
   }
   // Jiffy tubes
   if (lay.tubes) for (const t of data.tubes) t.tiles.forEach(([x, y], i) => {
-    const k = data.tubeLevel[x + y * W], cx = (x + 0.5) * px, cy = (y + 0.5) * px, ax = t.axis === 'x', w = Math.max(3, px * 0.42);
+    const k = data.tubeLevel[x + y * W], cx = (x + 0.5) * px, cy = (y + 0.5) * px, ax = data.tubeAxis[x + y * W] === 'x', w = Math.max(3, px * 0.42);
+    if (data.tubeAxis[x + y * W] === 'xy') {   // the bend: a square at the centre plus an arm to each of its two open edges
+      const arms = data.tubeBend[x + y * W].map(([dx, dy]) => dx ? [dx > 0 ? cx : x * px, cy - w / 2, px / 2, w] : [cx - w / 2, dy > 0 ? cy : y * px, w, px / 2]), box = [cx - w / 2, cy - w / 2, w, w];
+      g.fillStyle = C.deck; for (const r of [box, ...arms]) g.fillRect(...r);
+      if (k === 'up') { g.globalAlpha = 0.35; g.fillStyle = C.tube; for (const r of [box, ...arms]) g.fillRect(...r); g.globalAlpha = 1; }
+      g.strokeStyle = C.tube; g.lineWidth = Math.max(1, px * 0.08); g.setLineDash(k === 'lo' ? [px * 0.18, px * 0.14] : []); for (const r of arms) g.strokeRect(...r); g.setLineDash([]);
+      return;
+    }
     g.fillStyle = C.deck; ax ? g.fillRect(x * px, cy - w / 2, px, w) : g.fillRect(cx - w / 2, y * px, w, px);
     g.strokeStyle = C.tube; g.lineWidth = Math.max(1, px * 0.08);
     if (k === 'up') { g.setLineDash([]); g.globalAlpha = 0.35; g.fillStyle = C.tube; ax ? g.fillRect(x * px, cy - w / 2, px, w) : g.fillRect(cx - w / 2, y * px, w, px); g.globalAlpha = 1; }
@@ -361,7 +368,7 @@ const plan = $('plan'), tip = $('tip');
 function tileAt(ev) { const r = plan.getBoundingClientRect(), data = deckData(S.ship, S.deck, S.seed); const x = Math.floor((ev.clientX - r.left) / r.width * data.W), y = Math.floor((ev.clientY - r.top) / r.height * data.H); return x >= 0 && y >= 0 && x < data.W && y < data.H ? [x, y] : null; }
 function describe(data, x, y) {
   const c = data.grid[y][x], r = data.room[y][x], k = data.tubeLevel[x + y * data.W];
-  if (k) return [`Jiffy tube · ${k === 'lo' ? 'lower run' : k === 'up' ? 'upper run, 1.7 m up' : 'ladder shaft'}`, 'Crawl height 1.25 m. Gronk and Drone can\'t follow; crazed crew can, slower.'];
+  if (k) return [`Jiffy tube${data.tubeAxis[x + y * data.W] === 'xy' ? ' bend' : ''} · ${k === 'lo' ? 'lower run' : k === 'up' ? 'upper run, 1.7 m up' : 'ladder shaft'}`, 'Crawl height 1.25 m. Gronk and Drone can\'t follow; crazed crew can, slower.'];
   if (x === data.exit[0] && y === data.exit[1]) return ['Tubelift', `Needs all ${data.chips.length} logic chips. ` + (S.deck + 1 >= L.SHIPS[S.ship].decks ? 'Last deck: boarding it ends the run — you escape.' : `Leads to deck ${String(S.deck + 2).padStart(2, '0')}.`)];
   if (c === 1) return [data.inHull(x, y) ? 'Bulkhead' : 'Open space', data.inHull(x, y) ? 'Solid. Wall-run along it.' : 'Outside the hull at this deck.'];
   const extra = [];

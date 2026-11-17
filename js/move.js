@@ -1,6 +1,7 @@
 // Player traversal: momentum running, jump, mantle/vault onto props, slide, wall-run and a grapple line.
 // Pure logic on the player state `P` + `world`; main.js owns input, camera, sound and enemy side-effects (via `api`).
 import { TS, TUBE_UP } from './world.js';
+import { tubeDirs } from './tube.js';
 
 export const MOVE = {
   gravity: 21, jump: 6.3, walk: 3.3, crouch: 1.7, sprint: 5.7, flowBonus: 1.5, airAccel: 14, groundK: 10,
@@ -21,10 +22,10 @@ function ledgeAhead(P, world, dx, dz, reach) {
   for (const dist of [0.5, 0.75]) {
     const px = P.x + dx * dist, pz = P.z + dz * dist; const [tx, ty] = world.tile(px, pz);
     const top = world.topAt(tx, ty); if (!isFinite(top)) continue;
-    if (world.tubeKind(tx, ty) === 'up') {   // the high mouth of a laddered tube: pull yourself in along its axis
-      const rise = top - P.y, cx = (tx + 0.5) * TS, cz = (ty + 0.5) * TS, ax = world.d.tubeAxis[tx + ty * world.W];
-      if (rise < 0.25 || rise > reach || (ax === 'x' ? Math.abs(dz) > 0.6 || Math.abs(P.z - cz) > 0.5 : Math.abs(dx) > 0.6 || Math.abs(P.x - cx) > 0.5)) continue;
-      return ax === 'x' ? { top, x: cx - Math.sign(dx) * (TS / 2 - 0.6), z: cz, rise } : { top, x: cx, z: cz - Math.sign(dz) * (TS / 2 - 0.6), rise };
+    if (world.tubeKind(tx, ty) === 'up') {   // the high mouth of a laddered tube: pull yourself in along the way the tube opens (the first upper tile may be the bend)
+      const rise = top - P.y, cx = (tx + 0.5) * TS, cz = (ty + 0.5) * TS, m = tubeDirs(world.d, tx + ty * world.W).find(([a, b]) => !world.isTube(tx + a, ty + b)); if (!m) continue;
+      if (rise < 0.25 || rise > reach || (m[0] ? Math.abs(dz) > 0.6 || Math.abs(P.z - cz) > 0.5 : Math.abs(dx) > 0.6 || Math.abs(P.x - cx) > 0.5)) continue;
+      return { top, x: cx + m[0] * (TS / 2 - 0.6), z: cz + m[1] * (TS / 2 - 0.6), rise };
     }
     const rise = top - P.y; if (rise < 0.25 || rise > reach) continue;
     if (top + MOVE.height * 0.6 > world.ceilAt(tx, ty)) continue;                 // no headroom (crouch height)

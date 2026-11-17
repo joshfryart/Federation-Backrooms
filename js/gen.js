@@ -285,31 +285,50 @@ export function generate(deck, seed, opts = {}) {
   };
   const openNeighbors = (x, y) => DIRS.filter(([dx, dy]) => grid[y + dy]?.[x + dx] === 0).length;
 
-  // Jiffy tubes: crawl-height maintenance ducts bored straight through solid bulkhead between two open tiles.
-  // Only worth having when they are a real shortcut (or the only link). Movement inside is along the axis only.
-  const tubeAxis = {}, tubeLevel = {}, tubes = [];
+  // Jiffy tubes: crawl-height maintenance ducts bored through solid bulkhead between two open tiles: straight, or with one 90-degree bend (L).
+  // Only worth having when they are a real shortcut (or the only link). Movement inside follows the tube (js/tube.js: tubeOpen).
+  // Per tile: tubeAxis 'x' | 'y' (straight) or 'xy' (the bend tile; tubeBend[i] = [dir toward the previous tile, dir toward the next]).
+  const tubeAxis = {}, tubeLevel = {}, tubeBend = {}, tubes = [];
   {
     const wantT = Math.min(3, 1 + Math.floor(deck / 2)), cands = [];
+    const wall = (x, y) => grid[y]?.[x] === 1;
     for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
       if (grid[y][x] !== 0 || (x === s0[0] && y === s0[1])) continue;
       for (const [dx, dy] of [[1, 0], [0, 1]]) {
         let n = 0; while (n < 7 && grid[y + dy * (n + 1)]?.[x + dx * (n + 1)] === 1) n++;
         const ex = x + dx * (n + 1), ey = y + dy * (n + 1);
         if (n < 1 || n > 6 || ex > W - 2 || ey > H - 2 || grid[ey]?.[ex] !== 0) continue;
-        cands.push({ x, y, dx, dy, n, ex, ey, s: n + rnd() * 1.5 });
+        cands.push({ x, y, dx, dy, n, ex, ey, s: n + rnd() * 1.5, tiles: null });
+      }
+      // one bend (scored 3.5 below a straight bore of the same length so about 40 % of tubes bend): k1 wall tiles along d1 (the last is the corner), then k2 along the perpendicular d2, ending on an open tile
+      for (const [dx, dy] of DIRS) for (const sg of [-1, 1]) {
+        const ex2 = dy ? sg : 0, ey2 = dy ? 0 : sg;   // d2 is perpendicular to d1
+        for (let k1 = 1; k1 <= 5 && wall(x + dx * k1, y + dy * k1); k1++) {
+          const cx = x + dx * k1, cy = y + dy * k1;
+          for (let k2 = 1; k1 + k2 <= 7 && wall(cx + ex2 * k2, cy + ey2 * k2); k2++) {
+            const ex = cx + ex2 * (k2 + 1), ey = cy + ey2 * (k2 + 1);
+            if (ex < 1 || ey < 1 || ex > W - 2 || ey > H - 2 || grid[ey][ex] !== 0) continue;
+            const tiles = []; for (let i = 1; i <= k1; i++) tiles.push([x + dx * i, y + dy * i]); for (let i = 1; i <= k2; i++) tiles.push([cx + ex2 * i, cy + ey2 * i]);
+            cands.push({ x, y, dx, dy, n: k1 + k2, ex, ey, s: k1 + k2 - 3.5 + rnd() * 1.5, tiles, corner: k1 - 1, d1: [dx, dy], d2: [ex2, ey2] });
+          }
+        }
       }
     }
     cands.sort((a, b) => b.s - a.s);
-    for (const c of cands.slice(0, 80)) {
+    for (const c of cands.slice(0, 120)) {
       if (tubes.length >= wantT) break;
-      const tiles = []; for (let i = 1; i <= c.n; i++) tiles.push([c.x + c.dx * i, c.y + c.dy * i]);
+      const bent = !!c.tiles, tiles = c.tiles || []; if (!bent) for (let i = 1; i <= c.n; i++) tiles.push([c.x + c.dx * i, c.y + c.dy * i]);
       if (tiles.some(([tx, ty]) => !hull(tx, ty))) continue;                                                             // never tunnel through open space
       if (tiles.some(([tx, ty]) => [[0, 0], ...DIRS].some(([a, b]) => tubeAxis[(tx + a) + (ty + b) * W]))) continue;   // keep tubes apart
       const dAB = bfsFrom(c.x, c.y)[c.ex + c.ey * W]; if (dAB >= 0 && dAB < (c.n >= 2 ? 8 : 14)) continue;                // not a shortcut
-      // longer tubes usually climb: lower run from mouth a, a ladder shaft, then an upper run that opens high in the wall at b
-      const ladder = c.n >= 3 && rnd() < 0.65 ? 1 + Math.floor(rnd() * (c.n - 2)) : -1;
-      tiles.forEach(([tx, ty], i) => { grid[ty][tx] = 0; room[ty][tx] = 'jefferies'; tubeAxis[tx + ty * W] = c.dx ? 'x' : 'y'; tubeLevel[tx + ty * W] = ladder < 0 || i < ladder ? 'lo' : i === ladder ? 'lad' : 'up'; });
-      tubes.push({ tiles, a: [c.x, c.y], b: [c.ex, c.ey], axis: c.dx ? 'x' : 'y', ladder });
+      // longer tubes usually climb: lower run from mouth a, a ladder shaft (never on the bend), then an upper run that opens high in the wall at b
+      let ladder = -1;
+      if (c.n >= 3 && rnd() < 0.65) { const ok = []; for (let i = 1; i <= c.n - 2; i++) if (i !== c.corner) ok.push(i); if (ok.length) ladder = ok[Math.floor(rnd() * ok.length)]; }
+      tiles.forEach(([tx, ty], i) => {
+        const id = tx + ty * W; grid[ty][tx] = 0; room[ty][tx] = 'jefferies'; tubeLevel[id] = ladder < 0 || i < ladder ? 'lo' : i === ladder ? 'lad' : 'up';
+        if (bent && i === c.corner) { tubeAxis[id] = 'xy'; tubeBend[id] = [[-c.d1[0], -c.d1[1]], c.d2]; } else tubeAxis[id] = (i > c.corner && bent ? c.d2[0] : c.dx) ? 'x' : 'y';
+      });
+      tubes.push({ tiles, a: [c.x, c.y], b: [c.ex, c.ey], axis: bent ? 'xy' : c.dx ? 'x' : 'y', bend: bent ? c.corner : -1, ladder });
     }
   }
 
@@ -374,7 +393,7 @@ export function generate(deck, seed, opts = {}) {
   const gornSpawn = (pickTile(([x, y]) => dist(x, y) >= maxD * 0.55 && !(Math.abs(x - exit[0]) + Math.abs(y - exit[1]) < 4)) || exit).slice();
   used.delete(gornSpawn.join(','));
 
-  const data = { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis, tubeLevel,
+  const data = { deck, W, H, grid, room, rooms, props, start, exit, exitDir, exitBlocks, chips, gornSpawn, tubes, tubeAxis, tubeLevel, tubeBend,
            masked: !!opts.inside, inHull: hull, missing,
            openTiles, maxD, dist: reach, rnd, used, pickTile, bfsFrom };
   furnish(data);

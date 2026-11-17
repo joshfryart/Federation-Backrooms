@@ -3,6 +3,7 @@ import { iconSvg } from './icons.js';
 import { setMapPalette } from './minimap.js';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
+import { tubeStep } from './tube.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance } from './assets.js';
@@ -456,7 +457,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const [fx, fz] = world.center(w.tx, w.ty), toEnd = Math.hypot(fx - e.x, fz - e.z);
   // look-ahead: follow the field downhill and aim at the furthest tile in clear sight (with body-width clearance)
   let gx, gz, ax = tx, ay = ty, av = cur; const chain = [], tubeish = e.crawl || e.climbing || w.opts.tubes;
-  for (let k = 0; k < (tubeish ? 1 : gt.cut ? 6 : 4) && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; const ta = world.d.tubeAxis[ax + ay * W], tb = world.d.tubeAxis[nx + ny * W]; if (((ta === 'x' || tb === 'x') && dy !== 0) || ((ta === 'y' || tb === 'y') && dx !== 0)) continue;   /* same edge rule as World.field: tubes are entered only along their axis */ const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
+  for (let k = 0; k < (tubeish ? 1 : gt.cut ? 6 : 4) && av > 0; k++) { let best = av, bx = ax, by = ay; for (const [dx, dy] of WALK_DIRS) { const nx = ax + dx, ny = ay + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= world.H) continue; if (!tubeStep(world.d, ax + ay * W, nx + ny * W, dx, dy)) continue;   /* same edge rule as World.field: tubes are entered / left only through their open ends (bends turn) */ const v = f[nx + ny * W]; if (v >= 0 && v < best) { best = v; bx = nx; by = ny; } } if (best === av) break; ax = bx; ay = by; av = best; chain.push([bx, by]); }
   if (!chain.length) { gx = fx; gz = fz; } else { let pick = chain[0]; for (const c of chain) { const [cx, cz] = world.center(c[0], c[1]); if (c === chain[0] || (world.los(e.x, e.z, cx, cz) && [[0.34, 0], [-0.34, 0], [0, 0.34], [0, -0.34]].every(([ox, oz]) => world.los(e.x + ox, e.z + oz, cx + ox, cz + oz)))) pick = c; else break; } [gx, gz] = world.center(pick[0], pick[1]); }
   if (av === 0 && chain.length && chain[chain.length - 1][0] === w.tx && chain[chain.length - 1][1] === w.ty && world.los(e.x, e.z, fx, fz)) { gx = fx; gz = fz; }
   if (cur === 0) { gx = fx; gz = fz; }
