@@ -287,7 +287,7 @@ function loadDeck(n) {
   $('shipname').textContent = ship.name + ' · ' + ship.reg;
   updateHUD();
   if (NM && !G.navTour && !localStorage.getItem('fb_navtour')) { G.navTour = 1; const tips = ['Nav: M opens the big map, G cycles guide pins, Tab shows the ship schematic.', 'Nav: the compass strip and the floor chevrons lead to your pinned destination.', 'Nav: in the lift, Enter takes the deck your guide pin needs.'];
-    tips.forEach((t, i) => later(() => { if (G.phase === 'play') { G.say(t, 'good'); if (i === tips.length - 1) try { localStorage.setItem('fb_navtour', '1'); } catch (e) { /* private window */ } } }, 25000 + i * 14000)); }
+    tips.forEach((t, i) => later(() => { if (G.phase === 'play') { G.say(t, 'good'); { const kh = $('keyhint'), keys = [['M', 'G', 'Tab'], [], ['Enter']][i] || []; if (kh) { kh.innerHTML = keys.map(k => `<kbd>${k}</kbd>`).join(''); kh.style.opacity = 1; setTimeout(() => { kh.style.opacity = 0; }, 9000); } } if (i === tips.length - 1) try { localStorage.setItem('fb_navtour', '1'); } catch (e) { /* private window */ } } }, 25000 + i * 14000)); }
   if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; later(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
   else G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
   if (n === 1 && !NM) later(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
@@ -1380,6 +1380,15 @@ function step(dt, t) {
     if (top && (id === 'fire' || id === 'contamination' || id === 'abandon_ship' || id === 'hull_breach') && world && Math.random() < dt * 16) {
       const a = Math.random() * 6.283, r = 3 + Math.random() * 11, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r, [tx, ty] = world.tile(x, z);
       if (!world.solid(tx, ty)) smoke.add(x, world.ceilAt(tx, ty) - 0.4, z, (Math.random() - 0.5) * 0.5, -0.05 - Math.random() * 0.1, (Math.random() - 0.5) * 0.5, SMOKE_COL, 5 + Math.random() * 3); } }
+  // hull breach: while the alert is up a breach opens at one spot on the deck (seeded per deck): air rushes toward it, pulling you in and hurting inside 3 m.
+  // Holding an emergency breather halves the damage; getting out of line of sight / > 14 m ends the pull. Cleared when the alert clears.
+  { const top = G.comms?.alerts?.top?.(), on = !!top && top.def.id === 'hull_breach' && G.phase === 'play' && world;
+    if (!on) G.breach = null;
+    else {
+      if (!G.breach || G.breach.deck !== G.deck) { const t = world.d.pickTile(([x, y]) => !world.d.room[y][x] && world.d.dist[x + y * world.W] > world.d.maxD * 0.3) || world.d.start; const [bx, bz] = world.center(t[0], t[1]); G.breach = { deck: G.deck, x: bx, z: bz }; G.say('HULL BREACH on this deck — air is venting. Get away from the roar.', 'warn'); caption('air venting', bx, bz); }
+      const B = G.breach, dx = B.x - P.x, dz = B.z - P.z, d = Math.hypot(dx, dz);
+      if (d < 14 && world.los(P.x, P.z, B.x, B.z)) { const pull = (1 - d / 14) * 4.5; P.kbx += dx / (d || 1) * pull * dt * 6; P.kbz += dz / (d || 1) * pull * dt * 6; if (Math.random() < dt * 8) steam.add(B.x, 0.3 + Math.random() * 1.8, B.z, (Math.random() - 0.5) * 3, 0.4, (Math.random() - 0.5) * 3, STEAM, 1.2); if (d < 3) { G.hp -= (G.carry?.item === 'breather' ? 3 : 7) * dt; P.shake = Math.max(P.shake, 0.2); if (G.hp <= 0) { NOM() ? nomDie('decompression at the hull breach') : G.hp = 1; } } }
+    } }
   for (const st of world.steamers) {
     st.t -= dt;
     if (st.t <= 0 && Math.hypot(st.x - P.x, st.z - P.z) < 20) { st.t = 0.08; steam.add(st.x, 0.3, st.z, (Math.random() - 0.5) * 0.4, 1.2 + Math.random(), (Math.random() - 0.5) * 0.4, STEAM, 2.2); }

@@ -312,7 +312,7 @@ export const ITEMS = {
   zapper: { name: 'zapper', w: 0.8, pose: 'hold_r', hand: 'r' },
   dumbbell: { name: 'dumbbell', w: 6, pose: null, hand: 'r' },
   linen: { name: 'folded linen', w: 2, two: true, pose: 'carry_front', gift: 0.03, load: true },
-  smallbox: { name: 'parts box', w: 4, two: true, pose: 'carry_front', load: true },
+  smallbox: { name: 'parts box', w: 4, two: true, pose: 'carry_front', load: true, tool: 1.15 },
   crate: { name: 'supply crate', w: 14, two: true, pose: 'carry_front', load: true },
   hose: { name: 'hose coil', w: 6, pose: 'hold_r', hand: 'r', load: true },
   // handheld job equipment models (js/handhelds.js says what each does and how it hits)
@@ -330,11 +330,11 @@ export const ITEMS = {
   // batches 5-11 (js/itemart-sciences/flight/stations2/security/polish.js; ids = model kinds)
   soil_meter: { name: 'soil meter', w: 0.3, pose: 'hold_r', hand: 'r' }, pruning_shears: { name: 'pruning shears', w: 0.25, pose: 'hold_r', hand: 'r' }, harvest_tote: { name: 'harvest tote', w: 5, two: true, pose: 'carry_front', load: true, gift: 0.05 },
   wheel_chocks: { name: 'wheel chocks', w: 3, pose: 'hold_r', hand: 'r', load: true }, tiedown_strap: { name: 'tie-down strap', w: 0.6, pose: 'hold_r', hand: 'r' }, ratchet_strap: { name: 'ratchet strap', w: 1.2, pose: 'hold_r', hand: 'r', load: true },
-  tag_scanner: { name: 'tag scanner', w: 0.4, pose: 'hold_r', hand: 'r' }, coil_cartridge: { name: 'emitter coil cartridge', w: 3, two: true, pose: 'carry_front', load: true },
-  patch_plate: { name: 'hull patch plate', w: 4, two: true, pose: 'carry_front', load: true }, pipe_clamp: { name: 'pipe repair clamp', w: 1.2, pose: 'hold_r', hand: 'r', tool: 1.08 }, seal_gauge: { name: 'seal gauge', w: 0.6, pose: 'hold_r', hand: 'r' },
+  tag_scanner: { name: 'tag scanner', w: 0.4, pose: 'hold_r', hand: 'r' }, coil_cartridge: { name: 'emitter coil cartridge', w: 3, two: true, pose: 'carry_front', load: true, tool: 1.2 },
+  patch_plate: { name: 'hull patch plate', w: 4, two: true, pose: 'carry_front', load: true, tool: 1.2 }, pipe_clamp: { name: 'pipe repair clamp', w: 1.2, pose: 'hold_r', hand: 'r', tool: 1.08 }, seal_gauge: { name: 'seal gauge', w: 0.6, pose: 'hold_r', hand: 'r' },
   breather: { name: 'emergency breather', w: 0.4, pose: 'hold_r', hand: 'r', gift: 0.05 }, cuffs: { name: 'restraint cuffs', w: 0.3, pose: 'hold_r', hand: 'r' },
   tether: { name: 'safety tether', w: 0.8, pose: 'hold_r', hand: 'r' }, headset: { name: 'comms headset', w: 0.2, pose: 'hold_r', hand: 'r' },
-  light_panel: { name: 'light panel', w: 1.5, two: true, pose: 'tray', load: true }, injector_spare: { name: 'spare plasma injector', w: 6, two: true, pose: 'carry_front', load: true },
+  light_panel: { name: 'light panel', w: 1.5, two: true, pose: 'tray', load: true }, injector_spare: { name: 'spare plasma injector', w: 6, two: true, pose: 'carry_front', load: true, tool: 1.3 },
 };
 export const ITEM_IDS = Object.keys(ITEMS);
 // player speed multiplier for carrying an item (crates slow you, small things do not)
