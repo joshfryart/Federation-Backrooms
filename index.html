@@ -17,6 +17,10 @@
   #boot .bshine { position:absolute; inset:0; width:35%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent); animation:bootshine 1.3s ease-in-out infinite; } @keyframes bootshine { from { transform:translateX(-120%); } to { transform:translateX(320%); } }
   #boot .brow { display:flex; justify-content:space-between; width:min(520px,80vw); font:700 12px var(--f-m,monospace); letter-spacing:.12em; color:#aebdd2; }
   #boot button { display:none; margin-top:10px; padding:12px 34px; font:800 15px var(--f-d,Arial,sans-serif); letter-spacing:.24em; text-transform:uppercase; color:#08101c; background:#f2a03d; border:0; cursor:pointer; clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%); animation:bootpulse 1.4s ease-in-out infinite alternate; } @keyframes bootpulse { from { box-shadow:0 0 0 rgba(242,160,61,0); filter:brightness(1); } to { filter:brightness(1.18); } }
+  #boot .bcrew { display:none; position:relative; width:min(520px,80vw); height:124px; margin-top:4px; } #boot .bcrew.on { display:block; }
+  #boot .bslot { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:16px; opacity:0; transition:opacity .16s ease; text-align:left; } #boot .bslot.on { opacity:1; }
+  #boot .bslot img { width:112px; height:112px; border:1px solid rgba(242,160,61,.7); background:#0d1522; box-shadow:0 0 18px rgba(242,160,61,.18); }
+  #boot .bslot b { display:block; font:800 18px var(--f-d,Arial,sans-serif); letter-spacing:.1em; text-transform:uppercase; } #boot .bslot span { display:block; margin-top:4px; font:700 11px var(--f-m,monospace); letter-spacing:.14em; text-transform:uppercase; color:#8fa0b6; }
   #boot .bnote { max-width:560px; font-size:12px; color:#6f8197; line-height:1.5; }
   @media (prefers-reduced-motion: reduce) { #boot .bcrest, #boot .bshine, #boot button { animation:none; } }
   #keyhint kbd { display:inline-block; min-width:30px; padding:5px 9px; margin:0 5px; border:1px solid var(--lc1); border-radius:5px; background:rgba(7,11,19,.8); color:var(--lc4); font:700 15px var(--f-m,monospace); animation:kglow 1.4s ease-in-out infinite alternate; } @keyframes kglow { from { box-shadow:0 0 4px rgba(242,160,61,.3); } to { box-shadow:0 0 16px rgba(242,160,61,.95); } }
@@ -184,6 +188,7 @@
   <div class="bsub" id="boot-title">Powering up</div>
   <div class="btrack"><div class="bfill" id="boot-fill"></div><div class="bshine"></div></div>
   <div class="brow"><span id="boot-status">Starting…</span><span id="boot-pct">0%</span></div>
+  <div class="bcrew" id="boot-crew" aria-hidden="true"><div class="bslot" id="boot-slot0"><img alt="" width="112" height="112"><div><b></b><span></span></div></div><div class="bslot" id="boot-slot1"><img alt="" width="112" height="112"><div><b></b><span></span></div></div></div>
   <div class="bsub" id="boot-sub">The page stays responsive while the ship's systems load</div>
   <button id="boot-go" type="button">Enter the ship</button>
   <noscript><div class="bnote">This game needs JavaScript.</div></noscript>

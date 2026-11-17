@@ -903,9 +903,10 @@ async function startRun() {
     const enter = newRun({ hold: true });   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
     Loading.set(0.5, 'Compiling shaders…'); await paint();
     try { world && renderer.compile(scene, camera); } catch (e) { console.warn('compile', e.message); }
+    if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } }   // depth-of-field pass for the conversation close-up
     if (NOM() && G.menus && !TEST_MODE) {
       const list = G.menus.portraitOrder(), n = list.length;
-      for (let i = 0; i < n; i++) { Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i + 1} / ${n}`); G.portraits.renderNow(list[i]); await paint(); }
+      for (let i = 0; i < n; i++) { Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i + 1} / ${n}`); const p = list[i], url = G.portraits.renderNow(p); if (url) Loading.crew(url, p.short || p.full, p.title); await paint(); }   // the face being rendered right now fades in over the last one
     }
     Loading.set(0.99, 'Almost ready…'); await paint();
     Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);

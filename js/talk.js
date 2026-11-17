@@ -289,6 +289,7 @@ export class Talk {
     this.c = ctx; this.M = createTalkMachine(); this.e = null; this.tt = 0; this.memo = null; this.log = [];
     this.hidden = []; this.dof = null; this.light = null; this._v = null; this._q = null;
     if (typeof document !== 'undefined') this.mount();
+    this.ensureLight(); this.setupDof();   // both live from the start: adding a light (or building a pass) when a talk begins recompiled every lit material and stalled the zoom-in
   }
   get active() { return this.M.active; }
   get G() { return this.c.G; }
@@ -414,7 +415,7 @@ export class Talk {
     }
     for (const m of this.hidden) m.visible = true; this.hidden = [];
     if (this.c.vmScene && this.vmWas !== undefined) this.c.vmScene.visible = this.vmWas;
-    if (this.light) { this.light.parent?.remove(this.light); this.light = null; }
+    if (this.light) this.light.intensity = 0;   // stays in the scene (see ensureLight)
     if (this.dof) this.dof.enabled = false;
     document.body?.classList.remove('talking'); this.showUI(false, true);
     if (UIHUB.ui?.has('talk')) UIHUB.ui.closed('talk');
@@ -560,7 +561,12 @@ export class Talk {
     const rc = new T.Raycaster(); rc.far = TALK.dist + 0.3; rc.camera = this.c.camera; const org = new T.Vector3(fc.x, fc.y, fc.z), dir = new T.Vector3();
     return (c) => { try { dir.set(c.x, 0, c.z).normalize(); rc.set(org, dir); const h = rc.intersectObjects(objs, true).find(h => h.object.isMesh && !h.object.isSkinnedMesh && h.object.visible && !(h.object.material?.transparent && (h.object.material.opacity ?? 1) < 0.35)); return h ? h.distance : Infinity; } catch { return Infinity; } };
   }
-  addLight() { const T = this.c.THREE; if (!T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.lightI = 0.45; this.c.scene.add(this.light); this._occ = false; }
+  // The face light is created once and stays in the scene at intensity 0: three.js recompiles every lit material's shader whenever the scene's light count changes,
+  // so adding it per conversation (and removing it again afterwards) stalled the game for a second or more, at the start and at the end of every talk.
+  ensureLight() { const T = this.c.THREE; if (this.light || !T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.light.position.set(0, -50, 0); this.lightI = 0.45; this.c.scene.add(this.light); }
+  addLight() { this.ensureLight(); this.lightI = 0.45; if (this.light) this.light.intensity = 0; this._occ = false; }
+  /** compile the depth-of-field pass now (one throwaway composer frame with it enabled): the loading screen calls this so the first talk does not */
+  warm() { const post = this.c.post; if (!this.dof || !post?.composer || this.c.CFG?.quality !== 'high') return; const was = this.dof.enabled; this.dof.enabled = true; this.dof.uniforms.amount.value = 0; try { post.render(0.016, 0, 0, 0); } finally { this.dof.enabled = was; } }
   setupDof() {
     if (this.dof || this._dofLoading || !this.c.post?.composer || typeof document === 'undefined') { if (this.dof) this.dof.enabled = false; return; }
     this._dofLoading = true; const T = this.c.THREE;
