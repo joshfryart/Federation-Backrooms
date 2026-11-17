@@ -220,7 +220,7 @@ function mats() {
   M.core = new THREE.MeshBasicMaterial({ color: 0x66aaff, transparent: true, opacity: 0.85 });
   M.holo = new THREE.MeshBasicMaterial({ color: 0xffcc33, wireframe: true });
   M.pad = new THREE.MeshBasicMaterial({ color: 0x6fd0ff, transparent: true, opacity: 0.6 });
-  M.view = new THREE.MeshBasicMaterial({ map: textures().stars });
+  M.view = spaceMaterial(textures().stars, 6);
   M.blinkR = new THREE.MeshBasicMaterial({ color: 0xff3020 });
   M.blinkG = new THREE.MeshBasicMaterial({ color: 0x30ff60 });
   M.pipe = std({ color: 0x70757d, metalness: 0.9, roughness: 0.35 });
@@ -459,6 +459,30 @@ class Kit {
   cyl(r, h, x, y, col, z0 = 0, axis = 'y', glow = false, seg = 10) { const g = new THREE.CylinderGeometry(r, r, h, seg); if (axis === 'z') g.rotateX(Math.PI / 2); else if (axis === 'x') g.rotateZ(Math.PI / 2); return this._add(g, x, y, z0 + (axis === 'z' ? h / 2 : r), col, glow); }
   cone(r, h, x, y, col, z0 = 0, rx = 0, rz = 0) { const g = new THREE.ConeGeometry(r, h, 6); g.rotateX(rx); g.rotateZ(rz); return this._add(g, x, y, z0 + r, col, false); }
   done() { const m = (l) => l.length ? mergeGeometries(l, false) : null; return { solid: m(this.solid), glow: m(this.glow) }; }
+}
+
+// what a window / the bridge viewscreen shows: a ray from the camera through each pixel hits a far star sphere, so stars shift with your position (parallax) and slowly turn;
+// a planet limb sits low on the horizon. speed > 1 gives the viewscreen its forward drift. SPACE_T.value is advanced by World.update.
+export const SPACE_T = { value: 0 };
+export function spaceMaterial(stars, speed = 1) {
+  stars.wrapS = stars.wrapT = THREE.RepeatWrapping;
+  return new THREE.ShaderMaterial({
+    uniforms: { stars: { value: stars }, time: SPACE_T, speed: { value: speed } },
+    vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * ' + '\n#ifdef USE_INSTANCING\n instanceMatrix * \n#endif\n vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: `uniform sampler2D stars; uniform float time, speed; varying vec3 vW;
+      void main(){
+        vec3 d = normalize(vW - cameraPosition);
+        float a = time * 0.004 * speed;
+        float ca = cos(a), sa = sin(a); d = vec3(ca * d.x - sa * d.z, d.y, sa * d.x + ca * d.z);
+        vec2 uv = vec2(atan(d.z, d.x) / 6.2832 * 3.0, asin(clamp(d.y, -1.0, 1.0)) / 3.1416 * 1.5 + 0.5);
+        vec3 c = texture2D(stars, uv).rgb;
+        c += texture2D(stars, uv * 2.7 + 0.31).rgb * 0.35;
+        vec3 pc = normalize(vec3(0.55, -0.32, 0.77)); float pd = dot(d, pc);
+        if (pd > 0.9) { float k = smoothstep(0.9, 0.903, pd); float lit = clamp(dot(normalize(d - pc * pd), normalize(vec3(-0.6, 0.7, 0.2))) * 0.5 + 0.55, 0.15, 1.0); vec3 pl = mix(vec3(0.10, 0.22, 0.42), vec3(0.45, 0.62, 0.78), lit) * (0.35 + 0.65 * lit); c = mix(c, pl, k); }
+        else if (pd > 0.88) c += vec3(0.1, 0.25, 0.5) * smoothstep(0.88, 0.9, pd) * 0.6;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
 }
 const DK = 0x23262d, MT = 0x8f959e, WHT = 0xdfe6ea, RD = 0xb02820, YL = 0xd8a818, GRN = 0x2f8a48, STEEL = 0x5a6068;
 const GB = [0.35, 1.25, 2.0], GO = [2.0, 0.85, 0.25], GG = [0.3, 1.7, 0.75], GR = [2.0, 0.2, 0.12], GM = [1.7, 0.5, 1.5];
@@ -895,7 +919,7 @@ export class World {
       });
       lm.count = items.length; g.add(lm);
       const wg = new THREE.PlaneGeometry(1.7, 1.0);
-      const wm = new THREE.InstancedMesh(wg, new THREE.MeshBasicMaterial({ map: T.stars }), windows.length || 1);
+      const wm = new THREE.InstancedMesh(wg, spaceMaterial(T.stars, 1), windows.length || 1);
       windows.forEach((w, i) => { dummy.position.set(w.px, 1.7, w.pz); dummy.rotation.set(0, w.ry, 0); dummy.updateMatrix(); wm.setMatrixAt(i, dummy.matrix); });
       wm.count = windows.length; g.add(wm);
       if (windows.length && T.d.glass) {   // smudged, scratched pane in front of the view
@@ -1398,6 +1422,7 @@ export class World {
     }
   }
   update(dt, t) {
+    SPACE_T.value = t;
     this.directory?.userData.pulse?.(t);   // "you are here" lamp
     const lv = (id) => this.shipState?.level?.(id) || 0;   // 0 nominal, 1 degraded, 2 offline (main.js sets world.shipState)
     if (this.fieldMats) { const L = lv('security'), on = L >= 2 ? 0 : this.powerAmt * (L === 1 && Math.sin(t * 23) + Math.sin(t * 7.7) > 1.1 ? 0.25 : 1);
