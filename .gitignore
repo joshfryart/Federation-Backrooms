@@ -1,2 +1,5 @@
 tools/artifact/ship-deck-plans.html
 node_modules
+
+# shanty video render scratch (frames, wav, coverage): tools/video/README.md
+tools/video/out/
