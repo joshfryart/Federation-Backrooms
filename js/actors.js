@@ -607,3 +607,42 @@ export function prewarmOutfits(kinds = ['crew_m', 'crew_f', 'crew_f2', 'crew_hea
     idle(next);
   });
 }
+
+
+// First-person hands for the parkour verbs (mantle, ladder, slide, grapple, wall-run). Two bare hands with sleeved forearms, built from capsules; main.js poses them each frame
+// through hands.pose(mode, k, dt) where k is a 0..1 phase. Returns { group, pose }. Same skin / sleeve colours as the viewmodel so the zapper hand and these match.
+export function makeHands(skin = 0xd9a47c, sleeve = 0xa3231c) {
+  const group = new THREE.Group(), skinM = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6 }), cloth = new THREE.MeshStandardMaterial({ color: sleeve, roughness: 0.9 });
+  const cap = (r, l, m) => new THREE.Mesh(new THREE.CapsuleGeometry(r, l, 3, 8), m);
+  const hand = (side) => {
+    const h = new THREE.Group(), palm = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.02, 0.085), skinM); h.add(palm);
+    const fingers = []; for (let i = 0; i < 4; i++) { const f = new THREE.Group(), seg = cap(0.0085, 0.04, skinM); seg.rotation.x = Math.PI / 2; seg.position.z = -0.03; f.add(seg); f.position.set(-0.027 + i * 0.018, 0, -0.04); h.add(f); fingers.push(f); }
+    const th = new THREE.Group(), ts = cap(0.0095, 0.035, skinM); ts.rotation.x = Math.PI / 2; ts.position.z = -0.022; th.add(ts); th.position.set(side * 0.04, 0, -0.01); th.rotation.y = side * 0.7; h.add(th);
+    const arm = cap(0.03, 0.34, cloth); arm.rotation.x = Math.PI / 2; arm.position.set(0, 0, 0.26); h.add(arm);
+    h.userData.fingers = fingers; h.userData.thumb = th; return h;
+  };
+  const L = hand(-1), R = hand(1); group.add(L, R); group.visible = false; group.traverse(o => { if (o.isMesh) o.renderOrder = 11; });
+  const cur = { l: new THREE.Vector3(-0.22, -0.4, -0.3), r: new THREE.Vector3(0.22, -0.4, -0.3), lr: new THREE.Euler(), rr: new THREE.Euler(), curl: 0.2, vis: 0 };
+  const tgt = { l: new THREE.Vector3(), r: new THREE.Vector3(), lrx: 0, rrx: 0, lrz: 0, rrz: 0, curl: 0.2, show: false };
+  const lerpV = (a, b, k) => a.lerp(b, k);
+  function pose(mode, k, dt, opts = {}) {
+    const t = opts.time || 0, s = Math.sin, c = Math.cos; tgt.show = true; tgt.curl = 0.25; tgt.lrx = tgt.rrx = 0; tgt.lrz = tgt.rrz = 0;
+    if (mode === 'mantle') {            // both hands reach up and over the ledge, then push down beside the thighs
+      const reach = Math.min(1, k * 2.2), push = Math.max(0, (k - 0.55) / 0.45);
+      tgt.l.set(-0.2, -0.05 + reach * 0.22 - push * 0.55, -0.42 + push * 0.2); tgt.r.set(0.2, -0.05 + reach * 0.22 - push * 0.55, -0.42 + push * 0.2); tgt.lrx = tgt.rrx = -0.5 + push * 0.9; tgt.curl = push > 0 ? 0.1 : 0.9;
+    } else if (mode === 'ladder') {     // alternating hands up the rungs
+      const a = s(t * 5) * 0.5 + 0.5, b = 1 - a; tgt.l.set(-0.16, -0.25 + a * 0.4, -0.38); tgt.r.set(0.16, -0.25 + b * 0.4, -0.38); tgt.lrx = tgt.rrx = -0.3; tgt.curl = 0.9;
+    } else if (mode === 'slide') {      // arms swept back for balance, hands low
+      tgt.l.set(-0.3, -0.42, -0.1); tgt.r.set(0.3, -0.42, -0.1); tgt.lrz = 0.5; tgt.rrz = -0.5; tgt.curl = 0.1;
+    } else if (mode === 'grapple') {    // left arm out holding the launcher, right hand braced
+      tgt.l.set(-0.15, -0.12, -0.5); tgt.lrx = -0.15; tgt.r.set(0.26, -0.32, -0.28); tgt.curl = 0.8;
+    } else if (mode === 'wallrun') {    // the hand on the wall side trails flat against it
+      const side = opts.side || 1; (side > 0 ? tgt.r : tgt.l).set(side * 0.4, -0.12, -0.3); (side > 0 ? tgt.l : tgt.r).set(-side * 0.22, -0.4, -0.2); tgt[side > 0 ? 'rrz' : 'lrz'] = -side * 1.2; tgt.curl = 0.05;
+    } else tgt.show = false;
+    const kk = Math.min(1, dt * 14); lerpV(cur.l, tgt.l, kk); lerpV(cur.r, tgt.r, kk); cur.curl += (tgt.curl - cur.curl) * kk; cur.vis += ((tgt.show ? 1 : 0) - cur.vis) * Math.min(1, dt * 12);
+    L.position.copy(cur.l); R.position.copy(cur.r); L.rotation.set(tgt.lrx, 0, tgt.lrz); R.rotation.set(tgt.rrx, 0, tgt.rrz);
+    for (const h of [L, R]) for (const f of h.userData.fingers) f.rotation.x = cur.curl * 1.3;
+    group.visible = cur.vis > 0.05; group.scale.setScalar(0.9);
+  }
+  return { group, pose };
+}
