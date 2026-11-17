@@ -7,6 +7,8 @@
 //   dutyItems(duty) / Pins                  board rows -> urgency-sorted items; auto-pin when due, G cycles due items -> nearest lift -> none
 // Caching: one distance field per (deck grid, target tile), small LRU; routes are re-derived on the caller's 0.12 s tick, never per frame.
 
+import { tubeStep } from './tube.js';
+
 export const WALK = 3.3, SPRINT = 5.7;          // m/s, as js/move.js
 export const RIDE_OVERHEAD = 2;                 // s per ride: doors + deck panel
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -32,7 +34,7 @@ export function taskIcon(text = '') {
 }
 
 // ---- distance fields ---------------------------------------------------------------------------------------------
-// Same rules as World.field(tx, ty) (walkers: floor 1, tube 2, no ladders / upper runs / props; tubes entered end-on only).
+// Same rules as World.field(tx, ty) (walkers: floor 1, tube 2, no ladders / upper runs / props; tubes entered through their open ends only; bends turn).
 export function gridField(d, tx, ty) {
   const W = d.W, H = d.H, g = d.grid, T = d.tubeAxis || [], L = d.tubeLevel || [];
   const out = new Int16Array(W * H).fill(-1); if (tx < 0 || ty < 0 || tx >= W || ty >= H) return out;
@@ -45,7 +47,7 @@ export function gridField(d, tx, ty) {
       for (const [dx, dy] of DIRS) {
         const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
         const n = nx + ny * W, w = cost(nx, ny, n); if (w < 0) continue; const tb = T[n];
-        if ((ta === 'x' || tb === 'x') && dy !== 0) continue; if ((ta === 'y' || tb === 'y') && dx !== 0) continue;
+        if ((ta || tb) && !tubeStep(d, id, n, dx, dy)) continue;
         const nd = c + w; if (out[n] < 0 || nd < out[n]) { out[n] = nd; (buckets[nd] || (buckets[nd] = [])).push(n); }
       }
     }
@@ -111,7 +113,7 @@ export function routeTo(w, from, target) {
     const id = x + y * W, ta = T[id]; let b = null;
     for (const [dx, dy] of DIRS) {
       const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= w.H) continue; const n = nx + ny * W, v = f[n], tb = T[n];
-      if ((ta === 'x' || tb === 'x') && dy !== 0) continue; if ((ta === 'y' || tb === 'y') && dx !== 0) continue;
+      if ((ta || tb) && !tubeStep(w.d, id, n, dx, dy)) continue;
       if (v >= 0 && v < f[id] && (!b || v < b.v)) b = { x: nx, y: ny, v };
     }
     if (!b) return null; x = b.x; y = b.y; steps.push([x, y]); raw.push([x + 0.5, y + 0.5]);

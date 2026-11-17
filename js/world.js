@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SEARCHABLE, clutterFor } from './items.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
+import { tubeStep, tubeBoxes } from './tube.js';
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -575,6 +576,7 @@ export class World {
     return null;
   }
 
+  _tubeBoxes(i) { const c = this._tbx || (this._tbx = {}); return c[i] || (c[i] = tubeBoxes(this.d, i, TS, TUBE_SIDE)); }
   // push circle out of solid tiles (and out of the side walls of Jiffy tubes)
   resolve(p, r) {
     const [tx, ty] = this.tile(p.x, p.z);
@@ -592,7 +594,7 @@ export class World {
         const ax = this.d.tubeAxis[x + y * this.W];
         const tk = ax && this.d.tubeLevel[x + y * this.W], py = p.y || 0;
         if (ax && ((tk === 'up' && py < TUBE_UP - 0.4) || (tk === 'lo' && py > 0.45))) { push(cx, cz, TS / 2, TS / 2); continue; }   // wrong level: it is just bulkhead
-        if (ax) { const o = TS / 2 - TUBE_SIDE / 2; for (const sgn of [-1, 1]) ax === 'x' ? push(cx, cz + sgn * o, TS / 2, TUBE_SIDE / 2) : push(cx + sgn * o, cz, TUBE_SIDE / 2, TS / 2); continue; }
+        if (ax) { for (const [bx, bz, hx, hz] of this._tubeBoxes(x + y * this.W)) push(cx + bx, cz + bz, hx, hz); continue; }   // straight: a wall each side; bend: closed edges + inner pillar
         if (!this.solid(x, y)) continue;
         const prop = this.grid[y]?.[x] === 2;
         if (prop && (p.y || 0) >= this.topAt(x, y) - 0.03) continue;   // standing on / passing over a climbable prop
@@ -635,7 +637,7 @@ export class World {
           const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
           const n = nx + ny * W, w = cost(nx, ny, n); if (w < 0) continue;
           const tb = T[n];
-          if ((ta === 'x' || tb === 'x') && dy !== 0) continue; if ((ta === 'y' || tb === 'y') && dx !== 0) continue;
+          if ((ta || tb) && !tubeStep(this.d, id, n, dx, dy)) continue;   // tubes are entered / left only through their open ends (bends turn)
           const nd = c + w; if (d[n] < 0 || nd < d[n]) { d[n] = nd; (buckets[nd] || (buckets[nd] = [])).push(n); }
         }
       }
@@ -733,8 +735,19 @@ export class World {
       const headLo = [], headHi = [], base = [], side = [], sideTall = [], rib = [], strip = [], pipe = [], post = [], bar = [], rail = [], rung = [];
       const o = TS / 2 - TUBE_SIDE / 2, hw = TS / 2 - TUBE_SIDE, FULL = TUBE_UP + TUBE_H;   // side-wall offset, half width of the crawlway, shaft height
       for (const t of d.tubes) t.tiles.forEach(([x, y], i) => {
-        const ax = t.axis, kind = d.tubeLevel[x + y * W], y0 = kind === 'up' ? TUBE_UP : 0;
-        const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS, ry = ax === 'x' ? Math.PI / 2 : 0, P = (along, across) => ax === 'x' ? [cx + along, cz + across] : [cx + across, cz + along];
+        const ax = d.tubeAxis[x + y * W], kind = d.tubeLevel[x + y * W], y0 = kind === 'up' ? TUBE_UP : 0;
+        const cx = (x + 0.5) * TS, cz = (y + 0.5) * TS;
+        if (ax === 'xy') {   // the bend (never a ladder shaft): same head / base blocks, an L of side walls (closed edges + inner pillar), guide strips along both legs
+          if (kind === 'lo') headLo.push([cx, (WH + TUBE_H) / 2, cz, 0]); else { headHi.push([cx, (WH + FULL) / 2, cz, 0]); base.push([cx, TUBE_UP / 2, cz, 0]); }
+          for (const [bx, bz, hx, hz] of this._tubeBoxes(x + y * W)) { const wm = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, TUBE_H, hz * 2), shell); wm.position.set(cx + bx, y0 + TUBE_H / 2, cz + bz); wm.castShadow = wm.receiveShadow = true; g.add(wm); }
+          for (const [dx, dz] of d.tubeBend[x + y * W]) for (const sg of [-1, 1]) {
+            const q = dx ? [cx + dx * TS / 4, cz + sg * (hw - 0.02)] : [cx + sg * (hw - 0.02), cz + dz * TS / 4];
+            const sm = new THREE.Mesh(new THREE.BoxGeometry(dx ? TS / 2 : 0.05, 0.05, dx ? 0.05 : TS / 2), amber); sm.position.set(q[0], y0 + 0.025, q[1]); g.add(sm);
+          }
+          const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.4), amber); lamp.position.set(cx, y0 + TUBE_H - 0.04, cz); g.add(lamp);
+          return;
+        }
+        const ry = ax === 'x' ? Math.PI / 2 : 0, P = (along, across) => ax === 'x' ? [cx + along, cz + across] : [cx + across, cz + along];
         if (kind === 'lo') headLo.push([cx, (WH + TUBE_H) / 2, cz, 0]); else headHi.push([cx, (WH + FULL) / 2, cz, 0]);
         if (kind === 'up') base.push([cx, TUBE_UP / 2, cz, 0]);
         for (const sg of [-1, 1]) {
@@ -754,8 +767,8 @@ export class World {
       // hazard-striped hatch frame on each mouth (the far mouth of a laddered tube sits high in the wall)
       for (const t of d.tubes) for (const [end, first] of [[t.a, t.tiles[0]], [t.b, t.tiles[t.tiles.length - 1]]]) {
         const y0 = d.tubeLevel[first[0] + first[1] * W] === 'up' ? TUBE_UP : 0;
-        const bx = ((end[0] + first[0]) / 2 + 0.5) * TS, bz = ((end[1] + first[1]) / 2 + 0.5) * TS, ry = t.axis === 'x' ? Math.PI / 2 : 0;
-        const ox = t.axis === 'x' ? 0 : 1, oz = t.axis === 'x' ? 1 : 0, sx = Math.sign(end[0] - first[0]) * 0.05, sz = Math.sign(end[1] - first[1]) * 0.05;
+        const bx = ((end[0] + first[0]) / 2 + 0.5) * TS, bz = ((end[1] + first[1]) / 2 + 0.5) * TS, hz = end[0] !== first[0], ry = hz ? Math.PI / 2 : 0;   // the mouth's own direction (the first / last tile may be the bend)
+        const ox = hz ? 0 : 1, oz = hz ? 1 : 0, sx = Math.sign(end[0] - first[0]) * 0.05, sz = Math.sign(end[1] - first[1]) * 0.05;
         for (const sg of [-1, 1]) post.push([bx + sx + ox * sg * (hw + 0.07), y0 + TUBE_H / 2, bz + sz + oz * sg * (hw + 0.07), ry]);
         for (const yy of y0 ? [y0 + TUBE_H + 0.07, y0 - 0.07] : [TUBE_H + 0.07]) { const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.28, 0.14, 0.14), m.hazard); top.position.set(bx + sx, yy, bz + sz); top.rotation.y = ry; g.add(top); }
         if (!y0) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), amber); lamp.position.set(bx + sx * 3, TUBE_H + 0.24, bz + sz * 3); lamp.rotation.y = ry; g.add(lamp); }
