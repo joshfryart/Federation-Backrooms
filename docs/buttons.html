@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LCARS Button System</title>
+<!-- Specimen for css/lcars-buttons.css (+ js/lcars-buttons.js): every variant and state. Serve the repo root and open /docs/buttons.html -->
+<link rel="stylesheet" href="../css/hud-skin.css">
+<link rel="stylesheet" href="../css/lcars-buttons.css">
+<style>
+  :root { --f-d: "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif; --f-m: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; --dim: #8fa0b6; }
+  * { box-sizing: border-box; }
+  html { font-size: 16px; }
+  body { margin: 0; background: #04050b; color: #f3eee6; font-family: var(--f-d); padding: 0 16px 48px; }
+  header { position: relative; max-width: 1180px; margin: 0 auto; padding: 28px 0 10px 0; }
+  header::before { content: ''; position: absolute; left: -2px; top: 14px; width: 12rem; height: 4.6rem; border-left: .85rem solid #f0933a; border-top: .5rem solid #f0933a; border-radius: 1.7rem 0 0 0; }
+  header h1 { margin: 0 0 0 1.6rem; padding-top: 1.2rem; font: 800 2rem/1 var(--f-d); letter-spacing: .18em; text-transform: uppercase; }
+  header h1 b { color: #f0933a; }
+  header p { margin: .5rem 0 0 1.6rem; max-width: 70ch; color: #a8a6b9; font: 500 .95rem/1.5 'Helvetica Neue', Arial, sans-serif; }
+  header code, section code { font: 600 .82rem var(--f-m); color: #f4c25b; }
+  .bar { height: .45rem; margin: 14px 0 0 1.6rem; width: min(30rem, 70vw); border-radius: .3rem; background: linear-gradient(90deg, #f0933a 0 38%, transparent 38% 40%, #f4c25b 40% 58%, transparent 58% 60%, #b99be6 60% 76%, transparent 76% 78%, #7d97e8 78% 100%); }
+  .ctl { position: sticky; top: 0; z-index: 5; max-width: 1180px; margin: 10px auto 0; padding: 10px 0; display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: center; background: #04050b; font: 800 .75rem var(--f-d); letter-spacing: .14em; text-transform: uppercase; color: #a8a6b9; }
+  .ctl label { display: flex; gap: .55rem; align-items: center; cursor: pointer; }
+  main { max-width: 1180px; margin: 0 auto; display: grid; gap: 16px; }
+  section { position: relative; padding: 16px 20px 18px 24px; background: rgba(8, 10, 22, .85); border-left: .85rem solid var(--sc, #7d97e8); border-radius: 1.4rem 0 0 1.4rem; }
+  section h2 { display: inline-block; margin: 0 0 .3rem; padding: .1rem 1rem; border-radius: 999px; background: var(--sc, #7d97e8); color: #120a05; font: 800 .9rem/1.3 var(--f-d); letter-spacing: .2em; text-transform: uppercase; }
+  section > p { margin: .2rem 0 .9rem; color: #a8a6b9; font: 500 .85rem/1.45 'Helvetica Neue', Arial, sans-serif; max-width: 90ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: center; margin: 10px 0; }
+  .cell { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .cell small { font: 700 .62rem var(--f-m); letter-spacing: .12em; text-transform: uppercase; color: #8f8da3; }
+  .stack { display: grid; gap: 4px; width: min(30rem, 100%); }
+  .settings { display: grid; gap: 10px; text-align: left; font: 13px var(--f-d); letter-spacing: .08em; text-transform: uppercase; padding: 14px 18px; border-left: .85rem solid #b99be6; border-radius: 1.2rem 0 0 1.2rem; background: rgba(8, 10, 22, .78); width: min(420px, 100%); }
+  .settings label { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+  .pace span, .pace button { font-family: var(--f-d); }
+  .grid-act { display: flex; flex-wrap: wrap; gap: .4rem; }
+  /* forced states for the specimen only (the real states come from :hover / :active / :focus-visible) */
+  .f-hover { filter: brightness(1.15) saturate(1.06); --lc-glow: 1.7rem; }
+  .f-press { transform: translateY(.1rem) scale(.985); filter: brightness(.8) saturate(1.1); --lc-glow: .4rem; }
+  .f-focus { outline: .16rem solid var(--lc-focus) !important; outline-offset: .22rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Button <b>System</b></h1>
+  <p>One LCARS-style component set for every button and button-like control in <i>Starfarers: The Backdecks</i>. Styles: <code>css/lcars-buttons.css</code>; behaviours (range fill, segmented select, click blip, Calm class): <code>js/lcars-buttons.js</code>. The game's existing buttons adopt the look by selector; new UI uses the <code>lc-*</code> classes shown here.</p>
+  <div class="bar"></div>
+</header>
+<div class="ctl">
+  <label><input type="checkbox" class="lc-toggle" id="t-calm"> Calm visuals</label>
+  <label><input type="checkbox" class="lc-toggle" id="t-cb"> Colour-blind palette</label>
+  <span>Tab through the page to see the focus ring</span>
+</div>
+<main>
+  <section style="--sc:#f0933a">
+    <h2>Pill</h2>
+    <p><code>.lc-btn</code>: the default. Rounded ends, a darker two-tone end cap split from the face by a black gap, an optional index number on the cap (<code>data-lc-n</code>), top highlight + inner shade + soft outer glow in the face colour. Labels are condensed caps, right-aligned like a panel key.</p>
+    <div class="row">
+      <div class="cell"><button class="lc-btn">Acknowledge</button><small>default</small></div>
+      <div class="cell"><button class="lc-btn" data-lc-n="47">Engage</button><small>data-lc-n="47"</small></div>
+      <div class="cell"><button class="lc-btn lc-sm">Close</button><small>.lc-sm</small></div>
+      <div class="cell"><button class="lc-btn lc-lg" data-lc-n="01">Begin shift</button><small>.lc-lg</small></div>
+    </div>
+    <div class="row">
+      <div class="cell"><button class="lc-btn lc-orange">Orange</button><small>.lc-orange</small></div>
+      <div class="cell"><button class="lc-btn lc-gold">Gold</button><small>.lc-gold</small></div>
+      <div class="cell"><button class="lc-btn lc-peach">Peach</button><small>.lc-peach</small></div>
+      <div class="cell"><button class="lc-btn lc-lilac">Lilac</button><small>.lc-lilac</small></div>
+      <div class="cell"><button class="lc-btn lc-peri">Periwinkle</button><small>.lc-peri</small></div>
+      <div class="cell"><button class="lc-btn lc-teal">Teal</button><small>.lc-teal</small></div>
+      <div class="cell"><button class="lc-btn lc-sky">Sky</button><small>.lc-sky</small></div>
+      <div class="cell"><button class="lc-btn lc-rose">Rose</button><small>.lc-rose</small></div>
+    </div>
+  </section>
+
+  <section style="--sc:#f4c25b">
+    <h2>States</h2>
+    <p>Hover brightens and widens the glow; pressed sinks 1-2 px and darkens; keyboard focus draws a ring in the accent colour (sky, or yellow in the colour-blind palette); disabled goes slate grey with no glow. The row below forces each state for review.</p>
+    <div class="row">
+      <div class="cell"><button class="lc-btn" data-lc-n="10">Rest</button><small>rest</small></div>
+      <div class="cell"><button class="lc-btn f-hover" data-lc-n="11">Hover</button><small>:hover</small></div>
+      <div class="cell"><button class="lc-btn f-press" data-lc-n="12">Pressed</button><small>:active</small></div>
+      <div class="cell"><button class="lc-btn f-focus" data-lc-n="13">Focus</button><small>:focus-visible</small></div>
+      <div class="cell"><button class="lc-btn" data-lc-n="14" disabled>Disabled</button><small>:disabled</small></div>
+    </div>
+    <div class="row">
+      <div class="cell"><button class="lc-btn lc-warn">Reset all</button><small>.lc-warn (hatched cap)</small></div>
+      <div class="cell"><button class="lc-btn lc-warn f-hover">Reset all</button><small>warn :hover</small></div>
+      <div class="cell"><button class="lc-btn lc-ok">Confirm</button><small>.lc-ok</small></div>
+      <div class="cell"><button class="lc-btn lc-teal" disabled>Offline</button><small>teal :disabled</small></div>
+    </div>
+  </section>
+
+  <section style="--sc:#f7c9a2">
+    <h2>Capped / elbow</h2>
+    <p><code>.lc-elbow</code>: rounded left end, flat right end, then a separate squared two-colour bar cap. Used for each screen's main action (Begin shift, Resume, Enter the ship, Begin watch, New run).</p>
+    <div class="row">
+      <div class="cell"><button class="lc-btn lc-elbow lc-lg" data-lc-n="01-47">Begin shift</button><small>title</small></div>
+      <div class="cell"><button class="lc-btn lc-elbow" data-lc-n="05-12">Resume</button><small>pause</small></div>
+      <div class="cell"><button class="lc-btn lc-elbow lc-teal" data-lc-n="33-9" style="--lc-bar:#8fd8ff;--lc-bar2:#b99be6">Keep going</button><small>custom --lc-bar / --lc-bar2</small></div>
+      <div class="cell"><button class="lc-btn lc-elbow f-hover" data-lc-n="08-41">Begin watch</button><small>hover</small></div>
+    </div>
+  </section>
+
+  <section style="--sc:#b99be6">
+    <h2>Tabs and chips</h2>
+    <p><code>.lc-tab</code>: dark face with a coloured left cap bar; selected (<code>aria-pressed</code>, <code>aria-selected</code>, <code>.on</code>, <code>.sel</code>) fills with the colour. Comm-log and radio filter chips and the map's deck list use it.</p>
+    <div class="row">
+      <button class="lc-btn lc-tab" aria-pressed="true">All</button>
+      <button class="lc-btn lc-tab" aria-pressed="false">Comm</button>
+      <button class="lc-btn lc-tab" aria-pressed="false">PA</button>
+      <button class="lc-btn lc-tab lc-gold" aria-pressed="false">Orders</button>
+      <button class="lc-btn lc-tab lc-rose" aria-pressed="false">Alerts</button>
+      <button class="lc-btn lc-tab f-hover">Hover</button>
+      <button class="lc-btn lc-tab lc-teal" aria-selected="true">Teal selected</button>
+    </div>
+  </section>
+
+  <section style="--sc:#7d97e8">
+    <h2>Segmented selector</h2>
+    <p><code>.lc-seg</code>: a lilac label cap then joined segments; the chosen one fills orange (<code>--lc-sel</code> to change). The title's shift-length picker uses it, and the pause menu's Graphics and Crew voices selects are mirrored into one (the <code>&lt;select&gt;</code> stays, visually hidden, with the same id, value and change event).</p>
+    <div class="row">
+      <div class="lc-seg" role="group" aria-label="Shift length"><span>Shift</span><button type="button">First watch</button><button type="button" class="on">Standard</button><button type="button">Crunch</button></div>
+    </div>
+    <div class="row">
+      <div class="lc-seg lc-mini" style="--lc-sel:var(--lc-teal)"><span style="--lc-c:var(--lc-peri)">Graphics</span><button type="button" class="on">High</button><button type="button">Performance</button></div>
+      <label style="font:800 .75rem var(--f-d);letter-spacing:.14em;text-transform:uppercase;display:flex;gap:.7rem;align-items:center">Crew voices <select id="demo-sel"><option value="babble">Babble (procedural)</option><option value="synth">System voices</option><option value="subs">Subtitles only</option></select></label>
+      <small style="font:700 .62rem var(--f-m);color:#8f8da3">mirrored &lt;select&gt;: <span id="demo-val">babble</span></small>
+    </div>
+  </section>
+
+  <section style="--sc:#e4829a">
+    <h2>Pause-menu settings</h2>
+    <p>Toggles (<code>.lc-toggle</code>: pill switch, inset knob, ON / OFF marker), sliders (<code>.lc-range</code>: segmented track that fills to a pill thumb), a destructive reset, and the select fallback (<code>.lc-select</code>) where a select is not mirrored. The rows are the whole hit area.</p>
+    <div class="settings">
+      <label>Mouse sensitivity <input type="range" min="0.3" max="2.5" step="0.05" value="1"></label>
+      <label>Volume <input type="range" min="0" max="1" step="0.05" value="0.8"></label>
+      <label>Select fallback <select class="lc-select"><option>High (bloom, shadows)</option><option>Performance</option></select></label>
+      <label><input type="checkbox"> Calm visuals</label>
+      <label><input type="checkbox" checked> Sound captions</label>
+      <label><input type="checkbox" disabled> Disabled toggle</label>
+      <label><button type="button" class="lc-btn lc-warn" style="--lc-h:2.3rem;--lc-fs:.78rem;--lc-capw:1.5rem;--lc-px:1.1rem">Re-show tool instructions</button></label>
+    </div>
+  </section>
+
+  <section style="--sc:#8fd8ff">
+    <h2>Keycaps</h2>
+    <p><code>.lc-key</code> or any <code>&lt;kbd&gt;</code>: light key face, darker bottom lip, monospace. The first-run tips (<code>#keyhint</code>) make them glow gold; Calm visuals holds the glow still.</p>
+    <div class="row" style="font:600 .9rem 'Helvetica Neue',Arial,sans-serif;color:#a8a6b9">
+      <span><kbd>E</kbd> interact</span><span><kbd>Tab</kbd> ship status</span><span><kbd>1</kbd>–<kbd>8</kbd> choose</span><span><kbd class="lc-key">Esc</kbd> leave</span>
+      <span id="keyhint" style="position:static;opacity:1"><kbd>M</kbd><kbd>G</kbd><kbd>Enter</kbd></span><small style="font:700 .62rem var(--f-m);color:#8f8da3">glowing (#keyhint)</small>
+    </div>
+  </section>
+
+  <section style="--sc:#f0933a">
+    <h2>Tiles and list rows</h2>
+    <p><code>.lc-tile</code>: action grid buttons (duty board, radio quick actions): icon over label, coloured cap bar, fill orange on hover. <code>.lc-row</code>: full-width rows for talk / terminal menus and the lift panel; a leading <code>&lt;b&gt;</code> is the number key.</p>
+    <div class="row grid-act">
+      <button class="lc-tile"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l5 5L20 6"/></svg>Do it properly<em>~45 s</em></button>
+      <button class="lc-tile"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg>Rush it<em>~10 s</em></button>
+      <button class="lc-tile lc-gold"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 15-5 16 0"/></svg>Delegate<em>Ens. Castillo</em></button>
+      <button class="lc-tile f-hover"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>Hover</button>
+      <button class="lc-tile off"><svg class="ico" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5l14 14M19 5L5 19"/></svg>Unavailable</button>
+    </div>
+    <div class="stack">
+      <div class="lc-row"><b class="lc-key">1</b>Ask about their shift</div>
+      <div class="lc-row"><b class="lc-key">2</b>Request help with a repair</div>
+      <div class="lc-row f-hover" style="color:#120a05;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(0,0,0,.12)),var(--lc-lilac)"><b class="lc-key">3</b>Hover</div>
+      <div class="lc-row lc-peach"><b class="lc-key">4</b>Leave</div>
+    </div>
+  </section>
+</main>
+<script type="module">
+  import { mirror, fill } from '../js/lcars-buttons.js';
+  const sel = document.getElementById('demo-sel'); mirror(sel); sel.addEventListener('change', () => { document.getElementById('demo-val').textContent = sel.value; });
+  document.querySelectorAll('.settings input[type=range]').forEach(fill);
+  document.getElementById('t-calm').onchange = (e) => document.body.classList.toggle('lc-calm', e.target.checked);
+  document.getElementById('t-cb').onchange = (e) => document.body.classList.toggle('cb', e.target.checked);
+</script>
+</body>
