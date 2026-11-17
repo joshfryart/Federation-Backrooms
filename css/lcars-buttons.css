@@ -4,7 +4,7 @@
    small behaviours CSS cannot do (range fill, segmented <select>, click blip, Calm visuals class).
 
    ---- Use it in new UI (job mini-games, new panels) -------------------------------------------------------------------
-     <button class="lc-btn">Label</button>                       pill (default), orange face, darker two-tone end cap
+     <button class="lc-btn">Label</button>                       pill (default): flat orange face, end cap cut off by a black gap
      <button class="lc-btn lc-elbow" data-lc-n="04-17">Go</button>  capped: rounded left, flat right end + squared bar cap
      <button class="lc-btn lc-tab" aria-pressed="true">Tab</button> tab / chip; selected = aria-pressed|aria-selected|.on
      <button class="lc-btn lc-tile">ico + label</button>         tile (icon over label, for action grids)
@@ -15,10 +15,12 @@
      <input type="range" class="lc-range">                       pill-thumb slider, segmented filled track
    Modifiers: size .lc-sm / .lc-lg; colour .lc-orange .lc-gold .lc-peach .lc-lilac .lc-peri .lc-teal .lc-sky .lc-rose;
    meaning .lc-warn (destructive / caution), .lc-ok; disabled = :disabled, [aria-disabled=true] or .off.
-   Custom colours: style="--lc-c:#hex" (face) and optionally --lc-cap (end cap) / --lc-ink (label).  Index number on the
-   end cap: data-lc-n="12" or --lc-n:'12-08'.
-   Calm visuals (body.lc-calm) and prefers-reduced-motion stop every glow animation and transition; the Colour-blind
-   palette (body.cb) swaps warn / ok / teal to amber and blue.
+   Custom colours: style="--lc-c:#hex" (face) and optionally --lc-cap (end cap) / --lc-ink (label).  Index number (top-left
+   of the face): data-lc-n="12" or --lc-n:'12-08'.
+   Look: flat solid colour on black, no gradients, glows or bevels; black gaps (not lines) split segments; labels are
+   condensed caps set tight and low-right.  States: hover = lighter flat colour, pressed = darker flat colour, selected =
+   filled vs. dim, focus = a light ring.  Calm visuals (body.lc-calm) and prefers-reduced-motion stop every animation and
+   transition; the Colour-blind palette (body.cb) swaps warn / ok / teal to amber and blue.
 
    ---- How it layers ----------------------------------------------------------------------------------------------------
    The game's own buttons keep their ids, classes and handlers; the "adoption" selectors below give them the same look.
@@ -29,361 +31,360 @@
    ========================================================================================================== */
 
 :root {
-  --lc-orange: var(--k-orange, #f0933a); --lc-gold: var(--k-gold, #f4c25b); --lc-peach: var(--k-peach, #f7c9a2);
-  --lc-lilac: var(--k-lav, #b99be6); --lc-peri: var(--k-peri, #7d97e8); --lc-teal: #58c9b9; --lc-sky: var(--k-sky, #8fd8ff);
-  --lc-rose: var(--k-rose, #e4829a); --lc-warn: #ff6b55; --lc-ok: #4fd18b; --lc-off: #3a3f55;
-  --lc-panel: #0c0f1e; --lc-panel-hi: #161a33; --lc-black: #05060b; --lc-ink-dark: #120a05; --lc-ink-light: #f3eee6;
-  --lc-focus: #8fd8ff;
-  --lc-dur: .14s; --lc-ease: cubic-bezier(.2, .8, .2, 1);
+  /* a restrained panel palette: orange = main action, lilac / periwinkle = secondary, peach / tan = neutral, red = warn */
+  --lc-orange: var(--k-orange, #f0933a); --lc-gold: #f2bd6b; --lc-peach: #f5c59c;
+  --lc-lilac: #c49ad6; --lc-peri: #8f9be0; --lc-teal: #74b9ae; --lc-sky: #9cc4ea;
+  --lc-rose: #d9838f; --lc-warn: #e0614a; --lc-ok: #82c495; --lc-off: #3b3944;
+  --lc-panel: #0c0d14; --lc-panel-hi: #17161f; --lc-black: #000; --lc-ink-dark: #0b0705; --lc-ink-light: #f3eee6;
+  --lc-focus: #fff4e2;
+  --lc-dur: .1s; --lc-ease: cubic-bezier(.2, .8, .2, 1);
 }
 body.cb { --lc-warn: #ffb000; --lc-ok: #4aa3ff; --lc-teal: #4aa3ff; --lc-focus: #ffe14a; }
 
 /* ---------------------------------------------------------------- 1. pill (base) ---------------------------------------------- */
+/* one flat colour; the left end cap is the same colour, cut off by a black gap; the label sits low and right */
 .lc-btn,
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset, .bd-x, #bd-panel .x, .dp-pop .x) {
+  --lc-face: var(--lc-c, var(--lc-orange));
   box-sizing: border-box; vertical-align: middle;
   min-height: var(--lc-h, 2.75rem); min-width: var(--lc-minw, 0);
-  padding: var(--lc-py, .55rem) var(--lc-px, 1.5rem) var(--lc-py, .55rem) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .2rem) + var(--lc-pl, .9rem));
+  padding: calc(var(--lc-py, .55rem) * 1.9) var(--lc-px, 1.25rem) calc(var(--lc-py, .55rem) * .4) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem) + var(--lc-pl, 1.4rem));
   margin-right: var(--lc-mr, 0);
   border: 0; border-radius: var(--lc-r, 999px); clip-path: none; outline: 0;
-  font: 800 var(--lc-fs, 1rem)/1.05 var(--f-d); font-stretch: condensed; letter-spacing: var(--lc-ls, .2em); text-transform: uppercase;
+  font: 600 var(--lc-fs, 1rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: var(--lc-ls, .05em); text-transform: uppercase;
   text-align: right; text-shadow: none; white-space: nowrap;
   color: var(--lc-ink, var(--lc-ink-dark));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .30) 0, rgba(255, 255, 255, .07) 40%, rgba(255, 255, 255, 0) 52%, rgba(0, 0, 0, .18) 100%),
-    linear-gradient(90deg,
-      var(--lc-cap, color-mix(in oklab, var(--lc-c, var(--lc-orange)) 68%, #000)) 0 var(--lc-capw, 1.9rem),
-      var(--lc-black) var(--lc-capw, 1.9rem) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .2rem)),
-      var(--lc-c, var(--lc-orange)) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .2rem)));
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .16),
-    inset 0 -.2rem .45rem rgba(0, 0, 0, .28),
-    inset 0 .12rem .3rem rgba(255, 255, 255, .18),
-    0 0 var(--lc-glow, 1rem) -.3rem var(--lc-c, var(--lc-orange));
-  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; filter: none;
-  transition: filter var(--lc-dur) var(--lc-ease), transform .08s var(--lc-ease), box-shadow var(--lc-dur) var(--lc-ease), background-color var(--lc-dur);
+  background: linear-gradient(90deg,
+    var(--lc-cap, var(--lc-face)) 0 var(--lc-capw, 1.9rem),
+    var(--lc-black) var(--lc-capw, 1.9rem) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem)),
+    var(--lc-face) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem)));
+  box-shadow: none;
+  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; filter: none; transform: none;
+  transition: background-color var(--lc-dur), color var(--lc-dur);
 }
 .lc-btn, html body:not(#lc-0) :is(.btn, #boot-go, #bd-end button, #jgreset, .bd-x, #bd-panel .x) { position: relative; }   /* #bd-brief button stays sticky, .dp-pop .x floats */
 .lc-btn { display: inline-flex; align-items: center; justify-content: flex-end; gap: .5em; }
-/* the end-cap index number (data-lc-n / --lc-n); empty when neither is set */
+/* the index number (data-lc-n / --lc-n): small, in the top-left corner of the face, just past the gap; empty when unset */
 .lc-btn::before,
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset)::before {
-  content: var(--lc-n, attr(data-lc-n)); position: absolute; left: 0; bottom: .3em; width: var(--lc-capw, 1.9rem); padding-left: .2em;
-  text-align: center; font: 800 .48em/1 var(--f-m); letter-spacing: 0; color: rgba(10, 5, 0, .72); pointer-events: none;
+  content: var(--lc-n, attr(data-lc-n)); position: absolute; left: calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem) + .4rem); top: .4rem;
+  text-align: left; font: 600 max(.56em, .6rem)/1 var(--f-m); letter-spacing: -.02em; color: var(--lc-ink, var(--lc-ink-dark)); opacity: .7; pointer-events: none;
 }
-/* hover / pressed / focus / disabled */
+/* hover = lighter flat colour, pressed = darker flat colour, focus = light ring, disabled = dim grey */
 .lc-btn:hover,
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset, .bd-x, #bd-panel .x, .dp-pop .x):hover {
-  filter: brightness(1.15) saturate(1.06); --lc-glow: 1.7rem; transform: none;
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-orange)) 74%, #fff); filter: none; transform: none;
 }
 .lc-btn:active,
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset, .bd-x, #bd-panel .x, .dp-pop .x):active {
-  transform: translateY(.1rem) scale(.985); filter: brightness(.8) saturate(1.1); --lc-glow: .4rem;
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-orange)) 68%, #000); filter: none; transform: none;
 }
 .lc-btn:focus-visible,
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset, .bd-x, #bd-panel .x, .dp-pop .x):focus-visible {
-  outline: .16rem solid var(--lc-focus); outline-offset: .22rem;
+  outline: .16rem solid var(--lc-focus); outline-offset: .2rem;
 }
 .lc-btn:is(:disabled, [aria-disabled=true], .off),
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset):is(:disabled, [aria-disabled=true]) {
-  --lc-c: var(--lc-off); --lc-cap: #262a3c; --lc-ink: #9da3b8; --lc-glow: 0;
-  cursor: not-allowed; filter: saturate(.4); transform: none;
+  --lc-c: var(--lc-off); --lc-face: var(--lc-off); --lc-cap: var(--lc-off); --lc-ink: #8d8997;
+  cursor: not-allowed; filter: none; transform: none;
 }
 
 /* ---------------------------------------------------------------- 2. colours and meaning ------------------------------------- */
 .lc-orange { --lc-c: var(--lc-orange); } .lc-gold { --lc-c: var(--lc-gold); } .lc-peach { --lc-c: var(--lc-peach); }
 .lc-lilac { --lc-c: var(--lc-lilac); } .lc-peri { --lc-c: var(--lc-peri); } .lc-teal { --lc-c: var(--lc-teal); }
 .lc-sky { --lc-c: var(--lc-sky); } .lc-rose { --lc-c: var(--lc-rose); } .lc-ok { --lc-c: var(--lc-ok); }
-.lc-warn, #jgreset { --lc-c: var(--lc-warn); --lc-cap: color-mix(in srgb, var(--lc-warn) 45%, #200402); }
-.lc-warn::after, html body:not(#lc-0) #jgreset::after {   /* hazard hatching across the end cap */
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--lc-capw, 1.9rem); border-radius: 999px 0 0 999px; pointer-events: none;
-  background: repeating-linear-gradient(135deg, rgba(0, 0, 0, .38) 0 .3rem, transparent .3rem .6rem);
-}
-/* secondary actions: lilac / periwinkle instead of the old outline */
+/* warn: red face, the end cap stays dark so the button reads as "careful" even in the colour-blind palette */
+.lc-warn, #jgreset { --lc-c: var(--lc-warn); --lc-cap: color-mix(in oklab, var(--lc-warn) 55%, #000); }
+.lc-warn::after, html body:not(#lc-0) #jgreset::after { content: none; }
+/* secondary actions: lilac / periwinkle */
 .btn.alt, #bd-end button + button { --lc-c: var(--lc-lilac); }
 #bd-end button + button + button { --lc-c: var(--lc-peri); }
-#win .btn:not(.alt) { --lc-c: #8fe8d8; }
+#win .btn:not(.alt) { --lc-c: var(--lc-teal); }
 #dead .btn { --lc-c: var(--lc-rose); }
 
 /* ---------------------------------------------------------------- 3. sizes ------------------------------------------------- */
-.lc-sm, .bd-x, #bd-panel .x, .dp-pop .x { --lc-h: 2rem; --lc-fs: .72rem; --lc-capw: .75rem; --lc-pl: .55rem; --lc-px: .85rem; --lc-py: .2rem; --lc-ls: .14em; }
-.lc-lg { --lc-h: 3.4rem; --lc-fs: 1.25rem; --lc-capw: 2.9rem; --lc-px: 2.2rem; }
-.btn { --lc-h: clamp(2.3rem, 6vh, 3.1rem); --lc-fs: clamp(.85rem, 2.6vh, 1.12rem); --lc-px: clamp(1.4rem, 3vw, 2.4rem); --lc-capw: 2.7rem; }
-#bd-end button { --lc-mr: .6rem; --lc-h: 2.5rem; --lc-fs: .85rem; --lc-capw: 1.5rem; --lc-px: 1.3rem; }
+.lc-sm, .bd-x, #bd-panel .x, .dp-pop .x { --lc-h: 2rem; --lc-fs: .8rem; --lc-capw: .8rem; --lc-gapw: .2rem; --lc-pl: .7rem; --lc-px: .9rem; --lc-py: .3rem; --lc-ls: .04em; }
+.lc-lg { --lc-h: 3.4rem; --lc-fs: 1.3rem; --lc-capw: 2.9rem; --lc-px: 1.6rem; --lc-pl: 2.4rem; --lc-py: .6rem; }
+.btn { --lc-h: clamp(2.3rem, 6vh, 3.1rem); --lc-fs: clamp(.9rem, 2.6vh, 1.15rem); --lc-px: clamp(1.1rem, 2.2vw, 1.6rem); --lc-pl: clamp(1.4rem, 3vw, 2.6rem); --lc-capw: 2.7rem; }
+#bd-end button { --lc-mr: .6rem; --lc-h: 2.5rem; --lc-fs: .9rem; --lc-capw: 1.5rem; --lc-px: 1.1rem; --lc-pl: 1.2rem; }
 #bd-end .acts { margin-top: .9rem; display: flex; flex-wrap: wrap; gap: .5rem; }
 html body:not(#lc-0) .dp-pop .x { float: right; margin: -.2rem 0 0 .4rem; }
 html body:not(#lc-0) .bd-x {   /* js/socialui.js styles this one inline, so only !important reaches it */
-  margin: 0 0 0 .5rem !important; padding: .15rem .75rem .15rem 1.3rem !important; font: 800 .68rem/1 var(--f-d) !important; letter-spacing: .14em !important; color: var(--lc-ink-dark) !important; border: 0 !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(0, 0, 0, .15)), linear-gradient(90deg, color-mix(in oklab, var(--lc-lilac) 68%, #000) 0 .6rem, var(--lc-black) .6rem .75rem, var(--lc-lilac) .75rem) !important; }
+  margin: 0 0 0 .5rem !important; padding: .3rem .75rem .12rem 1.3rem !important; font: 600 .78rem/1 var(--f-d) !important; letter-spacing: .04em !important; color: var(--lc-ink-dark) !important; border: 0 !important;
+  background: linear-gradient(90deg, var(--lc-lilac) 0 .6rem, var(--lc-black) .6rem .78rem, var(--lc-lilac) .78rem) !important; }
+html body:not(#lc-0) .bd-x:hover { background: linear-gradient(90deg, #dcc2e6 0 .6rem, var(--lc-black) .6rem .78rem, #dcc2e6 .78rem) !important; }
 
 /* ---------------------------------------------------------------- 4. capped / elbow ----------------------------------------- */
-/* rounded left end, flat right end, then a separate squared bar cap: the classic panel-button look */
+/* rounded left end, flat right end, a black gap, then a separate squared two-colour bar cap */
 .lc-elbow,
 html body:not(#lc-0) :is(#begin, #resume, #boot-go, #bd-brief button, #again, #cont) {
-  --lc-r: 999px .25rem .25rem 999px; --lc-mr: .85rem;
+  --lc-r: 999px 0 0 999px; --lc-mr: .95rem;
 }
 .lc-elbow::after,
 html body:not(#lc-0) :is(#begin, #resume, #boot-go, #bd-brief button, #again, #cont)::after {
-  content: ''; position: absolute; top: 0; bottom: 0; right: -.72rem; width: .5rem; border-radius: .12rem .5rem .5rem .12rem; pointer-events: none;
-  background: linear-gradient(180deg, var(--lc-bar, var(--lc-gold)) 0 46%, var(--lc-black) 46% 54%, var(--lc-bar2, var(--lc-peri)) 54% 100%);
-  box-shadow: 0 0 .6rem -.2rem var(--lc-bar, var(--lc-gold));
+  content: ''; position: absolute; top: 0; bottom: 0; right: -.85rem; width: .6rem; border-radius: 0; pointer-events: none;
+  background: linear-gradient(180deg, var(--lc-bar, var(--lc-gold)) 0 calc(50% - .12rem), var(--lc-black) calc(50% - .12rem) calc(50% + .12rem), var(--lc-bar2, var(--lc-peri)) calc(50% + .12rem) 100%);
+  box-shadow: none;
 }
 #begin { --lc-n: '01-47'; } #credbtn { --lc-n: '02'; } #resume { --lc-n: '05-12'; } #companybtn { --lc-n: '06'; }
-#boot-go { --lc-n: '00-01'; --lc-h: 3.1rem; --lc-fs: 1.05rem; --lc-capw: 2.7rem; --lc-px: 2.2rem; }
+#boot-go { --lc-n: '00-01'; --lc-h: 3.1rem; --lc-fs: 1.15rem; --lc-capw: 2.7rem; --lc-px: 1.5rem; --lc-pl: 2.4rem; }
 #bd-go { --lc-n: '08-41'; } #again { --lc-n: '27-B'; } #cont { --lc-n: '33-9'; }
 #credback, #companyback { --lc-n: '◂'; --lc-c: var(--lc-peri); }
-/* the loading screen's ready button: slow breathing glow instead of the old brightness pulse */
-html body:not(#lc-0) #boot-go { margin-top: 1rem; animation: lc-breathe 1.8s ease-in-out infinite alternate; }
-@keyframes lc-breathe { from { --lc-glow: .6rem; } to { --lc-glow: 2.2rem; } }
-@property --lc-glow { syntax: '<length>'; inherits: true; initial-value: 1rem; }
+/* the loading screen's ready button: its bar cap blinks slowly, like a panel "awaiting input" light */
+html body:not(#lc-0) #boot-go { margin-top: 1rem; animation: none; }
+html body:not(#lc-0) #boot-go::after { animation: lc-blink 1.6s ease-in-out infinite alternate; }
+@keyframes lc-blink { from { opacity: 1; } to { opacity: .25; } }
+@property --lc-glow { syntax: '<length>'; inherits: true; initial-value: 0px; }   /* kept for older inline styles; no longer drawn */
 
 /* ---------------------------------------------------------------- 5. tabs / chips --------------------------------------------- */
-/* dark face, coloured left cap bar; selected fills with the colour */
+/* dim face (the colour at low strength) with a full-strength left cap; selected fills with the colour */
 .lc-tab,
 html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk) {
-  position: relative; box-sizing: border-box; min-height: var(--lc-h, 2rem); padding: .25rem .95rem .25rem 1.25rem;
-  border: 0; border-radius: var(--lc-r, 999px .3rem .3rem 999px); clip-path: none; outline: 0;
-  font: 800 var(--lc-fs, .75rem)/1.1 var(--f-d); letter-spacing: .14em; text-transform: uppercase; color: var(--lc-ink-light);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, .2)),
-    linear-gradient(90deg, var(--lc-c, var(--lc-peri)) 0 .55rem, var(--lc-black) .55rem .72rem, var(--lc-panel-hi) .72rem);
-  box-shadow: inset 0 0 0 1px rgba(185, 155, 230, .22), 0 0 0 0 transparent;
-  cursor: pointer; transition: filter var(--lc-dur) var(--lc-ease), box-shadow var(--lc-dur) var(--lc-ease), transform .08s;
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 26%, #000);
+  position: relative; box-sizing: border-box; min-height: var(--lc-h, 2rem); padding: .55rem .9rem .2rem 1.35rem;
+  border: 0; border-radius: var(--lc-r, 999px 0 0 999px); clip-path: none; outline: 0;
+  font: 600 var(--lc-fs, .85rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .05em; text-transform: uppercase; text-align: right;
+  color: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 55%, #fff);
+  background: linear-gradient(90deg, var(--lc-c, var(--lc-peri)) 0 .6rem, var(--lc-black) .6rem .8rem, var(--lc-face) .8rem);
+  box-shadow: none; filter: none;
+  cursor: pointer; transition: background-color var(--lc-dur), color var(--lc-dur);
 }
 .lc-tab:hover, html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk):hover {
-  filter: brightness(1.25); box-shadow: inset 0 0 0 1px var(--lc-c, var(--lc-peri)), 0 0 .9rem -.3rem var(--lc-c, var(--lc-peri));
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 42%, #000); filter: none; box-shadow: none;
 }
-.lc-tab:active, html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk):active { transform: translateY(1px); filter: brightness(.85); }
+.lc-tab:active, html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk):active { --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 10%, #000); transform: none; filter: none; }
 .lc-tab:focus-visible, html body:not(#lc-0) :is(.ac-panel .chips button):focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .16rem; }
 .lc-tab:is([aria-pressed=true], [aria-selected=true], .on, .sel),
 html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk)[aria-pressed=true] {
-  color: var(--lc-ink-dark);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, .05) 45%, rgba(0, 0, 0, .16)),
-    linear-gradient(90deg, color-mix(in oklab, var(--lc-c, var(--lc-orange)) 68%, #000) 0 .55rem, var(--lc-black) .55rem .72rem, var(--lc-c, var(--lc-orange)) .72rem);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2), 0 0 .9rem -.3rem var(--lc-c, var(--lc-orange));
+  --lc-face: var(--lc-c, var(--lc-orange)); color: var(--lc-ink-dark); box-shadow: none;
 }
+.lc-tab:is([aria-pressed=true], [aria-selected=true], .on, .sel):hover,
+html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk)[aria-pressed=true]:hover { --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-orange)) 74%, #fff); }
 html body:not(#lc-0) .ac-panel .chips button { --lc-c: var(--lc-peri); }
 html body:not(#lc-0) .ac-panel .chips button[aria-pressed=true] { --lc-c: var(--kc, var(--lc-orange)); }
-/* deck tabs on the big map (M): the zone colour is the cap, current deck glows teal, selected deck fills orange */
-html body:not(#lc-0) #nv-map .dk { --lc-c: var(--z); display: grid; border-radius: 999px .3rem .3rem 999px; padding: .3rem .5rem .3rem 1.2rem; font: 800 var(--t-base, .875rem) var(--f-m); letter-spacing: .04em; }
-html body:not(#lc-0) #nv-map .dk.cur { box-shadow: inset 0 0 0 .12rem var(--m-route, #8ef3ff), 0 0 .8rem -.2rem var(--m-route, #8ef3ff); }
+/* deck tabs on the big map (M): the zone colour is the cap, current deck gets a ring, selected deck fills orange */
+html body:not(#lc-0) #nv-map .dk { --lc-c: var(--z); display: grid; border-radius: 999px 0 0 999px; padding: .3rem .5rem .3rem 1.25rem; font: 600 var(--t-base, .875rem) var(--f-m); letter-spacing: 0; color: var(--lc-ink-light); }
+html body:not(#lc-0) #nv-map .dk.cur { box-shadow: inset 0 0 0 .14rem var(--m-route, #8ef3ff); }
 html body:not(#lc-0) #nv-map .dk.sel {
   color: var(--lc-ink-dark);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(0, 0, 0, .14)), linear-gradient(90deg, var(--z) 0 .55rem, var(--lc-black) .55rem .72rem, var(--lc-orange) .72rem);
+  background: linear-gradient(90deg, var(--z) 0 .6rem, var(--lc-black) .6rem .8rem, var(--lc-orange) .8rem);
 }
 html body:not(#lc-0) #nv-map .dk.sel .z { color: var(--lc-ink-dark) !important; }   /* the zone label colour is an inline style */
-/* room-type filter icons on the big map: round icon buttons */
+/* room-type filter icons on the big map: round flat icon buttons */
 html body:not(#lc-0) #nv-map .find span {
-  display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; opacity: .8; cursor: pointer;
-  background: radial-gradient(circle at 50% 35%, var(--lc-panel-hi), var(--lc-black)); box-shadow: inset 0 0 0 .1rem rgba(185, 155, 230, .35);
-  transition: filter var(--lc-dur), box-shadow var(--lc-dur), opacity var(--lc-dur);
+  display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; opacity: 1; cursor: pointer;
+  background: color-mix(in oklab, var(--lc-peri) 26%, #000); box-shadow: none; filter: none;
+  transition: background-color var(--lc-dur), color var(--lc-dur);
 }
-html body:not(#lc-0) #nv-map .find span:hover { opacity: 1; box-shadow: inset 0 0 0 .12rem var(--lc-peri), 0 0 .7rem -.2rem var(--lc-peri); }
-html body:not(#lc-0) #nv-map .find span.on { opacity: 1; filter: none; background: radial-gradient(circle at 50% 35%, #ffd39a, var(--lc-orange)); box-shadow: 0 0 .9rem -.1rem var(--lc-orange); }
+html body:not(#lc-0) #nv-map .find span:hover { background: color-mix(in oklab, var(--lc-peri) 38%, #000); box-shadow: none; }
+html body:not(#lc-0) #nv-map .find span.on { filter: none; background: var(--lc-orange); color: var(--lc-ink-dark); box-shadow: none; }
 
 /* ---------------------------------------------------------------- 6. segmented selector -------------------------------------- */
+/* a coloured label cap, then segments split by black gaps; the chosen segment fills */
 .lc-seg, html body:not(#lc-0) .pace {
   display: inline-flex; align-items: stretch; gap: .2rem; padding: 0; border: 0; border-radius: 999px; overflow: visible;
-  background: none; box-shadow: none; clip-path: none; font: 800 var(--lc-fs, .78rem)/1 var(--f-d); letter-spacing: .16em; text-transform: uppercase;
+  background: none; box-shadow: none; clip-path: none; font: 600 var(--lc-fs, .85rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .05em; text-transform: uppercase;
 }
 .lc-seg > span, html body:not(#lc-0) .pace > span {   /* the group label is the left end cap */
-  display: inline-flex; align-items: center; padding: 0 .9rem 0 1.1rem; border: 0; border-radius: 999px 0 0 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .25), rgba(0, 0, 0, .15)), var(--lc-c, var(--lc-lilac)); color: var(--lc-ink-dark);
+  display: inline-flex; align-items: center; padding: .75em .8rem .3em 1.2rem; border: 0; border-radius: 999px 0 0 999px;
+  background: var(--lc-c, var(--lc-lilac)); color: var(--lc-ink-dark); box-shadow: none;
 }
 .lc-seg > button, html body:not(#lc-0) .pace > button {
-  position: relative; min-height: var(--lc-h, 2.3rem); padding: .3rem 1.05rem; margin: 0; border: 0; border-radius: .2rem; outline: 0; opacity: 1;
-  font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--lc-ink-light); cursor: pointer;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(0, 0, 0, .18)), var(--lc-panel-hi);
-  box-shadow: inset 0 0 0 1px rgba(185, 155, 230, .28);
-  transition: filter var(--lc-dur) var(--lc-ease), box-shadow var(--lc-dur) var(--lc-ease), transform .08s;
+  --lc-face: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 24%, #000);
+  position: relative; min-height: var(--lc-h, 2.3rem); padding: .75em 1rem .3em; margin: 0; border: 0; border-radius: 0; outline: 0; opacity: 1;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: right; color: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 50%, #fff); cursor: pointer;
+  background: var(--lc-face); box-shadow: none; filter: none;
+  transition: background-color var(--lc-dur), color var(--lc-dur);
 }
-.lc-seg > button:last-child, html body:not(#lc-0) .pace > button:last-child { border-radius: .2rem 999px 999px .2rem; padding-right: 1.3rem; }
-.lc-seg > button:first-child, html body:not(#lc-0) .pace > button:first-child { border-radius: 999px .2rem .2rem 999px; padding-left: 1.3rem; }
-.lc-seg > button:hover, html body:not(#lc-0) .pace > button:hover { filter: brightness(1.3); box-shadow: inset 0 0 0 1px var(--lc-peri), 0 0 .8rem -.3rem var(--lc-peri); background-color: var(--lc-panel-hi); }
-.lc-seg > button:active, html body:not(#lc-0) .pace > button:active { transform: translateY(1px); filter: brightness(.85); }
+.lc-seg > button:last-child, html body:not(#lc-0) .pace > button:last-child { border-radius: 0 999px 999px 0; padding-right: 1.3rem; }
+.lc-seg > button:first-child, html body:not(#lc-0) .pace > button:first-child { border-radius: 999px 0 0 999px; padding-left: 1.3rem; }
+.lc-seg > button:hover, html body:not(#lc-0) .pace > button:hover { --lc-face: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 40%, #000); background: var(--lc-face); filter: none; box-shadow: none; }
+.lc-seg > button:active, html body:not(#lc-0) .pace > button:active { --lc-face: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 10%, #000); transform: none; filter: none; }
 .lc-seg > button:focus-visible, html body:not(#lc-0) .pace > button:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .14rem; z-index: 1; }
 .lc-seg > button:is(.on, [aria-pressed=true], [aria-checked=true]), html body:not(#lc-0) .pace > button.on {
-  color: var(--lc-ink-dark); font-weight: 800;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .32), rgba(255, 255, 255, .06) 45%, rgba(0, 0, 0, .16)), var(--lc-sel, var(--lc-orange));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2), 0 0 1rem -.25rem var(--lc-sel, var(--lc-orange));
+  --lc-face: var(--lc-sel, var(--lc-orange)); color: var(--lc-ink-dark); background: var(--lc-face); box-shadow: none;
 }
-html body:not(#lc-0) .pace { margin-top: 1.4vh; --lc-fs: clamp(.68rem, 1.9vh, .8rem); --lc-h: clamp(1.9rem, 5vh, 2.4rem); }
+.lc-seg > button:is(.on, [aria-pressed=true], [aria-checked=true]):hover, html body:not(#lc-0) .pace > button.on:hover { --lc-face: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 74%, #fff); }
+html body:not(#lc-0) .pace { margin-top: 1.4vh; --lc-fs: clamp(.75rem, 2vh, .88rem); --lc-h: clamp(2rem, 5vh, 2.4rem); }
 /* a <select> mirrored as a segmented control by js/lcars-buttons.js (the select stays in the DOM, visually hidden) */
 .lc-sr { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; white-space: nowrap !important; border: 0 !important; }
-.lc-seg.lc-mini { --lc-fs: .66rem; --lc-h: 1.9rem; letter-spacing: .1em; }
-.lc-seg.lc-mini > button { padding: .2rem .7rem; }
+.lc-seg.lc-mini { --lc-fs: .76rem; --lc-h: 2rem; }
+.lc-seg.lc-mini > button, .lc-seg.lc-mini > span { padding-top: .7em; padding-bottom: .28em; }
+.lc-seg.lc-mini > button { padding-left: .75rem; padding-right: .75rem; }
+.lc-seg.lc-mini > button:first-child { padding-left: 1rem; } .lc-seg.lc-mini > button:last-child { padding-right: 1rem; }
 
 /* ---------------------------------------------------------------- 7. keycaps ------------------------------------------------ */
+/* flat tan blocks, small radius, dark mono label */
 .lc-key, kbd,
 html body:not(#lc-0) :is(.nv-k, .k-key, #bd-menu .o b, .ac-panel .act b, .ac-panel .act .k, .ac-panel .act kbd, #keyhint kbd, #tk kbd) {
   display: inline-grid; place-items: center; box-sizing: border-box; min-width: 1.7em; height: 1.7em; padding: 0 .45em; margin: 0 .12em;
-  border: 0; border-radius: .45em; vertical-align: middle;
-  font: 800 .85em/1 var(--f-m); letter-spacing: 0; text-transform: none; color: #120d0a;
-  background: linear-gradient(180deg, #fffaf2 0, var(--lc-key, #efe6d6) 55%, color-mix(in srgb, var(--lc-key, #efe6d6) 80%, #6a5a48) 100%);
-  box-shadow: inset 0 -.18em 0 rgba(0, 0, 0, .32), inset 0 0 0 1px rgba(255, 255, 255, .5), 0 .08em .3em rgba(0, 0, 0, .55);
+  border: 0; border-radius: .3em; vertical-align: middle;
+  font: 700 .82em/1 var(--f-m); letter-spacing: 0; text-transform: none; color: var(--lc-ink-dark);
+  background: var(--lc-key, var(--lc-peach)); box-shadow: none;
 }
-/* on the first-run tips (#keyhint) the keycaps glow in the accent colour; Calm visuals / reduced motion keeps them still */
+/* on the first-run tips (#keyhint) the keycaps blink between gold and pale gold; Calm visuals / reduced motion holds them still */
 html body:not(#lc-0) #keyhint kbd { --lc-key: var(--lc-gold); font-size: 1rem; min-width: 2.1em; height: 2.1em; animation: lc-keyglow 1.4s ease-in-out infinite alternate; }
-@keyframes lc-keyglow { from { box-shadow: inset 0 -.18em 0 rgba(0, 0, 0, .32), 0 0 .2rem rgba(244, 194, 91, .3); } to { box-shadow: inset 0 -.18em 0 rgba(0, 0, 0, .32), 0 0 1.1rem rgba(244, 194, 91, .95); } }
+@keyframes lc-keyglow { from { background-color: var(--lc-gold); } to { background-color: #fde6bd; } }
 html body:not(#lc-0):not(#lc-1) .ac-panel .act kbd { position: absolute; top: .15rem; right: .2rem; height: 1.3em; min-width: 1.3em; font-size: .62rem; margin: 0; }
-html body:not(#lc-0) #bd-menu .o b { --lc-key: var(--lc-lilac); min-width: 1.6rem; height: 1.6rem; border-radius: 50%; padding: 0; margin: 0 .1rem 0 0; font-size: .78rem; }
+html body:not(#lc-0) #bd-menu .o b { --lc-key: var(--lc-lilac); min-width: 1.6rem; height: 1.6rem; border-radius: 999px; padding: 0 .3rem; margin: 0 .1rem 0 0; font-size: .78rem; }
 
 /* ---------------------------------------------------------------- 8. tiles (action grids) ------------------------------------ */
+/* dim block with one rounded corner and a full-colour cap bar on the left; hover fills orange */
 .lc-tile,
 html body:not(#lc-0) :is(.act) {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem;
-  min-width: 5.2rem; min-height: 3.6rem; padding: .45rem .7rem .45rem .95rem; box-sizing: border-box;
-  border: 0; border-radius: .9rem .25rem .9rem .25rem; outline: 0; clip-path: none;
-  font: 800 var(--t-micro, .65rem)/1.15 var(--f-d); letter-spacing: .1em; text-transform: uppercase; color: var(--lc-ink-light);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, .22)),
-    linear-gradient(90deg, var(--lc-c, var(--lc-peri)) 0 .4rem, var(--lc-black) .4rem .55rem, var(--lc-panel-hi) .55rem);
-  box-shadow: inset 0 0 0 1px rgba(185, 155, 230, .25), 0 .1rem .4rem rgba(0, 0, 0, .4);
-  cursor: pointer; transition: filter var(--lc-dur) var(--lc-ease), box-shadow var(--lc-dur) var(--lc-ease), transform .08s, color var(--lc-dur);
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 24%, #000);
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem;
+  min-width: 5.4rem; min-height: 3.8rem; padding: .5rem .75rem .45rem 1.05rem; box-sizing: border-box;
+  border: 0; border-radius: 1rem 0 0 0; outline: 0; clip-path: none;
+  font: 600 var(--t-micro, .72rem)/1.1 var(--f-d); font-stretch: condensed; letter-spacing: .04em; text-transform: uppercase;
+  color: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 45%, #fff);
+  background: linear-gradient(90deg, var(--lc-c, var(--lc-peri)) 0 .4rem, var(--lc-black) .4rem .6rem, var(--lc-face) .6rem);
+  box-shadow: none; filter: none;
+  cursor: pointer; transition: background-color var(--lc-dur), color var(--lc-dur);
 }
 .lc-tile:hover, html body:not(#lc-0) .act:hover {
-  color: var(--lc-ink-dark); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 0 1rem -.2rem var(--lc-orange);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(0, 0, 0, .14)), linear-gradient(90deg, color-mix(in oklab, var(--lc-orange) 68%, #000) 0 .4rem, var(--lc-black) .4rem .55rem, var(--lc-orange) .55rem);
+  --lc-c: var(--lc-orange); --lc-face: var(--lc-orange); color: var(--lc-ink-dark); box-shadow: none;
+  background: linear-gradient(90deg, var(--lc-c) 0 .4rem, var(--lc-black) .4rem .6rem, var(--lc-face) .6rem);
 }
 .lc-tile:hover .ico, html body:not(#lc-0) .act:hover .ico { color: var(--lc-ink-dark); }
-.lc-tile:active, html body:not(#lc-0) .act:active { transform: translateY(1px) scale(.98); filter: brightness(.85); }
+.lc-tile:active, html body:not(#lc-0) .act:active { --lc-face: color-mix(in oklab, var(--lc-orange) 68%, #000); transform: none; filter: none; }
 .lc-tile:focus-visible, html body:not(#lc-0) .act:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .16rem; }
-.lc-tile:is(:disabled, .off), html body:not(#lc-0) .act.off { --lc-c: var(--lc-off); opacity: .45; filter: saturate(.3); cursor: not-allowed; }
-html body:not(#lc-0) .act em { font: 600 .6rem var(--f-d); letter-spacing: .04em; opacity: .7; text-transform: none; }
+.lc-tile:is(:disabled, .off), html body:not(#lc-0) .act.off {
+  --lc-c: var(--lc-off); --lc-face: #141318; color: #77737f; opacity: 1; filter: none; cursor: not-allowed;
+  background: linear-gradient(90deg, var(--lc-off) 0 .4rem, var(--lc-black) .4rem .6rem, #141318 .6rem);
+}
+.lc-tile:is(:disabled, .off) .ico, html body:not(#lc-0) .act.off .ico { color: #77737f; }
+html body:not(#lc-0) .act em { font: 500 .66rem var(--f-d); letter-spacing: .02em; opacity: .75; text-transform: none; font-style: normal; }
+.lc-tile em { font: 500 .66rem var(--f-d); letter-spacing: .02em; opacity: .75; text-transform: none; font-style: normal; }
 html body:not(#lc-0) .act.opt { --lc-c: var(--lc-gold); }
 
 /* ---------------------------------------------------------------- 9. list rows (talk / terminal menus, lift panel) ------------ */
+/* dim flat row, rounded left end, a black gap then a coloured block cap on the right; hover fills with the colour */
 .lc-row,
 html body:not(#lc-0) :is(#bd-menu .o, #liftui .lr) {
-  position: relative; display: flex; align-items: center; gap: .55rem; min-height: 2.25rem; margin: .18rem 0; padding: .2rem 1rem .2rem .25rem;
-  border: 0; border-radius: 999px .3rem .3rem 999px; outline: 0; cursor: pointer;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(0, 0, 0, .14)), rgba(22, 26, 51, .78);
-  box-shadow: inset 0 0 0 1px rgba(185, 155, 230, .18);
-  transition: background-color var(--lc-dur), box-shadow var(--lc-dur) var(--lc-ease), filter var(--lc-dur), transform .08s;
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-lilac)) 22%, #000);
+  position: relative; display: flex; align-items: center; gap: .6rem; min-height: 2.3rem; margin: .2rem 0; padding: .2rem 1.6rem .2rem .3rem;
+  border: 0; border-radius: 999px 0 0 999px; outline: 0; cursor: pointer;
+  background: linear-gradient(90deg, var(--lc-face) 0 calc(100% - .8rem), var(--lc-black) calc(100% - .8rem) calc(100% - .6rem), var(--lc-c, var(--lc-lilac)) calc(100% - .6rem));
+  box-shadow: none; filter: none;
+  transition: background-color var(--lc-dur), color var(--lc-dur);
 }
-.lc-row::after, html body:not(#lc-0) :is(#bd-menu .o, #liftui .lr)::after {   /* thin bar cap on the right end */
-  content: ''; position: absolute; right: .3rem; top: .35rem; bottom: .35rem; width: .3rem; border-radius: .15rem; background: var(--lc-c, var(--lc-lilac)); opacity: .55; pointer-events: none;
-}
+.lc-row::after, html body:not(#lc-0) :is(#bd-menu .o, #liftui .lr)::after { content: none; }   /* the right cap is part of the background now */
 .lc-row:hover, html body:not(#lc-0) :is(#bd-menu .o, #liftui:not(.ride) .lr):hover {
-  color: var(--lc-ink-dark);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(0, 0, 0, .12)), var(--lc-c, var(--lc-lilac));
-  box-shadow: 0 0 1rem -.3rem var(--lc-c, var(--lc-lilac));
+  --lc-face: var(--lc-c, var(--lc-lilac)); color: var(--lc-ink-dark); box-shadow: none;
 }
 html body:not(#lc-0) :is(#bd-menu .o):hover :is(.ico, span, em, i) { color: var(--lc-ink-dark); }
 html body:not(#lc-0) #liftui:not(.ride) .lr:hover :is(b, span) { color: var(--lc-ink-dark); }
-.lc-row:active, html body:not(#lc-0) :is(#bd-menu .o, #liftui:not(.ride) .lr):active { transform: translateX(.15rem); filter: brightness(.88); }
+.lc-row:hover .lc-key, html body:not(#lc-0) #bd-menu .o:hover b { --lc-key: var(--lc-black); color: var(--lc-c, var(--lc-lilac)); }
+.lc-row:active, html body:not(#lc-0) :is(#bd-menu .o, #liftui:not(.ride) .lr):active { --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-lilac)) 68%, #000); transform: none; filter: none; }
 .lc-row:focus-visible, html body:not(#lc-0) :is(#bd-menu .o, #liftui .lr):focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .12rem; }
 html body:not(#lc-0) #bd-menu .o { --lc-c: var(--lc-lilac); }
-html body:not(#lc-0) #bd-menu .o.off, .lc-row:is(.off, [aria-disabled=true]) { opacity: .45; filter: saturate(.3); cursor: not-allowed; pointer-events: none; }
-html body:not(#lc-0) #liftui .lr { --lc-c: var(--lc-peach); font: 700 var(--t-base, .875rem) var(--f-d); }
-html body:not(#lc-0) #liftui .lr i { display: inline-grid; place-items: center; min-width: 2.4rem; height: 1.75rem; border-radius: 999px .25rem .25rem 999px; font: 800 .8rem var(--f-m); color: var(--lc-ink-dark);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(0, 0, 0, .15)), var(--lc-i, var(--dim, #8fa0b6)); }
+html body:not(#lc-0) #bd-menu .o.off, .lc-row:is(.off, [aria-disabled=true]) { --lc-c: var(--lc-off); opacity: .6; filter: none; cursor: not-allowed; pointer-events: none; }
+html body:not(#lc-0) #liftui .lr { --lc-c: var(--lc-peach); font: 600 var(--t-base, .875rem) var(--f-d); }
+html body:not(#lc-0) #liftui .lr i { display: inline-grid; place-items: center; min-width: 2.4rem; height: 1.75rem; border-radius: 999px 0 0 999px; font: 700 .8rem var(--f-m); color: var(--lc-ink-dark);
+  background: var(--lc-i, var(--dim, #8fa0b6)); }
 html body:not(#lc-0) #liftui .lr.cur { --lc-i: var(--lc-teal); } html body:not(#lc-0) #liftui .lr.dest { --lc-i: var(--lc-orange); }
-html body:not(#lc-0) #liftui .lr.here { box-shadow: inset 0 0 0 .12rem var(--lc-teal), 0 0 .9rem -.3rem var(--lc-teal); }
-html body:not(#lc-0) #liftui .lr.pinned { outline: 0; box-shadow: inset 0 0 0 .12rem var(--lc-orange), 0 0 1rem -.2rem var(--lc-orange); }
+html body:not(#lc-0) #liftui .lr.here { box-shadow: inset 0 0 0 .14rem var(--lc-teal); }
+html body:not(#lc-0) #liftui .lr.pinned { outline: 0; box-shadow: inset 0 0 0 .14rem var(--lc-orange); }
 html body:not(#lc-0) #liftui.ride .lr { cursor: default; }
 
 /* ---------------------------------------------------------------- 10. toggles, sliders, selects (pause menu settings) --------- */
+/* toggle: a flat pill track; the knob is a pill block cut out by a black ring.  Off = dim, on = filled */
 .lc-toggle, html body:not(#lc-0) .settings input[type=checkbox] {
   -webkit-appearance: none; appearance: none; position: relative; flex: none; box-sizing: border-box; margin: 0;
-  width: 3.1rem; height: 1.6rem; border: 0; border-radius: 999px; cursor: pointer; outline: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, .35), rgba(255, 255, 255, .04)), var(--lc-panel-hi);
-  box-shadow: inset 0 0 0 .1rem rgba(185, 155, 230, .5), inset 0 .15rem .35rem rgba(0, 0, 0, .55);
-  transition: background-color var(--lc-dur), box-shadow var(--lc-dur) var(--lc-ease);
+  width: 3.2rem; height: 1.7rem; border: 0; border-radius: 999px; cursor: pointer; outline: 0;
+  background: color-mix(in oklab, var(--lc-c, var(--lc-lilac)) 30%, #000); box-shadow: none; filter: none;
+  transition: background-color var(--lc-dur);
 }
-.lc-toggle::before, html body:not(#lc-0) .settings input[type=checkbox]::before {   /* the knob: a small pill */
-  content: ''; position: absolute; top: .22rem; left: .24rem; width: 1.3rem; height: 1.16rem; border-radius: 999px;
-  background: linear-gradient(180deg, #d6d2e6, #8e8aa6); box-shadow: 0 .08rem .25rem rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .6);
-  transition: transform .18s var(--lc-ease), background-color var(--lc-dur);
+.lc-toggle::before, html body:not(#lc-0) .settings input[type=checkbox]::before {   /* the knob */
+  content: ''; position: absolute; top: .25rem; left: .25rem; width: 1.45rem; height: 1.2rem; border-radius: 999px;
+  background: color-mix(in oklab, var(--lc-lilac) 80%, #000); box-shadow: none;
+  transition: transform .14s var(--lc-ease), background-color var(--lc-dur);
 }
-.lc-toggle::after, html body:not(#lc-0) .settings input[type=checkbox]::after {   /* OFF / ON marker on the free side */
-  content: 'OFF'; position: absolute; right: .42rem; top: 50%; transform: translateY(-50%); font: 800 .45rem/1 var(--f-m); letter-spacing: .05em; color: rgba(243, 238, 230, .5);
-}
-.lc-toggle:checked, html body:not(#lc-0) .settings input[type=checkbox]:checked {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .25), rgba(0, 0, 0, .15)), var(--lc-c, var(--lc-orange));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 0 .9rem -.2rem var(--lc-c, var(--lc-orange));
-}
-.lc-toggle:checked::before, html body:not(#lc-0) .settings input[type=checkbox]:checked::before { transform: translateX(1.32rem); background: linear-gradient(180deg, #2a1608, #120a05); }
-.lc-toggle:checked::after, html body:not(#lc-0) .settings input[type=checkbox]:checked::after { content: 'ON'; right: auto; left: .5rem; color: rgba(18, 10, 5, .75); }
+.lc-toggle::after, html body:not(#lc-0) .settings input[type=checkbox]::after { content: none; }
+.lc-toggle:checked, html body:not(#lc-0) .settings input[type=checkbox]:checked { background: var(--lc-c, var(--lc-orange)); box-shadow: none; }
+.lc-toggle:checked::before, html body:not(#lc-0) .settings input[type=checkbox]:checked::before { transform: translateX(1.25rem); background: var(--lc-ink-dark); }
 .lc-toggle:focus-visible, html body:not(#lc-0) .settings input:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .2rem; }
-.lc-toggle:hover, html body:not(#lc-0) .settings label:hover input[type=checkbox] { filter: brightness(1.18); }
+.lc-toggle:hover, html body:not(#lc-0) .settings label:hover input[type=checkbox] { filter: brightness(1.2); }
+.lc-toggle:disabled, html body:not(#lc-0) .settings input[type=checkbox]:disabled { background: #141318; cursor: not-allowed; filter: none; }
+.lc-toggle:disabled::before, html body:not(#lc-0) .settings input[type=checkbox]:disabled::before { background: var(--lc-off); }
 /* toggle rows: text on the left, switch on the right, whole row is the hit area */
-html body:not(#lc-0) .settings { gap: .35rem; }
-html body:not(#lc-0) .settings label { min-height: 2.4rem; padding: .15rem .3rem .15rem .7rem; border-radius: 999px .3rem .3rem 999px; cursor: pointer; transition: background-color var(--lc-dur); }
-html body:not(#lc-0) .settings label:hover { background: rgba(185, 155, 230, .1); }
+html body:not(#lc-0) .settings { gap: .3rem; }
+html body:not(#lc-0) .settings label { min-height: 2.4rem; padding: .15rem .3rem .15rem .8rem; border-radius: 999px 0 0 999px; cursor: pointer; transition: background-color var(--lc-dur); }
+html body:not(#lc-0) .settings label:hover { background: color-mix(in oklab, var(--lc-lilac) 12%, #000); }
 html body:not(#lc-0) .settings label:has(> input[type=checkbox]) { flex-direction: row-reverse; justify-content: flex-end; }
 html body:not(#lc-0) .settings label:has(> input[type=checkbox]) > input { margin-left: auto; }
 html body:not(#lc-0) .settings label:has(> #jgreset) { justify-content: flex-end; padding-top: .45rem; }
 html body:not(#lc-0) .settings label:has(> #jgreset):hover { background: none; }
-#jgreset { --lc-h: 2.3rem; --lc-fs: .78rem; --lc-capw: 1.5rem; --lc-px: 1.1rem; }
+#jgreset { --lc-h: 2.3rem; --lc-fs: .85rem; --lc-capw: 1.5rem; --lc-px: 1.1rem; --lc-pl: 1.1rem; }
 
+/* slider: a segmented bar (black gaps every 10%) that fills up to a flat pill thumb ringed in black */
 .lc-range, html body:not(#lc-0) .settings input[type=range] {
-  -webkit-appearance: none; appearance: none; flex: 0 1 13rem; width: 13rem; height: 1.7rem; margin: 0; background: none; cursor: pointer; outline: 0;
-  --lc-track: linear-gradient(90deg, var(--lc-c, var(--lc-orange)) 0 var(--lc-v, 50%), var(--lc-panel-hi) var(--lc-v, 50%));
+  -webkit-appearance: none; appearance: none; flex: 0 1 13rem; width: 13rem; min-width: 0; height: 1.7rem; margin: 0; background: none; cursor: pointer; outline: 0;
+  --lc-track: linear-gradient(90deg, var(--lc-c, var(--lc-orange)) 0 var(--lc-v, 50%), color-mix(in oklab, var(--lc-c, var(--lc-orange)) 26%, #000) var(--lc-v, 50%));
 }
 .lc-range::-webkit-slider-runnable-track, html body:not(#lc-0) .settings input[type=range]::-webkit-slider-runnable-track {
-  height: .62rem; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(185, 155, 230, .45);
-  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - .14rem), rgba(5, 6, 11, .85) calc(10% - .14rem) 10%), var(--lc-track);
+  height: .7rem; border-radius: 0; box-shadow: none;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - .18rem), var(--lc-black) calc(10% - .18rem) 10%), var(--lc-track);
 }
 .lc-range::-moz-range-track, html body:not(#lc-0) .settings input[type=range]::-moz-range-track {
-  height: .62rem; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(185, 155, 230, .45);
-  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - .14rem), rgba(5, 6, 11, .85) calc(10% - .14rem) 10%), var(--lc-track);
+  height: .7rem; border-radius: 0; box-shadow: none;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - .18rem), var(--lc-black) calc(10% - .18rem) 10%), var(--lc-track);
 }
 .lc-range::-webkit-slider-thumb, html body:not(#lc-0) .settings input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; width: 2rem; height: 1.25rem; margin-top: -.315rem; border: 0; border-radius: 999px;
-  background: linear-gradient(180deg, #fff4dc, var(--lc-thumb, var(--lc-gold)) 55%, color-mix(in srgb, var(--lc-thumb, var(--lc-gold)) 70%, #3a2006));
-  box-shadow: 0 0 0 .14rem var(--lc-black), 0 0 .7rem -.1rem var(--lc-thumb, var(--lc-gold));
-  transition: transform .1s var(--lc-ease);
+  -webkit-appearance: none; appearance: none; width: 1.9rem; height: 1.35rem; margin-top: -.325rem; border: 0; border-radius: 999px;
+  background: var(--lc-thumb, var(--lc-peach)); box-shadow: 0 0 0 .2rem var(--lc-black);
+  transition: background-color var(--lc-dur);
 }
 .lc-range::-moz-range-thumb, html body:not(#lc-0) .settings input[type=range]::-moz-range-thumb {
-  width: 2rem; height: 1.25rem; border: 0; border-radius: 999px;
-  background: linear-gradient(180deg, #fff4dc, var(--lc-thumb, var(--lc-gold)) 55%, color-mix(in srgb, var(--lc-thumb, var(--lc-gold)) 70%, #3a2006));
-  box-shadow: 0 0 0 .14rem var(--lc-black), 0 0 .7rem -.1rem var(--lc-thumb, var(--lc-gold));
+  width: 1.9rem; height: 1.35rem; border: 0; border-radius: 999px;
+  background: var(--lc-thumb, var(--lc-peach)); box-shadow: 0 0 0 .2rem var(--lc-black);
 }
-.lc-range:hover::-webkit-slider-thumb, html body:not(#lc-0) .settings input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.08); }
-.lc-range:active::-webkit-slider-thumb, html body:not(#lc-0) .settings input[type=range]:active::-webkit-slider-thumb { transform: scale(.94); filter: brightness(.9); }
+.lc-range:hover::-webkit-slider-thumb, html body:not(#lc-0) .settings input[type=range]:hover::-webkit-slider-thumb { transform: none; background: #fde3c8; }
+.lc-range:active::-webkit-slider-thumb, html body:not(#lc-0) .settings input[type=range]:active::-webkit-slider-thumb { transform: none; filter: none; background: color-mix(in oklab, var(--lc-peach) 70%, #000); }
 
-/* plain <select> (only where js/lcars-buttons.js has not mirrored it): pill with a chevron end cap */
+/* plain <select> (only where js/lcars-buttons.js has not mirrored it): dim pill, black gap, lilac chevron end cap */
 .lc-select, html body:not(#lc-0) .settings select {
-  -webkit-appearance: none; appearance: none; min-height: 2rem; padding: .25rem 2.2rem .25rem .9rem; border: 0; border-radius: 999px;
-  font: 800 .75rem var(--f-d); letter-spacing: .12em; text-transform: uppercase; color: var(--lc-ink-light); cursor: pointer;
+  -webkit-appearance: none; appearance: none; min-height: 2rem; padding: .45rem 2.3rem .2rem 1rem; border: 0; border-radius: 999px;
+  font: 600 .82rem/1 var(--f-d); font-stretch: condensed; letter-spacing: .05em; text-transform: uppercase; color: color-mix(in oklab, var(--lc-lilac) 45%, #fff); cursor: pointer;
   background:
-    linear-gradient(135deg, transparent 50%, var(--lc-ink-dark) 50%) calc(100% - .95rem) 55% / .35rem .35rem no-repeat,
-    linear-gradient(225deg, transparent 50%, var(--lc-ink-dark) 50%) calc(100% - .62rem) 55% / .35rem .35rem no-repeat,
-    linear-gradient(90deg, var(--lc-panel-hi) 0 calc(100% - 1.75rem), var(--lc-black) calc(100% - 1.75rem) calc(100% - 1.6rem), var(--lc-lilac) calc(100% - 1.6rem));
-  box-shadow: inset 0 0 0 1px rgba(185, 155, 230, .45);
+    linear-gradient(45deg, transparent 50%, var(--lc-ink-dark) 50%) calc(100% - 1rem) 42% / .35rem .35rem no-repeat,
+    linear-gradient(315deg, transparent 50%, var(--lc-ink-dark) 50%) calc(100% - .67rem) 42% / .35rem .35rem no-repeat,
+    linear-gradient(90deg, color-mix(in oklab, var(--lc-lilac) 26%, #000) 0 calc(100% - 1.8rem), var(--lc-black) calc(100% - 1.8rem) calc(100% - 1.6rem), var(--lc-lilac) calc(100% - 1.6rem));
+  box-shadow: none;
 }
-html body:not(#lc-0) .settings select option { background: #10132a; color: var(--lc-ink-light); }
+.lc-select:focus-visible, html body:not(#lc-0) .settings select:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .2rem; }
+html body:not(#lc-0) .settings select option { background: #121118; color: var(--lc-ink-light); }
 
-/* ---------------------------------------------------------------- 11. other clickables: hover glow + focus ring only ----------- */
+/* ---------------------------------------------------------------- 11. other clickables: flat hover + focus ring only ----------- */
 html body:not(#lc-0) :is(.card, #cm-radio .card):focus-visible { outline: .16rem solid var(--lc-focus); outline-offset: .2rem; }
-html body:not(#lc-0) #perkscreen .card:hover { box-shadow: 0 0 1.4rem -.4rem var(--lc-orange); }
+html body:not(#lc-0) #perkscreen .card:hover { box-shadow: inset 0 0 0 .16rem var(--lc-orange); }
 html body:not(#lc-0) #cm-radio .card { transition: box-shadow var(--lc-dur) var(--lc-ease), background-color var(--lc-dur); }
 html body:not(#lc-0) .blk { transition: filter var(--lc-dur); cursor: pointer; }
 html body:not(#lc-0) .blk:hover { filter: brightness(1.2); }
 html body:not(#lc-0) .blk:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .1rem; }
-html body:not(#lc-0) :is(#ui-wheel, #tk) .wseg.hov { filter: drop-shadow(0 0 .45rem rgba(240, 147, 58, .75)); }
-/* the "click to resume" chip (js/ui-mode.js): a gold-ringed pill with bar caps at both ends (it keeps its own centring transform) */
-html body:not(#lc-0) #ui-resume { border-radius: 999px; padding: .6rem 2.2rem; font: 800 var(--t-base, .875rem) var(--f-d); letter-spacing: .2em; color: var(--lc-gold);
-  background: linear-gradient(90deg, var(--lc-gold) 0 .9rem, var(--lc-black) .9rem 1.1rem, rgba(12, 15, 30, .94) 1.1rem calc(100% - 1.1rem), var(--lc-black) calc(100% - 1.1rem) calc(100% - .9rem), var(--lc-peri) calc(100% - .9rem));
-  box-shadow: inset 0 0 0 .12rem rgba(244, 194, 91, .55), 0 0 1.4rem -.3rem var(--lc-gold); }
+html body:not(#lc-0) :is(#ui-wheel, #tk) .wseg.hov { filter: brightness(1.25); }
+/* the "click to resume" chip (js/ui-mode.js): black pill with gold / periwinkle block caps at both ends (it keeps its own centring transform) */
+html body:not(#lc-0) #ui-resume { border-radius: 999px; padding: .75rem 2.2rem .5rem; font: 600 var(--t-base, .95rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .06em; color: var(--lc-gold);
+  background: linear-gradient(90deg, var(--lc-gold) 0 1rem, transparent 1rem 1.25rem, var(--lc-black) 1.25rem calc(100% - 1.25rem), transparent calc(100% - 1.25rem) calc(100% - 1rem), var(--lc-peri) calc(100% - 1rem));
+  box-shadow: none; }
 
 /* ---------------------------------------------------------------- 12. motion: Calm visuals and prefers-reduced-motion ---------- */
 body.lc-calm :is(.lc-btn, .lc-tab, .lc-tile, .lc-row, .lc-toggle, .lc-seg > button, .btn, #boot-go, #bd-brief button, #bd-end button, #jgreset, .act, .pace > button, .ac-panel .chips button, #nv-map .dk, #bd-menu .o, #liftui .lr, kbd, .nv-k, .settings input),
-body.lc-calm :is(.lc-btn, .btn, #boot-go, #bd-brief button, .lc-toggle, .settings input)::before {
+body.lc-calm :is(.lc-btn, .btn, #boot-go, #bd-brief button, .lc-toggle, .settings input)::before,
+body.lc-calm :is(.lc-btn, .btn, #boot-go, #bd-brief button)::after {
   animation: none !important; transition: none !important;
 }
-body.lc-calm #boot-go { --lc-glow: 1rem; }
-body.lc-calm #keyhint kbd { box-shadow: inset 0 -.18em 0 rgba(0, 0, 0, .32), 0 0 .6rem rgba(244, 194, 91, .7); }
+body.lc-calm #keyhint kbd { background-color: var(--lc-gold); }
 body.lc-calm :is(.lc-btn, .btn, #boot-go, #bd-brief button, #bd-end button, .act, .lc-tile):active { transform: none; }
 @media (prefers-reduced-motion: reduce) {
   :is(.lc-btn, .lc-tab, .lc-tile, .lc-row, .lc-toggle, .lc-seg > button, .btn, #boot-go, #bd-brief button, #bd-end button, #jgreset, .act, .pace > button, .ac-panel .chips button, #nv-map .dk, #bd-menu .o, #liftui .lr, kbd, .nv-k, .settings input),
-  :is(.lc-toggle, .settings input)::before { animation: none !important; transition: none !important; }
-  #keyhint kbd { box-shadow: inset 0 -.18em 0 rgba(0, 0, 0, .32), 0 0 .6rem rgba(244, 194, 91, .7) !important; }
+  :is(.lc-toggle, .settings input)::before,
+  :is(.lc-btn, .btn, #boot-go, #bd-brief button)::after { animation: none !important; transition: none !important; }
+  #keyhint kbd { background-color: var(--lc-gold) !important; }
 }
 /* small windows: keep tap targets usable */
 @media (max-height: 470px), (max-width: 700px) {
-  .btn { --lc-capw: 1.5rem; --lc-px: 1.2rem; }
-  html body:not(#lc-0) .pace > button { padding: .2rem .65rem; }
+  .btn { --lc-capw: 1.5rem; --lc-px: 1rem; --lc-pl: 1.2rem; }
+  html body:not(#lc-0) .pace > button { padding: .7em .65rem .28em; }
 }
