@@ -48,10 +48,19 @@ function humanModel(opts, cfg, fallback) {
     },
   };
 }
+// space madness: additive bone noise on top of the clip (the mixer rewrites the animated bones every frame, so this never accumulates): a stooped spine, a head that lolls
+// and snaps back, arms hanging forward and twitching, a lurch every second or so. No dedicated shamble clip exists in the free UAL set.
+function lurch(H, t) {
+  const B = (n) => H.inner.getObjectByName(n), s = Math.sin, snap = Math.max(0, s(t * 1.3 + 1.7)) ** 6;
+  B('spine_01')?.rotateX(0.18 + snap * 0.12); B('spine_02')?.rotateX(0.14 + s(t * 2.1) * 0.05); B('spine_03')?.rotateZ(s(t * 1.7) * 0.08);
+  B('neck_01')?.rotateZ(s(t * 3.1) * 0.12 + snap * 0.25); B('Head')?.rotateX(0.12 + s(t * 9) * 0.05);
+  for (const [n, sg] of [['upperarm_l', 1], ['upperarm_r', -1]]) { const b = B(n); if (b) { b.rotateX(0.35 + s(t * 6 + sg) * 0.1); b.rotateZ(sg * 0.12); } }
+  for (const n of ['lowerarm_l', 'lowerarm_r']) B(n)?.rotateX(0.25 + s(t * 11) * 0.08);
+}
 const CRAZED_FACE = { JawDrop: 0.75, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 0.9, NoseWrinkler: 1, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 };
 export const MODELS = {
   gronk: () => gronkModel(),
-  crazed: (o = {}) => humanModel({ bloody: 0.8, pale: 0.55, rank: Math.floor(Math.random() * 3), ...(o.human || {}) }, { face: CRAZED_FACE, attack: 'punch_cross', tick(mesh, H, t) { H.lookYaw = Math.sin(t * 7) * 0.25 + Math.sin(t * 2.3) * 0.3; H.face({ JawDrop: 0.55 + Math.abs(Math.sin(t * 5)) * 0.45 }); } }, () => crewFallback(0xb02a20)),
+  crazed: (o = {}) => humanModel({ bloody: 0.8, pale: 0.55, rank: Math.floor(Math.random() * 3), ...(o.human || {}) }, { face: CRAZED_FACE, attack: 'punch_cross', tick(mesh, H, t) { H.lookYaw = Math.sin(t * 7) * 0.25 + Math.sin(t * 2.3) * 0.3; H.face({ JawDrop: 0.55 + Math.abs(Math.sin(t * 5)) * 0.45 }); lurch(H, t); } }, () => crewFallback(0xb02a20)),
   slimeling: (o = {}) => humanModel({ slime: true, bloody: 0.35, ...(o.human || {}) }, { face: { ...CRAZED_FACE, JawDrop: 1 }, attack: 'punch_jab', walk: 'jog', walkRef: 3, init: slimeKit, tick: slimeTick }, () => crewFallback(0x30a050)),
   drone: () => humanModel({ kind: 'suit', height: 2.02, tint: 0x4e5a56 }, { walk: 'walk_formal', walkRef: 1.25, jogAt: 99, runAt: 99, attack: 'punch_jab', attackSpeed: 0.9, stun: 'hit_head', stunHold: 'idle', init: droneKit, tick: droneTick }, () => crewFallback(0x5a6660)),
   phantom: () => humanModel({ kind: 'crew_m', height: 1.86, material: phantomMaterial(), shadow: false }, { idle: 'dance', walk: 'dance', jog: 'dance', run: 'dance', attack: 'punch_jab', init: hostKit, face: { MouthLeftPullUp: 1, RightBrowDown: 0, MouthRightPullUp: 1, JawDrop: 0.35, LeftUpperLidOpen: 1, RightUpperLidOpen: 1 } }, () => crewFallback(0xff3fd0)),
