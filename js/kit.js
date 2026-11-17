@@ -34,9 +34,10 @@ export class Kit {
   useJob() {
     const C = this.C, G = C.G, P = C.P, it = this.inst; if (!it) { G.say('Nothing in hand. [V] takes something off your belt.', 'warn'); return null; }
     const h = HANDHELDS[it.id], r = useJob(it); if (!r.ok) { G.say(r.why, 'warn'); return r; }
+    G.mini?.toolTip(it.id, h);   // the first time you use a tool: what it is and what it is for (js/minigames-ui.js)
     const say = (t, k = 'comp') => G.say(`${h.name}: ${t}`, k), S = G.shipState, near = this.front(this.crew(), 2.4, 0.5);
     switch (r.effect) {
-      case 'faults': { const f = S?.faulted?.() || []; const rp = C.nearestRepair?.(true); say(rp ? `${rp.sys} — ${S.status(rp.sys)}. Hold E: repairs ${Math.round((h.job.repairMul - 1) * 100)}% faster with this in hand.` : f.length ? `faults: ${f.map(s => s.name).slice(0, 4).join(', ')}` : 'all readings nominal.'); break; }
+      case 'faults': { const f = S?.faulted?.() || []; const rp = C.nearestRepair?.(true); say(rp ? `${rp.sys} — ${S.status(rp.sys)}. E at the fault: repairs ${Math.round((h.job.repairMul - 1) * 100)}% faster with this in hand.` : f.length ? `faults: ${f.map(s => s.name).slice(0, 4).join(', ')}` : 'all readings nominal.'); break; }
       case 'vitals': if (near) { G.duty?._bump(near.person, r.heal); say(`${near.person.short}: pulse ${62 + (near.person.id % 30)}, stress ${near.cower ? 'high' : 'normal'}.`); } else say(`you: ${Math.round(G.hp)}% — ${G.hp < 50 ? 'see a medic' : 'fit for duty'}.`); break;
       case 'heal': if (near) { G.duty?._bump(near.person, r.heal); near.stunT = 0; say(`you treat ${near.person.short}. (+trust)`, 'good'); } else { G.hp = Math.min(G.maxHp, G.hp + r.selfHeal); say(`+${r.selfHeal} health.`, 'good'); } break;
       case 'room': { C.world.reveal(P.x, P.z, 9); const [tx, ty] = C.world.tile(P.x, P.z), room = C.world.d.room[ty]?.[tx]; const items = (C.world.clutter || []).filter(c => Math.hypot(c.x - P.x, c.z - P.z) < 9).map(c => c.name); say(`${room || 'corridor'}: ${items.length ? items.slice(0, 4).join(', ') : 'nothing loose'}${items.length > 4 ? '…' : ''}. Map updated.`); break; }

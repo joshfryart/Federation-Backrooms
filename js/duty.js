@@ -51,7 +51,8 @@ export class Duty {
     this.loops = d.loops.map((l, i) => ({ ...l, period: Math.min(400, Math.max(90, l.every * 8)) * T, next: (pace.firstDue ?? 30) + i * (pace.dueGap ?? 20) + hash01('duty', seed, l.id) * (pace.dueJitter ?? 30), state: 'idle', done: 0, last: null }));
     this.tasks = (d.tasks[mission] || []).map((t, i) => ({ ...t, id: 't' + i, state: 'pending', at_s: Math.max(pace.firstTask ?? 0, t.at * 60 * T), by: null }));
     this.ledger = {}; this.debt = 0; this.entries = []; this.chain = []; this.score = 0; this.maxScore = 0; this.trustMap = new Map(); this.audit = 100; this.stats = { proper: 0, rushed: 0, faked: 0, skipped: 0, missed: 0, delegated: 0, orders: 0, refused: 0, caught: 0, unfinished: 0 };
-    this.events = []; this.jobs = [];   // pending delegated / ordered jobs
+    this.events = []; this.jobs = []; this.play = null; this.minis = [];   // play(job) -> true: a mini-game took the job over (js/minigames-ui.js); minis: the results
+    // pending delegated / ordered jobs
   }
   on(fn) { this.listeners.push(fn); return this; }
   emit(ev) { this.events.push(ev); if (this.events.length > 60) this.events.shift(); for (const f of this.listeners) f(ev); }
@@ -82,9 +83,18 @@ export class Duty {
     if (l.state !== 'due' && l.state !== 'idle') return { ok: false, why: 'not due' };
     if (l.room !== this.place.room) return { ok: false, why: `Do this in the ${l.room}` };
     if (quality === 'skipped') { this._finish(l, 'skipped'); return { ok: true, secs: 0 }; }
+    if (quality === 'proper' && this.play && this.play({ kind: 'duty', id: l.id, loop: l })) return { ok: true, secs: 0, minigame: true };   // a mini-game does it properly; its result comes back through complete()
     const secs = Math.max(2.5, l.dur * SHIP_SEC_PER_MIN * l.q[quality][0] * 1.2 * (this.pace.performMul ?? 1));
     l.state = 'doing'; this.busy = { loop: l, q: quality, left: secs, total: secs };
     this.emit({ type: 'start', loop: l.id, quality, secs }); return { ok: true, secs };
+  }
+  // a finished mini-game (js/minigames.js outcomeOf): the work was done at the console, so no timer; the same ledger, witnesses and score as perform()
+  complete(id, quality, res = null) {
+    const l = this.loop(id); if (!l || l.state === 'doing') return { ok: false, why: 'busy' };
+    if (l.state !== 'due' && l.state !== 'idle') return { ok: false, why: 'not due' };
+    if (l.room !== this.place.room) return { ok: false, why: `Do this in the ${l.room}` };
+    if (!['proper', 'rushed'].includes(quality)) return { ok: false, why: 'a mini-game only ends proper or rushed' };
+    if (res) this.minis.push({ t: +this.t.toFixed(1), loop: l.id, game: res.id, quality: res.quality, mistakes: res.mistakes, outcome: quality }); this._finish(l, quality); return { ok: true, secs: 0 };
   }
   cancel() { if (this.busy) { const l = this.busy.loop; this.busy = null; this._finish(l, 'skipped', { cancelled: true }); } }
 
@@ -190,9 +200,11 @@ export class Duty {
   }
 
   // ---- mission task board: the player does their own tasks in the right room
-  doTask(id, quality = 'proper') {
+  doTask(id, quality = 'proper', opt = {}) {
     const t = this.tasks.find(x => x.id === id); if (!t || t.state !== 'active') return { ok: false, why: 'not active' };
     if (t.room !== this.place.room) return { ok: false, why: `Go to the ${t.room}` };
+    if (quality === 'proper' && !opt.noGame && this.play && this.play({ kind: 'task', id: t.id, task: t })) return { ok: true, minigame: true };
+    if (opt.res) this.minis.push({ t: +this.t.toFixed(1), task: t.id, game: opt.res.id, quality: opt.res.quality, mistakes: opt.res.mistakes, outcome: quality });
     t.state = 'done'; t.by = quality; this.maxScore += 1; this.score += { proper: 1, rushed: 0.6, faked: 0.25, skipped: 0 }[quality] ?? 1;
     if (quality !== 'proper') this.chain.push(`Task "${t.task}" ${quality}`);
     this.emit({ type: 'taskdone', task: t.task, quality }); return { ok: true };

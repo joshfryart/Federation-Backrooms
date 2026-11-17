@@ -37,10 +37,12 @@ import { HANDHELDS } from './handhelds.js';
 import { makeGait, gaitNow, describeGait } from './gait.js';
 import { Fidgeter } from './movement.js';
 import { Haul, initHaul, opStart, opHook, opEnd, pushHook, toolBonus } from './haul.js';   // equipment motions, carrying, carts (js/equipment.js, js/carry.js)
-import { propsFor, classifyItem } from './equipment.js';
+import { propsFor, classifyItem, ITEMS } from './equipment.js';
 import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
 import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / hold / shove / strike, security response, armory (js/combat.js rules, docs/combat.md)
 import { MISSIONS, party as commParty } from './bridge.js';
+import { Minis } from './minigames-ui.js';   // job mini-games: DOM layer + glue (docs/minigames.md)
+import { outcomeOf, repairLevel, SEVERITY, gameFor as miniGameFor } from './minigames.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { briefNotes, rumourFor } from './socialui.js';   // run-start crew notes + rumours (docs/social.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
@@ -705,12 +707,14 @@ function setupDuty() {
   G.duty = new Duty({ player: G.player, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say, seed: G.runSeed, mission: G.mission, pace: G.pace });
   G.duty.atJob = orderAt;   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
   G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1', pace: G.pace });
+  G.mini = G.mini || new Minis({ G, CFG, sound, ui: () => G.menus?.UI, blocked: miniBlocked, apply: miniApply, abort: miniAbort, clearPin: () => { if (G.pin?.mini) G.pin = null; } });
+  G.mini.enabled = !navigator.webdriver || new URLSearchParams(location.search).get('mini') === '1'; G.mini.reset(); G.duty.play = (j) => G.mini.offer(miniJob(j));
   setupRepair(); G.pin = null; G.intro = null; G.introDone = false; G.attn = {}; G.barkAt = G.nodAt = undefined;
   G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel.`, 'warn'); });
   G.duty.on((ev) => {
     const g = G.say;
-    if (ev.type === 'due') g(`Duty: ${ev.label} (${ev.room}). [J]`, 'comp');
-    else if (ev.type === 'task') { g(`Task open: ${ev.task} (${ev.room}) — due by end of shift`, 'comp'); if (ev.first) startIntro(ev); }
+    if (ev.type === 'due') { g(`Duty: ${ev.label} (${ev.room}). [J]`, 'comp'); miniPin(ev, 'duty'); }
+    else if (ev.type === 'task') { g(`Task open: ${ev.task} (${ev.room}) — due by end of shift`, 'comp'); if (ev.first) startIntro(ev); else miniPin(ev, 'task'); }
     else if (ev.type === 'taskdone' && G.intro && G.intro.task === ev.task) endIntro();
     else if (ev.type === 'done') g(ev.auto ? `Round skipped: ${ev.label}. It comes round again.` : ev.quality === 'proper' ? `${ev.label}: done properly.` : `${ev.label}: ${ev.quality}.`, ev.quality === 'proper' ? 'good' : ev.auto ? 'comp' : 'warn');
     else if (ev.type === 'refused') { g(ev.text.startsWith(ev.who) ? ev.text : `${ev.who}: ${ev.text}`, 'warn'); if (ev.person) refuseReact(ev.person, ev.text); }
@@ -1090,6 +1094,51 @@ function fire() {
 }
 
 
+// ---- job mini-games (js/minigames.js logic, js/minigames-ui.js layer, docs/minigames.md): doing a job properly is a short skill game; the result feeds the old outcomes
+// Not during hazards, a red alert and the like, a conversation, a fight, a held body or a hull breach: those jobs keep the plain way (hold E / the timed round).
+function miniBlocked() {
+  if (!NOM() || G.phase !== 'play' || P.hidden || G.breach || G.talk?.active || G.combat?.g || G.combat?.ko > 0 || G.combat?.sec) return 'busy';
+  if (gorns.some(g => g.state === S.CHASE)) return 'hunted';
+  if ((G.comms?.alerts?.top?.()?.def.severity ?? 0) >= 3) return 'alert';
+  if (G.phases?.hazard?.(G.shipDeck + 1, { zone: G.duty?.place.room === 'engineering' ? 'engineering' : '' })) return 'hazard';
+  return null;
+}
+function miniJob(j) {   // a Duty.play() offer ({ kind, loop | task }) -> the job the mini-game layer reads
+  const D = G.duty, l = j.loop || j.task, sys = l.sys, dept = (sys && SYS[sys]?.dept) || G.player.dept, label = j.kind === 'duty' ? l.label : l.task;
+  return { kind: j.kind, id: j.id, label, room: l.room, spot: l.spot, sys, dept, steps: l.steps, severity: j.kind === 'task' ? 0.4 : 0.3 + (j.loop && D.status(j.loop) === 'overdue' ? 0.2 : 0), duty: j };
+}
+function miniApply(job, res, info) {   // the game finished: the same outcomes the old verbs gave
+  const D = G.duty;
+  if (job.kind === 'repair') {
+    const lv = repairLevel(res, info), S = SHIP(), rp = job.rp, name = SYS[job.sys].name, say = G.say;
+    S.repair(job.sys, { hp: lv.hp }); G.repairT = 0;
+    if (lv.outcome === 'proper') return { label: 'Repaired', cls: 'good', note: `${name} is back to full.` };
+    if (lv.outcome === 'rushed') return { label: 'Patched', cls: 'warn', note: `${name} holds, with little margin.` };
+    let note = `${name} limps on.`; const cr = G.carry, it = ITEMS[cr?.item]; if (lv.costPart && it?.tool && it.load) { G.carry = null; note += ` The spare ${it.name} is ruined.`; }
+    if (lv.spark && rp) { for (let i = 0; i < 24; i++) sparks.add(rp.x, rp.y, rp.z, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, SPARK, 0.6); sound.zap?.(); }
+    D?.chain.push(`You botched the ${name} repair (${Math.round(res.quality * 100)}%)`); void say; return { label: 'Botched', cls: 'bad', note };
+  }
+  const q = outcomeOf(res, info), r = job.kind === 'duty' ? D.complete(job.id, q, res) : D.doTask(job.id, q, { noGame: true, res });
+  if (!r.ok) G.say(r.why, 'warn');
+  return q === 'proper' ? { label: 'Done properly', cls: 'good', note: 'It goes in the log as proper.' } : { label: 'Rushed', cls: 'warn', note: 'Good enough to log, but not clean.' + (info.first ? '' : ' Slow down next time.') };
+}
+function miniAbort(job) {   // Esc: rush it (the old rushed outcome). A repair has no rushed verb: you step away and the slow hold-E patch is allowed here.
+  const D = G.duty; if (!D) return;
+  if (job.kind === 'repair') { G.mini.holdFor = job.rp; G.say('You step back. Hold E for the slow patch.', 'comp'); return; }
+  const r = job.kind === 'duty' ? D.perform(job.id, 'rushed') : D.doTask(job.id, 'rushed', { noGame: true }); if (!r.ok) G.say(r.why, 'warn');
+}
+function miniRepair(rp) {   // E at a faulted point: the panel game (true = a game opened and the plain hold is off)
+  if (!G.mini?.enabled || G.mini.holdFor === rp) return false; const st = SHIP().status(rp.sys); if (st === 'nominal') return false;
+  const where = rp.main ? SYS[rp.sys].name : `junction — ${SYS[rp.sys].name}`, job = { kind: 'repair', id: rp.sys + (rp.main ? '' : ':j'), label: `Repair: ${where}`, sys: rp.sys, main: !!rp.main, dept: SYS[rp.sys].dept, severity: SEVERITY[st] ?? 0.4, rp, timeMul: Math.min(1.6, G.kit ? G.kit.repairMul() : toolBonus(G.carry)) };
+  return G.mini.offer(job);
+}
+// the first job at a station you have not met: pin the route (G.pin, the nav guide) so the first time is guided, not hunted
+function miniPin(ev, kind) {
+  if (!G.mini?.enabled || G.pin || G.intro || !NOM()) return; const loop = kind === 'duty' ? G.duty.loop(ev.loop) : null, job = { kind, id: loop?.id || ev.id, spot: loop?.spot || G.duty.tasks.find(t => t.id === ev.id)?.spot, room: ev.room };
+  if (!G.mini.unseen(job) || !ev.room || ev.room === 'any' || G.duty.place.room === ev.room) return;
+  const here = G.shipDeck + 1, list = (G.plan?.[ev.room] || []).slice().sort((a, b) => Math.abs(a.deckNo - here) - Math.abs(b.deckNo - here)), s = list[0];
+  G.pin = { kind, id: job.id, room: ev.room, deck: s?.deckNo ?? here, tx: s?.tx, ty: s?.ty, label: ev.label || ev.task, mini: true };
+}
 // the duty round or mission task you can do right here (right room and, when it names a station, standing at it): E does it properly, J/the wheel offer rushed/fake/skip
 function dutyHere() {
   const D = G.duty; if (!NOM() || !D || !world) return null; const room = D.place.room;
@@ -1116,7 +1165,7 @@ function interact() {
   if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(), top = lp && lp.kind === 'catwalk' ? world.topAt(lp.tx, lp.ty) : 0;   // E at a catwalk module: climb the ladder rungs up onto its deck (a scripted 1.8 s mantle; step off an edge to come down)
     if (top > 1 && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.4) { P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: (lp.tx + 0.5) * 2.5, z: (lp.ty + 0.5) * 2.5, top, dx: 0, dz: 0, t: 0, dur: 1.8, exit: 0, fast: false }; G.say('You climb onto the catwalk.', 'good'); return; } }
   if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && (P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft)) { enterHide(lp); return; } }
-  if (nearestRepair()) return;   // E is held to repair; handled in step()
+  { const rp = nearestRepair(); if (rp) { miniRepair(rp); return; } }   // E: the panel game (js/minigames.js), or held to repair the old way (alerts, hazards, Esc from the game); the hold is handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
   if (NOM() && G.combat?.interact()) return;   // the armory arms locker (draw a phaser) / someone knocked down or in a fight (js/grapple.js)
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
@@ -1593,7 +1642,8 @@ function updateShipSystems(dt, tension) {
   const t = performance.now() / 1000;
   // repair: hold E at a faulted point. Noisy — whatever is hunting you will hear it.
   const rp = nearestRepair();
-  if (rp && keys.KeyE && !(P.clung > 0) && P.grounded) {
+  if (G.mini?.holdFor && G.mini.holdFor !== rp) G.mini.holdFor = null;
+  if (rp && keys.KeyE && !(P.clung > 0) && P.grounded && !(G.mini?.enabled && G.mini.holdFor !== rp && !miniBlocked())) {
     G.repairT += dt; noiseNow = Math.max(noiseNow, 9); G.repair?.assist(rp.sys, dt);   // a crew member already working it: your hands add speed to theirs
     G.repSparkT = (G.repSparkT || 0) - dt; if (G.repSparkT <= 0) { G.repSparkT = 0.35; for (let i = 0; i < 6; i++) sparks.add(rp.x, rp.y, rp.z, (Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2, SPARK, 0.4); sound.zap(); }
     if (G.repairT >= repairTime(rp)) { G.repairT = 0; S.repair(rp.sys); }
@@ -1898,6 +1948,7 @@ function frame() {
   if (G.phase !== 'loading') render(dt, elapsed);   // the loading overlay is opaque: do not spend the GPU drawing behind it
 }
 function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
+  if (G.mini?.run) G.mini.tick(dt);   // a job mini-game is a UI layer: it runs while the world is paused
   if (G.phase === 'play' && world) step(dt, t);
   else if ((G.phase === 'ride' || G.phase === 'select') && world) liftStep(dt, t);
   else if (G.phase === 'dying' && world) dyingStep(dt, t);
@@ -1939,7 +1990,7 @@ const ready = (async () => {
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
-Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
+Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.defineProperty(window.__game, 'mini', { get: () => G.mini }); window.__game.miniRepair = (rp) => miniRepair(rp); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
 Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact;   // conversation close-up (js/talk.js)
 $('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
