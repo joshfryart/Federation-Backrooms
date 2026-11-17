@@ -242,7 +242,7 @@ export class Enemy {
   seesPlayer(p, range, fov = 1.25) {
     const dx = p.x - this.x, dz = p.z - this.z, d = Math.hypot(dx, dz);
     if (d > range || !this.w.los(this.x, this.z, p.x, p.z)) return false;
-    if (p.hidden && d > 1.8) return false;   // crouched behind cover (main.js enterHide)
+    if (p.hidden && d > (p.hideR ?? 1.8)) return false;   // crouched behind cover (main.js enterHide)
     if (d < 4) return true;
     return Math.abs(wrapA(Math.atan2(dx, dz) - this.yaw)) < fov;
   }

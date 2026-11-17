@@ -46,6 +46,9 @@ export const PERKS = [
   { id: 'shield',   name: 'Personal Deflector',   desc: 'Absorb the next hit each deck.', max: 1 },
   { id: 'scan',     name: 'Lifeform Scanner',     desc: 'The scan-o-matic shows hostiles when within 18m.', max: 1 },
   { id: 'luck',     name: 'Supply Requisition',   desc: 'More batteries and medkits on each deck.', max: 2 },
+  { id: 'ghost',    name: 'Silent Running',       desc: 'Hunters only find you hiding from 1 m. With two Soft-Soled Boots: Ghost Protocol, much quieter still.', max: 1 },
+  { id: 'noisemaker', name: 'Distraction Kit',    desc: 'A thrown tool pulls hunters from 30% further away, per level.', max: 2 },
+  { id: 'tough',    name: 'Face Guard',           desc: 'Each E press tears a clinger off faster.', max: 2 },
 ];
 
 export const REDSHIRT_LINES = [

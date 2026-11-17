@@ -830,9 +830,17 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 let DUTIES = { billets: {} };
 async function loadDuties() { try { DUTIES = await (await fetch('./assets/data/duties.json')).json(); } catch (e) { console.warn('duties not loaded', e); } return DUTIES; }
 
+// career (localStorage fb_meta): runs, best deck, kills, wins. Milestones give a free starting perk in the next run (madness mode)
+const META_KEY = 'fb_meta';
+function metaGet() { try { return Object.assign({ runs: 0, bestDeck: 0, kills: 0, wins: 0 }, JSON.parse(localStorage.getItem(META_KEY) || '{}')); } catch (e) { return { runs: 0, bestDeck: 0, kills: 0, wins: 0 }; } }
+function metaEnd(deck, won) { try { const M = metaGet(); M.runs++; M.bestDeck = Math.max(M.bestDeck, deck); M.kills += G.kills + G.stuns; if (won) M.wins++; localStorage.setItem(META_KEY, JSON.stringify(M)); } catch (e) { /* private window */ } }
+const META_UNLOCKS = [[(M) => M.bestDeck >= 3, 'boots', 'Reached deck 3'], [(M) => M.kills >= 8, 'cell', '8 hostiles stunned or downed'], [(M) => M.wins >= 1, 'legs', 'Escaped a ship'], [(M) => M.runs >= 5, 'hypo', '5 shifts survived or not']];
+function metaGrant() { const M = metaGet(), got = []; for (const [ok, id, why] of META_UNLOCKS) if (ok(M)) { G.perks[id] = (G.perks[id] || 0) + 1; if (id === 'hypo') { G.maxHp += 25; G.hp = G.maxHp; } if (id === 'cell') { G.maxPhaser++; G.phaser++; } got.push(`${PERKS.find(p => p.id === id).name} (${why})`); } G.metaBonus = got; if (got.length) later(() => { if (G.phase === 'play') G.say('Career bonus: ' + got.join(', '), 'good'); }, 3500); }
+G.metaGet = metaGet;
 function newRun() {
   releaseCling(); G.taught = {}; G.visits = {};
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: G.forceSeed ?? Math.floor(Math.random() * 1e6) });   // G.forceSeed: tools/test.mjs seed-set smoke runs
+  if (!NOM()) metaGrant();
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
   G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p); G.portraits?.clear();   // portraits are cached by person id: a new crew needs new faces
@@ -871,7 +879,7 @@ function completeDeck() {
     if (G.deck >= winDeck() && !G.endless) {
       document.exitPointerLock?.();
       $('winstats').innerHTML = `${winDeck()} decks of the ${G.ship.name} · ${G.tribbles} furbles rescued · ${G.stuns} hostiles stunned<br>Time on shift ${fmtTime(G.time)}`;
-      localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck);
+      localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck); if (!NOM()) metaEnd(G.deck, true);
       showScreen('win'); G.phase = 'win'; return;
     }
     offerPerks();
@@ -906,6 +914,7 @@ function die(by, line = null) {
   bloodBurst(P.x, 1.0, P.z, 120, 5); for (let i = 0; i < 6; i++) decals.floor('blood', P.x + (Math.random() - 0.5) * 2, P.z + (Math.random() - 0.5) * 2, 1.2 + Math.random(), 1);
   screenSplat(14, true); sound.roar(0.35); by.roar = 1.5; $('danger').style.opacity = 1; $('prompt').textContent = '';
   const deckReached = G.deck;
+  if (!NOM()) metaEnd(deckReached, false);
   if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
   $('deathline').textContent = line || pick(DEATH_LINES);
   $('stats').innerHTML = [['Last known position', `Deck ${deckReached} · ${ship.name}`], ['Registry', ship.reg], ['Cause', by?.name || 'Unknown'], ['Furbles rescued', G.tribbles], ['Hostiles stunned', G.stuns], ['Time on shift', fmtTime(G.time)], ['Best run', `Deck ${G.best}`]].map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('');
@@ -924,6 +933,7 @@ function caption(text, x, z) {
 G.caption = caption;
 // distraction (madness mode): a noise made at (x, z) pulls hunters that are not chasing you to investigate that spot; the closer, the surer
 G.distract = (x, z, radius = 20) => {
+  radius *= 1 + 0.3 * perk('noisemaker');
   sound.clang?.(0.25); caption('clatter', x, z); const [tx, ty] = world.tile(x, z); if (world.grid[ty]?.[tx] !== 0) return 0; let n = 0;
   for (const g of gorns) { if (!g.active || g.dead || ![S.PATROL, S.INVESTIGATE, S.SEARCH].includes(g.state) || !g.setTarget) continue; const d = Math.hypot(g.x - x, g.z - z); if (d > radius || (d > radius * 0.6 && Math.random() < 0.4)) continue; g.state = S.INVESTIGATE; g.timer = 7; g.setTarget(tx, ty); n++; }
   return n; };
@@ -966,7 +976,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyX' && G.kit) G.kit.useJob();
     if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
-    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); const m = $('clungmash'); if (m) { m.style.transform = 'scale(1.35)'; setTimeout(() => { m.style.transform = 'scale(1)'; }, 70); } } else interact(); }
+    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8 + 0.5 * perk('tough'); sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); const m = $('clungmash'); if (m) { m.style.transform = 'scale(1.35)'; setTimeout(() => { m.style.transform = 'scale(1)'; }, 70); } } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) newRun();
@@ -1037,7 +1047,7 @@ function dutyHere() {
 }
 // hiding (madness mode): E on a rack / drawer bank / shelving within reach while crouched crouches you behind it. Hunters only spot a hidden player within 1.8 m, ignore her noise, and lose the chase. Moving or E steps out.
 const HIDE_KINDS = new Set(['suitrack', 'drawers', 'shelving', 'weaponrack', 'tank']);
-function enterHide(lp) { P.hidden = { tx: lp.tx, ty: lp.ty }; P.vx = P.vz = 0; G.say('You crouch out of sight. Hunters only find you up close. [E] or move to step out.', 'good'); const o = $('hidefx'); if (o) o.style.opacity = 1; for (const g of gorns) if (g.state === S.CHASE && Math.hypot(g.x - P.x, g.z - P.z) > 3.5) { g.state = S.SEARCH; g.timer = 6; } }
+function enterHide(lp) { P.hidden = { tx: lp.tx, ty: lp.ty }; P.hideR = perk('ghost') ? 1.0 : 1.8; P.vx = P.vz = 0; G.say('You crouch out of sight. Hunters only find you up close. [E] or move to step out.', 'good'); const o = $('hidefx'); if (o) o.style.opacity = 1; for (const g of gorns) if (g.state === S.CHASE && Math.hypot(g.x - P.x, g.z - P.z) > 3.5) { g.state = S.SEARCH; g.timer = 6; } }
 function exitHide() { if (!P.hidden) return; P.hidden = null; const o = $('hidefx'); if (o) o.style.opacity = 0; }
 function interact() {
   if (P.hidden) { exitHide(); return; }
@@ -1215,7 +1225,7 @@ function step(dt, t) {
     else if (world.isTube(...world.tile(P.x, P.z))) sound.crawl(0.1);
     else sound.step(P.crouch ? 0.05 : P.sprint ? 0.22 : 0.13);
   }
-  const boots = 1 - perk('boots') * 0.3;
+  const boots = (1 - perk('boots') * 0.3) * (perk('boots') >= 2 && perk('ghost') ? 0.6 : 1);   // Ghost Protocol synergy
   const sneakNoise = !P.grounded ? 0 : speedNow < 0.5 ? 0 : P.mode === 'slide' ? 9 : P.crouch ? 2.5 : P.sprint ? 15 : 7;
   noiseNow = Math.max(noiseNow * (1 - dt * 3), sneakNoise * boots);
   P.bob += speedNow * dt * (P.sprint ? 1.8 : 1.5);
