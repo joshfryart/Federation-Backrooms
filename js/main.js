@@ -275,11 +275,11 @@ function spawnThreats(data, n, rnd) {
   G.threats = ['crazed'];
   const far = (f) => data.pickTile(([x, y]) => data.dist[x + y * data.W] >= data.maxD * f) || data.gornSpawn;
   chosen.forEach((type, i) => {
-    const delay = Math.max(10, 28 - n * 2) + i * 22 + 15;
+    const delay = Math.max(14, 30 - n * 2) + i * (n >= 6 ? 30 : 22) + 15;   // deeper decks: hostiles arrive further apart (a 3-hostile deck was brutal)
     gorns.push(makeEnemy(type, world, i === 0 ? data.gornSpawn : far(0.4), n, delay, scene, sound));
     G.threats.push(type);
   });
-  const nc = n >= 2 ? Math.min(4, 1 + Math.floor(rnd() * (1 + n / 3))) : 0; let made = 0;
+  const nc = n >= 2 ? Math.min(n >= 6 ? 2 : 3, 1 + Math.floor(rnd() * (1 + n / 3))) : 0; let made = 0;   // clingers capped (2 on deck 6+: the pool already holds three other hostiles)
   for (let i = 0; i < nc; i++) { const t = data.pickTile(([x, y]) => !data.room[y][x] && data.dist[x + y * data.W] > data.maxD * 0.15); if (t) { gorns.push(makeEnemy('clinger', world, t, n, 0, scene, sound)); made++; } }
   if (made) G.threats.push('clinger');
   if (n >= 2 && ents.some(e => e.fake)) G.threats.push('slimeling');

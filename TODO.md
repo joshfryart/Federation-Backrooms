@@ -82,7 +82,7 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 - [x] Wall/ceiling variety: ribbed bulkheads, window frames, hanging cables, conduit, hazard thresholds, burnt panels, dropped ceiling tiles. Still open: vents with fans, ceiling texture variants.
 - [x] Per-ship material identity (corridor wall/floor by hull class) and room-specific floor/wall materials.
 - [x] Doors: sliding leaves (`World.slideDoors`) done. Blackout (nominal) seals them: solid for the player (`World.resolve`), hold E ~3 s to pry (`pryDoor`), stays open 15 s. NPC walkers force a sealed door after ~2.5 s (open 10 s). Still open: red-alert lockdown, door sounds per material.
-- [ ] Taller/unusual rooms (atrium, shuttlebay with high ceiling) — walls are fixed at 3.2 m, only low ceilings are supported today.
+- [x] Taller rooms: big shuttlebay / cargo / engineering / arboretum have a 5.6 m ceiling (`TALL_H`, `World.isTall`, `ceilAt`; walls extend up, headers close openings onto lower tiles) and 2-3 `catwalk` modules (2.6 m deck, `top` set) along the walls, reached by grapple. Still open: a free-standing atrium, walk-under catwalk collision (the module is a solid prop), `ship_ladder` placement and NPC use, tall-room light/shadow tuning, not seen on screen (headless only).
 - [ ] Real windows to space with parallax starfield/planet; viewscreen on the bridge should animate.
 - [x] Lighting: AO baked into the generated sets, room-specific light colours, emergency lamps, vent light shafts. Still open: emergency lamps do not cast real light in a blackout (glow and halo only).
 - [ ] Weather-like effects: steam, coolant leaks, sparks (basic versions exist), smoke during alerts.
@@ -108,7 +108,7 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 - [ ] **First-person body:** no arms/legs on screen during mantle, slide, wall-run or grapple; only camera motion sells it. Add animated hands (the crew rig has fingers), a grapple launcher on the left hand, landing roll, and footstep/cloth audio per move.
 - [ ] **Tuning on real hardware:** all movement was tuned numerically and by headless tests, never played with a mouse. Check jump height under low ceilings (head clamps at 0.6 m), wall-run entry speed, grapple speed/cooldown, slide length, and enemy fairness now that the player is much faster.
 - [x] Crazed crew (`climber` in `HUNTERS.crazed`) vault climbable props and follow you through tubes, up ladders and along upper runs, slower than on the floor (props ×0.55, tubes ×0.5, ladders ×0.4; weighted `World.field(…, climb)` makes them prefer the floor; `World.hostileGround` + `Enemy.stepY` lift their feet). They can hit you on prop tops and in upper runs. Gronk and Drone still can't climb or crawl (they wait at a tube mouth or drag you off props); slimelings crawl tubes but don't climb.
-- [ ] Balance enemy mixes (deck 6+ can spawn 3 crazed + drone + hologram + clingers — likely brutal); tune speeds, damage, spawn delays.
+- [ ] Balance enemy mixes: first pass done (clingers capped 3 / 2 on deck 6+, hostile arrivals spaced 30 s apart on deck 6+, `spawnThreats`); speeds / damage still untuned by hand.
 - [ ] Hiding mechanic (lockers/vents), distraction items, more perks/synergies, meta-progression.
 - [ ] Slimeling impostor tells (subtle animation/audio) so players can learn to spot them.
 - [ ] Phantom: audit "being looked at" (needs LOS + dot product with `P.yaw`); darkness should reduce visibility.
