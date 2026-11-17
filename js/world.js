@@ -15,6 +15,8 @@ installIcons();   // U-1 / U-2: the handheld glyphs and the flight / operations 
 
 export const TS = 2.5;      // tile size (m)
 export const WH = 3.2;      // wall height (m)
+export const TALL_H = 5.6;  // ceiling of a tall room (big shuttlebay / cargo / engineering / arboretum)
+export const TALL_TYPES = new Set(['shuttlebay', 'cargo', 'engineering', 'arboretum']);
 const JUNCTION_FACES = 21;   // one per ship system (js/crew.js SYSTEMS): wall faces kept bare for repair junctions
 export const TUBE_H = 1.25; // crawl height of a Jiffy tube (m)
 export const TUBE_UP = 1.7; // floor height of a tube's upper run (reached by ladder)
@@ -533,6 +535,8 @@ export class World {
     this.wallFaces = []; this.sparkers = []; this.steamers = []; this.alertAmt = 0;
     this.panels = []; this.powerAmt = 1; this.powerTarget = 1; this.flickerF = 1; this.drips = [];
     this.flooded = !!data.flooded; this.cones = new THREE.Group();
+    this.tall = new Uint8Array(this.W * this.H);   // 1 = tile of a tall room (ceiling TALL_H)
+    for (const r of data.rooms || []) if (r.big && TALL_TYPES.has(r.type)) for (let ty = r.y; ty < r.y + r.h; ty++) for (let tx = r.x; tx < r.x + r.w; tx++) if (data.room[ty]?.[tx] === r.type) this.tall[tx + ty * this.W] = 1;
     this.tops = {}; this.propExt = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
     OWN = this.own = [];
     try { this._build(); this._details(); this._liminal(); this._dressing(); } finally { OWN = null; }
@@ -542,8 +546,10 @@ export class World {
   tubeKind(x, y) { return this.d.tubeLevel[x + y * this.W]; }   // 'lo' | 'lad' | 'up' | undefined
   floorAt(x, y) { return this.tubeKind(x, y) === 'up' ? TUBE_UP : 0; }
   headroomAt(x, y) { return this.ceilAt(x, y) - this.floorAt(x, y); }
+  isTall(x, y) { return !!this.tall[x + y * this.W]; }
   ceilAt(x, y) {
     if (this.d.room[y]?.[x] === 'jefferies') return this.tubeKind(x, y) === 'lo' ? TUBE_H : TUBE_UP + TUBE_H;
+    if (this.tall[x + y * this.W]) return TALL_H;
     if (this.d.room[y]?.[x]) return WH;
     const h = Math.sin((x >> 1) * 12.9898 + (y >> 1) * 78.233 + this.d.deck * 3.1) * 43758.5453; const f = h - Math.floor(h);
     return f < 0.3 ? 2.45 : WH;
@@ -826,6 +832,27 @@ export class World {
           im.setColorAt(i, base.clone().multiplyScalar(0.82 + rndv() * 0.22));
         });
         im.castShadow = true; im.receiveShadow = true; g.add(im);
+        // above 3.2 m: walls touching a tall room continue up to its ceiling
+        const ext = list.filter(([x, y]) => { for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (this.isTall(x + a, y + b)) return true; return false; });
+        if (ext.length) {
+          const eg = new THREE.BoxGeometry(TS, TALL_H - WH, TS), ei = new THREE.InstancedMesh(eg, mat, ext.length);
+          ext.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, (WH + TALL_H) / 2, (y + 0.5) * TS); dummy.updateMatrix(); ei.setMatrixAt(i, dummy.matrix); ei.setColorAt(i, base.clone().multiplyScalar(0.75)); });
+          ei.castShadow = true; ei.receiveShadow = true; g.add(ei);
+        }
+      }
+      // headers: where a tall room opens onto a lower tile, close the gap above the lower ceiling
+      {
+        const hd = [];
+        for (let y = 0; y < this.H; y++) for (let x = 0; x < W; x++) if (this.isTall(x, y) && this.grid[y][x] !== 1) for (const [dx, dy] of DIRS) {
+          const nx = x + dx, ny = y + dy; if (this.grid[ny]?.[nx] === undefined || this.grid[ny][nx] === 1 || this.isTall(nx, ny)) continue;
+          hd.push([x + 0.5 + dx * 0.5, y + 0.5 + dy * 0.5, dx !== 0, Math.min(this.ceilAt(nx, ny), WH)]);
+        }
+        if (hd.length) {
+          const hm = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.7) });
+          const im_set = (m, i, d) => m.setMatrixAt(i, d.matrix); const hg = new THREE.BoxGeometry(1, 1, 1), hi = new THREE.InstancedMesh(hg, hm, hd.length);
+          hd.forEach(([cx, cz, alongZ, lo], i) => { const h = TALL_H - lo; dummy.position.set(cx * TS, lo + h / 2, cz * TS); dummy.scale.set(alongZ ? 0.3 : TS, h, alongZ ? TS : 0.3); dummy.updateMatrix(); im_set(hi, i, dummy); });
+          dummy.scale.set(1, 1, 1); hi.castShadow = true; hi.receiveShadow = true; g.add(hi);
+        }
       }
     }
     // wall decorations on faces adjoining open tiles
