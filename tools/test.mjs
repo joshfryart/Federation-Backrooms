@@ -340,6 +340,28 @@ const dir = await page.evaluate(async () => {
 });
 console.log('director repairer:', JSON.stringify(dir)); if (!(dir.repairer && dir.crewFixed)) fail('director');
 });
+S('liminal', 'madness', async (page) => {   // tall rooms + catwalk climb (E at a module), walk-under collision, and the impossible corridor loop (two loops, then through)
+await installHelpers(page);
+const lim = await page.evaluate(async () => {
+  const g = __game; g.setQuality('low'); __T.hideEnemies(); const out = { catwalk: null, loop: null, scanned: 0, withCat: 0, withLoop: 0 };
+  for (let run = 0; run < 12 && !(out.catwalk && out.loop); run++) { g.G.forceSeed = 4000 + run * 977; g.G.forceShip = run % 10; g.newRun(); __T.hideEnemies();
+    for (let n = 1; n <= 8 && !(out.catwalk && out.loop); n++) { g.loadDeck(n); __T.hideEnemies(); const w = g.world, P = g.P; out.scanned++; if (w.d.props.some(q => q.kind === 'catwalk')) out.withCat++; if (g.G.liminal) out.withLoop++;
+      const cw = !out.catwalk && w.d.props.find(q => q.kind === 'catwalk');
+      if (cw) { const top = w.topAt(cw.tx, cw.ty), spot = [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].map(([a, b]) => [(cw.tx + 0.5) * 2.5 + a * 1.2, (cw.ty + 0.5) * 2.5 + b * 1.2]).find(([x, z]) => { const q = { x, z, y: 0 }; w.resolve(q, 0.3); return Math.hypot(q.x - x, q.z - z) < 0.02 && !w.solidAt(x, z); });
+        if (spot) { P.x = spot[0]; P.z = spot[1]; P.y = 0; P.yaw = Math.atan2(-((cw.tx + 0.5) * 2.5 - P.x), -((cw.ty + 0.5) * 2.5 - P.z)); P.pitch = 0; g.G.phase = 'play'; g.step(0.05, 1);
+          dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })); dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' })); for (let i = 0; i < 60; i++) { g.G.phase = 'play'; g.step(0.05, 2 + i * 0.05); }
+          const q = { x: (cw.tx + 0.5) * 2.5, z: (cw.ty + 0.5) * 2.5, y: 0 }, x0 = q.x, z0 = q.z; w.resolve(q, 0.3);
+          out.catwalk = { top, y: +P.y.toFixed(2), tall: w.isTall(cw.tx, cw.ty) || w.ceilAt(cw.tx, cw.ty) > 3.3, under: Math.hypot(q.x - x0, q.z - z0) < 0.01 }; } }
+      const L = g.G.liminal;
+      if (L && !out.loop) { const r = L.run, ctr = (u) => r.ax === 'x' ? w.center(u, r.fixed) : w.center(r.fixed, u), [x0, z0] = ctr(r.a + 1); P.x = x0; P.z = z0; P.y = 0; let loops = 0;
+        for (let i = 0; i < 400 && L.count < 3; i++) { const px = P.x, pz = P.z; g.G.phase = 'play'; if (r.ax === 'x') { P.x += 0.2; P.vx = 4; P.vz = 0; } else { P.z += 0.2; P.vz = 4; P.vx = 0; } g.step(0.05, 10 + i * 0.05); if ((r.ax === 'x' ? P.x - px : P.z - pz) < -0.5) loops++; if (i > 300 && loops >= 2) break; }
+        out.loop = { loops, count: L.count, len: r.b - r.a + 1 }; } } }
+  return out;
+});
+console.log('liminal:', JSON.stringify(lim));
+if (!(lim.catwalk && lim.catwalk.y >= lim.catwalk.top - 0.05 && lim.catwalk.tall && lim.catwalk.under)) fail('liminal: catwalk climb / tall room / walk-under ' + JSON.stringify(lim.catwalk));
+if (!(lim.loop && lim.loop.loops === 2 && lim.loop.count === 2)) fail('liminal: corridor loop ' + JSON.stringify(lim.loop));
+});
 S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach
 await installHelpers(page);
 const srch = await page.evaluate(async () => {
