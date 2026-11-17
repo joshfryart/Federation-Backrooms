@@ -48,7 +48,7 @@ import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / 
 import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation close-up: state machine, framing, pause rules, intents (tools/test-talk.mjs)
 import { combatTests, combatBrowser, combatMadness } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
-import { jobgameTests, jobgameBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
+import { jobgameTests, jobgameBrowser, jobsiteBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
   ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests]]) S(n, null, () => f(fail));
@@ -818,7 +818,8 @@ S('ui', 'nominal3', (p) => uiBrowser(p, fail));   // Esc closes a layer without 
 S('talk', 'nominal3', (p) => talkBrowser(p, fail));   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
 S('combat', 'nominal3', (p) => combatBrowser(p, null, fail));   // strike / grab / drag / release, witnesses, security, player HP (the madness zapper is combat-madness)
 S('wiring', 'nominal3', (p) => wiringBrowser(p, fail));
-S('jobgames', 'nominal3', (p) => jobgameBrowser(p, fail));   // job mini-games: instruction card once per tool (fb_cfg), win / fail -> quality + time, Esc cancels, no soft-lock (tools/test-jobgames.mjs)   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)
+S('jobgames', 'nominal3', (p) => jobgameBrowser(p, fail));
+S('jobsites', 'nominal3', (p) => jobsiteBrowser(p, fail));   // J board / J menu route to the job and start it on arrival; a work-site job end to end (tools/test-jobgames.mjs)   // job mini-games: instruction card once per tool (fb_cfg), win / fail -> quality + time, Esc cancels, no soft-lock (tools/test-jobgames.mjs)   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)
 S('pace-repair', 'nominal3', async (page3) => {   // pace wiring (title control, standard newRun), crew repair response, world pause, shift-end tasks (the preset maths is the node section pace-presets)
 const rep = await page3.evaluate(async () => {
   const g = __game, G = g.G, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));

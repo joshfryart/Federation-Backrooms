@@ -82,9 +82,44 @@ export async function jobgameTests(fail) {
   for (let s = 1; s < 40; s++) { const g = J.createGame('fresh', s), r = g.cur, bad = r.items.map((it, i) => it.day < r.today ? i : -1).filter(i => i >= 0); ck(bad.length === 1 && bad[0] === r.answer, `fresh seed ${s}: exactly one expired item`); }
   // learned store: once marked, has() is true; reset clears
   { let v = null; const s = J.learnedStore(() => v, (x) => { v = x; }); ck(!s.has('console'), 'nothing learned at first'); s.mark('console'); ck(s.has('console') && !s.has('junction') && v.console === 1, 'mark persists through set()'); s.reset(); ck(!s.has('console'), 'reset'); }
+  // ---- work sites (js/worksites.js): physical jobs done in the room. Every job resolves (sites or console), no kind over the cap, every site
+  //      definition has an interactive act, every act wins on hinted play and faults on bad play, nothing waits forever
+  const W = await imp('js/worksites.js'), all = W.coverageAll(duties), rows = Object.entries(all.kinds).sort((a, b) => b[1] - a[1]);
+  out.sites = { total: all.total, sites: all.sites, games: all.games, share: +all.share.toFixed(3) };
+  console.log(`job coverage incl. work sites (${all.total} jobs: ${all.sites} work-site jobs, ${all.games} console games; max share ${(all.share * 100).toFixed(1)} %):\n` + rows.map(([k, n]) => `${k.padEnd(16)} ${String(n).padStart(4)}  ${(100 * n / all.total).toFixed(1).padStart(5)} %`).join('\n'));
+  ck(all.total > 600 && !all.missing.length, 'every loop and task resolves to a site job or a console game; missing: ' + all.missing.slice(0, 5).join(' | '));
+  ck(all.share <= MAX_SHARE, 'no kind (site or console) over the cap: ' + all.share);
+  ck(all.sites >= 100 && Object.keys(all.kinds).filter(k => k.startsWith('site:')).length >= 14, `physical jobs are work sites (${all.sites}, ${Object.keys(all.kinds).filter(k => k.startsWith('site:')).length} site kinds)`);
+  for (const [label, room, id] of [['Ward rounds', 'sickbay', 'ward'], ['Scrub and sanitise the galley', 'mess', 'clean'], ['Re-secure loose pallets', 'cargo', 'lash'], ['Grow bed round', 'arboretum', 'growbed'], ['Deck patrol and door checks', 'cargo', 'patrol'], ['Swab and contamination log', 'lab', 'samples'], ['Treat drill injuries and bruises', 'sickbay', 'dose'], ['Shuttle preflight walk-around', 'shuttlebay', 'walkround']])
+    ck(W.jobFor({ label, room, spot: 'console' })?.def?.id === id, `"${label}" is the ${id} work site`);
+  ck(W.jobFor({ label: 'Balance grid load against reactor output', room: 'engineering', spot: 'console' })?.type === 'game' && W.jobFor({ label: 'Plot orbit and transporter-range hold', room: 'bridge', spot: 'console' })?.type === 'game', 'console work stays a console game');
+  const rect = { x: 2, y: 2, w: 6, h: 5 }, free = (x, y) => x >= 2 && x < 8 && y >= 2 && y < 7;
+  for (const def of Object.values(W.SITE_DEFS)) {
+    ck(['scrub', 'scan', 'timing', 'count'].includes(def.act) && def.how && def.name && def.props.length && def.n[0] >= 2, `${def.id}: an interactive act, how-to, props, at least 2 sites`);
+    // sites: from props when the room has them, from the floor when it has none, plus a fetch point when the item is not carried
+    const props = def.props.slice(0, 3).map((k, i) => ({ kind: k, tx: 3 + i * 2, ty: 3 }));
+    const s1 = W.resolveSites(def, { rect, props, free }, 7), s0 = W.resolveSites(def, { rect, props: [], free }, 7), sf = W.resolveSites(def, { rect, props: [{ kind: 'shelving', tx: 7, ty: 6 }], free }, 7, { fetch: true });
+    ck(s1.length >= def.n[0] && s1.some(s => s.prop) && s0.length >= def.n[0] && s0.every(s => !s.prop && free(s.tx, s.ty)), `${def.id}: sites resolve from props and fall back to free floor`);
+    ck(!def.item.length || (sf[0].act === 'fetch' && sf[0].kind === 'shelving'), `${def.id}: missing item -> fetch site at the supply shelf first`);
+    for (let seed = 1; seed <= 12; seed++) for (const calm of [false, true]) {
+      const sites = W.resolveSites(def, { rect, props, free }, seed, { fetch: seed % 3 === 0 }), r = W.createSiteRun(def, seed, sites, { calm });
+      for (let f = 0; f < 30 * 400 && r.state === 'work'; f++) { const e = r.step(1 / 30, r.hint(r.next, f)); if (e?.type === 'fetch') r.fetched(); }   // the UI issues the item on a fetch event
+      ck(r.state === 'win' && r.faults === 0 && r.outcome().quality === 'proper' && r.outcome().perfect && r.t < r.limit * 0.6, `${def.id} seed ${seed}${calm ? ' calm' : ''}: hinted play wins clean (${r.state} ${r.faults} ${r.t.toFixed(1)}/${r.limit})`);
+    }
+    // order / item rules: wrong site in a sequence and no item in hand make no progress (and are not faults)
+    { const sites = W.resolveSites(def, { rect, props, free }, 3), r = W.createSiteRun(def, 3, sites); const last = sites.length - 1; const e = r.step(0.1, { at: last, press: true, hold: true, hasItem: true, look: r.sites[last].bearing, wipe: 2 }); if (def.order === 'seq') ck(e?.type === 'blocked' && r.sites[last].prog === 0, `${def.id}: sequence: the next site first`);
+      if (def.item.length) { const e2 = r.step(0.1, { at: 0, press: true, hold: true, hasItem: false, look: r.sites[0].bearing, wipe: 2 }); ck(e2?.type === 'needItem' && r.sites[0].prog === 0 && r.faults === 0, `${def.id}: no item in hand -> needItem, no progress`); } }
+    // bad play: timing / count fault; scrub / scan without the skill crawl; idle times out -> rushed (still done)
+    { const r = W.createSiteRun(def, 5, W.resolveSites(def, { rect, props, free }, 5)); for (let f = 0; f < 30 * 10 && r.state === 'work'; f++) r.step(1 / 30, r.bad(r.next, f));
+      if (def.act === 'timing' || def.act === 'count') ck(r.faults >= 1, `${def.id}: bad play is a fault (${r.faults})`); else ck(r.sites[r.next]?.prog < 0.7 && r.sites.filter(s => s.done).length === 0, `${def.id}: no skill, slow progress (${r.sites[r.next]?.prog})`); }
+    { const r = W.createSiteRun(def, 6, W.resolveSites(def, { rect, props, free }, 6)); for (let f = 0; f < 30 * 600 && r.state === 'work'; f++) r.step(1 / 30, { at: -1 }); ck(r.state === 'fail' && r.why === 'time' && r.outcome().quality === 'rushed', `${def.id}: idle ends by itself, rushed`); }
+    { const r = W.createSiteRun(def, 6, W.resolveSites(def, { rect, props, free }, 6)); r.step(10, { at: -1, away: true }); ck(r.t === 0, `${def.id}: the clock stops outside the room`); r.cancel(); ck(r.outcome() === null, `${def.id}: cancel has no outcome`); }
+    ck(W.siteRushNote(def, 2).length > 5, `${def.id}: has a rushed line`);
+  }
+  { const def = W.SITE_DEFS.lash, r = W.createSiteRun(def, 2, W.resolveSites(def, { rect, props: [], free }, 2)); const s = r.sites[0]; for (let f = 0; f < 80; f++) r.step(1 / 30, { at: 0, hold: true, hasItem: true }); ck(r.faults === 1 && s.prog === 0, 'timing: holding past the top is a fault'); }
+  { const def = W.SITE_DEFS.tally, r = W.createSiteRun(def, 2, W.resolveSites(def, { rect, props: [], free }, 2)); const s = r.sites[0]; for (let k = 0; k <= s.n; k++) r.step(1 / 30, { at: 0, press: true, hasItem: true }); for (let f = 0; f < 40; f++) r.step(1 / 30, { at: 0, hasItem: true }); ck(r.faults === 1 && !s.done && s.c === 0, 'count: one too many is a miscount; start again'); }
   return out;
 }
-
 // a key press through the real window listeners (the menus router in capture, then main.js), as tools/test-ui.mjs does
 const press = (page, code) => page.evaluate((code) => { window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code, bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code, bubbles: true })); }, code);
 // browser half: the instruction card shows once per tool (persisted in fb_cfg), win / fail set quality + time, Esc cancels (job stays due), no soft-lock
@@ -99,7 +134,7 @@ export async function jobgameBrowser(page, fail) {
     const due = (spot, label = 'Work the ops board') => { if (D.busy) D.busy = null; l.spot = spot; l.label = label; l.sys = ''; l.state = 'due'; l.dueAt = D.t; D.setPlace(deck, l.room); };
     const play = (how) => { const gm = J.game; for (let i = 0; i < 2000 && gm.state === 'play'; i++) { if (how === 'win') { for (const [c, d] of gm.hint()) J.key(c, d); } else if (how === 'strike') { const b = gm.bad(); if (b) J.key(b); } J.tick(1 / 30); } J.tick(1); return gm.result(); };
     // 1) first use of the console: the instruction card, the layer is up and the world is frozen
-    due('console'); const r1 = g.startJob(l); out.first = { ok: r1.ok, game: !!r1.game, phase: J.phase, layer: G.ui.has('jobgame'), frozen: G.menuPause, card: /New tool/.test(document.getElementById('jobgame')?.textContent || ''), keys: document.querySelectorAll('#jobgame kbd').length };
+    due('console'); const r1 = g.startJob(l, { console: true }); out.first = { ok: r1.ok, game: !!r1.game, phase: J.phase, layer: G.ui.has('jobgame'), frozen: G.menuPause, card: /New tool/.test(document.getElementById('jobgame')?.textContent || ''), keys: document.querySelectorAll('#jobgame kbd').length };
     return out;
   });
   // the real keyboard path: Enter through the menus router begins the game (learned + persisted)
@@ -113,13 +148,13 @@ export async function jobgameBrowser(page, fail) {
     // 2) win: the job runs properly, at half time (clean), the layer is gone
     const w = play('win'); out.win = { res: w.state, closed: !J.active && !G.ui.has('jobgame'), busy: D.busy?.loop === l, q: D.busy?.q, total: +(D.busy?.total || 0).toFixed(2), base: +base('proper').toFixed(2) };
     // 3) second use of the same tool: no card; a fumbled game still does the job, rushed
-    due('console'); g.startJob(l); out.second = { phase: J.phase }; const f = play('strike'); out.fail = { res: f.state, strikes: f.strikes, busy: D.busy?.loop === l, q: D.busy?.q, total: +(D.busy?.total || 0).toFixed(2), base: +base('rushed').toFixed(2) };
+    due('console'); g.startJob(l, { console: true }); out.second = { phase: J.phase }; const f = play('strike'); out.fail = { res: f.state, strikes: f.strikes, busy: D.busy?.loop === l, q: D.busy?.q, total: +(D.busy?.total || 0).toFixed(2), base: +base('rushed').toFixed(2) };
     // 4) another tool kind (warp core valve): its own card; idle play runs out of time -> rushed, never stuck
-    due('warpcore', 'Core temperature and injector rounds'); g.startJob(l); out.dial = { phase: J.phase }; J.key('Enter'); let n = 0; while (J.active && n++ < 30 * 40) J.tick(1 / 30); out.dial.timeout = { active: J.active, q: D.busy?.q, frames: n, why: J.game?.why };
+    due('warpcore', 'Core temperature and injector rounds'); g.startJob(l, { console: true }); out.dial = { phase: J.phase }; J.key('Enter'); let n = 0; while (J.active && n++ < 30 * 40) J.tick(1 / 30); out.dial.timeout = { active: J.active, q: D.busy?.q, frames: n, why: J.game?.why };
     // 5) calibration (biobed): hold-key game wins; calm visuals give 50 % more time
-    CFG.calm = true; due('console', 'Test emergency medical systems'); g.startJob(l); J.key('Enter'); out.cal = { limit: J.game.limit, kind: J.game.kind }; const c = play('win'); out.cal.res = c.state; out.cal.q = D.busy?.q; CFG.calm = false;
+    CFG.calm = true; due('console', 'Test emergency medical systems'); g.startJob(l, { console: true }); J.key('Enter'); out.cal = { limit: J.game.limit, kind: J.game.kind }; const c = play('win'); out.cal.res = c.state; out.cal.q = D.busy?.q; CFG.calm = false;
     // 6) colour-blind palette + captions: a strike leaves a caption line
-    CFG.cb = true; CFG.caps = true; due('junction', 'Routine junction round'); g.startJob(l); J.key('Enter'); out.cb = { good: J.palette.good, leads: J.palette.wires.join(',') }; const gm = J.game; J.key('Digit' + (gm.solve() % 4 + 1)); out.cb.caption = [...document.querySelectorAll('#caps div')].map(d => d.textContent).join('|'); out.cb.strikes = gm.strikes;
+    CFG.cb = true; CFG.caps = true; due('junction', 'Routine junction round'); g.startJob(l, { console: true }); J.key('Enter'); out.cb = { good: J.palette.good, leads: J.palette.wires.join(',') }; const gm = J.game; J.key('Digit' + (gm.solve() % 4 + 1)); out.cb.caption = [...document.querySelectorAll('#caps div')].map(d => d.textContent).join('|'); out.cb.strikes = gm.strikes;
     return out;
   });
   // 7) Esc through the real keyboard router: cancel; the job stays due, nothing performed, the layer stack is empty
@@ -129,17 +164,17 @@ export async function jobgameBrowser(page, fail) {
     out.cancel = { active: J.active, state: l.state, busy: !!D.busy, stack: G.ui.stack.length, frozen: G.menuPause, log: J.log.slice(-1)[0] };
     CFG.cb = false; CFG.caps = false;
     // 8) a mission task at a junction 
-    const t = D.tasks[0]; if (t) { t.state = 'active'; t.spot = 'junction'; t.task = 'Routine junction round'; D.setPlace(deck, t.room); const rt = g.startJob({ ...t, label: t.task }); out.task = { game: !!rt.game }; }
+    const t = D.tasks[0]; if (t) { t.state = 'active'; t.spot = 'junction'; t.task = 'Routine junction round'; D.setPlace(deck, t.room); const rt = g.startJob({ ...t, label: t.task }, { console: true }); out.task = { game: !!rt.game }; }
     return out;
   });
   const r4 = await page.evaluate(() => {
     const g = __game, G = g.G, J = g.jobgame, D = g.duty, l = D.loops[0], deck = G.shipDeck + 1, out = {}, t = D.tasks[0];
     if (t) { const gm = J.game; for (let i = 0; i < 2000 && gm.state === 'play'; i++) { for (const [c, d] of gm.hint()) J.key(c, d); J.tick(1 / 30); } J.tick(1); out.task = { state: t.state, by: t.by, phase: G.phase }; }
     // 9) no tool at the spot: the job just runs (no game); a job that cannot start here never opens a game
-    if (D.busy) D.busy = null; l.spot = 'any'; l.label = 'Walk about'; l.state = 'due'; D.setPlace(deck, l.room); const r = g.startJob(l); out.plain = { ok: r.ok, game: !!r.game, active: J.active, busy: D.busy?.loop === l };
-    if (D.busy) D.busy = null; l.spot = 'console'; l.state = 'due'; D.setPlace(deck, 'nowhere'); const r2 = g.startJob(l); out.away = { ok: r2.ok, active: J.active };
+    if (D.busy) D.busy = null; l.spot = 'any'; l.label = 'Walk about'; l.state = 'due'; D.setPlace(deck, l.room); const r = g.startJob(l, { console: true }); out.plain = { ok: r.ok, game: !!r.game, active: J.active, busy: D.busy?.loop === l };
+    if (D.busy) D.busy = null; l.spot = 'console'; l.state = 'due'; D.setPlace(deck, 'nowhere'); const r2 = g.startJob(l, { console: true }); out.away = { ok: r2.ok, active: J.active };
     // 10) a phase change (death, lift) while a game is up closes it (cancel), never leaves the layer up
-    D.setPlace(deck, l.room); g.startJob(l); G.phase = 'dying'; J.tick(0.1); out.phase = { active: J.active, stack: G.ui.stack.length }; G.phase = 'play';
+    D.setPlace(deck, l.room); g.startJob(l, { console: true }); G.phase = 'dying'; J.tick(0.1); out.phase = { active: J.active, stack: G.ui.stack.length }; G.phase = 'play';
     return out;
   });
   // 11) every themed kind through startJob: its own card once, win -> proper, fail -> rushed, Esc -> still due; a mission task plays its game too;
@@ -151,13 +186,13 @@ export async function jobgameBrowser(page, fail) {
     CFG.caps = true; CFG.cb = true;
     for (const [kind, label] of Object.entries(LABELS)) {
       const o = out.kinds[kind] = {};
-      due(label); g.startJob(l); o.card = J.phase === 'intro' && /New tool/.test(document.getElementById('jobgame')?.textContent || ''); J.key('Enter'); o.kind = J.game?.kind; o.canvas = !!document.querySelector('#jobgame canvas'); o.btns = document.querySelectorAll('#jobgame [data-k]').length;
+      due(label); g.startJob(l, { console: true }); o.card = J.phase === 'intro' && /New tool/.test(document.getElementById('jobgame')?.textContent || ''); J.key('Enter'); o.kind = J.game?.kind; o.canvas = !!document.querySelector('#jobgame canvas'); o.btns = document.querySelectorAll('#jobgame [data-k]').length;
       J.tick(1 / 30); const w = run('win'); o.win = w?.state; o.q = D.busy?.q; o.closed = !J.active && !G.ui.has('jobgame');
-      due(label); g.startJob(l); o.again = J.phase; const f = run('fail'); o.fail = f?.state; o.fq = D.busy?.q; o.fclosed = !J.active;
-      due(label); g.startJob(l); const b = J.game?.bad(); if (b) J.key(b); o.caption = [...document.querySelectorAll('#caps div')].map(d => d.textContent).slice(-1)[0] || ''; J.cancel(); o.cancel = { state: l.state, busy: !!D.busy, layer: G.ui.has('jobgame') };
+      due(label); g.startJob(l, { console: true }); o.again = J.phase; const f = run('fail'); o.fail = f?.state; o.fq = D.busy?.q; o.fclosed = !J.active;
+      due(label); g.startJob(l, { console: true }); const b = J.game?.bad(); if (b) J.key(b); o.caption = [...document.querySelectorAll('#caps div')].map(d => d.textContent).slice(-1)[0] || ''; J.cancel(); o.cancel = { state: l.state, busy: !!D.busy, layer: G.ui.has('jobgame') };
     }
     // a mission task with a themed game
-    const t = D.tasks[0]; if (t) { if (D.busy) D.busy = null; t.state = 'active'; t.spot = 'biobed'; t.task = 'Counsel the evacuees on arrival'; D.setPlace(deck, t.room); const rt = g.startJob({ ...t, label: t.task }); out.task = { game: !!rt.game, kind: J.game?.kind ?? (J.phase === 'intro' ? 'intro' : null) }; if (J.phase === 'intro') J.key('Enter'); out.task.kind2 = J.game?.kind; run('win'); out.task.state = t.state; out.task.by = t.by; }
+    const t = D.tasks[0]; if (t) { if (D.busy) D.busy = null; t.state = 'active'; t.spot = 'biobed'; t.task = 'Counsel the evacuees on arrival'; D.setPlace(deck, t.room); const rt = g.startJob({ ...t, label: t.task }, { console: true }); out.task = { game: !!rt.game, kind: J.game?.kind ?? (J.phase === 'intro' ? 'intro' : null) }; if (J.phase === 'intro') J.key('Enter'); out.task.kind2 = J.game?.kind; run('win'); out.task.state = t.state; out.task.by = t.by; }
     // rushed: no game, one line
     due(LABELS.vitals); const before = J.active; const rr = D.perform(l.id, 'rushed'); out.rushed = { ok: rr.ok, game: !!J.active || !!before, q: D.busy?.q };
     CFG.caps = false; CFG.cb = false; if (D.busy) D.busy = null;
@@ -190,3 +225,72 @@ export async function jobgameBrowser(page, fail) {
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) { const errs = []; const r = await jobgameTests(m => errs.push(m)); console.log(errs.length ? errs.join('\n') : 'jobgames OK ' + JSON.stringify(r)); process.exit(errs.length ? 1 : 0); }
+
+// ---- browser: the J paths always lead to the job (regression: "when I did J to do the job it didn't direct me to a mini game"), and a work-site
+//      job end to end (walk to each site, item required: draw it at the supply point, do each act, completion -> proper)
+export async function jobsiteBrowser(page, fail) {
+  const { installHelpers } = await import('./test-helpers.mjs'); await installHelpers(page);
+  await page.evaluate(() => { document.exitPointerLock?.(); window.__jgLock2 = __game.G.menus.lock; __game.G.menus.lock = () => null; });
+  const R = await page.evaluate(() => {
+    const g = __game, G = g.G, CFG = g.CFG, P = g.P, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+    g.newRun(); hide(); g.setQuality('low'); G.phase = 'play'; G.hp = G.maxHp = 1e6; CFG.learned = {}; CFG.calm = false; const restore = __T.quiet();
+    const D = g.duty, w = g.world, d = w.d, deck = G.shipDeck + 1; let t = 0; const step = (n = 1) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); } };
+    const inRoom = (r) => { for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const [cx, cz] = w.center(x, y); if (__T.open(cx, cz, 0.3)) return [cx, cz]; } return null; };
+    const goTo = ([x, z], yaw = P.yaw) => { P.x = x; P.z = z; P.vx = P.vz = 0; P.yaw = yaw; };
+    const roomOf = (type) => d.rooms.find(r => r.type === type && inRoom(r));
+    // a room with a console (console job) and another room to start from
+    const cp = d.props.find(p => p.kind === 'console' && d.room[p.ty]?.[p.tx] && roomOf(d.room[p.ty][p.tx])), croom = cp && d.room[cp.ty][cp.tx];
+    const other = d.rooms.find(r => r.type !== croom && inRoom(r)); out.setup = { croom, other: other?.type };
+    // 1) J board, a console job in another room: Properly pins the route, starts nothing, closes the board; arriving at the console opens the game
+    const l = D.loops[0]; if (D.busy) D.busy = null; Object.assign(l, { label: 'Work the ops board', room: croom, spot: 'console', sys: '', state: 'due', dueAt: D.t });
+    goTo(inRoom(other)); step(2);
+    const H = G.hud2; H.openBoard(); const blk = (H._tl = H.timeline()).lanes.flatMap(L => L.blocks).find(b => b.ref.loop === l.id && (b.st === 'due' || b.st === 'overdue' || b.ref.live)); H.pop = blk?.k; H.renderPanel();
+    const btn = document.querySelector('#duty-panel [data-do="q:proper"], [data-do="q:proper"]'); out.btn = { found: !!btn, off: btn?.classList.contains('off'), sub: btn?.querySelector('em')?.textContent };
+    btn?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    out.routed = { go: G.jobGo?.id === l.id, pin: G.nav?.pin?.kind, game: !!g.jobgame.active, board: H.boardOpen, state: l.state, hint: H.hintEl?.textContent || '' }; step(2); out.routed.hint = H.hintEl?.textContent || '';
+    const [sx, sz] = w.center(cp.tx, cp.ty), side = __T.openSideOf(sx, sz, 1.9, 1.3); goTo([side.x, side.z], side.yaw); step(3);
+    out.arrive = { go: !!G.jobGo, game: !!g.jobgame.active, phase: g.jobgame.phase, pin: G.nav?.pin?.kind || null }; g.jobgame.cancel();
+    // 2) the J menu path (Duty menu -> Do a duty or task -> the job -> Do it properly) from another room routes the same way
+    goTo(inRoom(other)); step(2); l.state = 'due'; g.G.menus.c.dutyMenu(); H.choose(H.menuStack.at(-1).opts.findIndex(o => /^Do a duty/.test(o.label)));
+    const li = H.menuStack.at(-1).opts.findIndex(o => o.label === l.label); H.choose(li); H.choose(0); out.menu = { go: G.jobGo?.id === l.id, game: !!g.jobgame.active, open: H.menuOpen };
+    g.G.clearJobGo();
+    // 3) a work-site job: galley clean (mop). Mop off the belt -> a fetch site first. Routed from elsewhere, starts on entering the room.
+    const room = d.rooms.find(r => r.w >= 3 && r.h >= 3 && r.type !== croom && inRoom(r)) || other, type = room.type;
+    if (D.busy) D.busy = null; Object.assign(l, { label: 'Scrub and sanitise the galley', room: type, spot: 'console', sys: '', state: 'due', dueAt: D.t });
+    G.kit.belt = G.kit.belt.filter(b => b.id !== 'mop'); G.kit.hand = -1;
+    const start = d.rooms.find(r => r.type !== type && inRoom(r)); goTo(inRoom(start)); step(2);
+    const rg = g.goJob(l); out.site0 = { routed: !!rg.routed, go: !!G.jobGo, active: g.sites.active };
+    goTo(inRoom(room)); step(3); const S = g.sites, run = S.run;
+    out.site = { active: S.active, type, def: run?.def.id, n: run?.sites.length, fetch: run?.sites[0]?.act === 'fetch', marks: g.scene.children.filter(o => o.userData.worksite != null).length, panel: document.getElementById('wsite')?.classList.contains('on'), pin: G.nav?.pin?.kind, hint: H.hintEl?.textContent || '' };
+    if (run) {
+      // walking up to a site and facing it puts it in reach (no input override)
+      const stand = (s) => { const [cx, cz] = w.center(s.tx, s.ty), o = s.prop ? __T.openSideOf(cx, cz, 1.6, 1.3) : { x: cx + 0.6, z: cz, yaw: Math.atan2(-(cx - cx - 0.6), 0) }; if (o) goTo([o.x, o.z], o.yaw ?? Math.atan2(-(cx - o.x), -(cz - o.z))); };
+      stand(run.sites[1]); step(2); out.reach = { at: S.at, want: 1 };
+      // wrong order: a scrub site before the supply point -> blocked; then the fetch site issues a mop into the hand
+      S.inputOverride = { at: 1, press: true, hold: true, wipe: 2 }; step(1); S.inputOverride = null; out.blocked = run.events.some(e => e.type === 'blocked' && e.why === 'fetch') && run.sites[1].prog === 0;
+      stand(run.sites[0]); step(1); S.inputOverride = { at: 0, press: true }; step(1); S.inputOverride = null; out.fetch = { done: run.sites[0].done, hand: G.kit.inst?.id, pin: G.nav?.pin?.id };
+      // every other site: scrub (hold E + view motion) until clean; hasItem comes from the real hand
+      for (let i = 1; i < run.sites.length; i++) { stand(run.sites[i]); for (let f = 0; f < 30 * 30 && !run.sites[i].done && S.run; f++) { S.inputOverride = { at: i, hold: true, wipe: 2 }; step(1); } }
+      S.inputOverride = null; step(2);
+    }
+    out.done = { active: S.active, run: !!S.run, busy: D.busy?.loop === l, q: D.busy?.q, marks: g.scene.children.filter(o => o.userData.worksite != null).length, panel: document.getElementById('wsite')?.classList.contains('on'), log: S.log.slice(-1)[0] };
+    // 4) a site job with the item on the belt (not in hand): the first E at a site takes it out; phase change cancels, job stays due
+    if (D.busy) D.busy = null; Object.assign(l, { state: 'due', label: 'Re-secure loose pallets' }); G.kit.hand = -1; if (!G.kit.belt.some(b => b.id === 'cargo_hook')) G.kit.belt[1] = { id: 'cargo_hook', dur: 300, charge: 0, uses: 0, broken: false };
+    goTo(inRoom(room)); step(1); const r4 = g.startJob(l); const run4 = S.run; out.belt = { ok: r4.ok, fetch: run4?.sites[0]?.act === 'fetch' };
+    if (run4) { S.inputOverride = { at: 0, press: true, hold: true }; step(1); S.inputOverride = null; out.belt.hand = G.kit.inst?.id; G.phase = 'dying'; step(1); G.phase = 'play'; out.belt.cancel = { active: S.active, state: l.state, marks: g.scene.children.filter(o => o.userData.worksite != null).length }; }
+    restore(); if (D.busy) D.busy = null; return out;
+  });
+  await page.evaluate(() => { __game.G.menus.lock = window.__jgLock2; });
+  console.log('jobsites:', JSON.stringify(R));
+  const chk = (c, m) => { if (!c) fail('jobsites browser: ' + m + ' ' + JSON.stringify(R)); };
+  chk(R.btn.found && !R.btn.off && /route/.test(R.btn.sub || ''), 'board: Properly is live from another room and says it will route');
+  chk(R.routed.go && R.routed.pin === 'job' && !R.routed.game && !R.routed.board && /starts when you get there/.test(R.routed.hint), 'J board Properly from another room: route pinned, hint shown, no game yet, board closed');
+  chk(!R.arrive.go && R.arrive.game && R.arrive.pin !== 'job', 'arriving at the station opens the mini-game by itself and clears the pin');
+  chk(R.menu.go && !R.menu.game && !R.menu.open, 'J menu "Do it properly" from another room routes too');
+  chk(R.site0.routed && R.site0.go && !R.site0.active, 'site job from elsewhere: routed, not started');
+  chk(R.site.active && R.site.def === 'clean' && R.site.fetch && R.site.n >= 4 && R.site.marks === R.site.n && R.site.panel && R.site.pin === 'site', 'entering the room starts the work sites: markers, checklist, fetch site (no mop), next site pinned');
+  chk(R.reach.at === R.reach.want, 'walking up to a site and facing it puts it in reach');
+  chk(R.blocked && R.fetch.done && R.fetch.hand === 'mop', 'supply point first; it issues a mop into the hand');
+  chk(!R.done.active && !R.done.run && R.done.busy && R.done.q === 'proper' && R.done.marks === 0 && !R.done.panel, 'every site scrubbed: the job is done properly; markers and checklist gone');
+  chk(R.belt.ok && !R.belt.fetch && R.belt.hand === 'cargo_hook' && !R.belt.cancel.active && R.belt.cancel.state === 'due' && R.belt.cancel.marks === 0, 'item on the belt: first E takes it out; a phase change cancels, the job stays due');
+}

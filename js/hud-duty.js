@@ -240,12 +240,12 @@ export class DutyHUD {
       if (['done', 'rushed', 'faked', 'skipped', 'missed'].includes(st) && b.ref.entry != null) body = `<div class="lbl">Report to the bridge</div><div class="row">${q('rep1', 'report', 'Honest', 'trust +')}${st !== 'done' ? q('rep0', 'fake', '"All fine"', 'risky') : ''}</div>`;
       else if (st === 'delegated') { const j = D.jobs.find(x => x.delegateOf === l.id); body = `<div class="lbl">${j ? esc(j.person.short) + ' has this' : 'Delegated'}</div><div class="row">${q('hail', 'hail', 'Check in', j ? j.person.short : '')}</div>`; }
       else if (b.ref.live || st === 'due' || st === 'overdue' || st === 'doing') {
-        body = `<div class="lbl">How will you do it?${here ? '' : ` <span style="color:#ff7a6b">· go to ${esc(l.room)}</span>`}</div><div class="row">${QUALITIES.map(qq => q('q:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake', skipped: 'skip' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake log', skipped: 'Skip' }[qq], qq === 'skipped' ? '0 s' : qq === 'faked' ? 'risk' : Math.round(secs(qq)) + ' s', !here || st === 'doing')).join('')}</div>`;
+        body = `<div class="lbl">How will you do it?${here ? '' : ` <span style="color:#ff7a6b">· go to ${esc(l.room)}</span>`}</div><div class="row">${QUALITIES.map(qq => q('q:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake', skipped: 'skip' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake log', skipped: 'Skip' }[qq], qq === 'skipped' ? '0 s' : qq === 'faked' ? 'risk' : qq === 'proper' && !here ? 'route' : Math.round(secs(qq)) + ' s', (!here && qq !== 'proper') || st === 'doing')).join('')}</div>`;
         const subs = D.subs().slice(0, 6); if (subs.length && st !== 'doing') body += `<div class="lbl">Or delegate to</div><div class="row">${subs.map(p => `<button class="act" data-do="deleg:${p.id}" data-k="${esc(k)}">${PT ? PT.img(p, 26, 'ap') : ico('person')}${esc(p.family || p.short)}<em>${Math.round(D.trust(p) * 100)}%</em></button>`).join('')}</div>`;
       } else body = `<div class="lbl">Later · in ${fmtLeft(b.a - D.t)}</div><div class="row">${q('pin', 'pin', 'Where', l.room)}</div>`;
     } else if (b.ref.task) {
       const t = D.tasks.find(x => x.id === b.ref.task); title = t.task; small = `${t.room} · ${b.st}`;
-      if (t.state === 'active') body = `<div class="lbl">Do the task${t.room === room ? '' : ` <span style="color:#ff7a6b">· go to ${esc(t.room)}</span>`}</div><div class="row">${['proper', 'rushed', 'faked'].map(qq => q('t:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake' }[qq], '', t.room !== room)).join('')}</div>`;
+      if (t.state === 'active') body = `<div class="lbl">Do the task${t.room === room ? '' : ` <span style="color:#ff7a6b">· go to ${esc(t.room)}</span>`}</div><div class="row">${['proper', 'rushed', 'faked'].map(qq => q('t:' + qq, { proper: 'proper', rushed: 'rush', faked: 'fake' }[qq], { proper: 'Properly', rushed: 'Rush', faked: 'Fake' }[qq], qq === 'proper' && t.room !== room ? 'route' : '', t.room !== room && qq !== 'proper')).join('')}</div>`;
       else body = `<div class="lbl">${t.state === 'pending' ? 'Opens in ' + fmtLeft(t.at_s - D.t) : t.state}</div>`;
     } else if (b.ref.person != null) { const p = D.roster.people.find(x => x.id === b.ref.person); title = b.ref.repair ? b.label : p?.short || title; body = `<div class="row">${b.ref.repair ? '' : q('order:' + b.ref.person, 'order', 'Order duty', '')}${q('hailp:' + b.ref.person, 'hail', 'Hail', p?.short || '')}</div>`; }
     const pop = document.createElement('div'); pop.className = 'dp-pop'; pop.innerHTML = `<h4>${esc(title)}</h4><small>${esc(small)} <button class="x" data-popx>close</button></small>${body}`;
@@ -265,15 +265,15 @@ export class DutyHUD {
   act(d, k) {
     const D = this.duty, f = this.findBlock(k), say = (t, c = 'warn') => UIHUB.menus?.say?.(t, c); if (!D) return;
     const lid = f?.b.ref.loop, tid = f?.b.ref.task, who = (id) => D.roster.people.find(x => x.id === id);
-    const job = UIHUB.menus?.G?.startJob;   // "properly" goes through the job mini-game (js/main.js startJob, js/jobgame-ui.js)
-    if ((d === 'q:proper' && lid) || (d === 't:proper' && tid)) { const it = lid ? D.loop(lid) : D.tasks.find(t => t.id === tid); if (job && it) { const c = D.check(it.id); if (!c.ok) { say(c.why); return; } this.closeBoard(); const r = job(it); if (!r.ok) say(r.why); return; } }
+    const go = UIHUB.menus?.G?.goJob;   // "properly": start the job here, or pin the route to it and start it on arrival (js/main.js goJob: console game / work sites)
+    if ((d === 'q:proper' && lid) || (d === 't:proper' && tid)) { const it = lid ? D.loop(lid) : D.tasks.find(t => t.id === tid); if (go && it) { const r = go(it); if (!r.ok) { say(r.why); return; } this.closeBoard(); return; } }
     if (d.startsWith('q:') && lid) { const r = D.perform(lid, d.slice(2)); if (!r.ok) say(r.why); else { this.closeBoard(); return; } }
     else if (d.startsWith('t:') && tid) { const r = D.doTask(tid, d.slice(2)); if (!r.ok) say(r.why); else say(`Task ${d.slice(2)}: ${D.tasks.find(t => t.id === tid)?.task}`, 'good'); }
     else if (d.startsWith('deleg:') && lid) { const p = who(+d.slice(6)); const r = p ? D.delegate(p, lid) : { ok: false, why: 'no one' }; if (!r.ok && !r.refused) say(r.why); }
     else if ((d === 'rep1' || d === 'rep0') && lid) D.report(lid, d === 'rep1');
     else if (d.startsWith('order:')) { const p = who(+d.slice(6)); const r = p ? D.order(p, null) : null; if (r && !r.ok && !r.refused) say(r.why); }
     else if (d.startsWith('hailp:') || d === 'hail') { const p = who(d.startsWith('hailp:') ? +d.slice(6) : D.jobs.find(x => x.delegateOf === lid)?.person.id); if (p) UIHUB.menus?.hail?.(p); }
-    else if (d === 'pin' && lid) say(`Do this in the ${D.loop(lid).room}.`, 'comp');
+    else if (d === 'pin' && lid) { const l = D.loop(lid), N = UIHUB.menus?.G?.nav; if (N?.setPin) N.setPin({ kind: 'room', id: 'room:' + l.room, type: l.room, room: l.room, label: l.label, icon: 'do' }); else say(`Do this in the ${l.room}.`, 'comp'); }
     this.pop = null; this._tl = null; if (this.boardOpen) this.renderPanel();
   }
   showEnd(html, actions) {
