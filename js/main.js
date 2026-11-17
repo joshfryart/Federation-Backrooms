@@ -1436,6 +1436,7 @@ function step(dt, t) {
   else if (npc) prompt = npc.kind === 'body' ? '[E] Search body' : npc.kind === 'emh' ? '[E] Speak to hologram' : `[E] Talk to ${npc.mesh.userData.rank || 'crewman'}`;
   else if (nearestSite()) prompt = `[E] Search ${fixtureName(nearestSite().kind)}`;
   else if (Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) prompt = NOM() ? (G.fx.liftLocked ? 'Tubelift locked out — lift controller offline' : inCarTile() ? '[E] Deck selection' : '') : G.chips >= world.d.chips.length ? '[E] Board tubelift' : 'Tubelift offline';
+  if (NOM() && G.sites?.wants()) prompt = G.sites.hint();   // at a work site: E works the site (js/worksite-ui.js), not the clutter beside it
   if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
   if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
   if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (lp && lp.kind === 'ship_ladder') prompt = `[E] Climb down to Deck ${G.shipDeck + 2 <= G.ship.decks ? G.shipDeck + 2 : G.shipDeck} · [Shift+E] up`; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }

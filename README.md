@@ -27,27 +27,40 @@ they walk between stations, ride the tubelifts, eat, work and gather in groups.
 
 **Do your job.** Your *duty rounds* come due at stations around the ship; mission tasks must be finished by the
 end of the shift. Do each one **properly** (slower, no debt) or **rushed** (faster, quietly adds duty debt).
-Press **J** for the duty board.
+Press **J** for the duty board and pick **Properly** on any job: if you are already there it starts, otherwise
+the route is pinned (minimap ribbon, floor chevrons, compass, lift panel) and the job opens by itself when you
+arrive.
 
-**Learn the tools.** Doing a job properly plays a short mini-game about *that* job, and the first time you meet
-each tool an instruction card tells you how it works. A sickbay ward round has you read four patient monitors and
-pick the bed that is out of range; you also dose hyposprays, check a sterile tray against its layout card, count
-controlled meds against the manifest and choose the right words in a counselling session. Engineering routes
-power between busses and bench-tests parts. Science sweeps for a signal and classifies contacts. Security checks
-badges at the door and audits the door log. The galley pulls pans off the range at the right moment and rotates
-stock, hydroponics doses the nutrient feeds, cargo matches crate codes and keeps the deck in trim, and the bridge
-plots a course through a hazard field and decodes incoming signals. Junctions still need rewiring and coolant
-valves still need bleeding. There are 22 games across the ship's 700-odd duty rounds and mission tasks, and none
-covers more than an eighth of them. Each round is seeded, so no two are quite the same. A clean run is faster; a
-fumbled one still gets done and is logged as rushed. Rushing is always one key and never a game. Esc always
-cancels, and the job stays due. Every game is keyboard-driven and honours calm visuals, sound captions and the
-colour-blind palette.
+**Work with your hands.** Physical jobs happen in the room. A ward round marks the beds in order and you scan
+each patient with the medical tricorder, sweeping until the reading peaks. A medication round has you charge the
+hypospray at each bed and let go inside the dose band. You mop the grime patches in the galley, wipe down the
+surgical bay, tap stock into the dispensers, feed and harvest the grow beds, ratchet cargo straps to tension,
+tally crate stacks on a PADD, swab sample points in the lab, inspect hardware with the engineering tricorder,
+torque fittings on a repair round, and walk patrols, hatch rounds and shuttle walk-rounds with a lamp. Each job
+needs the right item in your hand: if it's on your belt the first **E** takes it out, and if you don't carry one
+the room's supply point is marked first. Every site gets a glowing ring, a beam and a numbered tag with a
+progress ring, the next one is pinned, and an LCARS checklist on the left shows the sites, the item and a meter
+for the current action.
 
-| First-use instructions | The mini-game |
+**Learn the consoles.** Desk and console work plays a short mini-game about *that* job, in the ship's own
+console style (elbow frame, station pill and ship time, a rail of status blocks, a segmented timer), and the first
+time you meet each tool an instruction card in the same frame tells you how it works. Sickbay reads patient
+monitors, counts controlled meds and runs counselling sessions; engineering routes power and bench-tests parts;
+science sweeps for a signal and classifies contacts; security checks badges and audits the door log; the galley
+works the range and rotates stock; cargo matches crate codes and keeps the deck in trim; the bridge plots a course
+through a hazard field and decodes signals. Across the ship's 700-odd rounds and tasks there are 16 kinds of work
+site and 22 console games, and no single kind covers more than an eighth of the jobs. Each round is seeded, so no
+two are quite the same. A clean job is faster; a fumbled one still gets done and is logged as rushed. Rushing is
+always one key and never a game. Esc (or **J → Stop working**) cancels, and the job stays due. Everything is
+keyboard-driven and honours calm visuals, sound captions and the colour-blind palette.
+
+| Choosing a job from J pins the route | Work sites: the ward round |
 |---|---|
-| ![Instruction card for the station console](docs/screenshots/09-job-instructions.png) | ![Console sequence mini-game](docs/screenshots/10-job-minigame.png) |
+| ![J board Properly from another room: the route is pinned and the job starts on arrival](docs/screenshots/15-job-route.png) | ![Ward round work sites in sickbay: numbered bed markers, beams, the LCARS checklist](docs/screenshots/14-job-worksites.png) |
 
-![Vitals triage on a sickbay ward round: four patient monitors, pick the bed that is out of range](docs/screenshots/11-job-vitals.png)
+| First-use instructions | A console mini-game |
+|---|---|
+| ![LCARS instruction card for the biobed monitors](docs/screenshots/12-job-card-lcars.png) | ![Power routing on the LCARS console frame](docs/screenshots/13-job-console-lcars.png) |
 
 **Talk to people.** Press **E** on a crew member and the camera moves in for a close-up conversation while the
 world pauses. Greet, ask about duty, small talk, ask for help, give orders (rank permitting), swap items, ask
