@@ -122,7 +122,7 @@ function screenSplat(n, persist = false) {
 }
 function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e => e.remove()); }
 
-const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high', calm: false }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
+const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high', calm: false, caps: false, cb: false }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
 function setQuality(q) {
@@ -840,7 +840,7 @@ function newRun() {
   G.liftRnd = mulberry32((G.runSeed ^ 0x11f7a3) >>> 0);
   G.shipState = new ShipState(G.ship, G.runSeed); G.shipState.auto = false; if (NOM()) for (const sy of SYSTEMS) G.shipState.repair(sy.id); /* Systems Nominal: nothing is broken when you start */ G.fx = G.shipState.effects(); G.shipState.on(onShipEvent);
   G.director = NOM() ? null : new Director();   // no pacing pressure in Systems Nominal
-  G.comms?.destroy(); G.comms = NOM() ? createShipComms({ roster: G.roster, shipState: G.shipState, seed: G.runSeed, mission: G.mission, player: G.player, sound: { alertTone: (p) => { if (G.fx?.alert !== false) sound.alertTone(p); } }, G, onLighting: (on) => { if (world && (!on || G.fx?.alert !== false)) world.setAlert(on); }, urlAlert: new URLSearchParams(location.search).get('alert') }) : null;   // bridge comms + alerts: Systems Nominal only
+  G.comms?.destroy(); G.comms = NOM() ? createShipComms({ roster: G.roster, shipState: G.shipState, seed: G.runSeed, mission: G.mission, player: G.player, sound: { alertTone: (p) => { caption('alarm klaxon'); if (G.fx?.alert !== false) sound.alertTone(p); } }, G, onLighting: (on) => { if (world && (!on || G.fx?.alert !== false)) world.setAlert(on); }, urlAlert: new URLSearchParams(location.search).get('alert') }) : null;   // bridge comms + alerts: Systems Nominal only
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
@@ -913,8 +913,16 @@ function die(by, line = null) {
 }
 
 // callbacks used by Gorn AI
-G.onEnemyStep = (g, d) => { if (d < 30) { sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
-G.onEnemySpotted = (g) => { flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
+G.onEnemyStep = (g, d) => { if (d < 30) { if (d < 20) caption('footsteps', g.x, g.z); sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
+// sound captions (accessibility): a short bracketed line with a direction arrow relative to where you face; throttled per text
+let capLast = {};
+function caption(text, x, z) {
+  if (!CFG.caps) return; const now = performance.now(); if (now - (capLast[text] || 0) < 1800) return; capLast[text] = now;
+  let dir = ''; if (x !== undefined) { const a = Math.atan2(-(x - P.x), -(z - P.z)) - P.yaw, d = Math.atan2(Math.sin(a), Math.cos(a)); dir = Math.abs(d) < 0.6 ? ' ↑' : Math.abs(d) > 2.5 ? ' ↓' : d > 0 ? ' ←' : ' →'; if (Math.hypot(x - P.x, z - P.z) > 18) dir += ' (far)'; }
+  const el = $('caps'); if (!el) return; const li = document.createElement('div'); li.textContent = `[${text}]${dir}`; el.appendChild(li); while (el.children.length > 3) el.firstChild.remove(); setTimeout(() => li.remove(), 2800);
+}
+G.caption = caption;
+G.onEnemySpotted = (g) => { caption(g.name + ' roars', g.x, g.z); flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
 G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
 G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
 G.isClung = () => P.clung > 0;
@@ -971,6 +979,9 @@ function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
 $('qsel').onchange = (e) => setQuality(e.target.value);
+{ const cp = $('capson'), cb = $('cbmode'); document.body.classList.toggle('cb', !!CFG.cb);
+  if (cp) { cp.checked = !!CFG.caps; cp.onchange = (e) => { CFG.caps = e.target.checked; saveCfg(); }; }
+  if (cb) { cb.checked = !!CFG.cb; cb.onchange = (e) => { CFG.cb = e.target.checked; document.body.classList.toggle('cb', CFG.cb); saveCfg(); }; } }
 post.setCalm(CFG.calm);
 { const cl = $('calm'); if (cl) { cl.checked = !!CFG.calm; cl.onchange = (e) => { CFG.calm = e.target.checked; post.setCalm?.(CFG.calm); saveCfg(); }; } }
 $('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(G.player, 'Crew voice check.'); };
@@ -1689,7 +1700,7 @@ function beginTurn(e) {
   G.director?.bump(0.2, 'someone turned');
   e.turning = 2.6; e.used = true; G.mad.pending = e; const H = e.mesh.userData.human, d = Math.hypot(e.x - P.x, e.z - P.z);
   if (H) { H.standing = false; H.play('hit_head', { loop: false, fade: 0.1 }); H.face({ JawDrop: 1, NoseWrinkler: 1, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 1 }); }
-  sound.shriek(Math.max(0.06, 0.35 - d * 0.008)); if (d < 9) P.shake = Math.max(P.shake, 0.25);
+  sound.shriek(Math.max(0.06, 0.35 - d * 0.008)); caption('scream', e.x, e.z); if (d < 9) P.shake = Math.max(P.shake, 0.25);
   const who = `${e.person.short}, ${e.person.title}`;
   if (d < 14 && world.los(e.x, e.z, P.x, P.z)) G.say(`${who} clutches their head and starts to laugh…`, 'warn');
   else if (G.fx.comms < 2) G.say(garble(`Computer: Medical emergency — ${who}. Crew are advised to keep clear.`), 'warn');
