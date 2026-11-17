@@ -158,7 +158,7 @@ G.say = function (msg, cls = '') {
 };
 function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('show', s.id === id); }
 function hideScreens() { for (const s of document.querySelectorAll('.screen')) s.classList.remove('show'); }
-function flash(color = '#c00', op = 0.6) { if (CFG.calm) op *= 0.3; const f = $('flash'); f.style.background = color; f.style.transition = 'none'; f.style.opacity = op; requestAnimationFrame(() => { f.style.transition = 'opacity .5s'; f.style.opacity = 0; }); }
+function flash(color = '#c00', op = 0.6) { if (CFG.calm) op *= 0.3; if (CFG.cb && /^#([4-9a-f])[0-3]?[0-3]?/i.test(color) && color !== '#fff') color = '#a60'; /* colour-blind palette: red damage flashes become amber */ const f = $('flash'); f.style.background = color; f.style.transition = 'none'; f.style.opacity = op; requestAnimationFrame(() => { f.style.transition = 'opacity .5s'; f.style.opacity = 0; }); }
 function fade(to, ms = 700) { const f = $('fade'); f.style.transition = `opacity ${ms}ms`; f.style.opacity = to; }
 
 function updateHUD() {
