@@ -55,7 +55,7 @@ try {
     if (want('duty')) {
       await p.evaluate(() => { window.__game.G.hud2.openBoard(); });
       await p.waitForTimeout(500);
-      await p.evaluate(() => { const b = document.querySelector('#bd-panel .blk'); b?.click(); });
+      await p.click('#bd-panel .blk >> nth=-1');   // the board opens a block's popover on mousedown (a real click), not on element.click()
       await p.waitForTimeout(400); const a = await p.$('.dp-pop .act:not(.off)'); if (a) await a.hover();
       await shot(p, '16-duty-board-buttons.png');
       await p.keyboard.press('Escape'); await p.evaluate(() => { const H = window.__game.G.hud2; H.closeBoard?.(); });
