@@ -1036,6 +1036,8 @@ function enterHide(lp) { P.hidden = { tx: lp.tx, ty: lp.ty }; P.vx = P.vz = 0; G
 function exitHide() { if (!P.hidden) return; P.hidden = null; const o = $('hidefx'); if (o) o.style.opacity = 0; }
 function interact() {
   if (P.hidden) { exitHide(); return; }
+  if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(), top = lp && lp.kind === 'catwalk' ? world.topAt(lp.tx, lp.ty) : 0;   // E at a catwalk module: climb the ladder rungs up onto its deck (a scripted 1.8 s mantle; step off an edge to come down)
+    if (top > 1 && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.4) { P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: (lp.tx + 0.5) * 2.5, z: (lp.ty + 0.5) * 2.5, top, dx: 0, dz: 0, t: 0, dur: 1.8, exit: 0, fast: false }; G.say('You climb onto the catwalk.', 'good'); return; } }
   if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && (P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft)) { enterHide(lp); return; } }
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
