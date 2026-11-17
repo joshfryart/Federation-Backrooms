@@ -22,6 +22,8 @@ import { mulberry32 } from './data.js';
 import { hash01, hash } from './clock.js';
 import { gameFor, rushNote, learnedStore } from './jobgames.js';   // job mini-games (chosen by what the job is) + first-use instruction cards (js/jobgame-ui.js)
 import { JobGameUI } from './jobgame-ui.js';
+import { jobFor, siteRushNote } from './worksites.js';   // physical jobs: work sites in the room (beds, shelves, grime patches, straps…) with the item in hand
+import { WorkSites } from './worksite-ui.js';
 import { liftLine, loadPersonas, bark as voiceBark, habitCue, TAG_EFFECTS } from './voice.js';
 import { speak, cue as voiceCue, attach as attachSpeech, getMode as voiceMode, setMode as setVoiceMode, MODES as VOICE_MODES } from './speech.js';
 import { movePlayer, resetMover, startGrapple, MOVE } from './move.js';
@@ -615,18 +617,63 @@ G.jobgame = new JobGameUI({ G, CFG, sound, caption: (t) => caption(t), store: le
 // instruction card for that tool; the result sets the job's quality and time (win: proper and faster; fail: rushed, still done). Esc cancels:
 // nothing happens and the job stays due. No tool at the spot, no UI (headless node), or the job cannot start here: the old direct path.
 G.jobSeq = 0;
-function startJob(it) {
+G.sites = new WorkSites({ THREE, G, P, keys, scene, getWorld: () => world, CFG, sound });   // js/worksite-ui.js: in-room work sites (markers, checklist, item in hand)
+// opts.console: play the station's console game even when the job is physical (tests / debugging)
+function startJob(it, opts = {}) {
   const D = G.duty; if (!D) return { ok: false, why: 'no duty' };
-  const run = (q, o) => it.task ? D.doTask(it.id, q) : D.perform(it.id, q, o);
-  const tool = gameFor({ ...it, label: it.label || it.task }), c = D.check(it.id); if (!c.ok) return c;
+  const run = (q, o) => it.task ? D.doTask(it.id, q) : D.perform(it.id, q, o), label = it.label || it.task;
+  const job = jobFor({ ...it, label }), c = D.check(it.id); if (!c.ok) return c;
+  if (G.sites?.active) return { ok: false, why: `Finish ${G.sites.run.def.name.toLowerCase()} first ([J] stop working)` };
+  if (job?.type === 'sites' && !opts.console && world && G.ui) {
+    const seed = hash('worksite', G.runSeed || 1, it.id, G.jobSeq++);
+    const r = G.sites.start(it, job.def, { seed, apply: (res) => {
+      const rr = run(res.quality, { timeMul: res.timeMul, game: res }); if (!rr.ok) { G.say(rr.why, 'warn'); return; }
+      G.say(`${res.label}: ${label}`, res.quality === 'proper' ? 'good' : 'warn'); },
+      cancelled: () => G.say(`Stopped — ${label} is still due.`) });
+    return r.ok ? { ok: true, sites: true } : r;
+  }
+  const tool = job?.type === 'game' ? job.tool : gameFor({ ...it, label });
   if (!tool || !G.jobgame || !G.ui || G.jobgame.active) return run('proper');
   const seed = hash('jobgame', G.runSeed || 1, it.id, G.jobSeq++);
-  G.jobgame.start({ tool, seed, label: it.label || it.task, apply: (res) => {
+  G.jobgame.start({ tool, seed, label, station: stationName(it), apply: (res) => {
     const r = run(res.quality, { timeMul: res.timeMul, game: res }); if (!r.ok) { G.say(r.why, 'warn'); return; }
-    G.say(`${res.label}: ${it.label || it.task}${res.quality === 'proper' ? ` (${res.perfect ? 'half' : '40 % less'} time)` : ''}`, res.quality === 'proper' ? 'good' : 'warn'); },
-    cancelled: () => G.say(`Cancelled — ${it.label || it.task} is still due.`) });
+    G.say(`${res.label}: ${label}${res.quality === 'proper' ? ` (${res.perfect ? 'half' : '40 % less'} time)` : ''}`, res.quality === 'proper' ? 'good' : 'warn'); },
+    cancelled: () => G.say(`Cancelled — ${label} is still due.`) });
   return { ok: true, game: true };
 }
+const SPOT_NAME = { console: 'console', desk: 'desk terminal', captain_chair: 'command chair', 'command chair': 'command chair', holocube: 'holo-emitter', pad: 'transporter pad', lift: 'lift panel', junction: 'junction box', door: 'door panel', corridor: 'relay box', warpcore: 'core', replicator: 'replicator', stove: 'range', sink: 'sink', workbench: 'workbench', biobed: 'biobeds', locker: 'stores locker', tree: 'grow beds', table: 'tables', counter: 'counter' };
+function stationName(it) { return `${ROOMS[it.room]?.label || it.room} · ${SPOT_NAME[it.spot] || it.spot || 'station'}`; }
+// ---- "Do it properly" from anywhere (J board, J menu, hold-J wheel): start now when you are at the job, otherwise pin the route there and
+// start it when you arrive (G.jobGo; checked in nomTick). One pending job at a time; a new choice replaces it.
+const NO_STATION = ['door', 'corridor', 'lift', 'any', 'post'];
+function nearSpot(spot, room, r = 3.6) { if (!world || !spot || NO_STATION.includes(spot)) return true; const ps = world.d.props.filter(p => p.kind === spot && world.d.room[p.ty]?.[p.tx] === room); if (!ps.length) return true; return ps.some(p => { const [x, z] = world.center(p.tx, p.ty); return Math.hypot(x - P.x, z - P.z) < r; }); }
+function atJob(it) { const D = G.duty; if (!D || D.place.room !== it.room) return false; const j = jobFor({ ...it, label: it.label || it.task }); return j?.type === 'sites' || nearSpot(it.spot, it.room); }
+function jobTarget(it) {   // a pin for the job's station on this deck (tile), else the room type (any deck: nav plans lift + walk)
+  const cur = G.shipDeck ?? 0, rooms = world?.d.rooms.filter(r => r.type === it.room) || [];
+  if (rooms.length) { const [ptx, pty] = world.tile(P.x, P.z), r = rooms.sort((a, b) => Math.hypot(a.x + a.w / 2 - ptx, a.y + a.h / 2 - pty) - Math.hypot(b.x + b.w / 2 - ptx, b.y + b.h / 2 - pty))[0];
+    const st = jobFor({ ...it, label: it.label || it.task })?.type !== 'sites' && world.d.props.find(p => p.kind === it.spot && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h);
+    return { deck: cur, tx: st ? st.tx : r.x + (r.w >> 1), ty: st ? st.ty : r.y + (r.h >> 1), type: it.room }; }
+  return { type: it.room };
+}
+function findJob(g) { const D = G.duty; return g.task ? D?.tasks.find(t => t.id === g.id) : D?.loop(g.id); }
+function goJob(it) {
+  const D = G.duty; if (!D || !it) return { ok: false, why: 'no duty' }; const label = it.label || it.task, c = D.check(it.id);
+  if (!c.ok && !/^(Do this in|Go to) /.test(c.why || '')) return c;   // busy / not due: say why
+  if (G.sites?.active) return { ok: false, why: `Finish ${G.sites.run.def.name.toLowerCase()} first ([J] stop working)` };
+  if (c.ok && atJob(it)) { clearJobGo(); return startJob(it); }
+  const j = jobFor({ ...it, label }), where = j?.type === 'sites' ? (ROOMS[it.room]?.label || it.room) : stationName(it);
+  G.jobGo = { id: it.id, task: !!it.task, label, room: it.room, spot: it.spot, where, at: G.time };
+  G.nav?.setPin?.({ kind: 'job', id: 'job:' + it.id, label, icon: 'do', ...jobTarget(it) }, false);
+  G.say(`${label}: head to the ${where} — route pinned. It starts when you get there.`, 'comp'); sound.tone?.(520, 0.07, 'sine', 0.05);
+  return { ok: true, routed: true };
+}
+function clearJobGo() { if (!G.jobGo) return; G.jobGo = null; const N = G.nav; if (N?.pin?.kind === 'job') { N.setPin(null, false); N.pins.cleared = false; } }
+function jobGoTick() {
+  const g = G.jobGo; if (!g || G.phase !== 'play' || G.jobgame?.active || G.sites?.active) return; const it = findJob(g);
+  if (!it || (g.task ? it.state !== 'active' : !['due', 'idle'].includes(it.state))) { clearJobGo(); return; }
+  if (atJob(it)) { clearJobGo(); const r = startJob(it); if (!r.ok) G.say(r.why, 'warn'); }
+}
+G.goJob = goJob; G.clearJobGo = clearJobGo;
 G.startJob = startJob;
 G.combat = new Melee();   // js/grapple.js (uses the initHaul context above)
 G.talk = new Talk({ G, P, THREE, NOM, camera, scene, renderer, CFG, vmScene, get post() { return post; }, get world() { return world; }, get ents() { return ents; }, speak, commsData, duties: () => DUTIES, voiceBark, canTalk: () => (G.phases?.hazard?.(G.shipDeck + 1, { zone: G.duty?.place.room === 'engineering' ? 'engineering' : '' }) ? 'Not now!' : null) });   // js/talk.js (after Menus: its key listener runs after the router)
@@ -726,7 +773,7 @@ function setupDuty() {
   G.duty = new Duty({ player: G.player, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say, seed: G.runSeed, mission: G.mission, pace: G.pace });
   G.duty.atJob = orderAt;   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
   G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1', pace: G.pace });
-  setupRepair(); G.pin = null; G.intro = null; G.introDone = false; G.attn = {}; G.barkAt = G.nodAt = undefined;
+  setupRepair(); G.pin = null; G.jobGo = null; G.sites?.cancel('new run'); G.intro = null; G.introDone = false; G.attn = {}; G.barkAt = G.nodAt = undefined;
   G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel.`, 'warn'); });
   G.duty.on((ev) => {
     const g = G.say;
@@ -767,19 +814,21 @@ function nomTick(dt) {
   G.sim.tick(dt); alertStations(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt); G.repair?.tick(dt); repairBodies(dt);
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
-  D.tick(dt); G.hud2?.update(dt); ambientBarks(dt);
+  D.tick(dt); G.hud2?.update(dt); ambientBarks(dt); G.sites?.tick(dt); jobGoTick();
   if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }
-  if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(D.busy ? `Working: ${D.busy.loop.label}…` : (G.intro && (!due || due.task === G.intro.task)) ? introHint(dt) : (dutyHere() ? `[E] ${(dutyHere().label || dutyHere().task)}   ·   [J] rush / skip…` : '')); }
+  if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(G.sites?.active ? G.sites.hint() : D.busy ? `Working: ${D.busy.loop.label}…` : G.jobGo ? `✦ ${G.jobGo.label}: go to the ${G.jobGo.where} — it starts when you get there · [G] guide` : (G.intro && (!due || due.task === G.intro.task)) ? introHint(dt) : (dutyHere() ? `[E] ${(dutyHere().label || dutyHere().task)}   ·   [J] rush / skip…` : '')); }
 }
 // the whole world pauses while any menu / wheel / panel / map / terminal / conversation is open (G.menuPause is set by the menus agent)
 function worldPaused() { return !!(G.menuPause || G.paused); }
 G.worldPaused = worldPaused;
 function dutyMenu() {
   const D = G.duty, H = G.hud2; if (!D || !H) return; const room = D.place.room, say = G.say;
-  const doIt = (it) => H.openMenu(it.label || it.task, QUALITIES.map(q => ({ label: Q_LABEL[q], note: q === 'proper' ? `${Math.round((it.dur || 2) * 3.3 * 1.2)}s` : '', run: () => { if (q === 'proper') { H.closeMenu?.(); const r = startJob(it); if (!r.ok) say(r.why, 'warn'); return; } const r = it.task ? D.doTask(it.id, q === 'skipped' ? 'skipped' : q) : D.perform(it.id, q); if (!r.ok) say(r.why, 'warn'); else if (q === 'rushed') say(`Rushed: ${rushNote(gameFor({ ...it, label: it.label || it.task }), G.jobSeq++)}`, 'warn'); else if (it.task) say(`Task ${q}: ${it.task}`, 'good'); } })), 'How will you do it?');   /* rushing never plays a game: one key, one line about the corner cut */
+  const doIt = (it) => H.openMenu(it.label || it.task, QUALITIES.map(q => ({ label: Q_LABEL[q], note: q === 'proper' ? `${Math.round((it.dur || 2) * 3.3 * 1.2)}s` : '', run: () => { if (q === 'proper') { H.closeMenu?.(); const r = goJob(it); if (!r.ok) say(r.why, 'warn'); return; } const r = it.task ? D.doTask(it.id, q === 'skipped' ? 'skipped' : q) : D.perform(it.id, q); if (!r.ok) say(r.why, 'warn'); else if (q === 'rushed') { const j = jobFor({ ...it, label: it.label || it.task }); say(`Rushed: ${j?.type === 'sites' ? siteRushNote(j.def, G.jobSeq++) : rushNote(j?.tool, G.jobSeq++)}`, 'warn'); } else if (it.task) say(`Task ${q}: ${it.task}`, 'good'); } })), 'How will you do it?');   /* rushing never plays a game: one key, one line about the corner cut */
   const here = [...D.loops.filter(l => l.state === 'due' || l.state === 'idle').map(l => ({ ...l, off: l.room !== room || l.state === 'delegated', note: l.room !== room ? `go to ${l.room}` : l.state === 'due' ? 'due' : 'not yet' })), ...D.tasks.filter(t => t.state === 'active').map(t => ({ ...t, label: t.task, off: t.room !== room, note: t.room !== room ? `go to ${t.room}` : 'now' }))];
   const top = [
-    { label: 'Do a duty or task', run: () => H.openMenu('Duty / tasks', here.map(it => ({ label: it.label, note: it.note, off: it.off && false, run: () => { if (it.room !== room) say(`Do this in the ${it.room}.`, 'warn'); else doIt(it); } })).concat(here.length ? [] : [{ label: 'Nothing to do right now', off: true }]), 'digit to choose'), keepOpen: true },
+    ...(G.sites?.active ? [{ label: `Stop working: ${G.sites.run.def.name}`, note: 'job stays due', run: () => G.sites.cancel('stopped') }] : []),
+    ...(G.jobGo ? [{ label: `Cancel the route to ${G.jobGo.label}`, run: () => { clearJobGo(); say('Route cleared.'); } }] : []),
+    { label: 'Do a duty or task', run: () => H.openMenu('Duty / tasks', here.map(it => ({ label: it.label, note: it.note, off: it.off && false, run: () => doIt(it) })).concat(here.length ? [] : [{ label: 'Nothing to do right now', off: true }]), 'digit to choose'), keepOpen: true },
     { label: 'Order a subordinate', run: () => { const subs = D.subs(); H.openMenu('Order whom?', subs.slice(0, 9).map(p => ({ label: `${p.short} — ${p.title}`, note: `trust ${Math.round(D.trust(p) * 100)}%`, run: () => { const r = D.order(p, null); if (!r.ok && !r.refused) say(r.why, 'warn'); } })).concat(subs.length ? [] : [{ label: 'No one reports to you', off: true }])); }, keepOpen: true },
     { label: 'Delegate a due duty', run: () => { const due = D.loops.filter(l => l.state === 'due'), subs = D.subs(); if (!due.length || !subs.length) { say(!subs.length ? 'No one to delegate to.' : 'Nothing due to delegate.', 'warn'); return; } H.openMenu('Delegate which?', due.map(l => ({ label: l.label, run: () => H.openMenu(`Delegate "${l.label}" to`, D.byDistance(subs, G.plan?.[l.room] ? l.room : null).slice(0, 9).map(({ person: p, eta }) => ({ label: `${p.short} — ${p.title}`, note: `${etaNote(eta)}trust ${Math.round(D.trust(p) * 100)}%`, run: () => { const r = D.delegate(p, l.id); if (!r.ok && !r.refused) say(r.why, 'warn'); } }))), keepOpen: true }))); }, keepOpen: true },
     { label: 'Report to the bridge', run: () => { const done = D.loops.filter(l => l.last); H.openMenu('Report which?', done.flatMap(l => [{ label: `${l.label} — honest`, run: () => D.report(l.id, true) }, ...(l.last !== 'proper' ? [{ label: `${l.label} — "all fine"`, run: () => D.report(l.id, false) }] : [])]).concat(done.length ? [] : [{ label: 'Nothing to report yet', off: true }])); }, keepOpen: true },
@@ -1116,7 +1165,7 @@ function fire() {
 // the duty round or mission task you can do right here (right room and, when it names a station, standing at it): E does it properly, J/the wheel offer rushed/fake/skip
 function dutyHere() {
   const D = G.duty; if (!NOM() || !D || !world) return null; const room = D.place.room;
-  const near = (spot) => !spot || ['door', 'corridor', 'lift', 'any', 'post'].includes(spot) || world.d.props.some(p => p.kind === spot && Math.hypot(world.center(p.tx, p.ty)[0] - P.x, world.center(p.tx, p.ty)[1] - P.z) < 3.6) || !world.d.props.some(p => p.kind === spot && world.d.room[p.ty]?.[p.tx] === room);
+  const near = (spot) => nearSpot(spot, room);
   return D.loops.find(l => l.state === 'due' && l.room === room && near(l.spot)) || D.tasks.find(t => t.state === 'active' && t.room === room && near(t.spot)) || null;
 }
 // hiding (madness mode): E on a rack / drawer bank / shelving within reach while crouched crouches you behind it. Hunters only spot a hidden player within 1.8 m, ignore her noise, and lose the chase. Moving or E steps out.
@@ -1135,6 +1184,7 @@ function climbWell(dir) {
 G.climbWell = climbWell;
 function interact() {
   if (P.hidden) { exitHide(); return; }
+  if (NOM() && G.sites?.press()) return;   // E at a work site wins (js/worksite-ui.js); holding E there does the work
   if (NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 4.2 && climbWell(keys.ShiftLeft || keys.ShiftRight ? -1 : 1)) return; }
   if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(), top = lp && lp.kind === 'catwalk' ? world.topAt(lp.tx, lp.ty) : 0;   // E at a catwalk module: climb the ladder rungs up onto its deck (a scripted 1.8 s mantle; step off an edge to come down)
     if (top > 1 && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.4) { P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: (lp.tx + 0.5) * 2.5, z: (lp.ty + 0.5) * 2.5, top, dx: 0, dz: 0, t: 0, dur: 1.8, exit: 0, fast: false }; G.say('You climb onto the catwalk.', 'good'); return; } }
@@ -1169,7 +1219,7 @@ function interact() {
     else if (near.kind === 'emh') { G.say('Hologram: "Please describe your medical emergency. Or don\'t. I\'m a projection, not a mind-reader." (healed)', 'good'); G.hp = Math.min(G.maxHp, G.hp + 50); sound.heal(); }
     updateHUD(); return;
   }
-  { const du = dutyHere(); if (du) { const r = startJob(du); if (!r.ok) G.say(r.why, 'warn'); return; } }   // a duty due at this station wins over searching a locker
+  { const du = dutyHere(); if (du) { const r = goJob(du); if (!r.ok) G.say(r.why, 'warn'); return; } }   // a duty due at this station wins over searching a locker
   const site = nearestSite();
   if (site) {
     site.used = true; sound.pickup();
@@ -1178,7 +1228,7 @@ function interact() {
     else G.say(`${fixtureName(site.kind)}: nothing useful.`, 'npc');
     updateHUD(); return;
   }
-  { const du = dutyHere(); if (du && !(world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8)) { const r = startJob(du); if (!r.ok) G.say(r.why, 'warn'); return; } }
+  { const du = dutyHere(); if (du && !(world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8)) { const r = goJob(du); if (!r.ok) G.say(r.why, 'warn'); return; } }
   // lift
   if (world && Math.hypot(P.x - world.liftPos.x, P.z - world.liftPos.z) < 2.8) {
     if (G.fx.liftLocked) { sound.denied(); G.say('Tubelift controller OFFLINE — repair it at the lift controls (hold E)', 'warn'); }
@@ -1960,7 +2010,7 @@ const ready = (async () => {
   Loading.hide(TEST_MODE);
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, get jobgame() { return G.jobgame; }, startJob, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
