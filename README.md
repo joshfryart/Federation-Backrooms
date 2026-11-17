@@ -5,7 +5,6 @@ United Starfarers' Fleet ship — from Captain down to Cargo Handler — and you
 corners, or ignore it. The ship, and the 60–90 named crew aboard it, answer back. (A parody/homage; see [CREDITS.md](CREDITS.md).)
 
 > **Status:** Systems Nominal is the default mode and the focus of development. Everything below describes it.
-> Nothing here has been tuned on real hardware yet; the screenshots are captured headless with a software renderer.
 
 ![Your duty board: rounds and mission tasks across the watch](docs/screenshots/08-duty-board.png)
 
