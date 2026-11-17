@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STARSHIP LOST — Part One</title>
+<style>
+:root{--gold:#ffd24a;--red:#ff4a3a;--blue:#6ad8ff}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#fff}
+canvas#c{position:fixed;inset:0;width:100vw;height:100vh;display:block;transition:filter .6s}
+canvas#c.recap{filter:sepia(.85) contrast(1.1) blur(.6px) brightness(.9)}
+.bars:before,.bars:after{content:"";position:fixed;left:0;right:0;height:9vh;background:#000;z-index:5;pointer-events:none}
+.bars:before{top:0}.bars:after{bottom:0}
+#alertflash{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 35%,rgba(255,0,0,.55));opacity:0;z-index:4}
+#alertflash.on{animation:pulse .9s infinite alternate}@keyframes pulse{from{opacity:.1}to{opacity:1}}
+#sub{position:fixed;left:50%;bottom:11vh;transform:translateX(-50%);width:min(900px,90vw);text-align:center;z-index:6;pointer-events:none;opacity:0;transition:opacity .25s}
+#sub.on{opacity:1}
+#sub .nm{display:inline-block;font-weight:900;letter-spacing:.14em;font-size:clamp(11px,1.4vw,15px);padding:3px 12px;border-radius:99px;margin-bottom:6px;color:#000;text-transform:uppercase}
+#sub .tx{font-size:clamp(17px,2.4vw,28px);line-height:1.3;text-shadow:0 2px 6px #000,0 0 14px #000;font-weight:600}
+#sub .dir{display:block;margin-top:6px;font-size:clamp(11px,1.2vw,14px);opacity:.65;font-style:italic;font-weight:400}
+#slug{position:fixed;left:3vw;top:11vh;z-index:6;font-weight:900;letter-spacing:.2em;text-transform:uppercase;font-size:clamp(11px,1.5vw,16px);color:var(--gold);text-shadow:0 2px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none;max-width:60vw}
+#slug.on{opacity:1}
+#cnt{position:fixed;right:3vw;top:11vh;z-index:6;font-weight:900;font-size:clamp(20px,3.4vw,48px);color:#ffb86a;text-shadow:0 2px 8px #000;opacity:0;transition:opacity .3s;text-align:right}
+#cnt.on{opacity:1}#cnt small{display:block;font-size:.3em;letter-spacing:.2em}
+#hud{position:fixed;right:10px;bottom:10px;z-index:9;display:none;gap:6px}#hud button{opacity:.5}#hud button:hover{opacity:1}
+button{font:inherit;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border:0;border-radius:99px;padding:8px 16px;background:#3a3f66;color:#fff;cursor:pointer}
+button:hover{background:#5560b0}button.big{font-size:clamp(16px,2.4vw,26px);padding:14px 38px;background:linear-gradient(#ffe27a,#f0a020);color:#2a1400;box-shadow:0 0 0 3px #2a1400,0 0 0 6px var(--gold),0 8px 24px #000a;animation:bob 1.2s ease-in-out infinite}
+button.big:hover{filter:brightness(1.15)}@keyframes bob{50%{transform:translateY(-4px) rotate(-.6deg)}}
+/* ---------- the silly title ---------- */
+#menu{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:4vh 4vw 3vh;text-align:center;background:radial-gradient(ellipse at 50% 45%,#0000 30%,#000c 100%)}
+#menu.hide{display:none}
+.logo{position:relative;font-family:Impact,'Arial Black',Arial,sans-serif;line-height:.9;text-transform:uppercase;perspective:600px}
+.logo .l1,.logo .l2{display:block;filter:drop-shadow(0 4px 0 #6a2f00) drop-shadow(0 10px 18px #000)}
+.logo .l1{background:linear-gradient(#fff 0%,#ffe27a 40%,#b8740a 52%,#ffd24a 62%,#fff4c0 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:2px #3a1d00;font-size:clamp(40px,8vw,104px);letter-spacing:.06em;transform:rotateX(14deg)}
+.logo .l2{font-size:clamp(52px,11vw,150px);letter-spacing:.02em;transform:rotateX(14deg) rotate(-3deg);position:relative}
+.logo .l2 span{display:inline-block;animation:wob 2.4s ease-in-out infinite;background:linear-gradient(#fff 0%,#ffe27a 40%,#b8740a 52%,#ffd24a 62%,#fff4c0 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:2px #3a1d00}
+.logo .l2 span:nth-child(1){animation-delay:0s}.logo .l2 span:nth-child(2){animation-delay:.3s}
+.logo .l2 span:nth-child(3){animation:flick 3.1s infinite}.logo .l2 span:nth-child(4){animation:drift 7s ease-in-out infinite}
+@keyframes wob{50%{transform:translateY(-.06em) rotate(2deg)}}
+@keyframes flick{0%,40%,44%,100%{opacity:1}42%,46%{opacity:.15}}
+@keyframes drift{0%,100%{transform:translate(0,0)}45%,55%{transform:translate(.25em,-.18em) rotate(14deg)}}
+.logo .arrow{position:absolute;right:-1%;top:12%;font:italic 700 clamp(12px,1.6vw,20px) Arial;color:#ffd24a;-webkit-text-stroke:0;transform:rotate(6deg);text-shadow:0 2px 4px #000;white-space:nowrap;filter:none}
+.logo:after{content:"";position:absolute;inset:-10% 0;background:linear-gradient(105deg,transparent 40%,#fff9 50%,transparent 60%);mix-blend-mode:overlay;transform:translateX(-120%);animation:sweep 5s infinite}
+@keyframes sweep{60%,100%{transform:translateX(120%)}}
+.sub{margin-top:1.4vh;font:italic 800 clamp(13px,2vw,24px)/1.2 Georgia,serif;letter-spacing:.1em;color:#ffe9b0;text-shadow:0 2px 6px #000}
+.sub b{color:#ff8a6a}
+#tag{height:1.5em;margin-top:.8vh;font-weight:800;font-size:clamp(11px,1.5vw,18px);letter-spacing:.16em;text-transform:uppercase;color:#9fe;text-shadow:0 2px 6px #000;animation:tg 3s infinite}
+@keyframes tg{0%{opacity:0;transform:translateY(8px)}12%,88%{opacity:1;transform:none}100%{opacity:0}}
+#panel{display:flex;flex-direction:column;align-items:center;gap:10px}
+#panel .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.9}
+#panel select,#panel input[type=range]{accent-color:#ffd24a}select{background:#1a1d33;color:#fff;border:1px solid #556;border-radius:8px;padding:5px}
+#fake{font-size:11px;letter-spacing:.1em;opacity:.55}
+#tribcount{position:absolute;left:3vw;top:4vh;font-weight:900;font-size:clamp(12px,1.6vw,20px);letter-spacing:.15em;color:#ffb86a;text-shadow:0 2px 6px #000;text-align:left}
+#tribcount b{font-size:2.2em;display:block;line-height:1}
+#rate{position:absolute;right:3vw;top:24vh;transform:rotate(7deg);font:900 clamp(11px,1.5vw,18px) Arial;letter-spacing:.1em;color:#2a1400;background:#ffd24a;padding:6px 12px;border-radius:6px;box-shadow:0 0 0 2px #2a1400;text-align:center}
+/* ---------- cards ---------- */
+#card{position:fixed;inset:0;z-index:8;display:none;align-items:center;justify-content:center;flex-direction:column;text-align:center;background:#000}
+#card.on{display:flex}
+#card .stars{position:absolute;inset:0;background:radial-gradient(#fff 1px,transparent 1.5px) 0 0/90px 90px,radial-gradient(#9cf 1px,transparent 1.5px) 30px 50px/130px 130px;opacity:.7;animation:zoomstars 8s linear forwards}
+@keyframes zoomstars{from{transform:scale(1)}to{transform:scale(5)}}
+#card .big1{position:relative;animation:fly 8s cubic-bezier(.1,.8,.2,1) forwards}
+@keyframes fly{0%{transform:scale(.05) rotate(-40deg);opacity:0}15%{opacity:1}40%{transform:scale(1.05) rotate(-3deg)}100%{transform:scale(1) rotate(-1deg)}}
+#card .ep{position:relative;margin-top:3vh;font:italic 800 clamp(16px,3vw,36px) Georgia,serif;color:#ffe9b0;opacity:0;animation:fade 1s 3.2s forwards;letter-spacing:.06em;text-shadow:0 3px 8px #000}
+#card .ep small{display:block;font:900 .5em Arial;letter-spacing:.4em;color:#ff8a6a;margin-bottom:.5em}
+@keyframes fade{to{opacity:1}}
+#card.tbc .t{font:900 clamp(30px,7vw,100px) Impact,Arial;letter-spacing:.06em;color:#ff4a3a;text-shadow:0 0 30px #f00;animation:tbc 5s forwards;text-transform:uppercase}
+@keyframes tbc{0%{transform:scale(.3);opacity:0}20%{opacity:1;transform:scale(1.1)}100%{transform:scale(1)}}
+#card .roll{position:absolute;left:50%;transform:translateX(-50%);width:min(560px,90vw);top:100%;text-align:center;font-size:clamp(14px,1.9vw,22px);line-height:1.7;color:#ffe9b0;animation:roll 14s linear forwards}
+@keyframes roll{to{top:-130%}}
+.roll h4{margin:1.4em 0 0;color:#ffd24a;letter-spacing:.3em;font-size:.8em}.roll p{margin:0}
+#card.credits{background:#000b;justify-content:flex-start}
+#loading{position:fixed;inset:0;z-index:20;background:#000;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:.2em;text-transform:uppercase}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="alertflash"></div><div id="slug"></div><div id="cnt"></div><div id="sub"></div>
+<div id="card"></div>
+<div id="menu" class="hide">
+  <div>
+    <div class="logo"><span class="l1">Starship</span><span class="l2"><span>L</span><span>O</span><span>S</span><span>T</span></span><span class="arrow">&larr; this way? (no)</span></div>
+    <div class="sub">A Very Serious Drama&trade; &middot; <b>PART ONE</b> &middot; "Til Death Do Us Part (Pending Inspection)"</div>
+    <div id="tag"></div>
+  </div>
+  <div id="tribcount">TRIBBLES ABOARD<b id="tn">1</b></div>
+  <div id="rate">RATED 3 OUT OF 5 GORNS</div>
+  <div id="panel">
+    <button class="big" id="go">&#9654; Begin Melodrama</button>
+    <div class="row">
+      <label>Chapter <select id="chap"></select></label>
+      <label>Voice speed <input id="vr" type="range" min="0.6" max="1.3" step="0.05" value="1"> <span id="vrv">1.00&times;</span></label>
+      <label><input id="subs" type="checkbox" checked> Subtitles</label>
+    </div>
+    <div id="fake">Resume Season 1 (ship lost) &nbsp;&middot;&nbsp; Credits (the Gorn ate them) &nbsp;&middot;&nbsp; Needs sound &amp; a modern browser</div>
+  </div>
+</div>
+<div id="hud"><button id="bmute">Mute</button><button id="bmenu">Menu</button></div>
+<div id="loading">Locating ship&hellip; (not found)</div>
+
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { makeGorn, animateGorn, makeTribble } from './js/actors.js';
+import { loadModels, loadTextures } from './js/assets.js';
+import { makeHuman, holoMaterial, DIVISIONS, liveFace } from './js/humans.js';
+import { MODELS } from './js/enemies.js';
+import { buildItem } from './js/itemart.js';
+import { holdItem, dropItem, tickHeld } from './js/carry.js';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { BEATS } from './js/soap-script.js';
+
+const Q = new URLSearchParams(location.search);
+const TS = +(Q.get('ts') || 1);                    // timescale for waits (tests use small values)
+const $ = (id) => document.getElementById(id);
+const sleepRaw = (s) => new Promise(r => setTimeout(r, s * 1000 * TS));
+
+// ───────────────────────── renderer / scene ─────────────────────────
+const canvas = $('c');
+const R = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!Q.get('shot') });
+R.setPixelRatio(Math.min(devicePixelRatio, 2)); R.setSize(innerWidth, innerHeight, false);
+R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; R.toneMapping = THREE.AgXToneMapping; R.toneMappingExposure = 1.15;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x05060a);
+{ const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.28; }
+const cam = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, 0.05, 400);
+addEventListener('resize', () => { R.setSize(innerWidth, innerHeight, false); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+const hemi = new THREE.HemisphereLight(0xcfd8ff, 0x20202a, 0.55); scene.add(hemi);
+const key = new THREE.DirectionalLight(0xfff0d8, 2.2); key.position.set(3, 7, 7); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -9, right: 9, top: 7, bottom: -5, near: 1, far: 30 }); key.shadow.bias = -0.0004; scene.add(key, key.target);
+const rim = new THREE.PointLight(0x6ad8ff, 18, 14); rim.position.set(0, 3, -3); scene.add(rim);
+const redL = new THREE.PointLight(0xff2010, 0, 30); redL.position.set(0, 3.2, 2); scene.add(redL);
+
+// ───────────────────────── audio (tiny synth: stings, chirps, klaxon, blip-voice fallback) ─────────────────────────
+let AC = null, master = null, muted = false;
+function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = 0.55; master.connect(AC.destination); } catch (e) { AC = null; } } if (AC?.state === 'suspended') AC.resume(); return AC; }
+const now = () => AC.currentTime;
+function tone(f, d, { type = 'sine', v = 0.18, at = 0, to = 0, atk = 0.01, lp = 0, vib = 0 } = {}) {
+  if (!audio() || muted) return; const t = now() + at, o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + d);
+  if (vib) { const l = AC.createOscillator(), lg = AC.createGain(); l.frequency.value = 5.5; lg.gain.value = f * 0.012 * vib; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t + d + 0.1); }
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + atk); g.gain.exponentialRampToValueAtTime(0.0008, t + d);
+  let n = o; if (lp) { const f2 = AC.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = lp; o.connect(f2); n = f2; } n.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.05);
+}
+let nbuf = null;
+function noise(d, { v = 0.15, at = 0, f = 1500, q = 0.7, type = 'bandpass', to = 0 } = {}) {
+  if (!audio() || muted) return; if (!nbuf) { nbuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); const a = nbuf.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = Math.random() * 2 - 1; }
+  const t = now() + at, s = AC.createBufferSource(); s.buffer = nbuf; s.loop = true; const fl = AC.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f, t); if (to) fl.frequency.exponentialRampToValueAtTime(to, t + d); fl.Q.value = q;
+  const g = AC.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0008, t + d); s.connect(fl); fl.connect(g); g.connect(master); s.start(t, Math.random()); s.stop(t + d + 0.05);
+}
+const chord = (fs, d, o = {}) => fs.forEach(f => tone(f, d, { type: 'sawtooth', lp: 1800, v: 0.07, atk: 0.04, ...o }));
+const SND = {
+  brass(at = 0, big = 1) { chord([196, 247, 294, 392].map(f => f * big), 1.6, { at }); chord([98 * big], 1.6, { at, v: 0.12 }); },
+  organ(at = 0) { chord([220, 261.6, 329.6, 440], 1.8, { at, v: 0.06 }); tone(110, 1.8, { type: 'square', v: 0.05, at, lp: 600 }); },
+  violin(at = 0) { [660, 698, 784].forEach((f, i) => tone(f, 0.9, { type: 'sawtooth', at: at + i * 0.4, lp: 2400, v: 0.06, vib: 1, atk: 0.12 })); },
+  harp(at = 0) { [392, 494, 587, 784, 988].forEach((f, i) => tone(f, 1.4, { at: at + i * 0.12, v: 0.12 })); },
+  chirp(at = 0) { tone(900, 0.09, { at, to: 1700, type: 'triangle', v: 0.12 }); tone(1500, 0.07, { at: at + 0.09, to: 700, type: 'triangle', v: 0.1 }); },
+  klaxon(d = 3) { for (let i = 0; i < d * 2; i++) tone(i % 2 ? 520 : 760, 0.45, { type: 'square', at: i * 0.5, v: 0.08, lp: 1400 }); },
+  scan(d = 4) { tone(300, d, { type: 'sawtooth', to: 2400, v: 0.06, lp: 3000, atk: 0.2 }); for (let i = 0; i < d * 6; i++) tone(1200 + i * 60, 0.05, { at: i / 6, type: 'square', v: 0.04 }); },
+  crunch() { for (let i = 0; i < 7; i++) noise(0.07, { at: i * 0.09, f: 700 + Math.random() * 600, v: 0.35, q: 1.5 }); },
+  wipe() { noise(0.9, { f: 300, to: 4000, v: 0.12, q: 0.8 }); },
+  clap(d = 3) { for (let i = 0; i < d * 24; i++) noise(0.06, { at: Math.random() * d, f: 1800 + Math.random() * 2000, v: 0.12 * (1 - i / (d * 28)) + 0.01, q: 0.9 }); },
+  march() { const n = [392, 392, 392, 311, 392, 349, 349, 330, 349, 392]; n.forEach((f, i) => tone(f * (i % 3 ? 1 : 1.03), 0.38, { type: 'triangle', at: i * 0.38, v: 0.14 })); },
+  theme(d = 12) { const mel = [262, 330, 392, 523, 392, 330, 262, 330, 392, 523, 659, 523, 392, 523, 784]; mel.forEach((f, i) => chord([f, f * 1.5], 0.7, { at: i * 0.7 * (d / 12), v: 0.06 })); },
+  low(at = 0) { tone(55, 2.4, { at, type: 'sawtooth', lp: 300, v: 0.25 }); tone(82, 2.4, { at, type: 'sawtooth', lp: 300, v: 0.18 }); },
+  hush() { noise(2, { type: 'lowpass', f: 200, v: 0.08 }); },
+};
+// robot "blip" voice: used when the browser has no speech voices (or ?blips=1); timing mirrors the script's estimate
+function blipVoice(c, text, dur) {
+  if (!audio() || muted) return; const words = text.replace(/\.\.\./g, ' ').split(/\s+/).filter(Boolean), step = dur / Math.max(1, words.length + 1);
+  words.forEach((w, i) => { const syl = Math.max(1, Math.round(w.length / 3)); for (let s = 0; s < syl; s++) { const f = 120 * c.p * (1 + (Math.sin(i * 1.7 + s) * 0.25)); tone(f * 2, step / syl * 0.8, { type: 'sawtooth', at: i * step + s * (step / syl), v: 0.045, lp: 700 + (w.charCodeAt(0) % 5) * 220, atk: 0.015 }); } });
+}
+
+// ───────────────────────── speech ─────────────────────────
+const CH = {
+  COMPUTER: { name: "Ship's Computer", col: '#6ad8ff', p: 0.7, r: 0.80, g: 'any' },
+  TREMBLAY: { name: 'Capt. Tremblay', col: '#ffd24a', p: 0.85, r: 0.85, g: 'm' },
+  OKAFOR: { name: 'Cdr. Okafor', col: '#ff6a5a', p: 1.05, r: 0.88, g: 'f' },
+  REAL: { name: 'Okafor', col: '#ff9a5a', p: 1.1, r: 0.95, g: 'f2' },
+  MACLEOD: { name: 'Chief MacLeod', col: '#e8b84a', p: 0.65, r: 0.82, g: 'm2' },
+  DOC: { name: 'The Doctor', col: '#8fe8ff', p: 1.25, r: 0.85, g: 'f3' },
+  GORN: { name: 'The Gorn', col: '#7ad26a', p: 0.1, r: 0.55, g: 'm3' },
+  DRONE: { name: 'Auditor Drone', col: '#50ff70', p: 0.3, r: 0.7, g: 'm4' },
+};
+let voices = [], userRate = 1, showSubs = true;
+const loadVoices = () => { try { voices = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch (e) { voices = []; } };
+try { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; } catch (e) { /* no speech */ }
+const FEM = /female|zira|samantha|karen|susan|victoria|fiona|moira|tessa|hazel|jenny|aria|emma|serena|allison|ava|kate|libby|sonia/i;
+function voiceFor(key) {
+  if (!voices.length) return null; const c = CH[key], fem = voices.filter(v => FEM.test(v.name)), mal = voices.filter(v => !FEM.test(v.name));
+  const pool = c.g === 'any' ? voices : c.g.startsWith('f') ? (fem.length ? fem : voices) : (mal.length ? mal : voices), idx = (c.g.length > 1 ? +c.g.slice(-1) || 0 : 0);
+  return pool[(idx + (key.length % 2)) % pool.length];
+}
+let speakingTimer = null;
+function say(key, text, wps) {
+  const c = CH[key], est = text.replace(/\.\.\./g, ' ').split(/\s+/).filter(Boolean).length / wps + 0.7;
+  return new Promise(res => {
+    let done = false; const fin = () => { if (!done) { done = true; clearTimeout(speakingTimer); res(); } };
+    const useSynth = !muted && TS >= 1 && voices.length && !Q.get('blips');
+    if (!useSynth) { blipVoice(c, text, est); speakingTimer = setTimeout(fin, est * 1000 * TS); return; }
+    try {
+      speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text.replace(/\.\.\./g, ', ... ')); u.voice = voiceFor(key); u.rate = Math.max(0.3, c.r * userRate); u.pitch = Math.min(2, c.p); u.volume = 1;
+      u.onend = fin; u.onerror = fin; speechSynthesis.speak(u); speakingTimer = setTimeout(fin, (est * 2.2 + 3) * 1000);
+    } catch (e) { blipVoice(c, text, est); speakingTimer = setTimeout(fin, est * 1000 * TS); }
+  });
+}
+
+// ───────────────────────── stage-building helpers ─────────────────────────
+const M = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.05, ...o });
+function box(w, h, d, color, x = 0, y = 0, z = 0, o = {}) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(color, o)); m.position.set(x, y + h / 2, z); m.castShadow = m.receiveShadow = true; return m; }
+function starTex() { const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#02030a'; g.fillRect(0, 0, 512, 256); for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.7})`; g.fillRect(Math.random() * 512, Math.random() * 256, Math.random() < 0.1 ? 2 : 1, 1.4); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+function window3d(w, h, x, y, z) { const g = new THREE.Group(); const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: starTex() })); p.position.set(x, y, z); g.add(p); const fr = M(0x20242e, { metalness: 0.6, roughness: 0.4 }); for (const [ww, hh, dx, dy] of [[w + 0.3, 0.15, 0, h / 2], [w + 0.3, 0.15, 0, -h / 2], [0.15, h, -w / 2, 0], [0.15, h, w / 2, 0]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, 0.12), fr); b.position.set(x + dx, y + dy, z + 0.04); g.add(b); } return g; }
+function ceilLights(g, zs, color = 0xfff0d8, y = 3.6, w = 0.5, d = 1.6, x = 0) { for (const z of zs) { const l = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), new THREE.MeshBasicMaterial({ color })); l.position.set(x, y, z); g.add(l); } }
+
+const SETS = {
+  space() {
+    const g = new THREE.Group(); const N = 2500, pos = new Float32Array(N * 3); for (let i = 0; i < N; i++) { const r = 60 + Math.random() * 60, a = Math.random() * 6.283, b = Math.acos(2 * Math.random() - 1); pos.set([r * Math.sin(b) * Math.cos(a), r * Math.cos(b), r * Math.sin(b) * Math.sin(a)], i * 3); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.35, sizeAttenuation: true })));
+    // a plough-class hull: a wedge that widens aft, a stern castle, two glowing engines
+    const sh = new THREE.Shape(); sh.moveTo(-0.7, -7); sh.lineTo(0.7, -7); sh.lineTo(4.2, 7); sh.lineTo(-4.2, 7); sh.closePath();
+    const hull = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 1.3, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.12, bevelSegments: 2 }), M(0xb8c0c8, { metalness: 0.7, roughness: 0.35 })); hull.rotation.x = -Math.PI / 2; hull.position.y = -0.6; g.add(hull);
+    g.add(box(4.4, 1.4, 4, 0x9aa4ae, 0, 0.7, 4.4, { metalness: 0.6, roughness: 0.4 }));
+    for (const x of [-2.4, 2.4]) { const e = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 2.2, 20), M(0x2a2e36, { metalness: 0.8 })); e.rotation.x = Math.PI / 2; e.position.set(x, 0.1, 8.2); g.add(e); const gl = new THREE.Mesh(new THREE.CircleGeometry(0.75, 20), new THREE.MeshBasicMaterial({ color: 0xff8a2a })); gl.position.set(x, 0.1, 9.32); g.add(gl); }
+    g.userData.ship = g.children[1]; g.userData.root = g; g.userData.tick = (t) => { g.rotation.y = -1.05 + Math.sin(t * 0.12) * 0.1; g.rotation.x = 0.28; };
+    const tr = makeTribble(); tr.scale.setScalar(1.2); g.userData.tribble = tr; scene.add(tr);   // drifts past in space; removed with the set
+    g.userData.dispose = () => scene.remove(tr);
+    const tk = g.userData.tick; g.userData.tick = (t) => { tk(t); const u = (t * 0.07) % 1; tr.position.set(-14 + u * 28, 2.2 + Math.sin(t) * 0.5, 4); tr.rotation.set(t * 0.8, t * 0.5, t * 0.3); };
+    return g;
+  },
+  recap() {
+    const g = new THREE.Group(); g.add(box(14, 0.15, 8, 0x1b1d2a, 0, -0.15, 0, { metalness: 0.5, roughness: 0.3 })); const back = box(16, 6, 0.2, 0x0a0b12, 0, 0, -3); g.add(back);
+    for (let i = -3; i <= 3; i++) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6, 18, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false })); s.position.set(i * 2.2, 3, -1.3); g.add(s); }
+    return g;
+  },
+  ready() {
+    const g = new THREE.Group(); g.add(box(14, 0.1, 12, 0x3a3228, 0, -0.1, 0)); g.add(box(14, 4, 0.2, 0x7a6f5c, 0, 0, -4.2)); g.add(box(0.2, 4, 12, 0x6c6250, -7, 0, 0), box(0.2, 4, 12, 0x6c6250, 7, 0, 0));
+    g.add(window3d(5.2, 2.2, 0, 2.1, -4.05)); g.add(box(3.2, 0.8, 0.9, 0x5a3a22, 0, 0, -3.1, { roughness: 0.5 }));
+    for (const x of [-4, 4]) { g.add(box(0.5, 0.7, 0.5, 0x3a4a6a, x, 0, -3.4)); for (let i = 0; i < 9; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), M([0xff8ac0, 0xffd24a, 0xffffff][i % 3], { roughness: 0.6 })); f.position.set(x + (Math.random() - 0.5) * 0.55, 0.9 + Math.random() * 0.55, -3.4 + (Math.random() - 0.5) * 0.4); g.add(f); } }
+    ceilLights(g, [-2, 1], 0xffe2b0, 3.6, 3, 0.5); return g;
+  },
+  corridor() {
+    const g = new THREE.Group(); g.add(box(5, 0.1, 24, 0x39404c, 0, -0.1, -4)); g.add(box(0.2, 3.6, 24, 0x9a96a0, -2.5, 0, -4), box(0.2, 3.6, 24, 0x9a96a0, 2.5, 0, -4)); g.add(box(5, 0.15, 24, 0x6a6a74, 0, 3.6, -4)); g.add(box(5, 3.6, 0.2, 0x4a4e58, 0, 0, -14));
+    for (let z = -12; z < 8; z += 3) { g.add(box(0.1, 0.12, 0.6, 0xff8a2a, -2.38, 1.4, z, { emissive: 0xff8a2a, emissiveIntensity: 1 })); g.add(box(0.1, 0.12, 0.6, 0xff8a2a, 2.38, 1.4, z, { emissive: 0xff8a2a, emissiveIntensity: 1 })); }
+    ceilLights(g, [-9, -6, -3, 0, 3, 6], 0xe6f0ff, 3.5, 0.6, 1.8); return g;
+  },
+  chapel() {
+    const g = new THREE.Group(); g.add(box(16, 0.1, 18, 0x2c2420, 0, -0.1, 1)); g.add(box(1.8, 0.02, 14, 0x8a1a22, 0, 0, 3)); g.add(box(16, 5, 0.2, 0x8c8272, 0, 0, -4.4)); g.add(box(0.2, 5, 18, 0x7c7262, -8, 0, 1), box(0.2, 5, 18, 0x7c7262, 8, 0, 1));
+    g.add(window3d(5, 3.2, 0, 2.8, -4.25)); g.add(box(5.6, 0.22, 2.6, 0x4a3a2a, 0, 0, -2.4, { roughness: 0.5 })); g.add(box(1.2, 0.9, 0.6, 0xd8d0c0, 0, 0.22, -3.5));
+    for (const x of [-2.9, 2.9]) { const v = box(0.4, 0.8, 0.4, 0x3a4a6a, x, 0.22, -3.4); g.add(v); for (let i = 0; i < 12; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), M([0xff8ac0, 0xffd24a, 0xffffff][i % 3])); f.position.set(x + (Math.random() - 0.5) * 0.7, 1.2 + Math.random() * 0.7, -3.4 + (Math.random() - 0.5) * 0.5); g.add(f); } }
+    for (const side of [-1, 1]) for (const z of [0.2, 1.7, 3.2]) g.add(box(0.6, 0.45, 1.1, 0x5a3a22, side * 3.8, 0, z));
+    for (let z = -2; z < 8; z += 2.4) { g.add(box(0.2, 0.2, 0.2, 0xffd890, -7.7, 3, z, { emissive: 0xffc060, emissiveIntensity: 2 })); g.add(box(0.2, 0.2, 0.2, 0xffd890, 7.7, 3, z, { emissive: 0xffc060, emissiveIntensity: 2 })); }
+    ceilLights(g, [-2, 2, 6], 0xffe2b0, 4.8, 5, 0.5); return g;
+  },
+  brig() {
+    const g = new THREE.Group(); g.add(box(12, 0.1, 12, 0x1a2630, 0, -0.1, 0)); g.add(box(12, 4, 0.2, 0x24343e, 0, 0, -4)); g.add(box(0.2, 4, 12, 0x24343e, -6, 0, 0), box(0.2, 4, 12, 0x24343e, 6, 0, 0));
+    g.add(box(2, 0.5, 0.9, 0x39505c, -3.6, 0, -3.3)); const ff = new THREE.Mesh(new THREE.PlaneGeometry(9, 3.4), new THREE.MeshBasicMaterial({ color: 0x3ad0ff, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })); ff.position.set(0, 1.7, -0.1); g.add(ff);
+    for (let x = -4.5; x <= 4.5; x += 0.4) g.add(box(0.03, 3.4, 0.03, 0x7fe6ff, x, 0, -0.1, { emissive: 0x3ad0ff, emissiveIntensity: 2 }));
+    g.add(box(9, 0.06, 0.06, 0x7fe6ff, 0, 0, -0.1, { emissive: 0x3ad0ff, emissiveIntensity: 2 })); g.add(box(9, 0.06, 0.06, 0x7fe6ff, 0, 3.4, -0.1, { emissive: 0x3ad0ff, emissiveIntensity: 2 }));
+    ceilLights(g, [2], 0x9fd8ff, 3.9, 3, 0.4); g.userData.mood = { hemi: 0.3, key: 1.2, rimC: 0x3ad0ff }; return g;
+  },
+  title() {
+    const g = new THREE.Group(); const f = new THREE.Mesh(new THREE.CircleGeometry(7, 48), M(0x151826, { metalness: 0.7, roughness: 0.25 })); f.rotation.x = -Math.PI / 2; f.position.y = -0.02; f.receiveShadow = true; g.add(f);
+    const N = 1500, pos = new Float32Array(N * 3); for (let i = 0; i < N; i++) { const r = 30 + Math.random() * 40, a = Math.random() * 6.283, b = Math.acos(2 * Math.random() - 1); pos.set([r * Math.sin(b) * Math.cos(a), Math.abs(r * Math.cos(b)) * 0.8 - 1, r * Math.sin(b) * Math.sin(a)], i * 3); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.3 }))); return g;
+  },
+};
+const MOODS = { // hemi, key, key colour, rim colour/intensity, bg
+  space: { hemi: 0.15, key: 2.6, kc: 0xfff0d8, rim: 0x6ad8ff, ri: 14, bg: 0x02030a, kp: [-6, 4, 8] },
+  recap: { hemi: 0.35, key: 2.2, kc: 0xffe6b0, rim: 0xffb060, ri: 16, bg: 0x08090e, kp: [3, 7, 7] },
+  ready: { hemi: 0.55, key: 2.0, kc: 0xffe6c0, rim: 0xffa860, ri: 10, bg: 0x1a1612, kp: [3, 6, 7] },
+  corridor: { hemi: 0.5, key: 1.8, kc: 0xe0ecff, rim: 0xff8a2a, ri: 14, bg: 0x0a0c10, kp: [2, 5, 6] },
+  chapel: { hemi: 0.6, key: 2.2, kc: 0xffeccc, rim: 0xffd890, ri: 14, bg: 0x12100c, kp: [3, 7, 7] },
+  brig: { hemi: 0.3, key: 1.5, kc: 0xaad8ff, rim: 0x3ad0ff, ri: 22, bg: 0x04080c, kp: [2, 5, 6] },
+  title: { hemi: 0.5, key: 2.6, kc: 0xfff0d8, rim: 0xff8a6a, ri: 24, bg: 0x04050a, kp: [4, 7, 6] },
+};
+let stage = null, stageName = '';
+function setStage(name) {
+  if (name === stageName) return; if (stage) { stage.userData.dispose?.(); scene.remove(stage); } stageName = name; stage = SETS[name](); scene.add(stage);
+  const m = MOODS[name]; hemi.intensity = m.hemi; key.intensity = m.key; key.color.set(m.kc); key.position.set(...m.kp); rim.color.set(m.rim); rim.intensity = m.ri; scene.background.set(m.bg);
+  canvas.classList.toggle('recap', name === 'recap');
+}
+
+// ───────────────────────── actors ─────────────────────────
+const actors = {}; const holders = new THREE.Group(); scene.add(holders);
+function mkHuman(key, opts, { dist = 2.4, idle = 'idle' } = {}) {
+  const mesh = makeHuman(opts); if (!mesh) return null; const H = mesh.userData.human; H.play(idle);
+  const a = { key, mesh, H, h: (H.height || 1.75) * 0.93, dist, pose: idle, ry: 0, base: { x: 0, z: 0, ry: 0 }, speaking: false, move: null, shake: 0, seed: Math.random() * 9,
+    play(c) { a.pose = c; if (!a.speaking || c === 'idle_torch') H.play(H.has(c) ? c : 'idle', { fade: 0.25 }); },
+    tick(dt, t) { H.update(dt); tickHeld(H); if (!opts.material && !opts.tint) liveFace(H, t, a.seed); } };
+  return a;
+}
+function build() {
+  const U = { red: DIVISIONS[0], gold: DIVISIONS[1], blue: DIVISIONS[2] };
+  actors.tremblay = mkHuman('tremblay', { kind: 'crew_m', uniform: U.gold, rank: 6, name: 'Tremblay', seed: 3 });
+  actors.okafor = mkHuman('okafor', { kind: 'crew_f', uniform: U.red, rank: 4, name: 'Okafor', seed: 11 });
+  actors.real = mkHuman('real', { kind: 'crew_f', uniform: 0xd9772a, rank: 4, name: 'Okafor', seed: 11, bloody: 0.3, pale: 0.25 });
+  actors.macleod = mkHuman('macleod', { kind: 'crew_heavy', uniform: U.gold, rank: 3, name: 'MacLeod', seed: 5 }, { dist: 2.8 });
+  actors.doc = mkHuman('doc', { kind: 'crew_f2', material: holoMaterial(0x6ad8ff, 0.8), shadow: false }, {});
+  actors.twin = mkHuman('twin', { kind: 'crew_m', material: holoMaterial(0xff6a6a, 0.75), shadow: false }, {});
+  actors.third = mkHuman('third', { kind: 'crew_f', uniform: U.red, tint: 0x000000, shadow: false, seed: 11 }, {});
+  const xs = [['crew_m', U.blue], ['crew_f', U.red], ['crew_f2', U.gold], ['crew_m', U.red], ['crew_heavy', U.blue], ['crew_f', U.gold]];
+  xs.forEach(([k, u], i) => { actors['x' + i] = mkHuman('x' + i, { kind: k, uniform: u, rank: 1 + (i % 3), seed: 20 + i }, { idle: 'sitting_idle' }); });
+  const g = makeGorn(); g.scale.setScalar(0.82); actors.gorn = { key: 'gorn', mesh: g, h: 1.6, dist: 3.2, ry: 0, base: { x: 0, z: 0, ry: 0 }, speaking: false, move: null, shake: 0, pose: 'idle', play() { }, tick(dt, t) { animateGorn(g, this.move ? 1.2 : 0, t, this.speaking, {}); } };
+  const dr = MODELS.drone(); actors.drone = { key: 'drone', mesh: dr.mesh, h: 1.9, dist: 3.0, ry: 0, base: { x: 0, z: 0, ry: 0 }, speaking: false, move: null, shake: 0, pose: 'idle', play() { }, tick(dt) { dr.tick(dt, this.move ? 1.25 : 0, {}); } };
+  const tr = makeTribble(); tr.scale.setScalar(1.6); actors.tribble = { key: 'tribble', mesh: tr, h: 0.35, dist: 1.5, ry: 0, base: { x: 0, z: 0, ry: 0 }, speaking: false, move: null, shake: 0, pose: 'idle', play() { }, tick(dt, t) { tr.position.y = (this.y0 || 0) + Math.max(0, Math.sin(t * 7)) * (this.speaking ? 0.12 : 0.02); } };
+  for (const a of Object.values(actors)) if (a) { a.mesh.visible = false; a.mesh.traverse(o => { if (o.isMesh && !o.material?.transparent) { o.castShadow = true; } }); holders.add(a.mesh); }
+}
+const giveItem = (a, id, hand = 'hand_r') => { dropItem(a.H, hand); const m = buildItem(id, { frame: 'grip' }); if (m) holdItem(a.H, m, hand); };
+const dropAll = () => { for (const a of Object.values(actors)) if (a?.H) { dropItem(a.H, 'hand_r'); dropItem(a.H, 'hand_l'); } };
+
+function place(a, x, z, ry, { animate = true, clip = null } = {}) {
+  a.mesh.visible = true; a.base = { x, z, ry };
+  if (!animate || !a.mesh.userData.placed) { a.mesh.position.set(x, 0, z); a.ry = ry; a.mesh.rotation.y = ry; a.move = null; } else { a.move = { x, z, spd: 1.8 }; }
+  a.mesh.userData.placed = true; if (clip) a.play(clip);
+}
+function moveTo(a, x, z, ry, spd, clip) { a.base = { x, z, ry }; a.move = { x, z, spd }; if (a.H) a.H.play(clip || 'walk', { fade: 0.15 }); a.moveClip = clip; }
+function hideAll() { for (const a of Object.values(actors)) if (a) { a.mesh.visible = false; a.mesh.userData.placed = false; a.move = null; } trib.forEach(t => holders.remove(t.mesh)); trib.length = 0; }
+
+// the tribble swarm
+const trib = [];
+function spawnTribbles(n, { area = [-3, 3, -0.5, 4.5], big = 1 } = {}) {
+  for (let i = 0; i < n; i++) { const m = makeTribble(); m.scale.setScalar((0.75 + Math.random() * 0.9) * big); m.position.set(area[0] + Math.random() * (area[1] - area[0]), 0, area[2] + Math.random() * (area[3] - area[2])); m.rotation.y = Math.random() * 6.28; m.traverse(o => { if (o.isMesh) o.castShadow = true; }); holders.add(m); trib.push({ mesh: m, ph: Math.random() * 6, f: 4 + Math.random() * 4 }); }
+}
+function tickTribbles(t) { for (const b of trib) { b.mesh.position.y = Math.max(0, Math.sin(t * b.f + b.ph)) * 0.18; } }
+
+// ───────────────────────── cast per scene ─────────────────────────
+// [x, z, rotY(radians, + turns the figure toward screen-right), clip]
+const SC = {
+  recap: { set: 'recap', cast: { tremblay: [-3.4, -0.3, 0.45, 'idle_talking'], twin: [-1.7, -0.3, 0.2, 'idle'], doc: [0, -0.3, 0, 'idle'], gorn: [1.9, -0.7, -0.3], okafor: [3.6, -0.3, -0.4, 'idle_talking'] }, wide: [0, 1.7, 8.2, 0, 1.0, 0] },
+  1: { set: 'space', cast: {}, wide: [-17, 7, 30, 0, 0, 0] },
+  2: { set: 'ready', cast: { tremblay: [-1.5, 0, 0.5, 'idle_talking'], okafor: [1.5, 0, -0.5, 'idle'], tribble: [0, -3.1, 0, 'idle'] }, wide: [0, 1.9, 6.6, 0, 1.3, -1] },
+  3: { set: 'corridor', cast: { tremblay: [-1.0, 0.4, 1.05, 'walk_formal'], gorn: [1.0, -0.3, -1.15] }, wide: [0, 1.9, 5.8, 0, 1.2, -1] },
+  4: { set: 'chapel', cast: { doc: [0, -2.6, 0, 'idle_talking'], okafor: [-1.15, -1.4, 0.3, 'idle'], macleod: [1.2, -1.4, -0.3, 'idle'], gorn: [2.6, -1.6, -0.45], tremblay: [-2.7, -1.9, 0.5, 'idle'], drone: [-4.6, 3.4, 1.2], tribble: [0, 0.2, 0, 'idle'] }, wide: [0, 2.6, 10.4, 0, 1.2, -1.5], seats: true },
+  5: { set: 'brig', cast: { real: [0, -1.6, 0, 'idle'], drone: [2.0, 1.0, 3.14] }, wide: [0, 1.9, 6.6, 0, 1.4, -0.5] },
+  6: { set: 'chapel', cast: { doc: [0, -2.6, 0, 'idle_talking'], okafor: [-1.15, -1.4, 0.3, 'idle'], macleod: [1.2, -1.4, -0.3, 'idle'], gorn: [2.6, -1.6, -0.45], tremblay: [-2.7, -1.9, 0.5, 'idle'], drone: [-4.6, 3.4, 1.2] }, wide: [0, 2.6, 10.4, 0, 1.2, -1.5], seats: true },
+  7: { set: 'chapel', cast: { doc: [-3.2, -2.3, 0.4, 'idle'], okafor: [-1.15, -1.4, 0.3, 'idle_torch'], macleod: [0.4, -1.4, -0.2, 'idle'], gorn: [2.9, -1.7, -0.45], tremblay: [-2.0, -2.3, 0.3, 'idle'], drone: [-4.4, 2.6, 1.2], real: [1.9, 1.1, -0.5, 'idle'] }, wide: [0, 2.6, 10.4, 0, 1.2, -1.5], seats: true },
+  8: { set: 'chapel', cast: { doc: [-3.4, -2.3, 0.4, 'idle'], okafor: [-1.6, -0.6, 0.85, 'idle_torch'], real: [1.6, -0.6, -0.85, 'idle_torch'], macleod: [0, -0.4, 0, 'idle'], gorn: [3.0, -1.7, -0.5], tremblay: [1.1, -2.9, -0.1, 'idle'], drone: [-3.8, 1.4, 1.0] }, wide: [0, 2.2, 7.4, 0, 1.2, -1], seats: true },
+};
+let curScene = 0;
+function enterScene(n, instant = false) {
+  const d = SC[n]; curScene = n; setStage(d.set); const keep = new Set(Object.keys(d.cast)); if (d.seats) for (let i = 0; i < 6; i++) keep.add('x' + i);
+  for (const [k, a] of Object.entries(actors)) if (a && !keep.has(k)) { a.mesh.visible = false; a.mesh.userData.placed = false; a.move = null; }
+  for (const [k, c] of Object.entries(d.cast)) { const a = actors[k]; if (!a) continue; place(a, c[0], c[1], c[2], { animate: !instant, clip: c[3] }); if (k === 'tribble') a.y0 = 0; }
+  if (d.seats) { const seats = [[-3.8, 0.2, 1.57], [-3.8, 1.7, 1.57], [-3.8, 3.2, 1.57], [3.8, 0.2, -1.57], [3.8, 1.7, -1.57], [3.8, 3.2, -1.57]]; seats.forEach((s, i) => { const a = actors['x' + i]; place(a, s[0], s[1], s[2], { animate: false }); a.mesh.position.y = 0.3; a.H.play('sitting_idle'); }); }
+  if (n !== 4 && n !== 6 && n !== 7 && n !== 8) { trib.forEach(t => holders.remove(t.mesh)); trib.length = 0; }
+  if (Object.values(actors).some(a => a?.mesh.visible && a.key === 'okafor')) { if (n === 4 || n === 6) { dropAll(); giveItem(actors.okafor, 'tricorder_sec', 'hand_l'); } }
+  if (n === 8) { dropAll(); }
+  actors.third.mesh.visible = false;
+  if (!instant) snapCam = true; wideShot();
+}
+
+// ───────────────────────── camera ─────────────────────────
+const camPos = new THREE.Vector3(0, 2, 8), camLook = new THREE.Vector3(0, 1.2, 0), tgtPos = camPos.clone(), tgtLook = camLook.clone(); let snapCam = true, drift = 0;
+function wideShot() { const w = SC[curScene]?.wide || [0, 2, 8, 0, 1.2, 0]; tgtPos.set(w[0], w[1], w[2]); tgtLook.set(w[3], w[4], w[5]); }
+let side = 1;
+function closeOn(a, amt = 1) { const p = a.mesh.position; side = -side; const hh = a.h * 0.82; tgtLook.set(p.x - side * 0.15, hh - 0.08, p.z); tgtPos.set(p.x + side * 0.8 * amt, hh + 0.05, p.z + a.dist * 1.3 * amt); }
+function updateCam(dt, t) {
+  const k = snapCam ? 1 : 1 - Math.exp(-dt * 2.4); camPos.lerp(tgtPos, k); camLook.lerp(tgtLook, k); snapCam = false;
+  cam.position.set(camPos.x + Math.sin(t * 0.31) * 0.08, camPos.y + Math.sin(t * 0.23) * 0.03, camPos.z + drift); cam.lookAt(camLook);
+}
+
+// ───────────────────────── frame loop ─────────────────────────
+const clk = new THREE.Clock(); let T = 0, onTitle = true, alert = false, shakeT = 0;
+function frame() {
+  requestAnimationFrame(frame); const dt = Math.min(0.05, clk.getDelta()); T += dt;
+  for (const a of Object.values(actors)) {
+    if (!a || !a.mesh.visible) continue; const m = a.mesh;
+    if (a.move) { const dx = a.move.x - m.position.x, dz = a.move.z - m.position.z, d = Math.hypot(dx, dz); if (d < 0.06) { m.position.x = a.move.x; m.position.z = a.move.z; a.move = null; a.H?.play(a.pose && a.pose !== 'walk' ? a.pose : 'idle', { fade: 0.25 }); a.moveDone?.(); a.moveDone = null; } else { const s = Math.min(d, a.move.spd * dt); m.position.x += dx / d * s; m.position.z += dz / d * s; const want = Math.atan2(dx, dz); let dy = Math.atan2(Math.sin(want - a.ry), Math.cos(want - a.ry)); a.ry += dy * Math.min(1, dt * 8); } }
+    else { const want = a.base.ry * (a.speaking ? 0.35 : 1); a.ry += (want - a.ry) * (1 - Math.exp(-dt * 4)); }
+    m.rotation.y = a.ry + (a.shake ? Math.sin(T * 60) * 0.06 * a.shake : 0); if (a.shake) m.position.x += Math.sin(T * 55) * 0.004 * a.shake;
+    a.tick(dt, T);
+    if (a.key === 'doc' || a.key === 'twin') { const mat = m.userData.human?.mats; }
+  }
+  tickTribbles(T); stage?.userData.tick?.(T);
+  if (alert) { redL.intensity = 26 + Math.sin(T * 7) * 22; hemi.intensity = 0.12; } else redL.intensity = 0;
+  if (onTitle) { const a = T * 0.18; tgtPos.set(Math.sin(a * 0.6) * 5, 1.6 + Math.sin(a * 0.7) * 0.2, 10.5); tgtLook.set(0, 1.55, 0); }
+  updateCam(dt, T); R.render(scene, cam);
+}
+
+// ───────────────────────── UI overlays ─────────────────────────
+const subEl = $('sub'), slugEl = $('slug'), cntEl = $('cnt'), cardEl = $('card'), flashEl = $('alertflash');
+function showSub(key, text, dir) { if (!showSubs) return; const c = CH[key]; subEl.innerHTML = `<span class="nm" style="background:${c.col}">${c.name}</span><div class="tx">${text}</div>`; subEl.classList.add('on'); }
+const hideSub = () => subEl.classList.remove('on');
+let slugT = null; function slug(txt) { slugEl.textContent = txt; slugEl.classList.add('on'); clearTimeout(slugT); slugT = setTimeout(() => slugEl.classList.remove('on'), 4200 * Math.max(0.2, TS)); }
+function setAlert(on) { alert = on; flashEl.classList.toggle('on', on); }
+const LOGO = `<div class="logo big1"><span class="l1">Starship</span><span class="l2"><span>L</span><span>O</span><span>S</span><span>T</span></span></div>`;
+function card(html, cls = '') { cardEl.removeAttribute('style'); cardEl.className = 'on ' + cls; cardEl.innerHTML = html; }
+const noCard = () => { cardEl.removeAttribute('style'); cardEl.className = ''; cardEl.innerHTML = ''; };
+
+// ───────────────────────── episode runner ─────────────────────────
+let token = 0, paused = false;
+const sleep = async (s, my) => { await sleepRaw(s); };
+const trimText = (t) => t.replace(/\*/g, '');
+function sceneSlug(b) { return b.place.replace(/\(.*?\)/g, '').split(/\.\s/).slice(0, 2).join(' · ').replace(/\.$/, ''); }
+
+async function doFx(b, my, instant) {
+  const s = b.s;
+  switch (b.fx) {
+    case 'title':
+      if (instant) return; hideAll(); setStage('space'); wideShot(); snapCam = true; card(`${LOGO}<div class="ep"><small>PART ONE</small>"Til Death Do Us Part<br>(Pending Inspection)"</div><div class="stars"></div>`.replace('class="stars"', 'class="stars" style="z-index:-1"'));
+      SND.brass(0.1); SND.brass(2.4, 1.25); SND.brass(4.6, 1.5); SND.organ(5.8); break;
+    case 'wipe': if (!instant) SND.wipe(); break;
+    case 'march': if (!instant) SND.march(); break;
+    case 'tribbles':
+      if (instant) { if (!trib.length) spawnTribbles(40); break; }
+      cntEl.innerHTML = '<small>TRIBBLES IN ATTENDANCE</small><span id="cn">1</span>'; cntEl.classList.add('on');
+      for (let i = 0; i < 12; i++) SND.chirp(i * 0.25 + Math.random() * 0.2);
+      for (let i = 0; i < 3; i++) { await sleep(s / 6, my); if (my !== token) return; spawnTribbles(14, { area: [-2.8, 2.8, 0.6, 5] }); }
+      for (const [n, w] of [['40', 0.34], ['400', 0.3], ['4,000', 0.3]]) { $('cn').textContent = n; SND.chirp(); await sleep(s * w / 1.3, my); }
+      cntEl.classList.remove('on'); return;
+    case 'applause': if (!instant) SND.clap(3); break;
+    case 'scan':
+      actors.macleod.play('idle_torch'); giveItem(actors.macleod, 'tricorder_sec', 'hand_r'); actors.okafor.play('idle');
+      if (instant) { setAlert(true); return; } SND.scan(3.4); setTimeout(() => { if (my === token) { setAlert(true); SND.klaxon(3); } }, 3400 * TS); break;
+    case 'hush': if (!instant) SND.hush(); break;
+    case 'chirp': if (!instant) SND.chirp(); break;
+    case 'tbc':
+      setAlert(false); hideAll(); actors.third.mesh.visible = false; card('<div class="t">To Be Continued&hellip;</div>', 'tbc'); SND.low(); SND.violin(0.2); break;
+    case 'credits':
+      setAlert(false); noCard(); cardEl.className = 'on credits'; cardEl.innerHTML = `<div class="roll"><h4>STARRING</h4><p>A man in a coat</p><p>A woman with a tricorder</p><p>A second woman, with a grudge</p><p>A third woman (see next week)</p><p>The Gorn, as himself</p><p>The Gorn, as the ring bearer</p><h4>TRIBBLES</h4><p>Approximately 4,000</p><h4>NO IMPOSTORS WERE HARMED</h4><p>Several were married</p><h4>SOUP PROVIDED BY</h4><p>Soup</p></div>`;
+      enterScene(8, true); hideSub(); for (const k of ['okafor', 'real', 'macleod', 'tremblay', 'doc']) { actors[k].base.ry = 0; actors[k].play('dance'); } cardEl.className = 'on credits'; cardEl.style.background = 'transparent'; cardEl.style.left = '35%'; actors.gorn.speaking = true; actors.drone.play('idle');
+      if (!instant) SND.theme(s); break;
+  }
+  if (!instant) await sleep(s, my);
+}
+
+const AFTER = [];   // line-start actions: [regex, fn(my)]
+const act = (re, fn) => AFTER.push([re, fn]);
+act(/^Last time/, () => { setAlert(false); });
+act(/^Of course/, () => { actors.okafor.play('idle_torch'); });
+act(/^Human\. Scottish/, () => { actors.okafor.play('idle'); });
+act(/^I will retrieve/, (_, inst) => { const g = actors.gorn; moveTo(g, 0.8, 0.5, 0, 1.6); g.moveDone = () => { setTimeout(() => { if (!inst) { SND.crunch(); } trib.splice(0, 12).forEach(t => holders.remove(t.mesh)); moveTo(g, 2.6, -1.6, -0.45, 1.0); }, 0); }; if (inst) { trib.splice(0, 12).forEach(t => holders.remove(t.mesh)); place(g, 2.6, -1.6, -0.45, { animate: false }); } });
+act(/^That is impossible/, () => { actors.okafor.shake = 1; setTimeout(() => actors.okafor.shake = 0, 1500 * TS); });
+act(/^Do not marry her/, (_, inst) => { setAlert(false); const r = actors.real; if (inst) return; r.mesh.visible = true; r.mesh.position.set(-8, 0, 2.4); r.ry = Math.PI / 2; r.mesh.userData.placed = true; r.base = { x: 1.9, z: 1.1, ry: -0.5 }; moveTo(r, 1.9, 1.1, -0.5, 4.2, 'sprint'); setTimeout(() => { r.H.play('idle'); }, 1500 * TS); });
+act(/^For six seasons/, () => { });
+act(/^Me!$/, () => { for (const k of ['okafor', 'real']) { giveItem(actors[k], 'phaser1', 'hand_r'); actors[k].play('idle_torch'); } });
+act(/^Warning\. Third Okafor/, (_, inst) => { const t = actors.third; place(t, 1.1, -3.7, 0, { animate: false, clip: 'idle' }); t.mesh.scale.setScalar(1); if (!inst) { SND.low(); const s0 = performance.now(); const up = () => { const k = Math.min(1, (performance.now() - s0) / 1800); t.mesh.position.z = -3.7 + k * 0.35; if (k < 1) requestAnimationFrame(up); }; up(); } });
+act(/^Warning\. Impostor/, () => { });
+act(/^Please\. Please let/, (_, inst) => { if (inst) return; setAlert(false); hideAll(); card('', 'tbc'); });
+act(/^Both Okafors|^Auditing/, () => { });
+const STING = [[/wedding\.$/, 'organ'], [/Neither was I/, 'violin'], [/^So today/, null], [/no impostor aboard/, 'organ'], [/^Ladies\. Ladies/, null], [/^Aye\. And I will tell/, 'violin'], [/Third Okafor/, null], [/^Logging|Logging suspicious/, 'harp'], [/^Guard!/, 'harp']];
+
+async function runBeat(b, i, my, instant) {
+  if (b.k === 'scene') { enterScene(b.n, instant); if (!instant) slug(sceneSlug(b)); return; }
+  if (b.k === 'sfx') {
+    if (!instant && b.fx !== 'title' && b.fx !== 'tbc' && b.fx !== 'credits' && b.fx !== 'tribbles') { wideShot(); }
+    if (b.fx === 'applause' || b.fx === 'hush' || b.fx === 'chirp') wideShot();
+    if (b.fx === 'tribbles') { drift = 0; tgtPos.set(0, 3.2, 7.4); tgtLook.set(0, 0.6, 1.5); }
+    if (b.fx === 'scan') { const o = actors.okafor; tgtLook.set(o.mesh.position.x, 1.4, o.mesh.position.z); tgtPos.set(o.mesh.position.x + 1.2, 1.5, o.mesh.position.z + 2.4); }
+    if (b.fx === 'credits') { wideShot(); }
+    await doFx(b, my, instant); if (my === token && b.fx === 'title') noCard(); return;
+  }
+  // line
+  const keyMap = { COMPUTER: null, TREMBLAY: 'tremblay', OKAFOR: 'okafor', REAL: 'real', MACLEOD: 'macleod', DOC: 'doc', GORN: 'gorn', DRONE: 'drone' };
+  const actor = keyMap[b.who] ? actors[keyMap[b.who]] : null; const text = trimText(b.t);
+  if (!instant) noCard();
+  for (const [re, fn] of AFTER) if (re.test(text)) fn(my, instant);
+  if (instant) return;
+  if (b.who === 'COMPUTER' && curScene && SC[curScene].set !== 'space' && curScene !== 0) wideShot(); else if (actor?.mesh.visible) closeOn(actor, text.length < 22 ? 0.8 : 1); else wideShot();
+  if (actor?.mesh.visible && b.who !== 'COMPUTER') { actor.speaking = true; if (actor.H && actor.pose !== 'idle_torch' && actor.pose !== 'sitting_idle') actor.H.play(actor.H.has('idle_talking') ? 'idle_talking' : 'idle', { fade: 0.2 }); }
+  showSub(b.who, text, b.d);
+  for (const [re, s] of STING) if (re.test(text) && s) { if (/^Last/.test(text)) { } setTimeout(() => SND[s]?.(), (b.who === 'COMPUTER' ? 9500 : 600) * TS); }
+  if (/wedding\.$/.test(text)) { /* organ sting lands on the last word */ }
+  await say(b.who, text, b.wps); if (my !== token) return;
+  if (actor) { actor.speaking = false; if (actor.H) actor.H.play(actor.H.has(actor.pose) ? actor.pose : 'idle', { fade: 0.3 }); }
+  hideSub(); await sleep(0.45, my);
+}
+
+async function play(from = 0) {
+  const my = ++token; try { speechSynthesis.cancel(); } catch (e) { } $('menu').classList.add('hide'); onTitle = false; $('hud').style.display = 'flex'; document.body.classList.add('bars');
+  hideAll(); dropAll(); setAlert(false); noCard(); hideSub(); audio(); drift = 0; for (const a of Object.values(actors)) if (a) { a.speaking = false; a.shake = 0; }
+  // catch up: apply every earlier beat instantly so a chapter jump has the right set, props and alert state
+  const first = BEATS.findIndex(b => b.k === 'scene');
+  if (from === 0) { /* recap uses its own cast */ curScene = 0; setStage('recap'); SC.recap && place0(); }
+  for (let j = 0; j < from; j++) await runBeat(BEATS[j], j, my, true);
+  // beat 0 is the title card, beat 1 the recap line (staged by place0), then the scenes
+  for (let i = from; i < BEATS.length; i++) { if (my !== token) return; const b = BEATS[i]; if (i === 1 && from <= 1) { place0(); canvas.classList.add('recap'); slug('PREVIOUSLY…'); } if (i === 2) canvas.classList.remove('recap'); await runBeat(b, i, my, false); }
+  if (my !== token) return; noCard(); hideAll(); card('<div class="t" style="font:900 clamp(24px,5vw,64px) Impact;color:#ffd24a;letter-spacing:.1em">PART TWO<br><span style="font-size:.5em;color:#fff">COMING SOON-ISH</span></div><br><button class="big" id="again">&#8635; Watch again</button>'); $('again').onclick = () => play(0);
+}
+function place0() { setStage('recap'); curScene = 'recap'; const d = SC.recap; hideAll(); for (const [k, c] of Object.entries(d.cast)) { const a = actors[k]; place(a, c[0], c[1], c[2], { animate: false, clip: c[3] }); } snapCam = true; wideShot(); tgtPos.x = -1; }
+// slow lateral drift across the recap lineup
+setInterval(() => { if (curScene === 'recap' && !onTitle) { drift = 0; tgtPos.x = Math.min(2, tgtPos.x + 0.35); } }, 1200);
+
+// ───────────────────────── title screen ─────────────────────────
+const TAGS = ['Now with 40% more tribbles', 'Some impostors may be real', 'Soup sold separately', 'The ship is lost. The plot is not far behind.', 'Warning: contains Gorn', 'Sixth season. Fourth cast. First clue.', 'Trust no one (especially the groom)', 'Please do not feed the tribbles'];
+function titleScreen() {
+  $('menu').classList.remove('hide'); onTitle = true; document.body.classList.remove('bars'); $('hud').style.display = 'none'; hideAll(); setStage('title'); setAlert(false); noCard(); hideSub();
+  const L = { tremblay: [-4.4, 0, 0.6, 'idle_talking'], okafor: [-2.3, 0.5, 0.25, 'idle'], macleod: [-0.2, 0.9, 0, 'idle'], doc: [2.0, 0.5, -0.25, 'idle'], drone: [3.8, -0.4, -0.6], gorn: [0.3, -1.9, 0] };
+  for (const [k, c] of Object.entries(L)) place(actors[k], c[0], c[1], c[2], { animate: false, clip: c[3] }); actors.okafor.play('idle'); giveItem(actors.okafor, 'tricorder_sec', 'hand_r'); actors.okafor.play('idle_torch');
+  place(actors.tribble, 1.1, 1.8, 0.3, { animate: false }); actors.tribble.y0 = 0; trib.length = 0; spawnTribbles(1, { area: [-0.5, 0.5, 2, 2.4] });
+}
+let tn = 1, tagI = 0; setInterval(() => { if (onTitle) { tn = Math.min(9999, Math.round(tn * 1.35 + 1)); $('tn').textContent = tn.toLocaleString(); if (tn > 3000) tn = 1; } }, 700);
+setInterval(() => { const t = $('tag'); t.style.animation = 'none'; void t.offsetWidth; t.style.animation = ''; t.textContent = TAGS[tagI++ % TAGS.length]; }, 3000); $('tag').textContent = TAGS[0];
+const chap = $('chap'); [['0', 'From the top'], ['2', 'Scene 1 · Gossip'], ['4', 'Scene 2 · Ready room'], ['9', 'Scene 3 · Corridor'], ['0', '—']].slice(0, 0);
+{ const marks = [['Opening titles', 0]]; BEATS.forEach((b, i) => { if (b.k === 'scene') marks.push([sceneSlug(b).replace(/^[A-Z ]+\d\s—\s?/, ''), i]); }); marks.forEach(([n, i], k) => { const o = document.createElement('option'); o.value = i; o.textContent = (k ? `Scene ${k}: ` : '') + n; chap.appendChild(o); }); $('vr').oninput = (e) => { userRate = +e.target.value; $('vrv').textContent = userRate.toFixed(2) + '×'; }; $('subs').onchange = (e) => showSubs = e.target.checked; }
+$('go').onclick = () => { audio(); SND.brass(0); play(+chap.value); };
+$('bmenu').onclick = () => { token++; try { speechSynthesis.cancel(); } catch (e) { } titleScreen(); };
+$('bmute').onclick = (e) => { muted = !muted; e.target.textContent = muted ? 'Unmute' : 'Mute'; if (muted) try { speechSynthesis.cancel(); } catch (x) { } };
+addEventListener('keydown', (e) => { if (e.key === 'Escape') $('bmenu').onclick(); });
+
+// ───────────────────────── boot ─────────────────────────
+await Promise.all([loadModels(), loadTextures()]);
+build(); frame(); $('loading').remove();
+if (Q.get('at') !== null) { const at = +Q.get('at'); play(at); } else titleScreen();
+window.__soap = { play, titleScreen, actors, BEATS, get T() { return T; } }; window.__ready = true;
+</script>
+</body></html>

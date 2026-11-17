@@ -4,6 +4,8 @@
 
 **The irony:** Commander Okafor, who has spent the whole series hunting the impostor aboard, scans everyone *except* the person she is about to marry. When the groom finally scans *her*, the impostor is the bride. The prisoner she locked in the brig as "the impostor" was the real Okafor all along. The Gorn had worked it out over the soup.
 
+**Watch it:** serve the repo (`python3 -m http.server 8000`) and open `/soap.html`. It has the silly title screen, a chapter picker, a voice-speed slider and subtitles. Voices are the browser's speech synthesis, each slowed through the per-character rate below. With no system voices it falls back to robot blips on the same timing.
+
 ## Cast and voices
 Every character is a game model. Voices use the game's synth mode (`js/speech.js`, `speechSynthesis`). **Multiply each voice's `rate` by about 0.85** for the slowed, melodramatic delivery; the table already has the slowdown baked in. Hold pauses of 0.5s or longer between lines.
 
