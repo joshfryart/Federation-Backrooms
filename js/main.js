@@ -1194,6 +1194,7 @@ function step(dt, t) {
   if (P.stepD > stride && speedNow > 0.8 && (P.grounded || P.mode === 'wallrun') && P.mode !== 'slide') {
     P.stepD = 0;
     if (world.flooded) { sound.splash(P.crouch ? 0.05 : P.sprint ? 0.2 : 0.11); for (let i = 0; i < (P.sprint ? 10 : 5); i++) water.add(P.x + (Math.random() - 0.5) * 0.4, 0.08, P.z + (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 1.4, 1.2 + Math.random() * 1.2, (Math.random() - 0.5) * 1.4, WATER, 0.6); }
+    else if (world.isTube(...world.tile(P.x, P.z))) sound.crawl(0.1);
     else sound.step(P.crouch ? 0.05 : P.sprint ? 0.22 : 0.13);
   }
   const boots = 1 - perk('boots') * 0.3;
@@ -1338,6 +1339,7 @@ function step(dt, t) {
   if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
     { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; gunVM.visible = G.phase === 'play' && !NOM(); }
   // camera
+  sound.setMuffle?.(world.isTube(...world.tile(P.x, P.z)));
   P.shake = Math.max(0, P.shake - dt * 1.5); const shakeK = CFG.calm ? 0.2 : 1;
   const onFoot = P.grounded && P.mode !== 'slide';
   const bobY = onFoot ? Math.sin(P.bob * 2.2) * (0.04 + P.flow * 0.02) * Math.min(1, speedNow / 3) : 0;

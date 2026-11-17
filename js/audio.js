@@ -13,7 +13,8 @@ export class Sound {
     for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < irLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.6); }
     const conv = ctx.createConvolver(); conv.buffer = ir; const wet = ctx.createGain(); wet.gain.value = 0.34;
     const dry = ctx.createGain(); dry.gain.value = 0.9;
-    this.master.connect(dry); dry.connect(ctx.destination); this.master.connect(conv); conv.connect(wet); wet.connect(ctx.destination);
+    this.muffle = ctx.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 20000; this.muffle.connect(ctx.destination);   // inside a Jiffy tube everything outside is muffled (setMuffle)
+    this.master.connect(dry); dry.connect(this.muffle); this.master.connect(conv); conv.connect(wet); wet.connect(this.muffle);
 
     // noise buffer
     const len = ctx.sampleRate * 2;
@@ -146,6 +147,8 @@ export class Sound {
     s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + dur + 0.05);
   }
 
+  setMuffle(on) { if (!this.muffle || this.muffleOn === !!on) return; this.muffleOn = !!on; this.muffle.frequency.setTargetAtTime(on ? 700 : 20000, this.ctx.currentTime, 0.12); }
+  crawl(vol = 0.1) { this.noise(0.07, vol, 180 + Math.random() * 60, 1.2, 'lowpass'); this.noise(0.05, vol * 0.5, 2200 + Math.random() * 400, 4, 'bandpass', 0.03); }   // knees and palms on a grated duct floor
   step(vol = 0.15) { this.noise(0.09, vol, 300 + Math.random() * 120, 0.8, 'lowpass'); }
   phaser() { this.tone(1800, 0.35, 'sawtooth', 0.15, -1500); this.tone(900, 0.4, 'square', 0.06, -700); }
   empty() { this.tone(180, 0.12, 'square', 0.1); }
