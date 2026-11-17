@@ -10,7 +10,9 @@
 import { ICONS, SHAPES, CATS, drawIcon } from './icons.js';
 import { ROOM_CAT, along } from './nav.js';
 
-export const ROUTE = '#8ef3ff', DUE = '#ffd23f', LATE = '#ff4d3d', IDLE = '#8fa0b6', DOING = '#5cc8ff', DONE = '#4fd18b';
+export const ROUTE = '#8ef3ff', DUE = '#ffd23f', IDLE = '#8fa0b6', DOING = '#5cc8ff';
+export let LATE = '#ff4d3d', DONE = '#4fd18b';   // live bindings: setMapPalette(true) swaps red / green for orange / blue (colour-blind palette)
+export function setMapPalette(cb) { LATE = cb ? '#ff9a00' : '#ff4d3d'; DONE = cb ? '#4aa3ff' : '#4fd18b'; }
 export const catOf = (type) => CATS[ROOM_CAT[type]] || CATS.crew;
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
 const SP = {}; const shapePath = (n) => SP[n] || (SP[n] = new Path2D(SHAPES[n]));

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { setMapPalette } from './minimap.js';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { Sound } from './audio.js';
@@ -1015,9 +1016,9 @@ function resumeGame() { hideScreens(); G.phase = 'play'; requestLock(); }
 $('sens').oninput = (e) => { CFG.sens = +e.target.value; saveCfg(); };
 $('vol').oninput = (e) => { CFG.vol = +e.target.value; sound.setVolume(CFG.vol); saveCfg(); };
 $('qsel').onchange = (e) => setQuality(e.target.value);
-{ const cp = $('capson'), cb = $('cbmode'); document.body.classList.toggle('cb', !!CFG.cb);
+{ const cp = $('capson'), cb = $('cbmode'); document.body.classList.toggle('cb', !!CFG.cb); setMapPalette(!!CFG.cb);
   if (cp) { cp.checked = !!CFG.caps; cp.onchange = (e) => { CFG.caps = e.target.checked; saveCfg(); }; }
-  if (cb) { cb.checked = !!CFG.cb; cb.onchange = (e) => { CFG.cb = e.target.checked; document.body.classList.toggle('cb', CFG.cb); saveCfg(); }; } }
+  if (cb) { cb.checked = !!CFG.cb; cb.onchange = (e) => { CFG.cb = e.target.checked; document.body.classList.toggle('cb', CFG.cb); setMapPalette(CFG.cb); saveCfg(); }; } }
 post.setCalm(CFG.calm);
 { const cl = $('calm'); if (cl) { cl.checked = !!CFG.calm; cl.onchange = (e) => { CFG.calm = e.target.checked; post.setCalm?.(CFG.calm); saveCfg(); }; } }
 $('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(G.player, 'Crew voice check.'); };
