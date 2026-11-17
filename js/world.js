@@ -814,6 +814,7 @@ export class World {
       for (const [x, y] of open) {
         const r = d.room[y][x];
         if (r === 'jefferies') continue;   // tubes are lit only by their floor strips
+        if (d.loopRun && !r && (d.loopRun.ax === 'x' ? y === d.loopRun.fixed && x >= d.loopRun.a && x <= d.loopRun.b : x === d.loopRun.fixed && y >= d.loopRun.a && y <= d.loopRun.b)) continue;   // the looping corridor (main.js findLoopRun): a long unlit stretch
         const lit = r ? true : ((x + y) % 2 === 0);
         if (!lit) continue;
         { const hz = Math.sin((x >> 2) * 91.7 + (y >> 2) * 17.3 + d.deck * 5.7) * 9871.3; if (!r && hz - Math.floor(hz) < 0.2) continue; } // pitch-black stretches
