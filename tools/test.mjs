@@ -12,7 +12,7 @@
 // Sections (in order): node unit suites (tools/test-*.mjs), room props, generator, ship decks, inventory rooms, director cascade, crew voices, pace presets;
 //   madness page: bot run (chips, lift, perk, to the win screen), parkour, director repairer, fixture search, inventory in game, prop models, madness zapper;
 //   nominal page: Systems Nominal ship / turbolift / billet / duty / NPC walking / equipment / handhelds / doors, voices speech, NPC lift riders;
-//   voices.html; nominal page 3: nav HUD, NPC walking, comms HUD, UI, talk, combat, wiring, pace / crew repair / shift end; smoke on the seed set (tools/seed-scan.mjs).
+//   voices.html; nominal page 3: nav HUD, NPC walking, comms HUD, UI, talk, combat, wiring, job mini-games, pace / crew repair / shift end; smoke on the seed set (tools/seed-scan.mjs).
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -48,9 +48,10 @@ import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / 
 import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation close-up: state machine, framing, pause rules, intents (tools/test-talk.mjs)
 import { combatTests, combatBrowser, combatMadness } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
+import { jobgameTests, jobgameBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
-  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {
@@ -606,7 +607,7 @@ const nom = await page2.evaluate(async () => {
   out.unlocked = (g.openLiftPanel(), G.phase); key('Escape'); tick(2);
   { // billet, duty, phases, death -> continue as someone else
     G.phase = 'play'; const D = g.duty, ph = g.phases, old = G.player; out.billet = { isPlayer: old.isPlayer, billet: old.billet, loops: D.loops.length, mission: G.mission, hud: !!document.getElementById('bd-board') };
-    const l = D.loops[0]; D.setPlace(G.shipDeck + 1, l.room); l.state = 'due'; l.dueAt = D.t; const r = D.perform(l.id, 'proper'); tick(1); out.duty = { ok: r.ok, busy: !!D.busy }; { D.cancel(); const l2 = D.loops[1] || D.loops[0]; l2.spot = 'door'; l2.state = 'due'; l2.dueAt = D.t; D.setPlace(G.shipDeck + 1, l2.room); G.phase = 'play'; const before = l2.state, sx = P.x, sz = P.z; P.x = -40; P.z = -40; g.interact(); P.x = sx; P.z = sz; out.duty.quick = { before, after: l2.state, busy: !!D.busy && D.busy.loop === l2 }; D.cancel(); }
+    const l = D.loops[0]; D.setPlace(G.shipDeck + 1, l.room); l.state = 'due'; l.dueAt = D.t; const r = D.perform(l.id, 'proper'); tick(1); out.duty = { ok: r.ok, busy: !!D.busy }; { D.cancel(); const l2 = D.loops[1] || D.loops[0]; l2.spot = 'door'; l2.state = 'due'; l2.dueAt = D.t; D.setPlace(G.shipDeck + 1, l2.room); G.phase = 'play'; const before = l2.state, sx = P.x, sz = P.z; P.x = -40; P.z = -40; g.interact(); P.x = sx; P.z = sz; const jg = g.jobgame, jgOpen = !!jg?.active; if (jgOpen) { jg.key('Enter'); for (let i = 0; i < 10 && jg.game?.state === 'play'; i++) jg.key('Digit' + jg.game.solve()); jg.tick(1); }   /* E at the door panel opens its wiring mini-game (js/jobgame-ui.js): play it through */ out.duty.quick = { before, after: l2.state, busy: !!D.busy && D.busy.loop === l2, game: jgOpen }; D.cancel(); }
     for (let i = 0; i < 40; i++) { D.tick(1); } out.duty.board = D.board().length;
     ph.enabled = true; for (let i = 0; i < 30; i++) ph.tick(30); out.phases = ph.status(); const hz = ph.hazard(G.shipDeck + 1, { zone: 'engineering' }); out.phases.hazard = !!hz || ph.modeDef?.lethal === null;
     g.nomDie('test'); out.dead = { phase: G.phase, btns: document.querySelectorAll('#bd-end button').length, shown: document.getElementById('bd-end').classList.contains('show') };
@@ -700,6 +701,7 @@ console.log('nominal:', JSON.stringify(nom));
     ["n.billet.hud", () => n.billet.hud],
     ["n.duty.ok", () => n.duty.ok],
     ["n.duty.quick.after === 'doing'", () => n.duty.quick.after === 'doing'],
+    ["n.duty.quick.game (E at a station opens its job mini-game)", () => n.duty.quick.game],
     ["n.phases.index >= 3", () => n.phases.index >= 3],
     ["n.phases.mode", () => n.phases.mode],
     ["n.dead.shown", () => n.dead.shown],
@@ -815,7 +817,8 @@ S('comms-hud', 'nominal3', (p) => commsHud(p, fail));
 S('ui', 'nominal3', (p) => uiBrowser(p, fail));   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
 S('talk', 'nominal3', (p) => talkBrowser(p, fail));   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
 S('combat', 'nominal3', (p) => combatBrowser(p, null, fail));   // strike / grab / drag / release, witnesses, security, player HP (the madness zapper is combat-madness)
-S('wiring', 'nominal3', (p) => wiringBrowser(p, fail));   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)
+S('wiring', 'nominal3', (p) => wiringBrowser(p, fail));
+S('jobgames', 'nominal3', (p) => jobgameBrowser(p, fail));   // job mini-games: instruction card once per tool (fb_cfg), win / fail -> quality + time, Esc cancels, no soft-lock (tools/test-jobgames.mjs)   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)
 S('pace-repair', 'nominal3', async (page3) => {   // pace wiring (title control, standard newRun), crew repair response, world pause, shift-end tasks (the preset maths is the node section pace-presets)
 const rep = await page3.evaluate(async () => {
   const g = __game, G = g.G, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));

@@ -265,6 +265,8 @@ export class DutyHUD {
   act(d, k) {
     const D = this.duty, f = this.findBlock(k), say = (t, c = 'warn') => UIHUB.menus?.say?.(t, c); if (!D) return;
     const lid = f?.b.ref.loop, tid = f?.b.ref.task, who = (id) => D.roster.people.find(x => x.id === id);
+    const job = UIHUB.menus?.G?.startJob;   // "properly" goes through the job mini-game (js/main.js startJob, js/jobgame-ui.js)
+    if ((d === 'q:proper' && lid) || (d === 't:proper' && tid)) { const it = lid ? D.loop(lid) : D.tasks.find(t => t.id === tid); if (job && it) { const c = D.check(it.id); if (!c.ok) { say(c.why); return; } this.closeBoard(); const r = job(it); if (!r.ok) say(r.why); return; } }
     if (d.startsWith('q:') && lid) { const r = D.perform(lid, d.slice(2)); if (!r.ok) say(r.why); else { this.closeBoard(); return; } }
     else if (d.startsWith('t:') && tid) { const r = D.doTask(tid, d.slice(2)); if (!r.ok) say(r.why); else say(`Task ${d.slice(2)}: ${D.tasks.find(t => t.id === tid)?.task}`, 'good'); }
     else if (d.startsWith('deleg:') && lid) { const p = who(+d.slice(6)); const r = p ? D.delegate(p, lid) : { ok: false, why: 'no one' }; if (!r.ok && !r.refused) say(r.why); }

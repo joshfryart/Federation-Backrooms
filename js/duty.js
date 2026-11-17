@@ -7,7 +7,7 @@
 //   pickBillet(roster, seed, forceBillet)  -> a random living crew member becomes the player
 //   new Duty({ player, roster, clock, sim, duties, shipState, say, seed, mission, pace })
 //     .tick(dt)  .shiftEnd()  .firstTask()  .repairRows = () => rows (js/repair.js, shown on the board)
-//     .perform(loopId, quality)  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)  .byDistance(people, room) nearest first (sim.estimate)
+//     .perform(loopId, quality, { timeMul })  .check(id) -> { ok, why }  .report(loopId, honest)  .order(person, loopId)  .delegate(person, loopId)  .byDistance(people, room) nearest first (sim.estimate)
 //     .board()   duty + task board rows for the HUD     .ledger / .debt / .chain / .trust(person)
 //     .atJob = (job) => bool   optional (js/main.js): an ordered job's clock only runs once the person is in the job room ('ordered' / 'jobdone' events carry the job;
 //                              'atjob' fires once when they get there after walking / riding more than 3 s)
@@ -77,14 +77,22 @@ export class Duty {
   }
 
   // Start a duty in the right room. quality: proper | rushed | faked | skipped (skipped and faked are instant / near-instant).
-  perform(id, quality) {
+  // opts.timeMul: the job mini-game's result (js/jobgames.js outcome: a clean job is faster); opts.game: kept on the 'start' event
+  perform(id, quality, opts = {}) {
+    const c = this.check(id); if (!c.ok) return c; const l = this.loop(id);
+    if (quality === 'skipped') { this._finish(l, 'skipped'); return { ok: true, secs: 0 }; }
+    const secs = Math.max(2.5 * (opts.timeMul ?? 1), l.dur * SHIP_SEC_PER_MIN * l.q[quality][0] * 1.2 * (this.pace.performMul ?? 1) * (opts.timeMul ?? 1));
+    l.state = 'doing'; this.busy = { loop: l, q: quality, left: secs, total: secs };
+    this.emit({ type: 'start', loop: l.id, quality, secs, game: opts.game || null }); return { ok: true, secs };
+  }
+  // could perform(id) / doTask(id) start right now? (the same checks, nothing changes) -> { ok, why }. js/main.js asks before opening a job mini-game.
+  check(id) {
+    const t = this.tasks.find(x => x.id === id);
+    if (t) return t.state !== 'active' ? { ok: false, why: 'not active' } : t.room !== this.place.room ? { ok: false, why: `Go to the ${t.room}` } : { ok: true };
     const l = this.loop(id); if (!l || l.state === 'doing') return { ok: false, why: 'busy' };
     if (l.state !== 'due' && l.state !== 'idle') return { ok: false, why: 'not due' };
     if (l.room !== this.place.room) return { ok: false, why: `Do this in the ${l.room}` };
-    if (quality === 'skipped') { this._finish(l, 'skipped'); return { ok: true, secs: 0 }; }
-    const secs = Math.max(2.5, l.dur * SHIP_SEC_PER_MIN * l.q[quality][0] * 1.2 * (this.pace.performMul ?? 1));
-    l.state = 'doing'; this.busy = { loop: l, q: quality, left: secs, total: secs };
-    this.emit({ type: 'start', loop: l.id, quality, secs }); return { ok: true, secs };
+    return { ok: true };
   }
   cancel() { if (this.busy) { const l = this.busy.loop; this.busy = null; this._finish(l, 'skipped', { cancelled: true }); } }
 
@@ -191,8 +199,7 @@ export class Duty {
 
   // ---- mission task board: the player does their own tasks in the right room
   doTask(id, quality = 'proper') {
-    const t = this.tasks.find(x => x.id === id); if (!t || t.state !== 'active') return { ok: false, why: 'not active' };
-    if (t.room !== this.place.room) return { ok: false, why: `Go to the ${t.room}` };
+    const t = this.tasks.find(x => x.id === id); if (!t) return { ok: false, why: 'not active' }; const c = this.check(id); if (!c.ok) return c;
     t.state = 'done'; t.by = quality; this.maxScore += 1; this.score += { proper: 1, rushed: 0.6, faked: 0.25, skipped: 0 }[quality] ?? 1;
     if (quality !== 'proper') this.chain.push(`Task "${t.task}" ${quality}`);
     this.emit({ type: 'taskdone', task: t.task, quality }); return { ok: true };
