@@ -353,7 +353,7 @@ export function generate(deck, seed, opts = {}) {
 
   // T junction: on decks with a tube, one branch is bored off a straight lower-run tile of a tube (never next to its mouths) sideways through solid bulkhead to an open tile.
   // The junction tile becomes tubeAxis 'xy' with three open edges; the branch is its own tubes entry (branch: true, a = the junction tile, b = its open mouth, never a ladder).
-  if (deck >= 2 && tubes.length && rnd() < 0.7) {
+  for (let jpass = 0; jpass < 2; jpass++) if (deck >= 2 && tubes.length && rnd() < (jpass ? 0.45 : 0.7)) {   // up to two junctions per deck
     const wallT = (tx, ty) => grid[ty]?.[tx] === 1 && hull(tx, ty);
     outerJ: for (const t of tubes.slice().sort(() => rnd() - 0.5)) {
       if (t.branch) continue;
