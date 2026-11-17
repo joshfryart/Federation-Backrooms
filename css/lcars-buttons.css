@@ -32,9 +32,9 @@
 
 :root {
   /* a restrained panel palette: orange = main action, lilac / periwinkle = secondary, peach / tan = neutral, red = warn */
-  --lc-orange: var(--k-orange, #f0933a); --lc-gold: #f2bd6b; --lc-peach: #f5c59c;
-  --lc-lilac: #c49ad6; --lc-peri: #8f9be0; --lc-teal: #74b9ae; --lc-sky: #9cc4ea;
-  --lc-rose: #d9838f; --lc-warn: #e0614a; --lc-ok: #82c495; --lc-off: #3b3944;
+  --lc-orange: #ff9c33; --lc-gold: #ffc247; --lc-peach: #ffbf8c;
+  --lc-lilac: #cc8ff2; --lc-peri: #8c9dff; --lc-teal: #4ecbb8; --lc-sky: #82c9ff;
+  --lc-rose: #ff7d93; --lc-warn: #ff5a3c; --lc-ok: #5fd98c; --lc-off: #3b3944;
   --lc-panel: #0c0d14; --lc-panel-hi: #17161f; --lc-black: #000; --lc-ink-dark: #0b0705; --lc-ink-light: #f3eee6;
   --lc-focus: #fff4e2;
   --lc-dur: .1s; --lc-ease: cubic-bezier(.2, .8, .2, 1);
@@ -47,17 +47,17 @@ body.cb { --lc-warn: #ffb000; --lc-ok: #4aa3ff; --lc-teal: #4aa3ff; --lc-focus: 
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset, .bd-x, #bd-panel .x, .dp-pop .x) {
   --lc-face: var(--lc-c, var(--lc-orange));
   box-sizing: border-box; vertical-align: middle;
-  min-height: var(--lc-h, 2.75rem); min-width: var(--lc-minw, 0);
-  padding: calc(var(--lc-py, .55rem) * 1.9) var(--lc-px, 1.25rem) calc(var(--lc-py, .55rem) * .4) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem) + var(--lc-pl, 1.4rem));
+  min-height: var(--lc-h, 3rem); min-width: var(--lc-minw, 0);
+  padding: calc(var(--lc-py, .55rem) * 1.9) var(--lc-px, 1.25rem) calc(var(--lc-py, .55rem) * .4) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .32rem) + var(--lc-pl, 1.4rem));
   margin-right: var(--lc-mr, 0);
   border: 0; border-radius: var(--lc-r, 999px); clip-path: none; outline: 0;
-  font: 600 var(--lc-fs, 1rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: var(--lc-ls, .05em); text-transform: uppercase;
+  font: 800 var(--lc-fs, 1rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: var(--lc-ls, .09em); text-transform: uppercase;
   text-align: right; text-shadow: none; white-space: nowrap;
   color: var(--lc-ink, var(--lc-ink-dark));
   background: linear-gradient(90deg,
     var(--lc-cap, var(--lc-face)) 0 var(--lc-capw, 1.9rem),
-    var(--lc-black) var(--lc-capw, 1.9rem) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem)),
-    var(--lc-face) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem)));
+    var(--lc-black) var(--lc-capw, 1.9rem) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .32rem)),
+    var(--lc-face) calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .32rem)));
   box-shadow: none;
   cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; filter: none; transform: none;
   transition: background-color var(--lc-dur), color var(--lc-dur);
@@ -67,8 +67,8 @@ html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgre
 /* the index number (data-lc-n / --lc-n): small, in the top-left corner of the face, just past the gap; empty when unset */
 .lc-btn::before,
 html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgreset)::before {
-  content: var(--lc-n, attr(data-lc-n)); position: absolute; left: calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .25rem) + .4rem); top: .4rem;
-  text-align: left; font: 600 max(.56em, .6rem)/1 var(--f-m); letter-spacing: -.02em; color: var(--lc-ink, var(--lc-ink-dark)); opacity: .7; pointer-events: none;
+  content: var(--lc-n, attr(data-lc-n)); position: absolute; left: calc(var(--lc-capw, 1.9rem) + var(--lc-gapw, .32rem) + .4rem); top: .4rem;
+  text-align: left; font: 800 max(.56em, .6rem)/1 var(--f-m); letter-spacing: -.02em; color: var(--lc-ink, var(--lc-ink-dark)); opacity: .7; pointer-events: none;
 }
 /* hover = lighter flat colour, pressed = darker flat colour, focus = light ring, disabled = dim grey */
 .lc-btn:hover,
@@ -105,12 +105,12 @@ html body:not(#lc-0) :is(.btn, #boot-go, #bd-brief button, #bd-end button, #jgre
 /* ---------------------------------------------------------------- 3. sizes ------------------------------------------------- */
 .lc-sm, .bd-x, #bd-panel .x, .dp-pop .x { --lc-h: 2rem; --lc-fs: .8rem; --lc-capw: .8rem; --lc-gapw: .2rem; --lc-pl: .7rem; --lc-px: .9rem; --lc-py: .3rem; --lc-ls: .04em; }
 .lc-lg { --lc-h: 3.4rem; --lc-fs: 1.3rem; --lc-capw: 2.9rem; --lc-px: 1.6rem; --lc-pl: 2.4rem; --lc-py: .6rem; }
-.btn { --lc-h: clamp(2.3rem, 6vh, 3.1rem); --lc-fs: clamp(.9rem, 2.6vh, 1.15rem); --lc-px: clamp(1.1rem, 2.2vw, 1.6rem); --lc-pl: clamp(1.4rem, 3vw, 2.6rem); --lc-capw: 2.7rem; }
+.btn { --lc-h: clamp(2.6rem, 6.8vh, 3.5rem); --lc-fs: clamp(1rem, 3vh, 1.3rem); --lc-px: clamp(1.1rem, 2.2vw, 1.6rem); --lc-pl: clamp(1.4rem, 3vw, 2.6rem); --lc-capw: 2.7rem; }
 #bd-end button { --lc-mr: .6rem; --lc-h: 2.5rem; --lc-fs: .9rem; --lc-capw: 1.5rem; --lc-px: 1.1rem; --lc-pl: 1.2rem; }
 #bd-end .acts { margin-top: .9rem; display: flex; flex-wrap: wrap; gap: .5rem; }
 html body:not(#lc-0) .dp-pop .x { float: right; margin: -.2rem 0 0 .4rem; }
 html body:not(#lc-0) .bd-x {   /* js/socialui.js styles this one inline, so only !important reaches it */
-  margin: 0 0 0 .5rem !important; padding: .3rem .75rem .12rem 1.3rem !important; font: 600 .78rem/1 var(--f-d) !important; letter-spacing: .04em !important; color: var(--lc-ink-dark) !important; border: 0 !important;
+  margin: 0 0 0 .5rem !important; padding: .3rem .75rem .12rem 1.3rem !important; font: 800 .78rem/1 var(--f-d) !important; letter-spacing: .04em !important; color: var(--lc-ink-dark) !important; border: 0 !important;
   background: linear-gradient(90deg, var(--lc-lilac) 0 .6rem, var(--lc-black) .6rem .78rem, var(--lc-lilac) .78rem) !important; }
 html body:not(#lc-0) .bd-x:hover { background: linear-gradient(90deg, #dcc2e6 0 .6rem, var(--lc-black) .6rem .78rem, #dcc2e6 .78rem) !important; }
 
@@ -118,11 +118,11 @@ html body:not(#lc-0) .bd-x:hover { background: linear-gradient(90deg, #dcc2e6 0 
 /* rounded left end, flat right end, a black gap, then a separate squared two-colour bar cap */
 .lc-elbow,
 html body:not(#lc-0) :is(#begin, #resume, #boot-go, #bd-brief button, #again, #cont) {
-  --lc-r: 999px 0 0 999px; --lc-mr: .95rem;
+  --lc-r: 999px 0 0 999px; --lc-mr: 1.35rem;
 }
 .lc-elbow::after,
 html body:not(#lc-0) :is(#begin, #resume, #boot-go, #bd-brief button, #again, #cont)::after {
-  content: ''; position: absolute; top: 0; bottom: 0; right: -.85rem; width: .6rem; border-radius: 0; pointer-events: none;
+  content: ''; position: absolute; top: 0; bottom: 0; right: -1.22rem; width: .9rem; border-radius: 0; pointer-events: none;
   background: linear-gradient(180deg, var(--lc-bar, var(--lc-gold)) 0 calc(50% - .12rem), var(--lc-black) calc(50% - .12rem) calc(50% + .12rem), var(--lc-bar2, var(--lc-peri)) calc(50% + .12rem) 100%);
   box-shadow: none;
 }
@@ -140,10 +140,10 @@ html body:not(#lc-0) #boot-go::after { animation: lc-blink 1.6s ease-in-out infi
 /* dim face (the colour at low strength) with a full-strength left cap; selected fills with the colour */
 .lc-tab,
 html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk) {
-  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 26%, #000);
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 32%, #000);
   position: relative; box-sizing: border-box; min-height: var(--lc-h, 2rem); padding: .55rem .9rem .2rem 1.35rem;
   border: 0; border-radius: var(--lc-r, 999px 0 0 999px); clip-path: none; outline: 0;
-  font: 600 var(--lc-fs, .85rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .05em; text-transform: uppercase; text-align: right;
+  font: 800 var(--lc-fs, .85rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .09em; text-transform: uppercase; text-align: right;
   color: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 55%, #fff);
   background: linear-gradient(90deg, var(--lc-c, var(--lc-peri)) 0 .6rem, var(--lc-black) .6rem .8rem, var(--lc-face) .8rem);
   box-shadow: none; filter: none;
@@ -163,7 +163,7 @@ html body:not(#lc-0) :is(.ac-panel .chips button, #nv-map .dk)[aria-pressed=true
 html body:not(#lc-0) .ac-panel .chips button { --lc-c: var(--lc-peri); }
 html body:not(#lc-0) .ac-panel .chips button[aria-pressed=true] { --lc-c: var(--kc, var(--lc-orange)); }
 /* deck tabs on the big map (M): the zone colour is the cap, current deck gets a ring, selected deck fills orange */
-html body:not(#lc-0) #nv-map .dk { --lc-c: var(--z); display: grid; border-radius: 999px 0 0 999px; padding: .3rem .5rem .3rem 1.25rem; font: 600 var(--t-base, .875rem) var(--f-m); letter-spacing: 0; color: var(--lc-ink-light); }
+html body:not(#lc-0) #nv-map .dk { --lc-c: var(--z); display: grid; border-radius: 999px 0 0 999px; padding: .3rem .5rem .3rem 1.25rem; font: 800 var(--t-base, .875rem) var(--f-m); letter-spacing: 0; color: var(--lc-ink-light); }
 html body:not(#lc-0) #nv-map .dk.cur { box-shadow: inset 0 0 0 .14rem var(--m-route, #8ef3ff); }
 html body:not(#lc-0) #nv-map .dk.sel {
   color: var(--lc-ink-dark);
@@ -173,7 +173,7 @@ html body:not(#lc-0) #nv-map .dk.sel .z { color: var(--lc-ink-dark) !important; 
 /* room-type filter icons on the big map: round flat icon buttons */
 html body:not(#lc-0) #nv-map .find span {
   display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; opacity: 1; cursor: pointer;
-  background: color-mix(in oklab, var(--lc-peri) 26%, #000); box-shadow: none; filter: none;
+  background: color-mix(in oklab, var(--lc-peri) 32%, #000); box-shadow: none; filter: none;
   transition: background-color var(--lc-dur), color var(--lc-dur);
 }
 html body:not(#lc-0) #nv-map .find span:hover { background: color-mix(in oklab, var(--lc-peri) 38%, #000); box-shadow: none; }
@@ -183,22 +183,22 @@ html body:not(#lc-0) #nv-map .find span.on { filter: none; background: var(--lc-
 /* a coloured label cap, then segments split by black gaps; the chosen segment fills */
 .lc-seg, html body:not(#lc-0) .pace {
   display: inline-flex; align-items: stretch; gap: .2rem; padding: 0; border: 0; border-radius: 999px; overflow: visible;
-  background: none; box-shadow: none; clip-path: none; font: 600 var(--lc-fs, .85rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .05em; text-transform: uppercase;
+  background: none; box-shadow: none; clip-path: none; font: 800 var(--lc-fs, .85rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .09em; text-transform: uppercase;
 }
 .lc-seg > span, html body:not(#lc-0) .pace > span {   /* the group label is the left end cap */
   display: inline-flex; align-items: center; padding: .75em .8rem .3em 1.2rem; border: 0; border-radius: 999px 0 0 999px;
   background: var(--lc-c, var(--lc-lilac)); color: var(--lc-ink-dark); box-shadow: none;
 }
 .lc-seg > button, html body:not(#lc-0) .pace > button {
-  --lc-face: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 24%, #000);
+  --lc-face: color-mix(in oklab, var(--lc-seg-off, var(--lc-peri)) 30%, #000);
   position: relative; min-height: var(--lc-h, 2.3rem); padding: .75em 1rem .3em; margin: 0; border: 0; border-radius: 0; outline: 0; opacity: 1;
-  font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: right; color: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 50%, #fff); cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: right; color: color-mix(in oklab, var(--lc-seg-off, var(--lc-peri)) 45%, #fff); cursor: pointer;
   background: var(--lc-face); box-shadow: none; filter: none;
   transition: background-color var(--lc-dur), color var(--lc-dur);
 }
 .lc-seg > button:last-child, html body:not(#lc-0) .pace > button:last-child { border-radius: 0 999px 999px 0; padding-right: 1.3rem; }
 .lc-seg > button:first-child, html body:not(#lc-0) .pace > button:first-child { border-radius: 999px 0 0 999px; padding-left: 1.3rem; }
-.lc-seg > button:hover, html body:not(#lc-0) .pace > button:hover { --lc-face: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 40%, #000); background: var(--lc-face); filter: none; box-shadow: none; }
+.lc-seg > button:hover, html body:not(#lc-0) .pace > button:hover { --lc-face: color-mix(in oklab, var(--lc-seg-off, var(--lc-peri)) 48%, #000); background: var(--lc-face); filter: none; box-shadow: none; }
 .lc-seg > button:active, html body:not(#lc-0) .pace > button:active { --lc-face: color-mix(in oklab, var(--lc-sel, var(--lc-orange)) 10%, #000); transform: none; filter: none; }
 .lc-seg > button:focus-visible, html body:not(#lc-0) .pace > button:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .14rem; z-index: 1; }
 .lc-seg > button:is(.on, [aria-pressed=true], [aria-checked=true]), html body:not(#lc-0) .pace > button.on {
@@ -232,11 +232,11 @@ html body:not(#lc-0) #bd-menu .o b { --lc-key: var(--lc-lilac); min-width: 1.6re
 /* dim block with one rounded corner and a full-colour cap bar on the left; hover fills orange */
 .lc-tile,
 html body:not(#lc-0) :is(.act) {
-  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 24%, #000);
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 32%, #000);
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem;
   min-width: 5.4rem; min-height: 3.8rem; padding: .5rem .75rem .45rem 1.05rem; box-sizing: border-box;
   border: 0; border-radius: 1rem 0 0 0; outline: 0; clip-path: none;
-  font: 600 var(--t-micro, .72rem)/1.1 var(--f-d); font-stretch: condensed; letter-spacing: .04em; text-transform: uppercase;
+  font: 800 var(--t-micro, .72rem)/1.1 var(--f-d); font-stretch: condensed; letter-spacing: .04em; text-transform: uppercase;
   color: color-mix(in oklab, var(--lc-c, var(--lc-peri)) 45%, #fff);
   background: linear-gradient(90deg, var(--lc-c, var(--lc-peri)) 0 .4rem, var(--lc-black) .4rem .6rem, var(--lc-face) .6rem);
   box-shadow: none; filter: none;
@@ -262,7 +262,7 @@ html body:not(#lc-0) .act.opt { --lc-c: var(--lc-gold); }
 /* dim flat row, rounded left end, a black gap then a coloured block cap on the right; hover fills with the colour */
 .lc-row,
 html body:not(#lc-0) :is(#bd-menu .o, #liftui .lr) {
-  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-lilac)) 22%, #000);
+  --lc-face: color-mix(in oklab, var(--lc-c, var(--lc-lilac)) 32%, #000);
   position: relative; display: flex; align-items: center; gap: .6rem; min-height: 2.3rem; margin: .2rem 0; padding: .2rem 1.6rem .2rem .3rem;
   border: 0; border-radius: 999px 0 0 999px; outline: 0; cursor: pointer;
   background: linear-gradient(90deg, var(--lc-face) 0 calc(100% - .8rem), var(--lc-black) calc(100% - .8rem) calc(100% - .6rem), var(--lc-c, var(--lc-lilac)) calc(100% - .6rem));
@@ -280,7 +280,7 @@ html body:not(#lc-0) #liftui:not(.ride) .lr:hover :is(b, span) { color: var(--lc
 .lc-row:focus-visible, html body:not(#lc-0) :is(#bd-menu .o, #liftui .lr):focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .12rem; }
 html body:not(#lc-0) #bd-menu .o { --lc-c: var(--lc-lilac); }
 html body:not(#lc-0) #bd-menu .o.off, .lc-row:is(.off, [aria-disabled=true]) { --lc-c: var(--lc-off); opacity: .6; filter: none; cursor: not-allowed; pointer-events: none; }
-html body:not(#lc-0) #liftui .lr { --lc-c: var(--lc-peach); font: 600 var(--t-base, .875rem) var(--f-d); }
+html body:not(#lc-0) #liftui .lr { --lc-c: var(--lc-peach); font: 800 var(--t-base, .875rem) var(--f-d); }
 html body:not(#lc-0) #liftui .lr i { display: inline-grid; place-items: center; min-width: 2.4rem; height: 1.75rem; border-radius: 999px 0 0 999px; font: 700 .8rem var(--f-m); color: var(--lc-ink-dark);
   background: var(--lc-i, var(--dim, #8fa0b6)); }
 html body:not(#lc-0) #liftui .lr.cur { --lc-i: var(--lc-teal); } html body:not(#lc-0) #liftui .lr.dest { --lc-i: var(--lc-orange); }
@@ -321,7 +321,7 @@ html body:not(#lc-0) .settings label:has(> #jgreset):hover { background: none; }
 /* slider: a segmented bar (black gaps every 10%) that fills up to a flat pill thumb ringed in black */
 .lc-range, html body:not(#lc-0) .settings input[type=range] {
   -webkit-appearance: none; appearance: none; flex: 0 1 13rem; width: 13rem; min-width: 0; height: 1.7rem; margin: 0; background: none; cursor: pointer; outline: 0;
-  --lc-track: linear-gradient(90deg, var(--lc-c, var(--lc-orange)) 0 var(--lc-v, 50%), color-mix(in oklab, var(--lc-c, var(--lc-orange)) 26%, #000) var(--lc-v, 50%));
+  --lc-track: linear-gradient(90deg, var(--lc-c, var(--lc-orange)) 0 var(--lc-v, 50%), color-mix(in oklab, var(--lc-peri) 30%, #000) var(--lc-v, 50%));
 }
 .lc-range::-webkit-slider-runnable-track, html body:not(#lc-0) .settings input[type=range]::-webkit-slider-runnable-track {
   height: .7rem; border-radius: 0; box-shadow: none;
@@ -346,11 +346,11 @@ html body:not(#lc-0) .settings label:has(> #jgreset):hover { background: none; }
 /* plain <select> (only where js/lcars-buttons.js has not mirrored it): dim pill, black gap, lilac chevron end cap */
 .lc-select, html body:not(#lc-0) .settings select {
   -webkit-appearance: none; appearance: none; min-height: 2rem; padding: .45rem 2.3rem .2rem 1rem; border: 0; border-radius: 999px;
-  font: 600 .82rem/1 var(--f-d); font-stretch: condensed; letter-spacing: .05em; text-transform: uppercase; color: color-mix(in oklab, var(--lc-lilac) 45%, #fff); cursor: pointer;
+  font: 800 .82rem/1 var(--f-d); font-stretch: condensed; letter-spacing: .09em; text-transform: uppercase; color: color-mix(in oklab, var(--lc-lilac) 45%, #fff); cursor: pointer;
   background:
     linear-gradient(45deg, transparent 50%, var(--lc-ink-dark) 50%) calc(100% - 1rem) 42% / .35rem .35rem no-repeat,
     linear-gradient(315deg, transparent 50%, var(--lc-ink-dark) 50%) calc(100% - .67rem) 42% / .35rem .35rem no-repeat,
-    linear-gradient(90deg, color-mix(in oklab, var(--lc-lilac) 26%, #000) 0 calc(100% - 1.8rem), var(--lc-black) calc(100% - 1.8rem) calc(100% - 1.6rem), var(--lc-lilac) calc(100% - 1.6rem));
+    linear-gradient(90deg, color-mix(in oklab, var(--lc-lilac) 32%, #000) 0 calc(100% - 1.8rem), var(--lc-black) calc(100% - 1.8rem) calc(100% - 1.6rem), var(--lc-lilac) calc(100% - 1.6rem));
   box-shadow: none;
 }
 .lc-select:focus-visible, html body:not(#lc-0) .settings select:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .2rem; }
@@ -365,7 +365,7 @@ html body:not(#lc-0) .blk:hover { filter: brightness(1.2); }
 html body:not(#lc-0) .blk:focus-visible { outline: .14rem solid var(--lc-focus); outline-offset: .1rem; }
 html body:not(#lc-0) :is(#ui-wheel, #tk) .wseg.hov { filter: brightness(1.25); }
 /* the "click to resume" chip (js/ui-mode.js): black pill with gold / periwinkle block caps at both ends (it keeps its own centring transform) */
-html body:not(#lc-0) #ui-resume { border-radius: 999px; padding: .75rem 2.2rem .5rem; font: 600 var(--t-base, .95rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .06em; color: var(--lc-gold);
+html body:not(#lc-0) #ui-resume { border-radius: 999px; padding: .75rem 2.2rem .5rem; font: 800 var(--t-base, .95rem)/1 var(--f-d); font-stretch: condensed; letter-spacing: .06em; color: var(--lc-gold);
   background: linear-gradient(90deg, var(--lc-gold) 0 1rem, transparent 1rem 1.25rem, var(--lc-black) 1.25rem calc(100% - 1.25rem), transparent calc(100% - 1.25rem) calc(100% - 1rem), var(--lc-peri) calc(100% - 1rem));
   box-shadow: none; }
 
