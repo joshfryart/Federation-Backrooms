@@ -57,7 +57,7 @@ export class WorkSites {
     const sites = resolveSites(def, { rect, props: d.props, free: (tx, ty) => d.grid[ty]?.[tx] === 0 }, seed, { fetch });
     if (!sites.length) return { ok: false, why: 'no room to work' };
     this.job = { it, def, opts, rect, world: w, label: it.label || it.task }; this.run = createSiteRun(def, seed, sites, { calm: !!this.CFG?.calm });
-    this.at = -1; this.pressed = false; this.lastYaw = null; this.buildMarks(); this.render(true); this.el?.classList.add('on'); this.pinNext();
+    this.at = -1; this.pressed = false; this.lastYaw = null; this.anchor = null; this.buildMarks(); this.render(true); this.el?.classList.add('on'); this.pinNext();
     const first = this.run.sites[0]; this.G.say?.(`${def.name}: ${sites.filter(s => s.act !== 'fetch').length} ${def.site.toLowerCase()}s marked${def.item.length ? ` · needs a ${this.itemName(def)}${fetch ? ' (draw one at the marked supply point)' : ''}` : ''}. ${def.how}`, 'good');
     this.sound?.tone?.(660, 0.08, 'sine', 0.06); this.note(`start ${def.id} ${sites.length}${fetch ? ' fetch' : ''}`); void first;
     return { ok: true, sites: sites.length, fetch };
@@ -93,7 +93,10 @@ export class WorkSites {
     r.sites.forEach((s, i) => { if (s.done) return; const [cx, cz] = w.center(s.tx, s.ty), dx = cx - P.x, dz = cz - P.z, d = Math.hypot(dx, dz), facing = (dx * fx + dz * fz) / (d || 1); if (d > REACH || (d > 1.1 && facing < 0.35)) return; const sc = d - (i === r.next ? 1 : 0); if (sc < bd) { bd = sc; at = i; } });
     let inp;
     if (this.inputOverride) inp = { ...this.inputOverride, at: this.inputOverride.at ?? at };
-    else { const s = r.sites[at]; let look = 0; if (s) { const [cx, cz] = w.center(s.tx, s.ty); look = wrap(P.yaw - Math.atan2(-(cx - P.x), -(cz - P.z))); } inp = { at, hold: !!this.keys.KeyE && at >= 0, press: this.pressed, look, wipe: this.wipe }; }
+    else {   // scan: the hidden reading is a bearing relative to where you first faced the site (stable even standing on a floor site)
+      const s = r.sites[at]; if (at < 0) this.anchor = null; else if (!this.anchor || this.anchor.i !== at) { const [cx, cz] = w.center(s.tx, s.ty), d = Math.hypot(cx - P.x, cz - P.z); this.anchor = { i: at, yaw: d > 0.9 ? Math.atan2(-(cx - P.x), -(cz - P.z)) : P.yaw }; }
+      if (this.pressed && s?.act === 'scrub') this.wipe = Math.max(this.wipe, 1.6);   // keyboard-only: re-tapping E scrubs too (arrow keys turn the view as well)
+      inp = { at, hold: !!this.keys.KeyE && at >= 0, press: this.pressed, look: this.anchor ? wrap(P.yaw - this.anchor.yaw) : 0, wipe: this.wipe }; }
     inp.hasItem = inp.hasItem ?? this.hasItem(); inp.away = away; this.pressed = false; this.at = inp.at ?? at;
     const before = r.sites.map(s => s.done), f0 = r.faults, e = r.step(dt, inp);
     if (e) this.onEvent(e);
