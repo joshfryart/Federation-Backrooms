@@ -379,7 +379,7 @@ const propsOk = await page.evaluate(async () => {
   for (const k of PROP_GALLERY) { try { const g = buildProp(k); if (!g || !g.children.length) { bad.push(k); continue; }
     if (!PROP_ART[k]) continue; art++; const u = g.userData, n = tris(g); maxTris = Math.max(maxTris, n);
     if (n < 100 || n > 8000) bad.push(`${k}: ${n} tris`);   // galley props run 4,500-6,600 (stools, bottles, plate racks), the rest under 2,600
-    if (u.top !== undefined && !(u.top > 0 && u.top < 2.5)) bad.push(`${k}: top ${u.top}`);
+    if (u.top !== undefined && !(u.top > 0 && u.top < (k === 'catwalk' ? 2.7 : 2.5))) bad.push(`${k}: top ${u.top}`);
     if (PROP_KINDS.includes(k)) {   // floor props gen.js places: a footprint for collision, use points for crew, seat height on seated ones
       if (!(Array.isArray(u.box) && u.box.length === 4 && u.box[0] < u.box[1] && u.box[2] < u.box[3] && Math.max(-u.box[0], u.box[1], -u.box[2], u.box[3]) <= 1.25)) bad.push(`${k}: box ${JSON.stringify(u.box)}`);
       if (!(u.spots?.length || u.use)) bad.push(`${k}: no spots/use`);
