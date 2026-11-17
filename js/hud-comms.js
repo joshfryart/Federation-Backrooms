@@ -2,7 +2,7 @@
 //   top-centre: alert banner (stacked, highest severity first) / condition badge when green; PA subtitle line
 //   bottom-left: comm traffic stack; K: alert details + legend; L: comm log; H: radio menu (digits choose, Backspace goes back)
 //   F4 (debug): raise the next alert type; Shift+F4 clears them all
-import { ALERTS, ALERT_ORDER, SEVERITY_NAME, fmtElapsed } from './alerts.js';
+import { alertColour, ALERTS, ALERT_ORDER, SEVERITY_NAME, fmtElapsed } from './alerts.js';
 import { iconSvg } from './icons.js';
 import { UIHUB } from './ui-mode.js';
 import { deptCol, DEPT_LETTER } from './icons.js';
@@ -119,17 +119,17 @@ export class CommsHUD {
     this.elBanner.innerHTML = act.slice(0, 3).map((a, i) => {
       const d = a.def, scope = a.scope === 'deck' && a.deck != null ? `Deck ${a.deck + 1}` : a.scope === 'deck' ? 'This deck' : 'Ship-wide', by = a.byPerson ? `Ordered by ${a.byPerson.short}${a.byPerson.title ? ', ' + a.byPerson.title : ''}` : a.source === 'auto' ? 'Automatic: ' + (a.reason || 'ship sensors') : a.source === 'debug' ? 'Debug trigger' : 'Ordered by the bridge';
       return i === 0
-        ? `<div class="ac-card" data-id="${a.id}" style="--c:${d.colour};--p:${PULSE(d.severity)}" role="alert"><div class="h"><span class="n">${esc(d.label)}</span><span class="sc">${scope}</span><span class="el" data-el="${a.id}">${fmtElapsed(this.alerts.elapsed(a))}</span></div><div class="m">${esc(d.meaning)}</div><div class="w">${esc(by)}${a.reason && a.source !== 'auto' ? ' · ' + esc(a.reason) : ''}</div><div class="k">[K] what to do · severity ${d.severity} ${SEVERITY_NAME[d.severity]}</div></div>`
-        : `<div class="ac-card sub" data-id="${a.id}" style="--c:${d.colour}"><div class="h"><span class="n">${esc(d.label)}</span><span class="sc">${scope}</span><span class="el" data-el="${a.id}">${fmtElapsed(this.alerts.elapsed(a))}</span></div></div>`;
+        ? `<div class="ac-card" data-id="${a.id}" style="--c:${alertColour(d)};--p:${PULSE(d.severity)}" role="alert"><div class="h"><span class="n">${esc(d.label)}</span><span class="sc">${scope}</span><span class="el" data-el="${a.id}">${fmtElapsed(this.alerts.elapsed(a))}</span></div><div class="m">${esc(d.meaning)}</div><div class="w">${esc(by)}${a.reason && a.source !== 'auto' ? ' · ' + esc(a.reason) : ''}</div><div class="k">[K] what to do · severity ${d.severity} ${SEVERITY_NAME[d.severity]}</div></div>`
+        : `<div class="ac-card sub" data-id="${a.id}" style="--c:${alertColour(d)}"><div class="h"><span class="n">${esc(d.label)}</span><span class="sc">${scope}</span><span class="el" data-el="${a.id}">${fmtElapsed(this.alerts.elapsed(a))}</span></div></div>`;
     }).join('') + (act.length > 3 ? `<div class="ac-card sub" style="--c:#999"><div class="h"><span class="n">+${act.length - 3} more</span><span class="sc">[K] details</span></div></div>` : '');
   }
   renderDetails() {
     const act = this.alerts.active(), cond = this.alerts.condition();
     const steps = (d) => { const parts = String(d.doThis || '').split(/(?<=[.;])\s+/).filter(Boolean).slice(0, 3); return `<div class="steps">${parts.map((t, i) => `<div>${iconSvg(stepIcon(t, i))}<span>${esc(t.replace(/[.;]$/, ''))}</span></div>`).join('')}</div>`; };
     const sev = (n) => `<span class="sev">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'f' : ''}"></i>`).join('')}</span>`;
-    const rows = act.length ? act.map(a => { const d = a.def; return `<div class="ad alertcard" style="--c:${d.colour}"><h4>${iconSvg(d.severity >= 3 ? 'red' : d.severity >= 1 ? 'yellow' : 'green')}<b>${esc(d.label)}</b>${sev(d.severity)}</h4><small>${a.scope === 'deck' && a.deck != null ? 'Deck ' + (a.deck + 1) : a.scope === 'deck' ? 'This deck' : 'Ship-wide'} · ${fmtElapsed(this.alerts.elapsed(a))} · ${a.byPerson ? 'ordered by ' + esc(a.byPerson.short) : a.source === 'auto' ? 'automatic: ' + esc(a.reason) : a.source}${a.reason && a.source !== 'auto' ? ' · ' + esc(a.reason) : ''}</small><p>${esc(d.meaning)}</p><p class="do"><b style="color:#9fe3a8">What you should do:</b></p>${steps(d)}</div>`; }).join('')
-      : `<div class="ad alertcard" style="--c:${cond.colour}"><h4>${iconSvg('green')}<b>${esc(cond.label)}</b></h4><p>${esc(cond.meaning)}</p>${steps(cond)}</div>`;
-    const legend = ALERT_ORDER.map(id => { const d = ALERTS[id]; return `<div style="--c:${d.colour}" title="${esc(d.meaning)}"><i></i><span>${esc(d.label)} <em>${esc(d.short)}</em></span><em>${d.severity}</em></div>`; }).join('');
+    const rows = act.length ? act.map(a => { const d = a.def; return `<div class="ad alertcard" style="--c:${alertColour(d)}"><h4>${iconSvg(d.severity >= 3 ? 'red' : d.severity >= 1 ? 'yellow' : 'green')}<b>${esc(d.label)}</b>${sev(d.severity)}</h4><small>${a.scope === 'deck' && a.deck != null ? 'Deck ' + (a.deck + 1) : a.scope === 'deck' ? 'This deck' : 'Ship-wide'} · ${fmtElapsed(this.alerts.elapsed(a))} · ${a.byPerson ? 'ordered by ' + esc(a.byPerson.short) : a.source === 'auto' ? 'automatic: ' + esc(a.reason) : a.source}${a.reason && a.source !== 'auto' ? ' · ' + esc(a.reason) : ''}</small><p>${esc(d.meaning)}</p><p class="do"><b style="color:#9fe3a8">What you should do:</b></p>${steps(d)}</div>`; }).join('')
+      : `<div class="ad alertcard" style="--c:${alertColour(cond)}"><h4>${iconSvg('green')}<b>${esc(cond.label)}</b></h4><p>${esc(cond.meaning)}</p>${steps(cond)}</div>`;
+    const legend = ALERT_ORDER.map(id => { const d = ALERTS[id]; return `<div style="--c:${alertColour(d)}" title="${esc(d.meaning)}"><i></i><span>${esc(d.label)} <em>${esc(d.short)}</em></span><em>${d.severity}</em></div>`; }).join('');
     this.elDetails.innerHTML = `<h3>${iconSvg('alert')} Ship condition: ${esc(cond.label)}</h3>${rows}<details class="lgw"><summary>All alert types (severity 0-5)</summary><div class="lg">${legend}</div></details><div class="hint">K or Esc closes · L comm log · H radio</div>`;
   }
   // ---- PA + comm lines

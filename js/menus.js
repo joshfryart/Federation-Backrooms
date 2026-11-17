@@ -10,6 +10,7 @@
 // Every menu / wheel / panel pauses the whole world: G.menuPause = UI.frozen (|| the nav agent's big map) and step() returns early.
 import { createUIMode, mountUIMode, UIHUB } from './ui-mode.js';
 import { WheelView, newWheel, moveTo, pickItem, digitPick, stepSel, clampCursor, defaultKid } from './wheel.js';
+import { alertColour } from './alerts.js';
 import { Portraits } from './portraits.js';
 import { NameTags } from './nametags.js';
 import { toastOf, toastHTML, TOAST_CSS } from './toasts.js';
@@ -207,7 +208,7 @@ export class Menus {
   openStatus() { this.c.showStatus?.(true); this.UI.open('status', { close: () => this.c.showStatus?.(false), toggle: 'Tab' }); }
   hail(p) { return this.comms?.hail(p); }
   locate(p) { const N = this.G.nav; if (N?.setPin) try { const w = this.G.sim?.where(p); if (w?.deckNo) N.setPin({ kind: 'person', id: 'p' + p.id, label: p.short, icon: 'person', person: p, deck: w.deckNo - 1, room: w.room }); } catch { } }
-  alertTop() { const A = this.G.comms?.alerts, a = A?.top?.(); return a ? { label: a.def.label, colour: a.def.colour, elapsed: A.elapsed(a) } : null; }
+  alertTop() { const A = this.G.comms?.alerts, a = A?.top?.(); return a ? { label: a.def.label, colour: alertColour(a.def), elapsed: A.elapsed(a) } : null; }
   /** distance to a crew member: { deck: decks apart, m: metres when on this deck } or null */
   distTo(p) {
     const w = this.G.sim?.where?.(p); if (!w || w.deckNo == null) return null; const deck = Math.abs(w.deckNo - ((this.G.shipDeck ?? 0) + 1));

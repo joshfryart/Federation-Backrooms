@@ -5,6 +5,9 @@
 //   ALERTS[id]      static definition (label, meaning, what to do, PA text, klaxon pattern, severity 0-5, ...)
 //   AlertState      raise / clear / active() / on('raise'|'clear') / autoFromShip(shipState) / tick(dt)
 
+// colour-blind palette (body.cb, set from the pause menu): severity maps to blue -> yellow -> orange -> white, which stays distinguishable without red / green
+const CB = ['#4aa3ff', '#ffe14a', '#ffc400', '#ff9a00', '#ff7a00', '#ffffff'];
+export const alertColour = (def) => (globalThis.document?.body?.classList?.contains('cb') ? CB[Math.max(0, Math.min(5, def.severity | 0))] : def.colour);
 export const ALERT_IDS = ['yellow', 'red', 'fire', 'hull_breach', 'contamination', 'power_failure', 'gravity_failure', 'intruder', 'medical_emergency', 'abandon_ship'];
 
 // colour: HUD colour; severity: 0 (green) .. 5 (abandon ship); klaxon: pattern id for Sound.alertTone();
