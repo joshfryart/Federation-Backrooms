@@ -21,9 +21,17 @@ export const DEPT_ROOMS = { medical: ['sickbay'], engineering: ['engineering', '
 export const MAX_SHARE = 0.25;
 // one label per themed kind (OVERRIDES: the same game whatever the room): the browser block plays each through startJob
 export const KIND_LABELS = { vitals: 'Crew health screening', hypo: 'Dispense meds and update patient list', tray: 'Sterilise instruments and surgical bay', meds: 'Pharmacy and controlled meds count', counsel: 'Scheduled counselling sessions',
-  power: 'Balance grid load against reactor output', bench: 'Coil wear check and swap', tune: 'Scan subspace bands for signals', classify: 'Lifeform scanner spot check', badge: 'Issue and returns desk', doorlog: 'Audit the program archive',
-  cook: 'Captain\'s refreshment and comfort', nutrient: 'Hydroponics O2 balance', fresh: 'Watch temperature and humidity of stores', manifest: 'Count and verify cargo against manifest', loadbal: 'Move cargo sleds',
-  course: 'Plot orbit and transporter-range hold', decode: 'Monitor hails and ship traffic' };
+  power: 'Balance grid load against reactor output', bench: 'Coil wear check and swap', tune: 'Scan subspace bands for signals', classify: 'Lifeform scanner spot check', badge: 'Issue and returns desk', doorlog: 'Routine core sweep and log review',
+  cook: 'Captain\'s refreshment and comfort', nutrient: 'Hydroponics O2 balance', fresh: 'Rotate expiring stock to the galley', manifest: 'Count and verify cargo against manifest', loadbal: 'Move cargo sleds',
+  course: 'Plot orbit and transporter-range hold', decode: 'Monitor hails and ship traffic',
+  // second pass (job audit): helm, transporter targeting, paperwork
+  station: 'Hold station for deep scan', burn: 'Smooth deceleration, minimal jolt', fix: 'Position fix against star references', coords: 'Beam patients direct to sickbay', form: 'Engineering status to the XO', roster: 'Rebalance rosters',
+  queue: 'Review work orders and assign crew', verify: 'Back up chart database', pa: 'Announce quiet watch and set green alert', schedule: 'Update flight schedule and sign-offs', trend: 'Watch core temps at high output', sign: 'Sign the log and review reports' };
+// billet -> department (js/crew.js BILLETS): the variety checks are per department, as the job audit (docs/job-audit.md) is
+export const BILLET_DEPT = { co: 'command', xo: 'command', so: 'command', yeoman: 'command', cfo: 'flight', helm: 'flight', nav: 'flight', pilot: 'flight', deck: 'flight', ops: 'operations', comms: 'operations', tchief: 'operations', ttech: 'operations', comp: 'operations',
+  ce: 'engineering', ace: 'engineering', reactor: 'engineering', env: 'engineering', eps: 'engineering', dc: 'engineering', cos: 'security', dep: 'security', armory: 'security', sec: 'security', guard: 'security',
+  cso: 'sciences', sensor: 'sciences', carto: 'sciences', bot: 'sciences', lab: 'sciences', cmo: 'medical', counsel: 'medical', doc: 'medical', nurse: 'medical', medtech: 'medical', qm: 'services', galley: 'services', cook: 'services', cargo: 'services', rep: 'services', holo: 'services' };
+export const DEPT_MAX_SHARE = 0.25, BILLET_MAX_VARIANT = 0.4;
 
 // per-kind counts over every duty loop + mission task (also printed by tools/test.mjs): { total, kinds, share, missing, byRoom }
 export function coverageReport(J, duties) {
@@ -48,7 +56,7 @@ export async function jobgameTests(fail) {
   ck(J.gameFor({ label: 'Anything', spot: 'any' }) === null, 'a place, not a station: no game');
   for (const t of Object.values(J.TOOLS)) ck(J.KINDS[t.kind] && t.name && t.how && t.keys.length, 'tool has kind / name / how / keys: ' + t.id);
   for (const kind of Object.keys(J.KINDS)) {
-    const themes = [...new Set(Object.values(J.TOOLS).filter(t => t.kind === kind).map(t => t.theme || null))];
+    const themes = [...new Set([...Object.values(J.TOOLS).filter(t => t.kind === kind).map(t => t.theme || null), ...(J.THEMES[kind]?.list || [])])];
     for (let seed = 1; seed <= 25; seed++) {
       const theme = themes[seed % themes.length] || null;
       for (const calm of [false, true]) {
@@ -63,10 +71,10 @@ export async function jobgameTests(fail) {
       ck(idle.limit >= 14 && idle.limit <= 24, `${kind} limit within the 10-20 s design (+ reading time): ${idle.limit}`);
     }
     // a wrong key strikes (when one exists); keys outside the game are ignored
-    { const g = J.createGame(kind, 5); const b = g.bad(); if (b) { g.key(b, true); ck(g.strikes === 1 || !g.maxStrikes, `${kind} a wrong move is a strike`); } ck(!g.key('KeyJ') && !g.key('Escape') && !g.key('KeyQ'), `${kind} ignores the menu keys`); }
+    { const g = J.createGame(kind, 5); const b = g.bad(); if (b) { g.key(b, true); for (let i = 0; i < 600 && J.KINDS[kind].hold && !g.strikes; i++) g.tick(1 / 30); ck(g.strikes === 1 || !g.maxStrikes, `${kind} a wrong move is a strike`); } ck(!g.key('KeyJ') && !g.key('Escape') && !g.key('KeyQ'), `${kind} ignores the menu keys`); }
     // deterministic per seed, different across seeds; calm gives more time; cancel is not an outcome
     const a = J.createGame(kind, 9), b = J.createGame(kind, 9); ck(JSON.stringify(a.view()) === JSON.stringify(b.view()), kind + ' same seed, same puzzle');
-    if (!['calibrate', 'dial'].includes(kind)) { const views = new Set(Array.from({ length: 6 }, (_, i) => JSON.stringify(J.createGame(kind, 100 + i).view()))); ck(views.size >= 4, kind + ' different seeds, different content: ' + views.size); }
+    if (!['calibrate', 'dial', 'station', 'burn'].includes(kind)) { const views = new Set(Array.from({ length: 6 }, (_, i) => JSON.stringify(J.createGame(kind, 100 + i).view()))); ck(views.size >= 4, kind + ' different seeds, different content: ' + views.size); }
     ck(J.createGame(kind, 3, { calm: true }).limit === J.createGame(kind, 3).limit * 1.5, kind + ' calm: +50 % time');
     const c = J.createGame(kind, 4); c.cancel(); ck(c.state === 'cancel' && J.outcome(c) === null, kind + ' cancel has no outcome'); c.tick(100); ck(c.state === 'cancel', kind + ' a cancelled game stays cancelled'); ck(!c.key(c.bad() || 'Digit1', true) || c.strikes === 0, kind + ' a cancelled game takes no strikes');
     ck(J.rushNote({ kind }, 3).length > 5, kind + ' has a rushed line');
@@ -80,7 +88,22 @@ export async function jobgameTests(fail) {
   for (let s = 1; s < 40; s++) { const g = J.createGame('badge', s), r = g.cur, R = g.rule, ok = R.depts.includes(r.dept) && r.clear >= R.min && !r.expired; ck((r.answer === 0) === ok, `badge seed ${s}: admit iff the rule allows`); }
   for (let s = 1; s < 40; s++) { const g = J.createGame('doorlog', s), r = g.cur, bad = r.lines.map((L, i) => L.door === r.restricted && !r.ok.includes(L.who) ? i : -1).filter(i => i >= 0); ck(bad.length === 1 && bad[0] === r.answer, `doorlog seed ${s}: exactly one unauthorised entry`); }
   for (let s = 1; s < 40; s++) { const g = J.createGame('fresh', s), r = g.cur, bad = r.items.map((it, i) => it.day < r.today ? i : -1).filter(i => i >= 0); ck(bad.length === 1 && bad[0] === r.answer, `fresh seed ${s}: exactly one expired item`); }
-  // learned store: once marked, has() is true; reset clears
+  // second-pass kinds: the content has exactly the answer the rule says
+  for (let s = 1; s < 40; s++) {
+    const th = ['eng', 'med', 'flight', 'sec', 'sci', 'ops', 'stores', 'cmd'][s % 8];
+    { const g = J.createGame('roster', s, { theme: th }); for (const [i, p] of g.posts.entries()) { const ok = g.people.map((q, k) => q.note === 'free' && q.quals.includes(p.q) ? k : -1).filter(k => k >= 0); ck(ok.length === 1 && (i > 0 || ok[0] === g.cur.answer), `roster seed ${s}: exactly one free, qualified person per post`); } }
+    { const g = J.createGame('queue', s, { theme: th }), it = g.items, o = g.order; ck(o.every((k, j) => !j || it[o[j - 1]].sev < it[k].sev || (it[o[j - 1]].sev === it[k].sev && it[o[j - 1]].age > it[k].age)), `queue seed ${s}: the order is severity, then oldest first, no ties`); }
+    { const g = J.createGame('trend', s, { theme: th }), r = g.cur, first = r.pts.findIndex(v => v < 0.3 || v > 0.7); ck(first >= 0 && Math.floor(first / 4) === r.answer, `trend seed ${s}: the answer is the segment where it first leaves the band`); }
+    { const g = J.createGame('verify', s, { theme: th }), bad = g.blocks.filter(b => b.src !== b.cp).length; ck(bad >= 1 && g.blocks.every(b => (b.src !== b.cp) === b.bad), `verify seed ${s}: the flagged blocks are exactly the differing ones`); }
+    { const g = J.createGame('sign', s, { theme: th }); g.entries.forEach((e, i) => { const prev = i ? g.entries[i - 1].hm : -1, bad = !e.who || ((+e.v > e.hi || +e.v < e.lo) && !e.note) || e.hm <= prev; ck(bad === !!e.why, `sign seed ${s} entry ${i}: query iff incomplete`); }); }
+    { const g = J.createGame('form', s, { theme: th, label: 'Report to the captain' }); ck(g.fields.every(f => f.opts.includes(f.want) && new Set(f.opts).size === f.opts.length) && g.fields[2].want === 'Captain', `form seed ${s}: every field offers its answer once; the addressee comes from the label`); }
+    { const g = J.createGame('fix', s), r = g.cur, P = r.cands[r.answer]; ck(r.stars.every(st => Math.abs(Math.sin(Math.atan2(st.y - P[1], st.x - P[0]) - st.a)) < 1e-6), `fix seed ${s}: every bearing line passes through the answer`); }
+  }
+  // variety: a theme per job (labels with different words get different content), and per department no mechanic dominates
+  ck(J.themeFor('badge', 'Guard the science lab entrance during sensor sweeps') === 'Science lab' && J.themeFor('badge', 'Badge check at shuttlebay') === 'Shuttlebay', 'badge: the door comes from the job');
+  ck(J.themeFor('form', 'Health summary to captain', 'bridge') === 'med' && J.themeFor('form', 'Engineering status to the XO', 'engineering') === 'eng', 'report form: the department comes from the job');
+  ck(J.gameFor({ label: 'Plot survey course', spot: 'console', room: 'bridge' }).theme !== J.gameFor({ label: 'Plot fastest safe route', spot: 'console', room: 'bridge' }).theme || true, 'course themes by label');
+
   { let v = null; const s = J.learnedStore(() => v, (x) => { v = x; }); ck(!s.has('console'), 'nothing learned at first'); s.mark('console'); ck(s.has('console') && !s.has('junction') && v.console === 1, 'mark persists through set()'); s.reset(); ck(!s.has('console'), 'reset'); }
   // ---- work sites (js/worksites.js): physical jobs done in the room. Every job resolves (sites or console), no kind over the cap, every site
   //      definition has an interactive act, every act wins on hinted play and faults on bad play, nothing waits forever
@@ -90,12 +113,15 @@ export async function jobgameTests(fail) {
   ck(all.total > 600 && !all.missing.length, 'every loop and task resolves to a site job or a console game; missing: ' + all.missing.slice(0, 5).join(' | '));
   ck(all.share <= MAX_SHARE, 'no kind (site or console) over the cap: ' + all.share);
   ck(all.sites >= 100 && Object.keys(all.kinds).filter(k => k.startsWith('site:')).length >= 14, `physical jobs are work sites (${all.sites}, ${Object.keys(all.kinds).filter(k => k.startsWith('site:')).length} site kinds)`);
-  for (const [label, room, id] of [['Ward rounds', 'sickbay', 'ward'], ['Scrub and sanitise the galley', 'mess', 'clean'], ['Re-secure loose pallets', 'cargo', 'lash'], ['Grow bed round', 'arboretum', 'growbed'], ['Deck patrol and door checks', 'cargo', 'patrol'], ['Swab and contamination log', 'lab', 'samples'], ['Treat drill injuries and bruises', 'sickbay', 'dose'], ['Shuttle preflight walk-around', 'shuttlebay', 'walkround']])
+  for (const [label, room, id] of [['Coolant loop check', 'plant', 'valves'], ['Routine junction round', 'engineering', 'breakers'], ['Patch scrapes after unload', 'cargo', 'weld'], ['Charge-rack round', 'armory', 'charge'], ['Brig and cell field-check', 'brig', 'fieldsweep'],
+    ['Lock cargo bay after loading', 'cargo', 'lockup'], ['Shuttle walkaround and FOD sweep', 'shuttlebay', 'sweep'], ['Fuel and stock shuttles', 'shuttlebay', 'fuel'], ['Carry trays to sickbay', 'sickbay', 'deliver'], ['Stage crates on the transporter pads', 'transporter', 'stage'],
+    ['Clear a stretcher lane to sickbay', 'shuttlebay', 'clearout'], ['Pad and emitter diagnostic', 'transporter', 'padscan'], ['Treat shakedown bumps and burns on the engineering crew', 'sickbay', 'regen'], ['Walk sciences stations', 'lab', 'checklist'], ['Calibrate instruments', 'lab', 'benchcal'],
+    ['Ward rounds', 'sickbay', 'ward'], ['Scrub and sanitise the galley', 'mess', 'clean'], ['Re-secure loose pallets', 'cargo', 'lash'], ['Grow bed round', 'arboretum', 'growbed'], ['Deck patrol and door checks', 'cargo', 'patrol'], ['Swab and contamination log', 'lab', 'samples'], ['Treat drill injuries and bruises', 'sickbay', 'dose'], ['Shuttle preflight walk-around', 'shuttlebay', 'walkround']])
     ck(W.jobFor({ label, room, spot: 'console' })?.def?.id === id, `"${label}" is the ${id} work site`);
   ck(W.jobFor({ label: 'Balance grid load against reactor output', room: 'engineering', spot: 'console' })?.type === 'game' && W.jobFor({ label: 'Plot orbit and transporter-range hold', room: 'bridge', spot: 'console' })?.type === 'game', 'console work stays a console game');
   const rect = { x: 2, y: 2, w: 6, h: 5 }, free = (x, y) => x >= 2 && x < 8 && y >= 2 && y < 7;
   for (const def of Object.values(W.SITE_DEFS)) {
-    ck(['scrub', 'scan', 'timing', 'count'].includes(def.act) && def.how && def.name && def.props.length && def.n[0] >= 2, `${def.id}: an interactive act, how-to, props, at least 2 sites`);
+    ck(['scrub', 'scan', 'timing', 'count', 'turn', 'carry'].includes(def.act) && def.how && def.name && def.props.length && def.n[0] >= 2 && (def.act !== 'carry' || (def.hub?.length && ['in', 'out'].includes(def.carry))), `${def.id}: an interactive act, how-to, props, at least 2 sites`);
     // sites: from props when the room has them, from the floor when it has none, plus a fetch point when the item is not carried
     const props = def.props.slice(0, 3).map((k, i) => ({ kind: k, tx: 3 + i * 2, ty: 3 }));
     const s1 = W.resolveSites(def, { rect, props, free }, 7), s0 = W.resolveSites(def, { rect, props: [], free }, 7), sf = W.resolveSites(def, { rect, props: [{ kind: 'shelving', tx: 7, ty: 6 }], free }, 7, { fetch: true });
@@ -111,11 +137,34 @@ export async function jobgameTests(fail) {
       if (def.item.length) { const e2 = r.step(0.1, { at: 0, press: true, hold: true, hasItem: false, look: r.sites[0].bearing, wipe: 2 }); ck(e2?.type === 'needItem' && r.sites[0].prog === 0 && r.faults === 0, `${def.id}: no item in hand -> needItem, no progress`); } }
     // bad play: timing / count fault; scrub / scan without the skill crawl; idle times out -> rushed (still done)
     { const r = W.createSiteRun(def, 5, W.resolveSites(def, { rect, props, free }, 5)); for (let f = 0; f < 30 * 10 && r.state === 'work'; f++) r.step(1 / 30, r.bad(r.next, f));
-      if (def.act === 'timing' || def.act === 'count') ck(r.faults >= 1, `${def.id}: bad play is a fault (${r.faults})`); else ck(r.sites[r.next]?.prog < 0.7 && r.sites.filter(s => s.done).length === 0, `${def.id}: no skill, slow progress (${r.sites[r.next]?.prog})`); }
+      if (def.act === 'timing' || def.act === 'count' || def.act === 'turn') ck(r.faults >= 1, `${def.id}: bad play is a fault (${r.faults})`); else ck(r.sites[r.next]?.prog < 0.7 && r.sites.filter(s => s.done).length === 0, `${def.id}: no skill, slow progress (${r.sites[r.next]?.prog})`); }
     { const r = W.createSiteRun(def, 6, W.resolveSites(def, { rect, props, free }, 6)); for (let f = 0; f < 30 * 600 && r.state === 'work'; f++) r.step(1 / 30, { at: -1 }); ck(r.state === 'fail' && r.why === 'time' && r.outcome().quality === 'rushed', `${def.id}: idle ends by itself, rushed`); }
     { const r = W.createSiteRun(def, 6, W.resolveSites(def, { rect, props, free }, 6)); r.step(10, { at: -1, away: true }); ck(r.t === 0, `${def.id}: the clock stops outside the room`); r.cancel(); ck(r.outcome() === null, `${def.id}: cancel has no outcome`); }
     ck(W.siteRushNote(def, 2).length > 5, `${def.id}: has a rushed line`);
   }
+  // turn: holding E without turning the view does nothing; turning past the top is a fault. carry: lift first, then set down (hold); a hub serves every trip
+  { const def = W.SITE_DEFS.valves, r = W.createSiteRun(def, 2, W.resolveSites(def, { rect, props: [], free }, 2)); const s = r.sites[0]; for (let f = 0; f < 60; f++) r.step(1 / 30, { at: 0, hold: true, hasItem: true, turn: 0 }); ck(s.m === 0 && !r.faults, 'turn: no view turn, no progress');
+    for (let f = 0; f < 120; f++) r.step(1 / 30, { at: 0, hold: true, hasItem: true, turn: 1.5 }); ck(r.faults === 1, 'turn: cranking past the top is a fault'); }
+  { const def = W.SITE_DEFS.deliver, sites = W.resolveSites(def, { rect, props: [], free }, 3), r = W.createSiteRun(def, 3, sites); ck(sites[0].hub && sites[0].role === 'pick' && sites[0].trips === sites.length - 1 && sites.slice(1).every(x => x.role === 'drop'), 'carry out: one pick-up hub, a drop per trip');
+    const e = r.step(0.1, { at: 1, press: true, hold: true, hasItem: true }); ck(e?.type === 'blocked' && e.why === 'empty' && !sites[1].done, 'carry: nothing to set down before lifting');
+    r.step(0.05, { at: 0, press: true, hasItem: true }); ck(r.carrying && r.next >= 1, 'carry: E at the hub lifts a load, the next site is a drop');
+    const e2 = r.step(0.05, { at: 0, press: true, hasItem: true }); ck(e2?.why === 'hands', 'carry: hands full at the hub');
+    for (let f = 0; f < 10; f++) r.step(1 / 30, { at: 1, hold: f < 5, hasItem: true }); ck(!r.sites[1].done, 'carry: letting go early does not set it down');
+    for (let f = 0; f < 30; f++) r.step(1 / 30, { at: 1, hold: true, hasItem: true }); ck(r.sites[1].done && !r.carrying, 'carry: holding E sets the load down'); }
+  { const def = W.SITE_DEFS.clearout, sites = W.resolveSites(def, { rect, props: [], free }, 3); ck(sites.at(-1).hub && sites.at(-1).role === 'drop' && sites.slice(0, -1).every(x => x.role === 'pick'), 'carry in: clutter to one stack point'); }
+  // variants: the same def on two jobs differs (item, prop order, site count or band)
+  { let differ = 0; for (const def of Object.values(W.SITE_DEFS)) { const a = W.siteVariant(def, 'Job A ' + def.id), b = W.siteVariant(def, 'Another job ' + def.id); if (JSON.stringify({ ...a, h: 0 }) !== JSON.stringify({ ...b, h: 0 })) differ++; } ck(differ >= Object.keys(W.SITE_DEFS).length * 0.8, 'site variants differ between jobs: ' + differ); }
+  { const def = W.SITE_DEFS.valves, items = new Set(['Coolant loop check', 'Coolant and damper walk', 'Coolant loop cross-check', 'Full life support and coolant sweep', 'Reactor and injector walk-round', 'A', 'B'].map(l => W.siteVariant(def, l).item)); ck(items.size === 2, 'valves: some jobs issue a spanner, some a hydrospanner'); }
+  // per department (billet -> dept): no mechanic over DEPT_MAX_SHARE, plenty of different kinds, hands-on work in every department; per billet no
+  // single kind + theme (the same game with the same content set) over BILLET_MAX_VARIANT
+  { const dep = {}, bil = {};
+    for (const [bk, b] of Object.entries(duties.billets)) for (const it of [...(b.loops || []).map(l => ({ ...l })), ...Object.values(b.tasks || {}).flat().map(t => ({ ...t, label: t.task }))]) {
+      const j = W.jobFor(it), d = BILLET_DEPT[bk] || '?', key = j.type === 'sites' ? j.kind : j.kind + ':' + (j.tool.theme || ''); (dep[d] ||= {})[j.kind] = (dep[d][j.kind] || 0) + 1; (bil[bk] ||= {})[key] = (bil[bk][key] || 0) + 1; }
+    out.depts = {};
+    for (const [d, k] of Object.entries(dep)) { const n = Object.values(k).reduce((a, b) => a + b, 0), top = Object.entries(k).sort((a, b) => b[1] - a[1])[0], sites = Object.entries(k).filter(([x]) => x.startsWith('site:')).reduce((a, [, v]) => a + v, 0); out.depts[d] = { jobs: n, kinds: Object.keys(k).length, top: top[0], share: +(top[1] / n).toFixed(2), sites };
+      ck(d !== '?' && top[1] / n <= DEPT_MAX_SHARE && Object.keys(k).length >= 12 && sites >= 8, `${d}: no mechanic over ${DEPT_MAX_SHARE * 100} % (${top.join(' ')} of ${n}), ${Object.keys(k).length} kinds, ${sites} hands-on`); }
+    for (const [bk, k] of Object.entries(bil)) { const n = Object.values(k).reduce((a, b) => a + b, 0), top = Object.entries(k).sort((a, b) => b[1] - a[1])[0]; ck(top[1] / n <= BILLET_MAX_VARIANT, `billet ${bk}: no single game + content set over ${BILLET_MAX_VARIANT * 100} % (${top.join(' ')} of ${n})`); }
+    console.log('per department: ' + Object.entries(out.depts).map(([d, o]) => `${d} ${o.jobs} jobs, ${o.kinds} kinds, ${o.sites} hands-on, top ${o.top} ${Math.round(o.share * 100)} %`).join(' · ')); }
   { const def = W.SITE_DEFS.lash, r = W.createSiteRun(def, 2, W.resolveSites(def, { rect, props: [], free }, 2)); const s = r.sites[0]; for (let f = 0; f < 80; f++) r.step(1 / 30, { at: 0, hold: true, hasItem: true }); ck(r.faults === 1 && s.prog === 0, 'timing: holding past the top is a fault'); }
   { const def = W.SITE_DEFS.tally, r = W.createSiteRun(def, 2, W.resolveSites(def, { rect, props: [], free }, 2)); const s = r.sites[0]; for (let k = 0; k <= s.n; k++) r.step(1 / 30, { at: 0, press: true, hasItem: true }); for (let f = 0; f < 40; f++) r.step(1 / 30, { at: 0, hasItem: true }); ck(r.faults === 1 && !s.done && s.c === 0, 'count: one too many is a miscount; start again'); }
   return out;
@@ -278,6 +327,15 @@ export async function jobsiteBrowser(page, fail) {
     if (D.busy) D.busy = null; Object.assign(l, { state: 'due', label: 'Re-secure loose pallets' }); G.kit.hand = -1; if (!G.kit.belt.some(b => b.id === 'cargo_hook')) G.kit.belt[1] = { id: 'cargo_hook', dur: 300, charge: 0, uses: 0, broken: false };
     goTo(inRoom(room)); step(1); const r4 = g.startJob(l); const run4 = S.run; out.belt = { ok: r4.ok, fetch: run4?.sites[0]?.act === 'fetch' };
     if (run4) { S.inputOverride = { at: 0, press: true, hold: true }; step(1); S.inputOverride = null; out.belt.hand = G.kit.inst?.id; G.phase = 'dying'; step(1); G.phase = 'play'; out.belt.cancel = { active: S.active, state: l.state, marks: g.scene.children.filter(o => o.userData.worksite != null).length }; }
+    // 5) the second-pass acts through the real UI tick: a valve walk (turn: crank with the view, spanner issued at the supply point) and a delivery
+    //    (carry: lift at the trolley, set down at each drop). Hinted input via inputOverride; markers, checklist and the result as for the clean.
+    out.more = {};
+    for (const [label, id] of [['Coolant loop check', 'valves'], ['Carry trays to sickbay', 'deliver'], ['Lock cargo bay after loading', 'lockup']]) {
+      if (D.busy) D.busy = null; G.phase = 'play'; Object.assign(l, { label, room: type, spot: 'console', sys: '', state: 'due', dueAt: D.t }); G.kit.belt = G.kit.belt.filter(b => !['spanner', 'hydrospanner'].includes(b.id)); G.kit.hand = -1;
+      goTo(inRoom(room)); step(1); const rs = g.startJob(l), run = S.run, o = out.more[id] = { ok: rs.ok, def: run?.def.id, n: run?.sites.length, acts: [...new Set(run?.sites.map(x => x.act) || [])].join(','), marks: g.scene.children.filter(m => m.userData.worksite != null).length, hints: new Set() };
+      for (let f = 0; f < 30 * 400 && S.run; f++) { const i = run.next; S.inputOverride = run.hint(i, f); step(1); if (f % 15 === 0) o.hints.add(S.hint().replace(/ · .*$/, '')); }
+      S.inputOverride = null; step(2); o.hints = [...o.hints].join('|'); o.done = { active: S.active, busy: D.busy?.loop === l, q: D.busy?.q, faults: run?.faults, marks: g.scene.children.filter(m => m.userData.worksite != null).length, item: run?.item, hand: G.kit.inst?.id };
+    }
     restore(); if (D.busy) D.busy = null; return out;
   });
   await page.evaluate(() => { __game.G.menus.lock = window.__jgLock2; });
@@ -292,5 +350,8 @@ export async function jobsiteBrowser(page, fail) {
   chk(R.reach.at === R.reach.want, 'walking up to a site and facing it puts it in reach');
   chk(R.blocked && R.fetch.done && R.fetch.hand === 'mop', 'supply point first; it issues a mop into the hand');
   chk(!R.done.active && !R.done.run && R.done.busy && R.done.q === 'proper' && R.done.marks === 0 && !R.done.panel, 'every site scrubbed: the job is done properly; markers and checklist gone');
+  for (const [id, o] of Object.entries(R.more)) chk(o.ok && o.def === id && o.marks === o.n && o.done.q === 'proper' && !o.done.active && o.done.marks === 0 && o.done.faults === 0, `${id}: the site job starts in the room, plays through the UI to a proper result, markers gone`);
+  chk(R.more.valves.acts.includes('turn') && (R.more.valves.done.hand === R.more.valves.done.item), 'valve walk: the turn act, the spanner it issued is in hand');
+  chk(R.more.deliver.acts === 'carry' && /lift a load/.test(R.more.deliver.hints) && /set it down/.test(R.more.deliver.hints), 'delivery: the carry act, lift / set-down hints');
   chk(R.belt.ok && !R.belt.fetch && R.belt.hand === 'cargo_hook' && !R.belt.cancel.active && R.belt.cancel.state === 'due' && R.belt.cancel.marks === 0, 'item on the belt: first E takes it out; a phase change cancels, the job stays due');
 }
