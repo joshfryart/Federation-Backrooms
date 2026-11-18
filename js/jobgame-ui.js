@@ -51,8 +51,10 @@ const PAL_CB = { wires: ['#ffb000', '#4f9dff', '#f2f2f2', '#d45fd4'], good: '#4f
 const CAPS = { spark: 'sparks', spike: 'pressure spike', overdose: 'patient monitor alarm', underdose: 'patient monitor alarm', 'wrong bed': 'monitor alarm', burnt: 'pan sizzles, smoke', raw: 'chef tuts', static: 'static hiss', 'breaker trip': 'breaker clunk', 'bad mix': 'pump gurgles', list: 'deck groans', hazard: 'proximity alarm', 'they close up': 'awkward silence', 'let the wrong person in': 'door alarm', 'turned away crew who belong': 'grumbling', 'passed a bad part': 'rig buzzer', 'rejected a good part': 'rig buzzer', 'that slot is fine': 'tray buzzer', 'count off': 'count mismatch beep', misclassified: 'sensor chirp', 'that entry is fine': 'log beep', 'still in date': 'scanner beep', 'wrong crate': 'scanner buzz', misread: 'decoder buzz', stalled: 'thrusters cut out', 'bad fix': 'plot error tone', 'scattered pattern': 'transporter whine fails', 'form bounced': 'form rejected chime', 'cannot take that post': 'roster error beep', 'out of order': 'queue buzzer', 'checksum mismatch': 'verify error beep', 'wrong decks': 'PA error tone', 'talked over traffic': 'crosstalk squeal', clash: 'calendar clash beep', 'signed an incomplete entry': 'log rejects signature', 'queried a good entry': 'clerk sighs', 'wrong segment': 'log beep',
   'wrong person': 'wrong-person cough', 'buried the lead': 'listener frowns', 'missed the wrong figure': 'read-back error tone', 'bad call': 'decision board buzz', overspeed: 'overspeed klaxon', overheat: 'engine overheat alarm',
   'walked past': 'door alarm', 'held them for nothing': 'grumbling', 'wrong protocol': 'analyser error beep', 'misread trace': 'analyser buzz', mistagged: 'triage tag beep', 'missed call': 'call alarm', 'false start': 'false-start beep', 'wrong action': 'wrong-action tone' };
-const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', bridge: '#6ea8ff' };   // css/hud-skin.css --m-* (department meaning colours)
-const DEPT_NAME = { medical: 'Medical', engineering: 'Engineering', science: 'Sciences', security: 'Security', galley: 'Services', cargo: 'Operations', bridge: 'Command' };
+const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', bridge: '#6ea8ff', command: '#6ea8ff', flight: '#8fb7ff', operations: '#b99be6', sciences: '#c58be0', services: '#c6d25e' };   // css/hud-skin.css --m-* (department meaning colours)
+const DEPT_NAME = { medical: 'Medical', engineering: 'Engineering', science: 'Sciences', security: 'Security', galley: 'Services', cargo: 'Operations', bridge: 'Command', command: 'Command', flight: 'Flight', operations: 'Operations', sciences: 'Sciences', services: 'Services' };
+// a job's own mechanic (js/jobs/, tool.mech): its card / rail figures in the shape of a KINDS entry
+const mechK = (M) => ({ title: M.title, rule: M.fingerprint.rule, limit: M.limit, strikes: M.maxFaults, dept: M.dept });
 const MARKS = ['circle', 'triangle', 'square', 'diamond'], SYM = ['◆', '▲', '●', '■'];
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -78,7 +80,7 @@ export class JobGameUI {
   }
   begin() {
     const j = this.active; if (!j) return; if (this.phase === 'intro') this.store.mark(j.tool.id);
-    this.phase = 'play'; this.game = createGame(j.tool.kind, j.seed, { calm: !!this.CFG?.calm, theme: j.tool.theme, label: j.label }); this.render();
+    this.phase = 'play'; this.game = j.tool.mech ? j.tool.mech.create(j.seed, { calm: !!this.CFG?.calm, cb: !!this.CFG?.cb, label: j.label }) : createGame(j.tool.kind, j.seed, { calm: !!this.CFG?.calm, theme: j.tool.theme, label: j.label }); this.render();
   }
   // keyboard: the intro card takes Enter / Space / E to begin; the game takes its own keys (js/jobgames.js KINDS[kind].keys)
   key(code, down = true) {
@@ -89,7 +91,7 @@ export class JobGameUI {
     return ok;
   }
   onStrike() {
-    const g = this.game, why = g.events[g.events.length - 1]?.why || 'error'; this.sound?.denied?.(); this.caption(CAPS[why] || 'error buzz');
+    const g = this.game, why = g.events[g.events.length - 1]?.why || 'error'; this.sound?.denied?.(); this.caption(this.active?.tool.mech?.captions?.[why] || CAPS[why] || 'error buzz');
     if (!this.CFG?.calm && this.el) { this.flashT = 0.25; this.el.classList.add('strike'); this.el.classList.remove('shake'); void this.el.offsetWidth; this.el.classList.add('shake'); }
   }
   after() { const g = this.game; if (g && g.state !== 'play' && this.phase === 'play') { this.phase = 'done'; this.hold = 0.8; this.result = outcome(g); if (g.state === 'win') { this.sound?.chip?.(); this.caption('console chime'); } else { this.sound?.denied?.(); this.caption('fault tone'); } } }
@@ -111,7 +113,7 @@ export class JobGameUI {
 
   // ---------------------------------------------------------------- drawing (procedural: canvas 2D, no assets)
   render() {
-    if (!this.el || !this.active) return; const j = this.active, t = j.tool, K = KINDS[t.kind], kb = (k) => `<kbd>${esc(k)}</kbd>`, intro = this.phase === 'intro';
+    if (!this.el || !this.active) return; const j = this.active, t = j.tool, K = t.mech ? mechK(t.mech) : KINDS[t.kind], kb = (k) => `<kbd>${esc(k)}</kbd>`, intro = this.phase === 'intro';
     const dept = t.dept || K.dept || '', col = DEPT_COL[dept] || '#f0933a', time = this.G.comms?.clock?.format?.();
     this.el.style.setProperty('--kc', col); this.el.dataset.dept = dept || 'ops'; this.el.classList.toggle('calm', !!this.CFG?.calm);
     const rail = (rows) => rows.map(([k, v, cls = '', c = '']) => `<div class="jg-r ${cls}"${c ? ` style="--c:${c}"` : ''}${cls.includes('dyn') ? ` data-r="${k.toLowerCase()}"` : ''}><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
@@ -136,6 +138,7 @@ export class JobGameUI {
   }
   // on-screen buttons (a free cursor can play too): data-k is the key code each one sends (down on press, up on release)
   buttons(kind, kb) {
+    if (this.active?.tool.mech) return (this.game?.buttons() || []).map(([k, l]) => `<button data-k="${esc(k)}">${esc(l)}</button>`).join('');
     const B = (k, l) => `<button data-k="${k}">${l}</button>`, D = (n, lab = (d) => String(d)) => Array.from({ length: n }, (_, i) => B('Digit' + (i + 1), lab(i + 1))).join(''), g = this.game;
     const arrows = B('ArrowUp', '▲') + B('ArrowDown', '▼') + B('ArrowLeft', '◀') + B('ArrowRight', '▶');
     switch (kind) {
@@ -189,7 +192,7 @@ export class JobGameUI {
     rr(g.rounds ? 'round' : 'step', g.rounds ? `${Math.min(g.round + 1, g.rounds)}/${g.rounds}` : g.need ? `${Math.min((g.hits || 0) + 1, g.need)}/${g.need}` : g.code ? `${Math.min(g.pos + 1, g.code.length)}/${g.code.length}` : '1/1');
     rr('faults', g.maxStrikes ? `${g.strikes}/${g.maxStrikes}` : '—', g.strikes > 0); rr('time', `${Math.max(0, Math.ceil(g.limit - g.t))} s`, left < 0.25); rr('status', g.state === 'play' ? (g.strikes ? 'Fault' : 'Online') : g.state === 'win' ? 'Done' : 'Logged', g.strikes > 0 && g.state === 'play');
     const seg = this.el.querySelector('.jg-seg'); if (seg) { seg.style.setProperty('--v', Math.round(left * 100)); seg.classList.toggle('low', left < 0.25); }
-    const fn = DRAW[g.kind]; c.save(); c.textBaseline = 'alphabetic'; if (fn) fn.call(this, c, W, H, g, P); else if (g.kind === 'sequence') this.drawSeq(c, W, H, g, P); else if (g.kind === 'wires') this.drawWires(c, W, H, g, P); else if (g.kind === 'dial') this.drawDial(c, W, H, g, P); else this.drawCal(c, W, H, g, P); c.restore();
+    const fn = DRAW[g.kind]; c.save(); c.textBaseline = 'alphabetic'; if (this.active?.tool.mech) g.draw(c, W, H, P); else if (fn) fn.call(this, c, W, H, g, P); else if (g.kind === 'sequence') this.drawSeq(c, W, H, g, P); else if (g.kind === 'wires') this.drawWires(c, W, H, g, P); else if (g.kind === 'dial') this.drawDial(c, W, H, g, P); else this.drawCal(c, W, H, g, P); c.restore();
   }
   mark(c, kind, x, y, r) { c.beginPath(); if (kind === 'circle') c.arc(x, y, r, 0, 6.283); else if (kind === 'triangle') { c.moveTo(x, y - r); c.lineTo(x + r, y + r * 0.8); c.lineTo(x - r, y + r * 0.8); c.closePath(); } else if (kind === 'square') c.rect(x - r * 0.85, y - r * 0.85, r * 1.7, r * 1.7); else { c.moveTo(x, y - r); c.lineTo(x + r, y); c.lineTo(x, y + r); c.lineTo(x - r, y); c.closePath(); } }
   drawSeq(c, W, H, g, P) {   // LCARS-ish code strip: five cells, the next one lit; four keypad pads below

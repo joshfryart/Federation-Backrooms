@@ -3,7 +3,7 @@
 // node-testable (tools/test-jobgames.mjs); the 3D markers + LCARS checklist are js/worksite-ui.js, the glue is goJob / startJob in js/main.js.
 //   SITE_DEFS                     id -> { name, dept, item[], props[], n:[min,max], floor, act, order, site, how, verb }
 //   siteJobFor(item)              -> def | null  (SITE_OVERRIDES by exact label, then SITE_RULES: label regex + room filter)
-//   jobFor(item)                  -> { type: 'sites', def, kind } | { type: 'game', tool, kind } | null   (sites first, then the console game)
+//   jobFor(item)                  -> { type: 'job', mod, host, kind } (the job's own module, js/jobs/) | { type: 'sites', def, kind } | { type: 'game', tool, kind } | null
 //   resolveSites(def, ctx, seed)  -> [{ tx, ty, kind, name, prop }]   ctx: { rect, props: [{kind, tx, ty}], free(tx, ty) }; props first, then free
 //                                    floor tiles spread over the room (every room resolves); fetch: one supply prop (or floor) for the item
 //   createSiteRun(def, seed, sites, opts) -> run { sites[], state 'work'|'win'|'fail'|'cancel', faults, t, limit, next, step(dt, inp), result(),
@@ -20,6 +20,7 @@
 // Result: every site done with < 3 faults = proper (the walk was the work: the busy time after is short); 3+ faults or the time limit = rushed,
 // still done. Cancel (phase change, J "Stop working") = nothing happens, the job stays due. Rushing never plays a site job.
 import { gameFor } from './jobgames.js';
+import { moduleFor } from './jobs/index.js';   // jobs with their own mechanic module (js/jobs/<billet>__<slug>.js, docs/procedures.md)
 import { mulberry32 } from './data.js';
 
 const P = (props) => props;   // readability
@@ -344,16 +345,18 @@ export function siteVariant(def, label = '') {
   const h = lh(label + '|' + def.id), item = def.item?.length ? def.item[h % def.item.length] : null, span = def.n[1] - def.n[0];
   return { h, item, rot: (h >>> 4) % Math.max(1, Math.min(3, def.props.length)), n: def.n[0] + ((h >>> 8) % (span + 1)), band: ((h >>> 12) % 5) / 5, rate: 0.9 + ((h >>> 16) % 5) * 0.06, extra: def.need === 1 && (h >>> 20) % 3 === 0 ? 1 : 0, countBase: 2 + ((h >>> 22) % 2) };
 }
+// it.billet + it.jtype ('loop' | 'task:<mission>', set by js/duty.js) pick the job's own module when one exists: { type: 'job', mod, host }
 export function jobFor(it) {
+  const mod = it && moduleFor(it.billet, it.label || it.task, it.jtype); if (mod) return { type: 'job', mod, host: mod.host, kind: 'job:' + mod.id };
   const def = siteJobFor(it); if (def) return { type: 'sites', def, kind: 'site:' + def.id, variant: siteVariant(def, it.label || it.task) };
   const tool = gameFor(it); return tool ? { type: 'game', tool, kind: tool.kind } : null;
 }
 // ---- every loop + mission task -> console game kind or site job: counts (tests, TODO / README coverage table)
 export function coverageAll(duties) {
-  const kinds = {}, missing = []; let total = 0, sites = 0, games = 0;
-  const add = (it, label) => { total++; const j = jobFor({ ...it, label }); if (!j) { missing.push(label); return; } kinds[j.kind] = (kinds[j.kind] || 0) + 1; if (j.type === 'sites') sites++; else games++; };
-  for (const b of Object.values(duties.billets || {})) { for (const l of b.loops || []) add(l, l.label); for (const ts of Object.values(b.tasks || {})) for (const t of ts) add(t, t.task); }
-  return { total, kinds, sites, games, missing, share: Math.max(0, ...Object.values(kinds)) / Math.max(1, total) };
+  const kinds = {}, missing = []; let total = 0, sites = 0, games = 0, jobs = 0;
+  const add = (it, label) => { total++; const j = jobFor({ ...it, label }); if (j?.type === 'job') { kinds[j.kind] = 1; if (j.host === 'room') sites++; else games++; jobs++; return; } if (!j) { missing.push(label); return; } kinds[j.kind] = (kinds[j.kind] || 0) + 1; if (j.type === 'sites') sites++; else games++; };
+  for (const [bk, b] of Object.entries(duties.billets || {})) { for (const l of b.loops || []) add({ ...l, billet: bk, jtype: 'loop' }, l.label); for (const [ms, ts] of Object.entries(b.tasks || {})) for (const t of ts) add({ ...t, billet: bk, jtype: 'task:' + ms }, t.task); }
+  return { total, kinds, sites, games, jobs, missing, share: Math.max(0, ...Object.values(kinds)) / Math.max(1, total) };
 }
 
 // ---- sites in a room: the def's props (preference order, spread out), topped up with free floor tiles; a fetch site first when needed

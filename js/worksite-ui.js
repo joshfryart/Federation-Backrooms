@@ -8,8 +8,9 @@
 // site at the room's supply point comes first; E there issues one. Calm visuals: no pulsing. Colour-blind: done = blue, faults amber.
 import { createSiteRun, resolveSites, ACTS, siteRushNote } from './worksites.js';
 import { HANDHELDS, newInstance, isBroken } from './handhelds.js';
+import { resolveJobSites, jobRun } from './jobs/host.js';   // a job's own in-room mechanic (js/jobs/, opts.mod): same markers / checklist / item handling
 
-const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', flight: '#8fb7ff', bridge: '#6ea8ff', ops: '#b99be6' };
+const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', flight: '#8fb7ff', bridge: '#6ea8ff', ops: '#b99be6', command: '#6ea8ff', operations: '#b99be6', sciences: '#c58be0', services: '#c6d25e' };
 const CSS = `#wsite{position:fixed;left:.875rem;top:30%;z-index:14;width:15.5rem;display:none;pointer-events:none;color:var(--k-ink,#f3eee6);font:600 .8rem/1.35 var(--f-d,Arial,sans-serif);
   border-left:.85rem solid var(--kc,#f0933a);border-top:.5rem solid var(--kc,#f0933a);border-bottom:.5rem solid var(--k-lav,#b99be6);border-radius:1.4rem 0 0 1.4rem;background:var(--k-plate,rgba(6,8,16,.8));padding:.55rem .7rem .55rem .65rem;box-shadow:0 0 18px rgba(0,0,0,.45)}
 #wsite.on{display:block}
@@ -53,6 +54,7 @@ export class WorkSites {
   start(it, def, opts = {}) {
     if (this.active) return { ok: false, why: `Finish ${this.run.def.name.toLowerCase()} first (J: stop working)` };
     const w = this.world, rect = this.roomRect(it.room); if (!w || !rect) return { ok: false, why: `Do this in the ${it.room}` };
+    if (opts.mod) return this.startJob(it, opts.mod, opts, w, rect);
     const seed = opts.seed || 1, fetch = def.item.length > 0 && this.onBelt(def) < 0, d = w.d;
     const sites = resolveSites(def, { rect, props: d.props, free: (tx, ty) => d.grid[ty]?.[tx] === 0 }, seed, { fetch, variant: opts.variant });
     if (!sites.length) return { ok: false, why: 'no room to work' };
@@ -60,6 +62,16 @@ export class WorkSites {
     this.at = -1; this.pressed = false; this.lastYaw = null; this.anchor = null; this.buildMarks(); this.render(true); this.el?.classList.add('on'); this.pinNext();
     const first = this.run.sites[0]; this.G.say?.(`${def.name}: ${sites.filter(s => s.act !== 'fetch' && !s.hub).length} ${def.site.toLowerCase()}s marked${def.item.length ? ` · needs a ${this.itemName(def)}${fetch ? ' (draw one at the marked supply point)' : ''}` : ''}. ${def.how}`, 'good');
     this.sound?.tone?.(660, 0.08, 'sine', 0.06); this.note(`start ${def.id} ${sites.length}${fetch ? ' fetch' : ''}`); void first;
+    return { ok: true, sites: sites.length, fetch };
+  }
+  // a job module's in-room mechanic (js/jobs/): its sites resolved to room props / floor, its game wrapped as a run (js/jobs/host.js)
+  startJob(it, mod, opts, w, rect) {
+    const seed = opts.seed || 1, d = w.d, game = mod.create(seed, { calm: !!this.CFG?.calm, cb: !!this.CFG?.cb, label: it.label || it.task }), fetch = !!mod.item && this.onBelt({ item: [mod.item] }) < 0;
+    const sites = resolveJobSites(game, { rect, props: d.props, free: (tx, ty) => d.grid[ty]?.[tx] === 0 }, seed, { fetch }); if (!sites.length) return { ok: false, why: 'no room to work' };
+    this.run = jobRun(mod, game, sites); this.job = { it, def: this.run.def, opts, rect, world: w, label: it.label || it.task };
+    this.at = -1; this.pressed = false; this.lastYaw = null; this.anchor = null; this.buildMarks(); this.render(true); this.el?.classList.add('on'); this.pinNext();
+    this.G.say?.(`${mod.title}: ${game.sites.length} marked${mod.item ? ` · needs a ${this.itemName(this.run.def)}${fetch ? ' (draw one at the marked supply point)' : ''}` : ''}. ${mod.how}`, 'good');
+    this.sound?.tone?.(660, 0.08, 'sine', 0.06); this.note(`start job ${mod.id} ${sites.length}${fetch ? ' fetch' : ''}`);
     return { ok: true, sites: sites.length, fetch };
   }
   // E went down: true if it was meant for a site (main.js interact() asks first)
@@ -86,7 +98,7 @@ export class WorkSites {
     if (G.phase !== 'play') return;
     const w = this.world, [ptx, pty] = w.tile(P.x, P.z), R = this.job.rect, away = !(ptx >= R.x - 1 && ptx < R.x + R.w + 1 && pty >= R.y - 1 && pty < R.y + R.h + 1);
     // look motion (scrub strokes): view turn speed, smoothed
-    if (this.lastYaw != null && dt > 0) { const v = (Math.abs(wrap(P.yaw - this.lastYaw)) + Math.abs((P.pitch || 0) - (this.lastPitch || 0))) / dt; this.wipe += (v - this.wipe) * Math.min(1, dt * 8); this.turn += (Math.abs(wrap(P.yaw - this.lastYaw)) / dt - this.turn) * Math.min(1, dt * 10); }
+    if (this.lastYaw != null && dt > 0) { const v = (Math.abs(wrap(P.yaw - this.lastYaw)) + Math.abs((P.pitch || 0) - (this.lastPitch || 0))) / dt; this.wipe += (v - this.wipe) * Math.min(1, dt * 8); this.turn += (Math.abs(wrap(P.yaw - this.lastYaw)) / dt - this.turn) * Math.min(1, dt * 10); this.swing = (this.swing || 0) + (wrap(P.yaw - this.lastYaw) / dt - (this.swing || 0)) * Math.min(1, dt * 10); }
     this.lastYaw = P.yaw; this.lastPitch = P.pitch || 0;
     // which site is in reach and in view (the next one wins)
     const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let at = -1, bd = 1e9;
@@ -96,11 +108,12 @@ export class WorkSites {
     else {   // scan: the hidden reading is a bearing relative to where you first faced the site (stable even standing on a floor site)
       const s = r.sites[at]; if (at < 0) this.anchor = null; else if (!this.anchor || this.anchor.i !== at) { const [cx, cz] = w.center(s.tx, s.ty), d = Math.hypot(cx - P.x, cz - P.z); this.anchor = { i: at, yaw: d > 0.9 ? Math.atan2(-(cx - P.x), -(cz - P.z)) : P.yaw }; }
       if (this.pressed && s?.act === 'scrub') this.wipe = Math.max(this.wipe, 1.6);   // keyboard-only: re-tapping E scrubs too (arrow keys turn the view as well)
-      inp = { at, hold: !!this.keys.KeyE && at >= 0, press: this.pressed, look: this.anchor ? wrap(P.yaw - this.anchor.yaw) : 0, wipe: this.wipe, turn: this.turn }; }
+      inp = { at, hold: !!this.keys.KeyE && at >= 0, press: this.pressed, look: this.anchor ? wrap(P.yaw - this.anchor.yaw) : 0, wipe: this.wipe, turn: this.turn, swing: this.swing || 0 }; }
     inp.hasItem = inp.hasItem ?? this.hasItem(); inp.away = away; this.pressed = false; this.at = inp.at ?? at;
     const before = r.sites.map(s => s.done), f0 = r.faults, e = r.step(dt, inp);
     if (e) this.onEvent(e);
-    if (r.faults > f0) { const why = r.events.filter(x => x.type === 'fault').slice(-1)[0]?.why; this.sound?.denied?.(); this.G.caption?.(why === 'miscount' ? 'wrong count buzz' : why === 'misread' ? 'wrong call buzz' : why === 'over' ? 'over-limit buzz' : why === 'loose' ? 'gauge drops back' : 'fault buzz'); this.G.say?.(why === 'miscount' ? 'Miscount — start that one again.' : why === 'misread' ? 'Wrong call — check the spec plate and read it again.' : why === 'over' ? 'Too far — let go sooner.' : why === 'loose' ? 'Still loose — turn it further before you let go.' : 'Too soon — hold a little longer.', 'warn'); }
+    if (r.faults > f0 && r.mech) { const why = r.events.filter(x => x.type === 'fault').slice(-1)[0]?.why; this.sound?.denied?.(); this.G.caption?.(r.mech.captions?.[why] || 'fault buzz'); this.G.say?.(r.mech.says?.[why] || `Fault: ${why}.`, 'warn'); }
+    else if (r.faults > f0) { const why = r.events.filter(x => x.type === 'fault').slice(-1)[0]?.why; this.sound?.denied?.(); this.G.caption?.(why === 'miscount' ? 'wrong count buzz' : why === 'misread' ? 'wrong call buzz' : why === 'over' ? 'over-limit buzz' : why === 'loose' ? 'gauge drops back' : 'fault buzz'); this.G.say?.(why === 'miscount' ? 'Miscount — start that one again.' : why === 'misread' ? 'Wrong call — check the spec plate and read it again.' : why === 'over' ? 'Too far — let go sooner.' : why === 'loose' ? 'Still loose — turn it further before you let go.' : 'Too soon — hold a little longer.', 'warn'); }
     const fresh = r.sites.findIndex((s, i) => s.done && !before[i]);
     if (fresh >= 0) { const s = r.sites[fresh]; this.sound?.chip?.(); this.G.caption?.('chime'); if (r.state === 'work') { this.G.say?.(`${s.name}: done (${r.sites.filter(x => x.done).length}/${r.sites.length}).`, 'good'); this.pinNext(); } }
     this.updateMarks(dt); this.render();
@@ -128,6 +141,7 @@ export class WorkSites {
     if (!s) return `${r.def.name}: go to ${nx?.name || 'the next site'} (marked) · ${r.left} left · [J] stop working`;
     if (s.act === 'fetch') return `[E] draw a ${this.itemName(r.def)} here`;
     if (!this.hasItem()) return `[E] take the ${this.itemName(r.def)} off your belt`;
+    if (r.mech) return `${r.prompt(this.at)} · ${s.name}`;
     return { scrub: `Hold [E] and swing your view back and forth — ${s.name}`, scan: `Hold [E] and sweep your view slowly — lock the peak · ${s.name}`, timing: `Hold [E] to charge, let go in the band · ${s.name}`, count: `Tap [E] ${s.n}× then pause · ${s.name}`,
       turn: `Hold [E] and turn your view to crank, let go in the band · ${s.name}`, carry: s.role === 'pick' ? `[E] lift a load · ${s.name}` : s.n != null ? `Tap [E] ${s.n}× to count it in, then pause · ${s.name}` : `Hold [E] to set it down · ${s.name}`,
       read: !s.read ? '' : s.settle < s.need ? `Reading… stay on it · ${s.name}` : `Tap [E]: ${(r.def.calls || ['in limits'])[0].toLowerCase()} · hold [E]: ${(r.def.calls || [, 'out of limits'])[1].toLowerCase()} · ${s.read.txt}` }[s.act] || '';
@@ -187,15 +201,17 @@ export class WorkSites {
     const key = r.sites.map(x => x.done ? 1 : 0).join('') + '|' + r.next + '|' + this.hasItem() + '|' + this.at;
     if (full || key + '|' + r.carrying !== this._key) {
       this._key = key + '|' + r.carrying; const need = def.item.length && !this.hasItem();
-      el.innerHTML = `<div class="ws-h"><span class="k-pill">Work site</span><span class="ws-t">${esc(def.name)}</span></div>
-        <div class="ws-item${need ? ' need' : ''}">${def.item.length ? `Item · <b>${esc(this.itemName(def))}</b> ${this.hasItem() ? '· in hand' : this.onBelt(def) >= 0 ? '· on belt ([E] takes it)' : '· draw at supply'}` : 'Item · hands'} · ${esc(ACTS[def.act])}${def.act === 'carry' ? ` · ${r.carrying ? '<b>carrying</b>' : 'hands free'}` : ''}</div>
+      el.innerHTML = `<div class="ws-h"><span class="k-pill">${r.mech ? 'Job' : 'Work site'}</span><span class="ws-t">${esc(def.name)}</span></div>
+        <div class="ws-item${need ? ' need' : ''}">${def.item.length ? `Item · <b>${esc(this.itemName(def))}</b> ${this.hasItem() ? '· in hand' : this.onBelt(def) >= 0 ? '· on belt ([E] takes it)' : '· draw at supply'}` : 'Item · hands'} · ${esc(ACTS[def.act] || def.verb)}${def.act === 'carry' ? ` · ${r.carrying ? '<b>carrying</b>' : 'hands free'}` : ''}</div>
         <ol>${r.sites.map((x, i) => `<li class="${x.done ? 'done' : i === r.next ? 'next' : ''}"><i></i><span>${esc(x.name)}</span><em data-p="${i}">${x.done ? 'OK' : Math.round(x.prog * 100) + '%'}</em></li>`).join('')}</ol>
         <div class="ws-m"></div><div class="ws-f"><span class="ws-fl"></span><span class="ws-tm"></span></div>`;
     }
     r.sites.forEach((x, i) => { const e = el.querySelector(`[data-p="${i}"]`); if (e && !x.done) e.textContent = Math.round(x.prog * 100) + '%'; });
     const m = el.querySelector('.ws-m'); if (m) {
       const lbl = (a, b) => `<div class="ws-ml"><span>${a}</span><span>${b}</span></div>`;
-      if (!cur) m.innerHTML = lbl('Next', esc(r.sites[r.next]?.name || '—')) + `<div class="ws-bar"><b style="width:${Math.round((1 - r.left / r.sites.length) * 100)}%"></b></div>`;
+      const jp = cur && r.mech && cur.act !== 'fetch' ? r.panel(this.at) : null;
+      if (jp) m.innerHTML = lbl(esc(jp.label || def.verb), esc(jp.value ?? '')) + `<div class="ws-bar">${jp.band ? `<s style="left:${jp.band[0] * 100}%;width:${(jp.band[1] - jp.band[0]) * 100}%"></s>` : ''}<b style="width:${Math.round(Math.max(0, Math.min(1, jp.bar || 0)) * 100)}%"></b></div>`;
+      else if (!cur) m.innerHTML = lbl('Next', esc(r.sites[r.next]?.name || '—')) + `<div class="ws-bar"><b style="width:${Math.round((1 - r.left / r.sites.length) * 100)}%"></b></div>`;
       else if (cur.act === 'scan') m.innerHTML = lbl('Signal', cur.sig > 0.8 ? 'peak — hold' : cur.sig > 0.4 ? 'warmer' : 'sweep') + `<div class="ws-bar"><b style="width:${Math.round(cur.sig * 100)}%"></b></div><div class="ws-bar"><b style="width:${Math.round(cur.prog * 100)}%;background:var(--ok,#4fd18b)"></b></div>`;
       else if (cur.act === 'turn') m.innerHTML = lbl(def.verb, `${cur.hits}/${cur.need}`) + `<div class="ws-bar"><s style="left:${cur.band[0] * 100}%;width:${(cur.band[1] - cur.band[0]) * 100}%"></s><b style="width:${Math.round(cur.m * 100)}%;background:var(--k-gold,#f4c25b)"></b><u style="left:${cur.m * 100}%"></u></div>`;
       else if (cur.act === 'read') { const R = cur.read, ok = cur.settle >= cur.need, num = R.lo != null && R.hi != null && typeof R.v === 'number', lo = num ? Math.min(R.lo, R.v) - (R.hi - R.lo) * 0.3 : 0, hi = num ? Math.max(R.hi, R.v) + (R.hi - R.lo) * 0.3 : 1, X = (v) => Math.round((v - lo) / (hi - lo || 1) * 100), jit = ok || this.CFG?.calm ? 0 : (Math.sin(r.t * 23) * 6);

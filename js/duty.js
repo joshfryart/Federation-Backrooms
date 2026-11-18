@@ -48,8 +48,8 @@ export class Duty {
     this.t = 0; this.place = { deckNo: 1, room: null }; this.busy = null; this.listeners = [];
     const d = duties.billets?.[player.billet] || { loops: [], tasks: {} };
     this.d = d;
-    this.loops = d.loops.map((l, i) => ({ ...l, period: Math.min(400, Math.max(90, l.every * 8)) * T, next: (pace.firstDue ?? 30) + i * (pace.dueGap ?? 20) + hash01('duty', seed, l.id) * (pace.dueJitter ?? 30), state: 'idle', done: 0, last: null }));
-    this.tasks = (d.tasks[mission] || []).map((t, i) => ({ ...t, id: 't' + i, state: 'pending', at_s: Math.max(pace.firstTask ?? 0, t.at * 60 * T), by: null }));
+    this.loops = d.loops.map((l, i) => ({ ...l, billet: player.billet, jtype: 'loop', period: Math.min(400, Math.max(90, l.every * 8)) * T, next: (pace.firstDue ?? 30) + i * (pace.dueGap ?? 20) + hash01('duty', seed, l.id) * (pace.dueJitter ?? 30), state: 'idle', done: 0, last: null }));
+    this.tasks = (d.tasks[mission] || []).map((t, i) => ({ ...t, billet: player.billet, jtype: 'task:' + mission, id: 't' + i, state: 'pending', at_s: Math.max(pace.firstTask ?? 0, t.at * 60 * T), by: null }));
     this.ledger = {}; this.debt = 0; this.entries = []; this.chain = []; this.score = 0; this.maxScore = 0; this.trustMap = new Map(); this.audit = 100; this.stats = { proper: 0, rushed: 0, faked: 0, skipped: 0, missed: 0, delegated: 0, orders: 0, refused: 0, caught: 0, unfinished: 0 };
     this.events = []; this.jobs = [];   // pending delegated / ordered jobs
   }

@@ -624,6 +624,13 @@ function startJob(it, opts = {}) {
   const run = (q, o) => it.task ? D.doTask(it.id, q) : D.perform(it.id, q, o), label = it.label || it.task;
   const job = jobFor({ ...it, label }), c = D.check(it.id); if (!c.ok) return c;
   if (G.sites?.active) return { ok: false, why: `Finish ${G.sites.run.def.name.toLowerCase()} first ([J] stop working)` };
+  if (job?.type === 'job' && !opts.console && G.ui) {   // the job's own mechanic (js/jobs/<billet>__<slug>.js): in the room (work-site host) or on the console overlay
+    const mod = job.mod, seed = hash('job', G.runSeed || 1, it.id, G.jobSeq++);
+    const apply = (res) => { const rr = run(res.quality, { timeMul: res.timeMul, game: res }); if (!rr.ok) { G.say(rr.why, 'warn'); return; } G.say(`${res.label}: ${label}`, res.quality === 'proper' ? 'good' : 'warn'); };
+    const cancelled = () => G.say(`Stopped — ${label} is still due.`);
+    if (mod.host === 'room' && world) { const r = G.sites.start(it, null, { seed, mod, apply, cancelled }); return r.ok ? { ok: true, sites: true, job: mod.id } : r; }
+    if (mod.host === 'console' && G.jobgame && !G.jobgame.active) { G.jobgame.start({ tool: { id: 'job:' + mod.id, name: mod.tool || mod.title, kind: 'job', how: mod.how, keys: mod.keys, mech: mod }, seed, label, station: stationName(it), apply, cancelled }); return { ok: true, game: true, job: mod.id }; }
+  }
   if (job?.type === 'sites' && !opts.console && world && G.ui) {
     const seed = hash('worksite', G.runSeed || 1, it.id, G.jobSeq++);
     const r = G.sites.start(it, job.def, { seed, variant: job.variant, apply: (res) => {
@@ -647,11 +654,11 @@ function stationName(it) { return `${ROOMS[it.room]?.label || it.room} · ${SPOT
 // start it when you arrive (G.jobGo; checked in nomTick). One pending job at a time; a new choice replaces it.
 const NO_STATION = ['door', 'corridor', 'lift', 'any', 'post'];
 function nearSpot(spot, room, r = 3.6) { if (!world || !spot || NO_STATION.includes(spot)) return true; const ps = world.d.props.filter(p => p.kind === spot && world.d.room[p.ty]?.[p.tx] === room); if (!ps.length) return true; return ps.some(p => { const [x, z] = world.center(p.tx, p.ty); return Math.hypot(x - P.x, z - P.z) < r; }); }
-function atJob(it) { const D = G.duty; if (!D || D.place.room !== it.room) return false; const j = jobFor({ ...it, label: it.label || it.task }); return j?.type === 'sites' || nearSpot(it.spot, it.room); }
+function atJob(it) { const D = G.duty; if (!D || D.place.room !== it.room) return false; const j = jobFor({ ...it, label: it.label || it.task }); return j?.type === 'sites' || (j?.type === 'job' && j.host === 'room') || nearSpot(it.spot, it.room); }
 function jobTarget(it) {   // a pin for the job's station on this deck (tile), else the room type (any deck: nav plans lift + walk)
   const cur = G.shipDeck ?? 0, rooms = world?.d.rooms.filter(r => r.type === it.room) || [];
   if (rooms.length) { const [ptx, pty] = world.tile(P.x, P.z), r = rooms.sort((a, b) => Math.hypot(a.x + a.w / 2 - ptx, a.y + a.h / 2 - pty) - Math.hypot(b.x + b.w / 2 - ptx, b.y + b.h / 2 - pty))[0];
-    const st = jobFor({ ...it, label: it.label || it.task })?.type !== 'sites' && world.d.props.find(p => p.kind === it.spot && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h);
+    const jt = jobFor({ ...it, label: it.label || it.task }), st = jt?.type !== 'sites' && jt?.host !== 'room' && world.d.props.find(p => p.kind === it.spot && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h);
     return { deck: cur, tx: st ? st.tx : r.x + (r.w >> 1), ty: st ? st.ty : r.y + (r.h >> 1), type: it.room }; }
   return { type: it.room };
 }
@@ -661,7 +668,7 @@ function goJob(it) {
   if (!c.ok && !/^(Do this in|Go to) /.test(c.why || '')) return c;   // busy / not due: say why
   if (G.sites?.active) return { ok: false, why: `Finish ${G.sites.run.def.name.toLowerCase()} first ([J] stop working)` };
   if (c.ok && atJob(it)) { clearJobGo(); return startJob(it); }
-  const j = jobFor({ ...it, label }), where = j?.type === 'sites' ? (ROOMS[it.room]?.label || it.room) : stationName(it);
+  const j = jobFor({ ...it, label }), where = j?.type === 'sites' || j?.host === 'room' ? (ROOMS[it.room]?.label || it.room) : stationName(it);
   G.jobGo = { id: it.id, task: !!it.task, label, room: it.room, spot: it.spot, where, at: G.time };
   G.nav?.setPin?.({ kind: 'job', id: 'job:' + it.id, label, icon: 'do', ...jobTarget(it) }, false);
   G.say(`${label}: head to the ${where} — route pinned. It starts when you get there.`, 'comp'); sound.tone?.(520, 0.07, 'sine', 0.05);
@@ -823,7 +830,7 @@ function worldPaused() { return !!(G.menuPause || G.paused); }
 G.worldPaused = worldPaused;
 function dutyMenu() {
   const D = G.duty, H = G.hud2; if (!D || !H) return; const room = D.place.room, say = G.say;
-  const doIt = (it) => H.openMenu(it.label || it.task, QUALITIES.map(q => ({ label: Q_LABEL[q], note: q === 'proper' ? `${Math.round((it.dur || 2) * 3.3 * 1.2)}s` : '', run: () => { if (q === 'proper') { H.closeMenu?.(); const r = goJob(it); if (!r.ok) say(r.why, 'warn'); return; } const r = it.task ? D.doTask(it.id, q === 'skipped' ? 'skipped' : q) : D.perform(it.id, q); if (!r.ok) say(r.why, 'warn'); else if (q === 'rushed') { const j = jobFor({ ...it, label: it.label || it.task }); say(`Rushed: ${j?.type === 'sites' ? siteRushNote(j.def, G.jobSeq++) : rushNote(j?.tool, G.jobSeq++)}`, 'warn'); } else if (it.task) say(`Task ${q}: ${it.task}`, 'good'); } })), 'How will you do it?');   /* rushing never plays a game: one key, one line about the corner cut */
+  const doIt = (it) => H.openMenu(it.label || it.task, QUALITIES.map(q => ({ label: Q_LABEL[q], note: q === 'proper' ? `${Math.round((it.dur || 2) * 3.3 * 1.2)}s` : '', run: () => { if (q === 'proper') { H.closeMenu?.(); const r = goJob(it); if (!r.ok) say(r.why, 'warn'); return; } const r = it.task ? D.doTask(it.id, q === 'skipped' ? 'skipped' : q) : D.perform(it.id, q); if (!r.ok) say(r.why, 'warn'); else if (q === 'rushed') { const j = jobFor({ ...it, label: it.label || it.task }); say(`Rushed: ${j?.type === 'job' ? j.mod.rush : j?.type === 'sites' ? siteRushNote(j.def, G.jobSeq++) : rushNote(j?.tool, G.jobSeq++)}`, 'warn'); } else if (it.task) say(`Task ${q}: ${it.task}`, 'good'); } })), 'How will you do it?');   /* rushing never plays a game: one key, one line about the corner cut */
   const here = [...D.loops.filter(l => l.state === 'due' || l.state === 'idle').map(l => ({ ...l, off: l.room !== room || l.state === 'delegated', note: l.room !== room ? `go to ${l.room}` : l.state === 'due' ? 'due' : 'not yet' })), ...D.tasks.filter(t => t.state === 'active').map(t => ({ ...t, label: t.task, off: t.room !== room, note: t.room !== room ? `go to ${t.room}` : 'now' }))];
   const top = [
     ...(G.sites?.active ? [{ label: `Stop working: ${G.sites.run.def.name}`, note: 'job stays due', run: () => G.sites.cancel('stopped') }] : []),
