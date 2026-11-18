@@ -51,20 +51,26 @@ matches crate codes and keeps the deck in trim; the helm plots courses, keeps st
 braking burns and takes star fixes; the transporter dials drifting beam coordinates. Paperwork is never the same
 code twice: report forms filled from the readings, roster posts, priority queues, schedule slots, backup verify,
 PA announcements, log trend reviews and log sign-off, each themed by the job (an engineering status report reads
-core temperature and EPS load; a medical one, beds and hypo stock).
+core temperature and EPS load; a medical one, beds and hypo stock). Reports to a person are spoken briefs (turn
+to them, most urgent first, catch the wrong figure in their read-back); command calls weigh options against two
+limits; the helm flies survey grids, best-speed runs, hard turns and orbit holds on heading and throttle; guard
+posts watch the door for tailgaters and unsigned transfer orders; the labs set, run and read instrument traces;
+sickbay sorts casualties red / yellow / green and re-tags them as they change; standby jobs wait quietly for the
+one call that needs a fast, right answer.
 
 Physical jobs happen in the room with the real tool: crank valves with a spanner by turning your view, reset
 tripped breakers panel by panel, weld hull seams with the plasma torch, sweep the flight deck with a push broom,
 fuel the shuttles, charge cells at the rack, sweep force-field emitters with the security tricorder, dog hatches,
-carry trays, crates and sample cases from a trolley to each drop point. Every job in the ship was audited
-(docs/job-audit.md):
+carry trays, crates and sample cases from a trolley to each drop point, walk the gauges calling each one in or
+out of limits, count stock onto the shelves, screen and examine crew with the medical tricorder, splint, crimp
+hazmat seals, zero sights at the range. Every job in the ship was audited twice (docs/job-audit.md):
 
 | | before | now |
 |---|---|---|
-| distinct activities (console games + work sites) | 38 | 81 |
-| jobs done hands-on in the room | 147 | 252 of 701 |
-| largest single activity | console code, 11.7 % | report form, 8.1 % |
-| largest share inside one department | console code, 50 % of command | ID check, 22 % of security |
+| distinct activities (console games + work sites) | 38 | 101 |
+| jobs done hands-on in the room | 147 | 317 of 701 |
+| largest single activity | console code, 11.7 % | verbal brief, 5.6 % |
+| largest share inside one department | console code, 50 % of command | verbal brief, 15 % of command |
 
 Each round is seeded, and two jobs of the same kind get different content (theme, props, tool, band) from their
 label. A clean job is faster; a fumbled one still gets done and is logged as rushed. Rushing is
