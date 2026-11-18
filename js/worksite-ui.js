@@ -100,7 +100,7 @@ export class WorkSites {
     inp.hasItem = inp.hasItem ?? this.hasItem(); inp.away = away; this.pressed = false; this.at = inp.at ?? at;
     const before = r.sites.map(s => s.done), f0 = r.faults, e = r.step(dt, inp);
     if (e) this.onEvent(e);
-    if (r.faults > f0) { const why = r.events.filter(x => x.type === 'fault').slice(-1)[0]?.why; this.sound?.denied?.(); this.G.caption?.(why === 'miscount' ? 'wrong count buzz' : why === 'over' ? 'over-limit buzz' : why === 'loose' ? 'gauge drops back' : 'fault buzz'); this.G.say?.(why === 'miscount' ? 'Miscount — start that one again.' : why === 'over' ? 'Too far — let go sooner.' : why === 'loose' ? 'Still loose — turn it further before you let go.' : 'Too soon — hold a little longer.', 'warn'); }
+    if (r.faults > f0) { const why = r.events.filter(x => x.type === 'fault').slice(-1)[0]?.why; this.sound?.denied?.(); this.G.caption?.(why === 'miscount' ? 'wrong count buzz' : why === 'misread' ? 'wrong call buzz' : why === 'over' ? 'over-limit buzz' : why === 'loose' ? 'gauge drops back' : 'fault buzz'); this.G.say?.(why === 'miscount' ? 'Miscount — start that one again.' : why === 'misread' ? 'Wrong call — check the spec plate and read it again.' : why === 'over' ? 'Too far — let go sooner.' : why === 'loose' ? 'Still loose — turn it further before you let go.' : 'Too soon — hold a little longer.', 'warn'); }
     const fresh = r.sites.findIndex((s, i) => s.done && !before[i]);
     if (fresh >= 0) { const s = r.sites[fresh]; this.sound?.chip?.(); this.G.caption?.('chime'); if (r.state === 'work') { this.G.say?.(`${s.name}: done (${r.sites.filter(x => x.done).length}/${r.sites.length}).`, 'good'); this.pinNext(); } }
     this.updateMarks(dt); this.render();
@@ -129,7 +129,8 @@ export class WorkSites {
     if (s.act === 'fetch') return `[E] draw a ${this.itemName(r.def)} here`;
     if (!this.hasItem()) return `[E] take the ${this.itemName(r.def)} off your belt`;
     return { scrub: `Hold [E] and swing your view back and forth — ${s.name}`, scan: `Hold [E] and sweep your view slowly — lock the peak · ${s.name}`, timing: `Hold [E] to charge, let go in the band · ${s.name}`, count: `Tap [E] ${s.n}× then pause · ${s.name}`,
-      turn: `Hold [E] and turn your view to crank, let go in the band · ${s.name}`, carry: s.role === 'pick' ? `[E] lift a load · ${s.name}` : `Hold [E] to set it down · ${s.name}` }[s.act] || '';
+      turn: `Hold [E] and turn your view to crank, let go in the band · ${s.name}`, carry: s.role === 'pick' ? `[E] lift a load · ${s.name}` : s.n != null ? `Tap [E] ${s.n}× to count it in, then pause · ${s.name}` : `Hold [E] to set it down · ${s.name}`,
+      read: !s.read ? '' : s.settle < s.need ? `Reading… stay on it · ${s.name}` : `Tap [E]: ${(r.def.calls || ['in limits'])[0].toLowerCase()} · hold [E]: ${(r.def.calls || [, 'out of limits'])[1].toLowerCase()} · ${s.read.txt}` }[s.act] || '';
   }
 
   // ---- 3D markers (procedural: rings, beams, number tags, grime decals, scan fan)
@@ -145,7 +146,7 @@ export class WorkSites {
     c.fillStyle = col; c.font = '800 40px Arial Narrow, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(s.done ? '✓' : s.act === 'fetch' ? '+' : s.hub ? (s.role === 'pick' ? '▲' : '▼') : String(this.run.sites.filter(x => x.act !== 'fetch' && !x.hub).indexOf(s) + 1), 64, 66);
     if (s.hub && !s.done) { for (let k = 0; k < s.trips; k++) { c.fillStyle = k < s.c ? '#f4c25b' : 'rgba(244,194,91,.25)'; c.fillRect(64 - s.trips * 9 + k * 18 + 2, 104, 14, 14); } }
-    if (s.act === 'count' && !s.done) { for (let k = 0; k < s.n; k++) { c.fillStyle = k < s.c ? '#f4c25b' : 'rgba(244,194,91,.25)'; c.fillRect(64 - s.n * 9 + k * 18 + 2, 104, 14, 14); } }
+    if ((s.act === 'count' || (s.act === 'carry' && s.n != null)) && !s.done) { for (let k = 0; k < s.n; k++) { c.fillStyle = k < s.c ? '#f4c25b' : 'rgba(244,194,91,.25)'; c.fillRect(64 - s.n * 9 + k * 18 + 2, 104, 14, 14); } }
     m.tag.T.needsUpdate = true;
   }
   grimeTex(seed) {
@@ -197,6 +198,9 @@ export class WorkSites {
       if (!cur) m.innerHTML = lbl('Next', esc(r.sites[r.next]?.name || '—')) + `<div class="ws-bar"><b style="width:${Math.round((1 - r.left / r.sites.length) * 100)}%"></b></div>`;
       else if (cur.act === 'scan') m.innerHTML = lbl('Signal', cur.sig > 0.8 ? 'peak — hold' : cur.sig > 0.4 ? 'warmer' : 'sweep') + `<div class="ws-bar"><b style="width:${Math.round(cur.sig * 100)}%"></b></div><div class="ws-bar"><b style="width:${Math.round(cur.prog * 100)}%;background:var(--ok,#4fd18b)"></b></div>`;
       else if (cur.act === 'turn') m.innerHTML = lbl(def.verb, `${cur.hits}/${cur.need}`) + `<div class="ws-bar"><s style="left:${cur.band[0] * 100}%;width:${(cur.band[1] - cur.band[0]) * 100}%"></s><b style="width:${Math.round(cur.m * 100)}%;background:var(--k-gold,#f4c25b)"></b><u style="left:${cur.m * 100}%"></u></div>`;
+      else if (cur.act === 'read') { const R = cur.read, ok = cur.settle >= cur.need, num = R.lo != null && R.hi != null && typeof R.v === 'number', lo = num ? Math.min(R.lo, R.v) - (R.hi - R.lo) * 0.3 : 0, hi = num ? Math.max(R.hi, R.v) + (R.hi - R.lo) * 0.3 : 1, X = (v) => Math.round((v - lo) / (hi - lo || 1) * 100), jit = ok || this.CFG?.calm ? 0 : (Math.sin(r.t * 23) * 6);
+        m.innerHTML = lbl(def.verb, ok ? esc(R.txt) : 'settling…') + (num ? `<div class="ws-bar"><s style="left:${X(R.lo)}%;width:${X(R.hi) - X(R.lo)}%"></s><u style="left:${Math.max(0, Math.min(100, X(R.v) + jit))}%"></u></div>` : '') + `<div class="ws-ml"><span>tap [E] ${esc((def.calls || [])[0] || '')}</span><span>hold [E] ${esc((def.calls || [])[1] || '')}</span></div><div class="ws-bar"><b style="width:${Math.round(Math.min(1, cur.ht / 0.7) * 100)}%;background:var(--k-gold,#f4c25b)"></b></div>`; }
+      else if (cur.act === 'carry' && cur.n != null && cur.role === 'drop') m.innerHTML = lbl(def.verb, `${cur.c} / ${cur.n}`) + `<div class="ws-pips">${Array.from({ length: cur.n }, (_, k) => `<span class="${k < cur.c ? 'on' : ''}"></span>`).join('')}</div>`;
       else if (cur.act === 'carry') m.innerHTML = lbl(cur.role === 'pick' ? 'Lift' : 'Set down', r.carrying ? 'carrying' : 'hands free') + `<div class="ws-bar"><b style="width:${Math.round((cur.role === 'drop' ? (cur.set || 0) / 0.6 : 0) * 100)}%"></b></div>`;
       else if (cur.act === 'timing') m.innerHTML = lbl(def.verb, `${cur.hits}/${cur.need}`) + `<div class="ws-bar"><s style="left:${cur.band[0] * 100}%;width:${(cur.band[1] - cur.band[0]) * 100}%"></s><b style="width:${Math.round(cur.m * 100)}%;background:var(--k-gold,#f4c25b)"></b><u style="left:${cur.m * 100}%"></u></div>`;
       else if (cur.act === 'count') m.innerHTML = lbl(def.verb, `${cur.c} / ${cur.n}`) + `<div class="ws-pips">${Array.from({ length: cur.n }, (_, k) => `<span class="${k < cur.c ? 'on' : ''}"></span>`).join('')}</div>`;
