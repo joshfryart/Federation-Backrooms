@@ -26,7 +26,7 @@ const BASE = process.env.BASE || 'http://localhost:8123';
   } else {
     const fps = +fpsArg, start = +a, end = +b, dt = 1 / fps; const t0 = Date.now();
     for (let f = 0; f < end; f++) {
-      const draw = f >= start; await p.evaluate(`window.__frame(${dt}, ${draw})`);
+      const draw = f >= start && !(process.env.SKIP_EXISTING && fs.existsSync(`${out}/f${String(f).padStart(6, '0')}.jpg`)); await p.evaluate(`window.__frame(${dt}, ${draw})`);
       if (draw) { await p.screenshot({ path: `${out}/f${String(f).padStart(6, '0')}.jpg`, type: 'jpeg', quality: 88 }); if ((f - start) % 100 === 0) console.log(`frame ${f}/${end} (${((Date.now() - t0) / 1000).toFixed(0)}s)`); }
     }
   }
