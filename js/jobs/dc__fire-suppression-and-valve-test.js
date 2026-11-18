@@ -36,7 +36,6 @@ export default define({
       }
       s.prog = clamp(m.phase === 'pump' ? m.p / band[0] * 0.4 : m.phase === 'hold' ? 0.4 + m.hold / holdT * 0.5 : 0.92, 0, 0.95);
     };
-    m.f0 = 0;
     m.hint = (f = 0) => { const i = m.next; if (i < 0) return { at: -1 }; if (i === 0) return { at: 0, hold: true };
       if (m.phase === 'pump') { const go = m.p < band[0] && m.gap >= 0.45; return { at: 1, press: go, hold: go }; }
       if (m.phase === 'hold') return { at: 1, hold: false };
