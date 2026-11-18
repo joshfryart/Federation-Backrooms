@@ -16,7 +16,7 @@ export default define({
   create(seed, opts) {
     const m = room(machine(this, seed, opts), [{ name: 'Pump A gland', prop: 'pumpskid' }, { name: 'Exchanger gland', prop: 'heatexch' }, { name: 'Return line gland', prop: 'tank' }]), r = m.rnd;
     const lag = m.calm ? 0.55 : 0.75;
-    m.g = m.sites.map(() => ({ need: ri(r, 1, 3), turns: 0, since: 9, hiss: 1, shown: 1, p: rf(r, 0.25, 0.45), side: r() < 0.5 ? 'left' : 'right' }));
+    m.g = m.sites.map(() => ({ need: ri(r, 1, 3), turns: 0, since: 9, hiss: 1, shown: 1, p: rf(r, 0.25, 0.45) }));
     m.step = (dt, inp = {}) => {
       if (!m.live(dt, inp.away)) return; const s = m.cur(inp); if (!s) return; const i = m.next, g = m.g[i];
       g.since += dt;
@@ -33,8 +33,8 @@ export default define({
     m.hint = (f = 0) => { const i = m.next; if (i < 0) return { at: -1 }; const g = m.g[i]; const go = g.since >= lag + 0.05 && g.turns < g.need && f % 2 === 0; return { at: i, press: go, hold: go }; };
     m.bad = (f = 0) => ({ at: m.next, press: f % 6 === 0, hold: f % 6 < 2 });
     m.view = () => ({ need: m.g.map(g => g.need), p: m.g.map(g => +g.p.toFixed(2)) });
-    m.panel = (i) => { const g = m.g[i]; if (!g) return null; const settled = g.since >= m.g[i].since && g.since >= (m.calm ? 0.55 : 0.75); return { label: settled ? (g.hiss > 0 ? 'SETTLED · hiss' : 'SETTLED · silent') : 'SETTLING…', value: `pressure ${Math.round(60 + (1 - g.shown) * 25 + g.p * 10)} bar`, bar: 1 - g.shown, band: [0.97, 1] }; };
-    m.prompt = (i) => { const g = m.g[i]; if (!g) return ''; return g.since < (m.calm ? 0.55 : 0.75) ? 'Wait: the packing is bedding in' : g.turns < g.need ? 'Still hissing: tap [E] for a quarter turn' : 'Silent: hands off the wrench'; };
+    m.panel = (i) => { const g = m.g[i]; if (!g) return null; const settled = g.since >= lag; return { label: settled ? (g.hiss > 0 ? 'SETTLED · hiss' : 'SETTLED · silent') : 'SETTLING…', value: `pressure ${Math.round(60 + (1 - g.shown) * 25 + g.p * 10)} bar`, bar: 1 - g.shown, band: [0.97, 1] }; };
+    m.prompt = (i) => { const g = m.g[i]; if (!g) return ''; return g.since < lag ?'Wait: the packing is bedding in' : g.turns < g.need ? 'Still hissing: tap [E] for a quarter turn' : 'Silent: hands off the wrench'; };
     return m;
   },
 });
