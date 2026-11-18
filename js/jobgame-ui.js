@@ -48,7 +48,7 @@ const CSS = `#jobgame{--kc:#f0933a;--kc2:var(--k-lav,#b99be6);--kc3:var(--k-peri
 const PAL = { wires: ['#ff5a48', '#4fd06a', '#4f9dff', '#ffd23f'], good: '#4fd06a', bad: '#ff5a48' };
 const PAL_CB = { wires: ['#ffb000', '#4f9dff', '#f2f2f2', '#d45fd4'], good: '#4f9dff', bad: '#ffb000' };
 // sound captions for a strike, by the game's reason
-const CAPS = { spark: 'sparks', spike: 'pressure spike', overdose: 'patient monitor alarm', underdose: 'patient monitor alarm', 'wrong bed': 'monitor alarm', burnt: 'pan sizzles, smoke', raw: 'chef tuts', static: 'static hiss', 'breaker trip': 'breaker clunk', 'bad mix': 'pump gurgles', list: 'deck groans', hazard: 'proximity alarm', 'they close up': 'awkward silence', 'let the wrong person in': 'door alarm', 'turned away crew who belong': 'grumbling', 'passed a bad part': 'rig buzzer', 'rejected a good part': 'rig buzzer', 'that slot is fine': 'tray buzzer', 'count off': 'count mismatch beep', misclassified: 'sensor chirp', 'that entry is fine': 'log beep', 'still in date': 'scanner beep', 'wrong crate': 'scanner buzz', misread: 'decoder buzz' };
+const CAPS = { spark: 'sparks', spike: 'pressure spike', overdose: 'patient monitor alarm', underdose: 'patient monitor alarm', 'wrong bed': 'monitor alarm', burnt: 'pan sizzles, smoke', raw: 'chef tuts', static: 'static hiss', 'breaker trip': 'breaker clunk', 'bad mix': 'pump gurgles', list: 'deck groans', hazard: 'proximity alarm', 'they close up': 'awkward silence', 'let the wrong person in': 'door alarm', 'turned away crew who belong': 'grumbling', 'passed a bad part': 'rig buzzer', 'rejected a good part': 'rig buzzer', 'that slot is fine': 'tray buzzer', 'count off': 'count mismatch beep', misclassified: 'sensor chirp', 'that entry is fine': 'log beep', 'still in date': 'scanner beep', 'wrong crate': 'scanner buzz', misread: 'decoder buzz', stalled: 'thrusters cut out', 'bad fix': 'plot error tone', 'scattered pattern': 'transporter whine fails', 'form bounced': 'form rejected chime', 'cannot take that post': 'roster error beep', 'out of order': 'queue buzzer', 'checksum mismatch': 'verify error beep', 'wrong decks': 'PA error tone', 'talked over traffic': 'crosstalk squeal', clash: 'calendar clash beep', 'signed an incomplete entry': 'log rejects signature', 'queried a good entry': 'clerk sighs', 'wrong segment': 'log beep' };
 const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', bridge: '#6ea8ff' };   // css/hud-skin.css --m-* (department meaning colours)
 const DEPT_NAME = { medical: 'Medical', engineering: 'Engineering', science: 'Sciences', security: 'Security', galley: 'Services', cargo: 'Operations', bridge: 'Command' };
 const MARKS = ['circle', 'triangle', 'square', 'diamond'], SYM = ['◆', '▲', '●', '■'];
@@ -62,7 +62,7 @@ export class JobGameUI {
     let el = document.getElementById('jobgame'); if (!el) { el = document.createElement('div'); el.id = 'jobgame'; el.className = 'ui-layer'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
     this.el = el; el.onmousedown = (e) => { e.stopPropagation(); const b = e.target.closest('[data-k]'); if (b) { e.preventDefault(); this.key(b.dataset.k, true); } };
     el.onmouseup = (e) => { const b = e.target.closest('[data-k]'); if (b) this.key(b.dataset.k, false); };
-    el.onmouseleave = () => { if (this.game?.held) { this.game.held.L = this.game.held.R = false; } };
+    el.onmouseleave = () => { if (this.game?.held) { for (const k of Object.keys(this.game.held)) this.game.held[k] = false; } };
     addEventListener('keyup', (e) => { if (this.active && this.phase === 'play') this.key(e.code, false); });
   }
   get palette() { return this.CFG?.cb ? PAL_CB : PAL; }
@@ -76,7 +76,7 @@ export class JobGameUI {
   }
   begin() {
     const j = this.active; if (!j) return; if (this.phase === 'intro') this.store.mark(j.tool.id);
-    this.phase = 'play'; this.game = createGame(j.tool.kind, j.seed, { calm: !!this.CFG?.calm, theme: j.tool.theme }); this.render();
+    this.phase = 'play'; this.game = createGame(j.tool.kind, j.seed, { calm: !!this.CFG?.calm, theme: j.tool.theme, label: j.label }); this.render();
   }
   // keyboard: the intro card takes Enter / Space / E to begin; the game takes its own keys (js/jobgames.js KINDS[kind].keys)
   key(code, down = true) {
@@ -127,7 +127,7 @@ export class JobGameUI {
     }
     const btns = this.buttons(t.kind, kb), g = this.game;
     this.el.innerHTML = `<div class="jg-fr">${top}<div class="jg-rail">${rail([[g?.rounds ? 'Round' : 'Step', '–', 'dyn', 'var(--k-gold,#f4c25b)'], ['Faults', '0', 'dyn', 'var(--k-lav,#b99be6)'], ['Time', '–', 'dyn'], ['Status', 'Online', 'grow dyn', '#f7c9a2']])}</div>
-      <div class="jg-main"><div class="jg-lbl">${esc(j.label || t.name)}</div><canvas width="400" height="170"></canvas><div class="jg-seg"></div></div>
+      <div class="jg-main"><div class="jg-lbl">${esc(j.label || t.name)}${g?.sub ? ` · ${esc(g.sub)}` : ''}</div><canvas width="400" height="170"></canvas><div class="jg-seg"></div></div>
       ${bot(this.phase === 'done' ? `<div class="jg-res">${esc(this.result?.label || '')}</div>` : `<div class="jg-btns${(btns.match(/<button/g) || []).length > 6 ? ' tight' : ''}">${btns}<button class="no" data-k="Escape">Esc</button></div>`)}</div>`;
     const ex = this.el.querySelector('.jg-btns [data-k="Escape"]'); if (ex) ex.onmousedown = (e) => { e.stopPropagation(); this.G.ui?.close('jobgame'); if (this.active) this.cancel(); };
     this.cv = this.el.querySelector('canvas'); this.draw();
@@ -157,6 +157,17 @@ export class JobGameUI {
       case 'tune': return B('ArrowLeft', '◀ hold') + B('ArrowRight', 'hold ▶') + B('Space', `Lock ${kb('Space')}`);
       case 'loadbal': return B('ArrowLeft', '◀ Port') + B('ArrowRight', 'Starboard ▶');
       case 'course': return arrows;
+      case 'station': return B('ArrowUp', '▲ hold') + B('ArrowDown', '▼ hold') + B('ArrowLeft', '◀ hold') + B('ArrowRight', 'hold ▶');
+      case 'burn': return B('Space', `Brake (hold) ${kb('Space')}`);
+      case 'fix': return D(4);
+      case 'coords': return arrows + B('Enter', `Energise ${kb('Enter')}`);
+      case 'form': return arrows + B('Enter', `File ${kb('Enter')}`);
+      case 'roster': case 'queue': return D(5);
+      case 'verify': return D(8) + B('Enter', `Resend ${kb('Enter')}`);
+      case 'pa': return D(6, d => `${d} ${PAZ_UI[d - 1]}`) + B('Space', `Speak ${kb('Space')}`);
+      case 'schedule': return B('ArrowLeft', '◀') + B('ArrowRight', '▶') + B('Enter', `Book ${kb('Enter')}`);
+      case 'trend': return D(6);
+      case 'sign': return B('Digit1', '1 Sign') + B('Digit2', '2 Query');
       default: return '';
     }
   }
@@ -338,7 +349,7 @@ const DRAW = {
   loadbal(c, W, H, g, P) {
     T(c, 'Next:', 10, 18, 11, '#a8a6b9', 'left', 600); g.queue.forEach((w, i) => { const x = 50 + i * 42, cur = i === g.i, done = i < g.i; box(c, x, 6, 34, 18, done ? '#2a2748' : cur ? '#f0933a' : '#6b5536', cur ? '#fff' : null, 3); T(c, `${w} t`, x + 17, 19, 11, done ? '#6b68a0' : '#0a0912', 'center'); });
     const cx = W / 2, cy = 96; c.strokeStyle = '#a8a6b9'; c.lineWidth = 2; c.beginPath(); c.moveTo(cx - 150, cy - 50); c.lineTo(cx + 150, cy - 50); c.lineTo(cx + 150, cy + 40); c.lineTo(cx - 150, cy + 40); c.closePath(); c.stroke();
-    T(c, 'PORT', cx - 100, cy - 36, 11, '#a8a6b9', 'center', 600); T(c, 'STARBOARD', cx + 100, cy - 36, 11, '#a8a6b9', 'center', 600); T(c, `${g.L} t`, cx - 100, cy + 6, 22, '#fff', 'center'); T(c, `${g.R} t`, cx + 100, cy + 6, 22, '#fff', 'center');
+    T(c, (g.sides || ['PORT'])[0], cx - 100, cy - 36, 11, '#a8a6b9', 'center', 600); T(c, (g.sides || [, 'STARBOARD'])[1], cx + 100, cy - 36, 11, '#a8a6b9', 'center', 600); T(c, `${g.L} t`, cx - 100, cy + 6, 22, '#fff', 'center'); T(c, `${g.R} t`, cx + 100, cy + 6, 22, '#fff', 'center');
     const d = g.R - g.L, ang = clamp01((d + 6) / 12) * Math.PI - Math.PI / 2; c.strokeStyle = '#55507e'; c.lineWidth = 6; c.beginPath(); c.arc(cx, cy + 34, 34, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
     const lim = g.lim / 6 * (Math.PI / 2); c.strokeStyle = P.good; c.beginPath(); c.arc(cx, cy + 34, 34, -Math.PI / 2 - lim, -Math.PI / 2 + lim); c.stroke(); c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.beginPath(); c.arc(cx, cy + 42, 34, -Math.PI / 2 - lim, -Math.PI / 2 + lim); c.stroke();
     c.strokeStyle = Math.abs(d) <= g.lim ? '#fff' : P.bad; c.lineWidth = 3; c.beginPath(); c.moveTo(cx, cy + 34); c.lineTo(cx + Math.sin(ang) * 30, cy + 34 - Math.cos(ang) * 30); c.stroke(); T(c, `trim limit ±${g.lim} t`, cx, cy + 56, 9, '#a8a6b9', 'center', 600);
@@ -347,7 +358,7 @@ const DRAW = {
     const s = 17, gw = g.W * s * 2, x0 = (W - gw) / 2, y0 = 8, cs = s * 2 - 2, cell = (x, y) => [x0 + x * s * 2, y0 + y * s * 2 * 0.92];
     for (let y = 0; y < g.H; y++) for (let x = 0; x < g.W; x++) { const [px, py] = cell(x, y); c.strokeStyle = 'rgba(125,151,232,.25)'; c.lineWidth = 1; c.strokeRect(px, py, cs, cs * 0.92);
       if (g.isHaz(x, y)) { c.fillStyle = '#6b5a4a'; c.beginPath(); for (let k = 0; k < 7; k++) { const a = k / 7 * 6.283, rr = 11 * (0.7 + (((x * 7 + y * 13 + k * 5) % 6) / 15)); k ? c.lineTo(px + cs / 2 + Math.cos(a) * rr, py + cs * 0.46 + Math.sin(a) * rr) : c.moveTo(px + cs / 2 + Math.cos(a) * rr, py + cs * 0.46 + Math.sin(a) * rr); } c.closePath(); c.fill(); c.strokeStyle = '#ffb000'; c.lineWidth = 1.5; c.stroke(); } }
-    const [gx, gy] = cell(...g.goal); c.strokeStyle = P.good; c.lineWidth = 3; c.beginPath(); c.arc(gx + cs / 2, gy + cs * 0.46, 11, 0, 6.283); c.stroke(); T(c, `WP${g.hits + 1}`, gx + cs / 2, gy + cs * 0.46 + 4, 9, '#fff', 'center');
+    const [gx, gy] = cell(...g.goal); c.strokeStyle = P.good; c.lineWidth = 3; c.beginPath(); c.arc(gx + cs / 2, gy + cs * 0.46, 11, 0, 6.283); c.stroke(); T(c, `WP${g.hits + 1}`, gx + cs / 2, gy + cs * 0.46 + 4, 9, '#fff', 'center'); if (g.hazName) T(c, `▲ ${g.hazName}`, W - 6, H - 4, 9, '#ffb000', 'right', 600);
     const [sx, sy] = cell(...g.pos), dir = g.goal[0] > g.pos[0] ? 1 : -1; c.fillStyle = '#f7c9a2'; c.beginPath(); c.moveTo(sx + cs / 2 + 12 * dir, sy + cs * 0.46); c.lineTo(sx + cs / 2 - 9 * dir, sy + cs * 0.46 - 8); c.lineTo(sx + cs / 2 - 9 * dir, sy + cs * 0.46 + 8); c.closePath(); c.fill();
   },
   decode(c, W, H, g, P) {
@@ -356,5 +367,86 @@ const DRAW = {
     T(c, 'RECEIVED', 10, 16, 10, '#a8a6b9', 'left', 600); box(c, 80, 4, 220, 32, '#0c0b1a', '#55507e', 3); trace(r.rx, 90, 10, 200, 20, '#f7c9a2', true); T(c, bits(r.rx).join(''), 360, 26, 13, '#f7c9a2', 'center', 700);
     r.codes.forEach((code, i) => { const y = 46 + i * 28; box(c, 6, y, W - 12, 24, '#0c0b1a', '#55507e', 3); T(c, `${i + 1}  ${r.names[i]}`, 14, y + 16, 11, '#f3eee6'); trace(code, 150, y + 5, 150, 14, '#7d97e8', false); T(c, bits(code).join(''), 360, y + 16, 11, '#d8d2e6', 'center', 600); });
   },
+  station(c, W, H, g, P) {
+    const cx = 130, cy = 85, R = 70, X = (v) => cx + v * R, Y = (v) => cy + v * R; box(c, cx - R, cy - R, R * 2, R * 2, '#0c0b1a', '#55507e', 3);
+    for (let k = 1; k < 4; k++) { c.strokeStyle = 'rgba(125,151,232,.18)'; c.beginPath(); c.arc(cx, cy, k * R / 3, 0, 6.283); c.stroke(); }
+    const bw = g.box * R; c.fillStyle = g.inBox() ? P.good : 'rgba(125,151,232,.3)'; c.globalAlpha = 0.35; c.fillRect(cx - bw, cy - bw, bw * 2, bw * 2); c.globalAlpha = 1; c.strokeStyle = '#fff'; c.lineWidth = 2; c.strokeRect(cx - bw, cy - bw, bw * 2, bw * 2);
+    const [x, y] = g.pos; c.fillStyle = '#f7c9a2'; c.beginPath(); c.moveTo(X(x), Y(y) - 8); c.lineTo(X(x) + 6, Y(y) + 6); c.lineTo(X(x) - 6, Y(y) + 6); c.closePath(); c.fill();
+    for (const [k, dx, dy] of [['U', 0, -1], ['D', 0, 1], ['L', -1, 0], ['R', 1, 0]]) if (g.held[k]) { c.strokeStyle = '#ffd9a0'; c.lineWidth = 3; c.beginPath(); c.moveTo(X(x) - dx * 8, Y(y) - dy * 8); c.lineTo(X(x) - dx * 18, Y(y) - dy * 18); c.stroke(); }
+    T(c, 'HOLD', 300, 30, 11, '#a8a6b9', 'center', 600); box(c, 230, 40, 140, 16, '#1d1a33', '#a8a6b9', 3); c.fillStyle = P.good; c.fillRect(232, 42, 136 * Math.min(1, g.fill / g.need), 12);
+    T(c, g.inBox() ? 'ON STATION' : 'OFF STATION', 300, 82, 14, g.inBox() ? '#fff' : '#f7c9a2', 'center'); T(c, g.sub || 'Station keeping', 300, 104, 11, '#a8a6b9', 'center', 600); T(c, 'current pushes outward', 300, 122, 10, '#a8a6b9', 'center', 600);
+  },
+  burn(c, W, H, g, P) {
+    const x0 = 20, x1 = W - 20, y = 60, X = (d) => x1 - (x1 - x0) * clamp01(d / g.d0); c.strokeStyle = 'rgba(125,151,232,.4)'; c.lineWidth = 2; c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.stroke();
+    c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.moveTo(x1, y - 22); c.lineTo(x1, y + 22); c.stroke(); T(c, 'MARK', x1, y - 28, 10, '#fff', 'right', 700);
+    const sx = X(g.d); c.fillStyle = '#f7c9a2'; c.beginPath(); c.moveTo(sx + 12, y); c.lineTo(sx - 8, y - 8); c.lineTo(sx - 8, y + 8); c.closePath(); c.fill();
+    if (g.held.S) { c.fillStyle = '#ffd9a0'; c.beginPath(); c.moveTo(sx + 14, y - 4); c.lineTo(sx + 30 + Math.random() * 6, y); c.lineTo(sx + 14, y + 4); c.closePath(); c.fill(); }
+    const vy = 120, vmax = 0.36, VX = (v) => x0 + (x1 - x0) * clamp01(v / vmax); c.fillStyle = '#1d1a33'; c.fillRect(x0, vy - 8, x1 - x0, 16); c.fillStyle = 'rgba(79,208,106,.35)'; c.fillRect(VX(g.band[0]), vy - 8, VX(g.band[1]) - VX(g.band[0]), 16);
+    c.strokeStyle = '#fff'; c.lineWidth = 2; c.strokeRect(VX(g.band[0]), vy - 8, VX(g.band[1]) - VX(g.band[0]), 16); c.fillStyle = '#f0933a'; c.fillRect(VX(g.v) - 2, vy - 12, 4, 24);
+    T(c, `SPEED ${(g.v * 1000).toFixed(0)} m/s`, x0, vy + 26, 11, '#f7c9a2', 'left'); T(c, g.held.S ? 'BRAKING' : 'COASTING', x1, vy + 26, 11, '#fff', 'right'); T(c, g.sub || '', x0, 20, 11, '#a8a6b9', 'left', 600); pips(c, g.need, g.hits, W / 2 - 14, 22, P);
+  },
+  fix(c, W, H, g, P) {
+    const r = g.cur, X = (v) => 10 + v * (W - 20), Y = (v) => 8 + v * (H - 16), Pt = r.cands[r.answer];
+    for (const s of r.stars) { const dx = Math.cos(s.a), dy = Math.sin(s.a); c.strokeStyle = 'rgba(247,201,162,.6)'; c.lineWidth = 1.5; c.setLineDash([6, 4]); c.beginPath(); c.moveTo(X(Pt[0] + dx * 2), Y(Pt[1] + dy * 2)); c.lineTo(X(Pt[0] - dx * 2), Y(Pt[1] - dy * 2)); c.stroke(); c.setLineDash([]);
+      const sx = clamp01(s.x), sy = clamp01(s.y); c.fillStyle = '#fff'; c.beginPath(); c.arc(X(sx), Y(sy), 3, 0, 6.283); c.fill(); T(c, s.name, X(sx) + (sx > 0.8 ? -6 : 6), Y(sy) + (sy < 0.1 ? 12 : -4), 9, '#a8a6b9', sx > 0.8 ? 'right' : 'left', 600); }
+    r.cands.forEach((p, i) => { c.strokeStyle = '#7d97e8'; c.lineWidth = 2; c.beginPath(); c.arc(X(p[0]), Y(p[1]), 9, 0, 6.283); c.stroke(); T(c, i + 1, X(p[0]), Y(p[1]) + 4, 11, '#fff', 'center'); });
+    T(c, `fix ${Math.min(g.round + 1, g.rounds)}/${g.rounds}`, W - 10, H - 6, 10, '#a8a6b9', 'right', 600);
+  },
+  coords(c, W, H, g, P) {
+    T(c, `${g.sub || 'Transport'} · TARGET`, 12, 18, 11, '#a8a6b9', 'left', 600); T(c, 'LOCK', 220, 18, 11, '#a8a6b9', 'left', 600);
+    ['X', 'Y', 'Z'].forEach((ax, i) => { const y = 32 + i * 38, on = i === g.sel, ok = g.cur[i] === g.target[i]; box(c, 8, y, 190, 32, '#0c0b1a', '#55507e', 4); T(c, `${ax}  ${String(g.target[i]).padStart(2, '0')}`, 20, y + 22, 18, '#f7c9a2');
+      box(c, 214, y, 178, 32, on ? '#17142a' : '#0c0b1a', on ? '#f7c9a2' : ok ? P.good : '#55507e', 4); T(c, `${ax}  ${String(g.cur[i]).padStart(2, '0')}`, 226, y + 22, 18, ok ? '#fff' : '#d8d2e6'); T(c, ok ? 'MATCH' : g.cur[i] < g.target[i] ? '→' : '←', 380, y + 21, 11, ok ? '#fff' : '#f7c9a2', 'right'); });
+    pips(c, g.need, g.hits, 20, 158, P); T(c, 'target drifts with the ship', W - 10, 160, 9, '#a8a6b9', 'right', 600);
+  },
+  form(c, W, H, g, P) {
+    T(c, 'READINGS', 10, 14, 10, '#a8a6b9', 'left', 600); g.rd.forEach((r, i) => { const y = 22 + i * 34, out = r.v < r.lo || r.v > r.hi; box(c, 6, y, 150, 30, '#0c0b1a', out ? P.bad : '#55507e', 3); T(c, r.name, 12, y + 12, 10, '#d8d2e6', 'left', 600); T(c, `${r.v} ${r.unit}`, 12, y + 26, 13, '#fff'); T(c, `${r.lo}–${r.hi}`, 150, y + 26, 9, '#a8a6b9', 'right', 600); });
+    T(c, `REPORT ${Math.min(g.hits + 1, g.need)}/${g.need}`, 170, 14, 10, '#a8a6b9', 'left', 600);
+    g.fields.forEach((f, i) => { const y = 24 + i * 44, on = i === g.sel, bad = g.bads?.includes(i); box(c, 166, y, 228, 38, on ? '#17142a' : '#0c0b1a', bad ? P.bad : on ? '#f7c9a2' : '#55507e', 4); T(c, f.name, 174, y + 13, 10, '#a8a6b9', 'left', 600); T(c, `◀ ${f.opts[f.i]} ▶`, 174, y + 31, 13, '#fff'); });
+  },
+  roster(c, W, H, g, P) {
+    g.posts.forEach((p, i) => { const y = 6 + i * 30, on = i === g.round; box(c, 6, y, 160, 26, on ? '#17142a' : '#0c0b1a', on ? '#f7c9a2' : '#55507e', 4); T(c, p.q, 12, y + 12, 11, on ? '#f7c9a2' : '#fff'); T(c, p.watch, 12, y + 23, 9, '#a8a6b9', 'left', 600); T(c, p.who >= 0 ? g.people[p.who].name.split(' ').pop() : on ? '?' : '', 160, y + 17, 11, '#fff', 'right'); });
+    g.people.forEach((p, i) => { const y = 6 + i * 31, used = g.posts.some(x => x.who === i); box(c, 176, y, 218, 27, used ? '#1d1a33' : '#0c0b1a', '#55507e', 4); T(c, `${i + 1}  ${p.name}`, 182, y + 12, 11, used ? '#6b68a0' : '#fff'); T(c, p.quals.join(', '), 182, y + 23, 9, '#d8d2e6', 'left', 600); T(c, used ? 'assigned' : p.note, 388, y + 12, 9, p.note === 'free' ? '#a8a6b9' : '#f7c9a2', 'right', 700); });
+  },
+  queue(c, W, H, g, P) {
+    T(c, 'SAFETY > MISSION > ROUTINE · oldest first', W / 2, 13, 10, '#a8a6b9', 'center', 600); const SEV = ['SAFETY', 'MISSION', 'ROUTINE'];
+    g.items.forEach((it, i) => { const y = 20 + i * 29; box(c, 6, y, W - 12, 25, it.done ? '#1d1a33' : '#0c0b1a', '#55507e', 4); T(c, i + 1, 14, y + 17, 12, '#f7c9a2'); T(c, it.title, 32, y + 17, 11, it.done ? '#6b68a0' : '#fff');
+      box(c, 260, y + 4, 66, 17, it.done ? null : ['#c05050', '#c8a040', '#55507e'][it.sev], null, 8); T(c, SEV[it.sev], 293, y + 16, 9, it.done ? '#6b68a0' : '#0a0912', 'center'); T(c, it.done ? 'DONE' : `${it.age} h`, W - 14, y + 17, 11, it.done ? P.good : '#d8d2e6', 'right'); });
+  },
+  verify(c, W, H, g, P) {
+    T(c, `VOLUME: ${g.vol}`, 10, 14, 11, '#f7c9a2', 'left'); T(c, `${Math.min(g.hits + 1, g.need)}/${g.need}`, W - 10, 14, 10, '#a8a6b9', 'right', 600);
+    g.blocks.forEach((b, i) => { const x = 6 + (i % 4) * 98, y = 22 + Math.floor(i / 4) * 72; box(c, x, y, 92, 66, b.flag ? '#2a1a20' : '#0c0b1a', b.flag ? '#f7c9a2' : '#55507e', 4); T(c, `${i + 1}`, x + 6, y + 14, 12, '#f7c9a2');
+      c.font = '700 12px monospace'; c.textAlign = 'left'; c.fillStyle = '#d8d2e6'; c.fillText(`SRC ${b.src}`, x + 10, y + 34); c.fillStyle = '#fff'; c.fillText(`CPY ${b.cp}`, x + 10, y + 52); if (b.flag) T(c, 'RESEND', x + 86, y + 14, 9, '#f7c9a2', 'right'); });
+  },
+  pa(c, W, H, g, P) {
+    box(c, 6, 4, W - 12, 34, '#f3eee6', null, 4); T(c, `“${g.msg.text}”`, 14, 19, 12, '#0a0912'); T(c, `FOR: ${g.msg.to.map(i => PAZ_UI[i]).join(', ')}`, 14, 33, 10, '#55507e', 'left', 700);
+    PAZ_UI.forEach((z, i) => { const x = 6 + (i % 3) * 132, y = 46 + Math.floor(i / 3) * 34; box(c, x, y, 126, 28, g.on[i] ? '#17142a' : '#0c0b1a', g.on[i] ? '#f7c9a2' : '#55507e', 4); T(c, `${i + 1} ${z}`, x + 8, y + 18, 11, g.on[i] ? '#fff' : '#a8a6b9'); T(c, g.on[i] ? 'ON' : 'off', x + 118, y + 18, 9, g.on[i] ? '#f7c9a2' : '#6b68a0', 'right'); });
+    const cl = g.clear(); box(c, 120, 120, 160, 30, cl ? P.good : '#55507e', '#fff', 6); T(c, cl ? 'CHANNEL CLEAR' : 'TRAFFIC', 200, 140, 13, '#0a0912', 'center'); pips(c, g.need, g.hits, 20, 135, P);
+  },
+  schedule(c, W, H, g, P) {
+    const x0 = 14, cw = (W - 28) / g.H, y = 54, X = (s) => x0 + s * cw; T(c, `Book: ${g.blk.name} · ${g.blk.l} h · between ${8 + g.blk.win[0]}:00 and ${8 + g.blk.win[1]}:00`, 10, 16, 11, '#f7c9a2');
+    for (let s = 0; s < g.H; s++) { box(c, X(s) + 1, y, cw - 2, 44, '#0c0b1a', '#2a2748', 2); T(c, `${8 + s}`, X(s) + 3, y + 58, 9, '#a8a6b9', 'left', 600); }
+    c.strokeStyle = '#fff'; c.lineWidth = 2; c.setLineDash([5, 3]); c.strokeRect(X(g.blk.win[0]), y - 6, X(g.blk.win[1]) - X(g.blk.win[0]), 56); c.setLineDash([]);
+    for (const b of g.busy) { box(c, X(b.s) + 2, y + 4, b.l * cw - 4, 36, b.mine ? '#3a4a7a' : '#55507e', null, 3); T(c, b.name, X(b.s) + 5, y + 26, 9, '#fff', 'left', 600); }
+    const ok = g.valid(); box(c, X(g.pos) + 2, y + 74, g.blk.l * cw - 4, 30, ok ? P.good : '#f0933a', '#fff', 4); T(c, g.blk.name, X(g.pos) + 6, y + 93, 10, '#0a0912', 'left'); T(c, '▲', X(g.pos) + g.blk.l * cw / 2, y + 70, 10, '#fff', 'center');
+    pips(c, g.need, g.hits, W - 46, 34, P);
+  },
+  sign(c, W, H, g, P) {
+    T(c, 'TIME   ENTRY                         READING        INIT', 10, 13, 9, '#a8a6b9', 'left', 700);
+    g.entries.forEach((e, i) => { const y = 18 + i * 28, cur = i === g.round, done = i < g.round; box(c, 6, y, W - 12, 25, cur ? '#17142a' : '#0c0b1a', cur ? '#f7c9a2' : '#55507e', 3);
+      c.font = '700 12px monospace'; c.textAlign = 'left'; c.fillStyle = done ? '#6b68a0' : '#f3eee6'; c.fillText(e.t, 12, y + 17); T(c, e.name, 58, y + 12, 10, done ? '#6b68a0' : '#fff'); T(c, `limits ${e.lo}–${e.hi}${e.note ? ' · ' + e.note : ''}`, 58, y + 22, 8, '#a8a6b9', 'left', 600);
+      T(c, `${e.v} ${e.unit}`, 300, y + 17, 12, done ? '#6b68a0' : '#f7c9a2', 'right'); c.font = '700 12px monospace'; c.fillStyle = e.who ? '#fff' : '#ff8a7a'; c.textAlign = 'center'; c.fillText(e.who || '__', 330, y + 17);
+      if (done) T(c, e.why ? 'QUERY' : 'SIGNED', W - 12, y + 17, 10, e.why ? '#f7c9a2' : P.good, 'right'); else if (cur) T(c, '◀', W - 14, y + 17, 12, '#f7c9a2', 'right'); });
+    T(c, 'complete = time after the line above · reading in limits or noted · initials', W / 2, 164, 9, '#a8a6b9', 'center', 600);
+  },
+  trend(c, W, H, g, P) {
+    const r = g.cur, x0 = 34, x1 = W - 8, y0 = 22, y1 = 140, X = (k) => x0 + k / 23 * (x1 - x0), Y = (v) => y1 - v * (y1 - y0);
+    T(c, `${r.name}${r.unit ? ` (${r.unit})` : ''} · limits ${r.lo} – ${r.hi}`, 10, 14, 11, '#f7c9a2'); T(c, `log ${Math.min(g.round + 1, g.rounds)}/${g.rounds}`, W - 10, 14, 10, '#a8a6b9', 'right', 600);
+    c.fillStyle = 'rgba(79,208,106,.12)'; c.fillRect(x0, Y(0.7), x1 - x0, Y(0.3) - Y(0.7)); c.strokeStyle = '#fff'; c.lineWidth = 1; c.setLineDash([4, 3]); for (const v of [0.3, 0.7]) { c.beginPath(); c.moveTo(x0, Y(v)); c.lineTo(x1, Y(v)); c.stroke(); } c.setLineDash([]);
+    T(c, r.hi, x0 - 4, Y(0.7) + 4, 9, '#a8a6b9', 'right', 600); T(c, r.lo, x0 - 4, Y(0.3) + 4, 9, '#a8a6b9', 'right', 600);
+    for (let s = 0; s < 6; s++) { const a = X(s * 4 - 0.5), b = X(s * 4 + 3.5); c.strokeStyle = 'rgba(125,151,232,.3)'; c.beginPath(); c.moveTo(clamp(a, x0, x1), y0); c.lineTo(clamp(a, x0, x1), y1); c.stroke(); T(c, s + 1, (clamp(a, x0, x1) + clamp(b, x0, x1)) / 2, y1 + 16, 12, '#f7c9a2', 'center'); }
+    c.strokeStyle = '#7d97e8'; c.lineWidth = 2; c.beginPath(); r.pts.forEach((v, k) => { const yy = Y(clamp01(v)); k ? c.lineTo(X(k), yy) : c.moveTo(X(k), yy); }); c.stroke();
+    r.pts.forEach((v, k) => { if (v < 0.3 || v > 0.7) { c.fillStyle = P.bad; c.fillRect(X(k) - 2, Y(clamp01(v)) - 2, 4, 4); } });
+  },
 };
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const clamp01 = (v) => Math.max(0, Math.min(1, v)), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const PAZ_UI = ['Bridge', 'Engineering', 'Sickbay', 'Science', 'Cargo', 'Crew decks'];

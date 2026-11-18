@@ -48,6 +48,19 @@ export const KINDS = {
   // bridge / helm / comms
   course: { dept: 'bridge', title: 'Course plot', limit: 18, strikes: 3, keys: ['↑', '↓', '←', '→'], rule: 'Step the plot to each waypoint in turn. Plotting into a hazard is a fault. Two legs.' },
   decode: { dept: 'bridge', title: 'Signal decode', limit: 18, strikes: 3, keys: ['1', '2', '3', '4'], rule: 'Static flips one pulse. Press the codebook message the received pattern is closest to. Three messages.' },
+  station: { dept: 'bridge', title: 'Station keeping', limit: 20, strikes: 0, keys: ['↑', '↓', '←', '→'], rule: 'A current pushes the ship off its mark. Hold the arrows to thrust back into the box and stay there until the hold meter fills.' },
+  burn: { dept: 'bridge', title: 'Braking burn', limit: 22, strikes: 3, hold: true, keys: ['Space (hold)'], rule: 'Hold Space to fire the braking thrusters. Reach the marker at a speed inside the green band. Too fast: go round again; stalled short: a fault. Three approaches.' },
+  fix: { dept: 'bridge', title: 'Position fix', limit: 18, strikes: 3, keys: ['1', '2', '3', '4'], rule: 'Three star bearings are drawn. Press the marked position where all three lines cross. Three fixes.' },
+  coords: { title: 'Beam coordinates', limit: 22, strikes: 3, keys: ['↑', '↓', '←', '→', 'Enter'], rule: 'Dial the lock to the target coordinates (↑ / ↓ pick an axis, ← / → step it); the target drifts as the ship moves. Enter energises. Two transports.' },
+  // paperwork / command (no single department: the theme comes from the job)
+  form: { title: 'Report form', limit: 22, strikes: 3, keys: ['↑', '↓', '←', '→', 'Enter'], rule: 'Fill each field from the readings on the left (↑ / ↓ pick a field, ← / → change it), then Enter to file. Two reports.' },
+  roster: { title: 'Roster assignment', limit: 22, strikes: 3, keys: ['1 – 5'], rule: 'Fill each post with someone who holds its qualification and is free: not on leave, sick or already on watch.' },
+  queue: { title: 'Priority queue', limit: 20, strikes: 3, keys: ['1 – 5'], rule: 'Work the list in order: safety first, then mission, then routine; oldest first inside each. Press the next item to take.' },
+  verify: { title: 'Backup verify', limit: 20, strikes: 3, keys: ['1 – 8', 'Enter'], rule: 'Compare each block\'s source and copy checksum. Flag (1 – 8) every block that differs, then Enter to re-send. Two volumes.' },
+  pa: { title: 'Shipwide announcement', limit: 20, strikes: 3, keys: ['1 – 6', 'Space'], rule: 'Select the decks the message is for (1 – 6), then Space to broadcast while the channel shows CLEAR. Two announcements.' },
+  schedule: { title: 'Schedule slot', limit: 22, strikes: 3, keys: ['←', '→', 'Enter'], rule: 'Slide each block (← / →) into free time inside its window, then Enter to book it. Three blocks.' },
+  sign: { title: 'Log sign-off', limit: 20, strikes: 3, keys: ['1 sign', '2 query'], rule: 'An entry is complete with a time later than the line above, a reading inside its limits (or a note) and initials. 1 signs it, 2 queries it. Five entries.' },
+  trend: { title: 'Log trend review', limit: 18, strikes: 3, keys: ['1 – 6'], rule: 'Read the logged trace: press the segment where it first left its limits. Three logs.' },
 };
 // ---- the station / tool a job uses: name, mini-game, one-line how-to (shown once, on the instruction card). theme: content set for the game
 const TOOL = (id, name, kind, how, theme) => ({ id, name, kind, how, keys: KINDS[kind].keys, ...(theme ? { theme } : {}), ...(KINDS[kind].dept ? { dept: KINDS[kind].dept } : {}) });
@@ -87,6 +100,8 @@ export const TOOLS = {
   armscheck: TOOL('armscheck', 'Charger test rack', 'bench', 'Each charger shows its held charge against spec: 1 passes it, 2 pulls it.', 'arms'),
   fieldtest: TOOL('fieldtest', 'Force-field emitter test', 'bench', 'Each emitter shows its field strength against spec: 1 passes it, 2 flags it.', 'field'),
   coils: TOOL('coils', 'Transporter coil rig', 'bench', 'Each coil shows its wear reading against spec: 1 keeps it, 2 swaps it.', 'coil'),
+  galleytest: TOOL('galleytest', 'Galley equipment test', 'bench', 'Each unit shows its test reading against spec: 1 passes it, 2 tags it out of service.', 'galley'),
+  labtest: TOOL('labtest', 'Lab instrument check', 'bench', 'Each instrument shows its reading on the reference standard: 1 passes it, 2 sends it for calibration.', 'lab'),
   sensors: TOOL('sensors', 'Sensor tuner', 'tune', 'Sweep the band (← / →): the strength meter rises near the signal. Space locks it when the meter is full.'),
   comms: TOOL('comms', 'Comms tuner', 'tune', 'Sweep the band (← / →) for the carrier, Space to lock when the strength meter is full.'),
   classify: TOOL('classify', 'Sensor contact board', 'classify', 'Read each contact\'s size, emission and motion, then press the matching class in the legend.'),
@@ -100,11 +115,60 @@ export const TOOLS = {
   loadbal: TOOL('loadbal', 'Load-trim board', 'loadbal', 'Stow each crate port (←) or starboard (→) and keep the deck in trim.'),
   course: TOOL('course', 'Helm plot', 'course', 'Step the course (arrow keys) to each waypoint; never plot through a hazard.'),
   decode: TOOL('decode', 'Comms decoder', 'decode', 'Match the received pulse pattern to the closest codebook message (1 – 4). Static flips one pulse.'),
-  signoff: TOOL('signoff', 'Log signature pad', 'sequence', 'Sign the log: key the lit authorisation code, symbol by symbol.'),
+  signoff: TOOL('signoff', 'Log signature pad', 'sign', 'Read each entry before you put your name to it: sign the complete ones, query the rest.'),
+  trim: TOOL('trim', 'Reactor output trim', 'calibrate', 'Keep the output marker on the drifting demand: hold ← / → until the steady-output meter fills.'),
+  printer: TOOL('printer', 'Replicator pattern console', 'sequence', 'Key in the pattern code for the job, symbol by symbol, to start the print.'),
+  coldstart: TOOL('coldstart', 'Reactor start sequence', 'sequence', 'The start-up sequence is a fixed code: key each lit symbol in order or the start aborts.'),
   transporter: TOOL('transporter', 'Transporter pattern lock', 'calibrate', 'Keep the targeting scanner on the drifting pattern: hold ← / → until the lock meter fills.'),
+  // flying, transporter targeting, paperwork (the theme of each comes from the job's label: themeFor)
+  station: TOOL('station', 'Helm station-keeping', 'station', 'The ship drifts on the current: hold the arrow keys to thrust back into the box and hold it there.'),
+  burn: TOOL('burn', 'Helm thruster control', 'burn', 'Hold Space to brake; let go to coast. Arrive at the marker slow, inside the green band.'),
+  fix: TOOL('fix', 'Navigation fix board', 'fix', 'Three reference stars, three bearing lines: the ship is where all three cross.'),
+  beam: TOOL('beam', 'Transporter targeting', 'coords', 'Dial each axis of the lock onto the target coordinates; they drift with the ship. Enter energises.'),
+  report: TOOL('report', 'Report form', 'form', 'Copy the figures from the readings into the form, set the status and the addressee, Enter files it.'),
+  roster: TOOL('roster', 'Duty roster', 'roster', 'Each post needs its qualification and someone who is free. Pick the person for the highlighted post.'),
+  queue: TOOL('queue', 'Priority queue', 'queue', 'Safety before mission before routine, oldest first within each: take the items in that order.'),
+  backup: TOOL('backup', 'Backup and verify', 'verify', 'Flag each block whose copy checksum differs from the source, then Enter re-sends them.'),
+  pa: TOOL('pa', 'Shipwide PA', 'pa', 'Pick the decks the announcement is for, wait for a CLEAR channel and press Space to speak.'),
+  schedule: TOOL('schedule', 'Schedule board', 'schedule', 'Slide each block into free time inside its window and book it with Enter.'),
+  trend: TOOL('trend', 'Log trend viewer', 'trend', 'Find where the logged reading first left its limits: press that segment.'),
 };
 TOOLS['command chair'] = TOOLS.captain_chair;
 export function toolFor(spot) { return (spot && TOOLS[spot]) || null; }
+
+// ---- variety inside a kind, keyed by the job: a theme (content set) from the label's words, else the room, else a hash of the label. Two jobs of
+//      the same kind get different readings / posts / volumes / hazards / doors; the per-run seed then varies the round content on top.
+export const labelHash = (s) => { let h = 2166136261; for (const ch of String(s || '')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+const DEPT_RE = [[/sickbay|medical|patient|casualt|triage|health|injur|fitness|clinic/i, 'med'], [/helm|\bnav\b|navig|flight|shuttle|maneuv|manoeuv|position|arrival|\beta\b|course|approach|pilot|deck crew|launch/i, 'flight'],
+  [/security|armory|brig|intruder|patrol|guard|watch officers|lockdown/i, 'sec'], [/reactor|core temp|injector|grid|\beps\b|power|engineering|\btaps?\b|junction|defect|fault|damper|coolant|yard|shakedown/i, 'eng'],
+  [/sensor|survey|science|chart|scan|\blab\b|anomal|sample/i, 'sci'], [/transporter|\bops\b|comm|relay|database|\bcore\b|archive|backup|records|ticket|network/i, 'ops'], [/cargo|manifest|stores|ration|galley|stock|consumed|quartermaster/i, 'stores']];
+const ROOM_THEME = { engineering: 'eng', plant: 'eng', workshop: 'eng', sickbay: 'med', lab: 'sci', arboretum: 'sci', datacore: 'ops', transporter: 'ops', holodeck: 'ops', bridge: 'cmd', readyroom: 'cmd', brig: 'sec', armory: 'sec', shuttlebay: 'flight', cargo: 'stores', stores: 'stores', mess: 'stores' };
+const DEPT_THEMED = ['form', 'roster', 'queue', 'verify', 'pa', 'schedule', 'trend'];
+export const THEMES = {   // kind -> [label regex, theme]...; list: every theme the kind knows (tests play each one)
+  course: { re: [[/debris|fod|dust/i, 'debris'], [/storm|ion|hazard/i, 'ion'], [/dock|station|traffic|rendezvous|transfer|arrival|approach/i, 'traffic'], [/survey|grid|chart/i, 'survey']], list: ['debris', 'ion', 'traffic', 'survey', 'asteroids'] },
+  decode: { re: [[/medical|sickbay/i, 'medical'], [/alert|drill|tone/i, 'alert'], [/relay|network|link|failover|junction/i, 'relay']], list: ['hail', 'medical', 'alert', 'relay'] },
+  tune: { re: [[/subspace|transceiver|comm|channel|relay|link/i, 'comms'], [/deflector|dust/i, 'deflector'], [/array|sensor|calibrat|sweep|drift|resolution|range/i, 'array']], list: ['array', 'comms', 'deflector', 'core'] },
+  calibrate: { re: [[/output|constrictor|steady power/i, 'core'], [/hologra|matrix|emh/i, 'emh'], [/emitter|holo|program|session|grid/i, 'holo'], [/buffer|biofilter|decontam|flush/i, 'buffer'], [/lock|beam|transport|pad|patient|team|casualty/i, 'lock']], list: ['lock', 'buffer', 'holo', 'emh', 'core'] },
+  dial: { re: [[/injector/i, 'injector'], [/damper|deflector/i, 'damper'], [/air|atmos|ventilat|filtration|scrubber|isolation/i, 'air'], [/pattern|matter|replicator|buffer/i, 'matter'], [/water|reclamation/i, 'water']], list: ['coolant', 'injector', 'damper', 'air', 'matter', 'water'] },
+  power: { re: [[/sickbay|medical|hologram/i, 'Sickbay'], [/sensor|array|scan|science/i, 'Sensors'], [/transport|pad/i, 'Transporter'], [/lift|tractor|cargo|gravity/i, 'Lifts'], [/holo|playroom|program/i, 'Holodeck'], [/speed|burst|impulse|cruise/i, 'Impulse']], list: ['Sickbay', 'Sensors', 'Transporter', 'Lifts', 'Holodeck', 'Impulse'] },
+  badge: { re: [[/lab|sensor|science/i, 'Science lab'], [/sickbay|quarantine|isolation|stretcher|patient/i, 'Isolation ward'], [/shuttlebay|away-team traffic|unload/i, 'Shuttlebay'], [/transporter|pad|beam/i, 'Transporter room'], [/brig|cell/i, 'Brig'], [/armory|sidearm|weapon|escort/i, 'Armory'], [/cargo|hold|evacuee/i, 'Cargo bay'], [/bridge|lockdown|intruder/i, 'Bridge']], list: ['Armory', 'Science lab', 'Isolation ward', 'Shuttlebay', 'Transporter room', 'Brig', 'Cargo bay', 'Bridge'] },
+  cook: { re: [[/bland|patient|sickbay|soft|special/i, 'bland'], [/batch|bulk|loading|double|evacuee/i, 'bulk'], [/sealed|science|console|field|lab/i, 'field'], [/broth|water/i, 'broth']], list: ['meal', 'bland', 'bulk', 'field', 'broth'] },
+  manifest: { re: [[/medical|sickbay/i, 'medical'], [/probe|sample|science|lab|drone/i, 'science'], [/transporter|pad|beam/i, 'pads'], [/spare|repair|patch/i, 'spares']], list: ['cargo', 'medical', 'science', 'pads', 'spares'] },
+  loadbal: { re: [[/sled|lift/i, 'sleds'], [/pad|beam|batch|weight|transporter/i, 'pads'], [/shuttle|hold/i, 'shuttle']], list: ['crates', 'sleds', 'pads', 'shuttle'] },
+  fresh: { re: [[/replicator|feedstock|matter|pattern/i, 'feedstock'], [/medical|med\b|sickbay/i, 'medical'], [/ration|field|emergency/i, 'rations']], list: ['pantry', 'feedstock', 'medical', 'rations'] },
+  station: { re: [[/scan|survey|deep/i, 'scan'], [/transfer|transport|dock/i, 'transfer'], [/drift|orbit/i, 'orbit']], list: ['scan', 'transfer', 'orbit', 'hold'] },
+  burn: { re: [[/dock|approach|berth/i, 'dock'], [/thruster|test|turn|maneuv/i, 'test'], [/recover|launch|flight|land/i, 'shuttle'], [/decel|speed|run|stricken/i, 'decel']], list: ['dock', 'test', 'shuttle', 'decel'] },
+  coords: { re: [[/patient|casualt|sickbay|stretcher/i, 'patients'], [/cargo|crate|batch|supplies|bulk/i, 'cargo'], [/sample|specimen/i, 'samples'], [/team|away|surveyor|beacon/i, 'team']], list: ['team', 'cargo', 'patients', 'samples'] },
+  fix: { list: ['stars'] },
+  counsel: { re: [[/fatigue|exhaustion|long scan|loading/i, 'fatigue'], [/medical staff|triage|medical team/i, 'staff'], [/evacuee|relief|families/i, 'grief'], [/new crew|trials|drills?\b|after a fault/i, 'nerves'], [/lonely|walkabout|open-door|wellness|peace/i, 'lonely']], list: ['general', 'fatigue', 'grief', 'nerves', 'staff', 'lonely'] },
+};
+for (const k of DEPT_THEMED) THEMES[k] = { re: DEPT_RE, list: ['eng', 'med', 'flight', 'sec', 'sci', 'ops', 'stores', 'cmd'], room: true };
+export function themeFor(kind, label = '', room = null) {
+  const T = THEMES[kind]; if (!T) return null;
+  for (const [re, th] of T.re || []) if (re.test(label)) return th;
+  if (T.room && ROOM_THEME[room]) return ROOM_THEME[room];
+  return T.list[labelHash(label) % T.list.length];
+}
 
 // ---- which game a job plays. Exact labels first (OVERRIDES), then RULES in order (label + sys text, room filter), then the spot's own tool.
 const MED = ['sickbay'], ENG = ['engineering', 'plant', 'workshop'], SCI = ['lab', 'datacore'], SEC = ['brig', 'armory'], GAL = ['mess', 'arboretum'], CAR = ['cargo', 'stores'], BRI = ['bridge', 'readyroom'];
@@ -131,10 +195,62 @@ export const OVERRIDES = {
   'Run helm and damper checks': 'course', 'Keep order among the evacuees': 'badge', 'Scan cargo for hazardous signatures': 'samples', 'Live-fire calibration at the range': 'armscheck',
   'Assign watch officers so sensors stay manned': 'signoff', 'Give sensors priority power and bandwidth': 'power', 'Check hull plates and sensor mounts before maneuvers': 'preflight', 'Secure the lab and sensor spaces': 'badge',
   'Pattern buffer check after sensor power draw': 'replicator', 'Brief sensor, carto and botany on survey targets': 'classify', 'Seal-check sickbay isolation doors': 'door', 'Decontaminate buffer': 'transporter',
-  'Scan subspace bands for signals': 'comms', 'Monitor hails and ship traffic': 'decode', 'Keep the science team\'s comm channel clear': 'comms', 'Hold clean relay link to the sickbay and bridge': 'comms', 'Align the subspace transceiver': 'comms', 'Subspace transceiver range test': 'comms',
+  'Scan subspace bands for signals': 'comms',
+  // second pass (job audit, docs/job-audit.md): labels whose words would mislead a rule
+  'Sign the log and review reports': 'signoff', 'Captain\'s log and standing orders': 'signoff', 'Accept or reject ship readiness': 'signoff', 'Approve approach and sensor power': 'signoff', 'Cold-start drill': 'coldstart', 'Authorise transfer and docking': 'signoff',
+  'Watch temperature and humidity of stores': 'trend', 'Power the cargo lifts and tractor gear': 'power', 'Report junction margins': 'report', 'Report all margins': 'report', 'Divert power to sickbay on request': 'power',
+  'Replicator feedstock and queue': 'fresh', 'Run the full ops systems test sequence': 'trend', 'Duty roster and deficiency review': 'roster', 'Assign watch officers so sensors stay manned': 'roster',
+  'Pattern buffer check after sensor power draw': 'backup', 'Relay sickbay requests to captain and bridge': 'decode', 'Report power draw anomalies from the units': 'trend', 'Run full pre-launch checklist on all craft': 'preflight',
+  'Run helm and damper checks': 'burn', 'Align navigational deflector': 'sensors', 'Reserve power for sensor arrays': 'power', 'O2 reclamation check': 'trend', 'Reconcile sensor data with master chart': 'backup',
+  'Debrief the medical team after the relief': 'counsel', 'Hold steady output during scan': 'trim', 'Hold steady power for transporter': 'trim', 'Constrictor and output trim': 'trim', 'Test sickbay power, bed monitors and hologram trigger': 'power', 'Check the holographic medic and scanners': 'scanner', 'Audit the program archive': 'backup', 'Audit the archive for corrupted programs': 'backup', 'Inspect incoming medical stores and log expiry': 'fresh',
+  'Transporter readiness sign-off': 'signoff', 'Sign off the transfer log': 'signoff', 'Work the ops board': 'console',
+  'Print pallet straps and crate seals': 'printer', 'Print medical consumables and sterile packs': 'printer', 'Spare parts printed for engineering': 'printer', 'Prepare sample containers and lab consumables on industrial replicator': 'printer',
+  'Hail the receiving station and confirm the schedule': 'decode', 'Approve cargo manifest and transfer schedule': 'manifest', 'Serial audit of the zapper locker': 'manifest', 'Prepare and tag survey specimens': 'manifest',
+  'Issue probes and sample containers to science': 'manifest', 'Reconcile matter stores against manifest': 'manifest', 'Repair locker audit': 'manifest',
+  'Write up fix accuracy results': 'report', 'Crew morale report to the captain': 'report', 'Report load-crew exhaustion to the quartermaster': 'report', 'Deliver results to sickbay': 'report',
+  'Move stable patients to recovery and chart handoff': 'report', 'Verify alert drill and station times': 'report', 'Print drill checklist for captain': 'report', 'Request cleaning stock from stores': 'report',
+  'Hand updated plot to navigation': 'report', 'Present finished chart to bridge': 'report', 'Confirm sickbay needs and clear the route': 'report', 'Log survey briefing and tasking': 'report',
+  'Set up triage beds and sort incoming patients by urgency': 'queue', 'Stage survey grid and target list': 'queue', 'Command the bridge watch': 'queue', 'Run the system test checklist with each department': 'queue',
+  'Mark hazards along the route': 'classify', 'Scan the relief destination for pathogens and radiation': 'samples', 'Analyse sensor-collected samples': 'samples', 'Culture and pathogen ID': 'samples', 'Review lab samples for biohazard': 'samples',
+  'Decide whether to extend the survey': 'classify', 'Brief sensor, carto and botany on survey targets': 'classify', 'Update charts with the latest sensor data': 'classify',
+  'Test all galley equipment, hot plates and replicator lines': 'galleytest', 'Replicator and galley equipment round': 'galleytest', 'Test galley backups: manual stoves and spare stock': 'galleytest', 'Routine pattern checks on all food units': 'galleytest', 'Run full diagnostics on every replicator unit': 'galleytest',
+  'Test lab instruments under load': 'labtest', 'Verify nutrient pump power draw': 'bench', 'Full systems stress test': 'bench',
+  'Boost O2 output for sensor crew on extended shifts': 'nutrient', 'Inspect incoming medical stores and log expiry': 'fresh', 'Medicine and supply count': 'meds', 'Prepare treatment batches and quarantine bay': 'hypo', 'Prepare for lifting injuries and strains': 'tray',
+  'Meet returning shuttle with medical team': 'vitals', 'Stand ready for launch': 'preflight', 'Ready the medical shuttle': 'preflight', 'Launch and fly survey pattern': 'course', 'Clear the approach with nav': 'course', 'Run the full set of calibration courses': 'course',
+  'Recover samples and team': 'beam', 'Clear transporter for patient transfers': 'beam', 'Pre-load surveyor pads and lock beacon': 'beam', 'Beam medical supplies out': 'beam', 'Beam samples to lab': 'beam',
+  'Test emergency lock with a weighted dummy load': 'transporter', 'Drill the technician': 'transporter', 'Switch grid emitters to a calm recovery program for patients\' families': 'holocube', 'Cycle the emitters through every program class': 'holocube',
+  'Open bookings and run the standard grid sweep': 'schedule', 'Reserve computer time for data processing': 'schedule', 'Clear priority transport and berths for patients': 'schedule',
+  'Keep the probe relay link open': 'comms', 'Open a priority channel to the destination': 'comms', 'Keep transporter and cargo scanning links responsive': 'comms', 'Route extra power to science arrays': 'power',
+  'Extra scrubber capacity for crowded sickbay': 'valve', 'Tune dampers and EPS after stress': 'valve', 'Test emergency atmosphere isolation and lights': 'valve', 'Sickbay air filtration to isolation grade': 'valve',
+  'Post a guard at the lab': 'roster', 'Post an officer at the shuttlebay for away-team traffic': 'roster', 'Brief a landing party if a site is chosen': 'roster', 'Authorise medical stores and surge staff': 'roster',
+  'Run an intruder lockdown drill': 'pa', 'Run a security alert drill': 'pa', 'Clear bay and cycle doors for launch': 'pa', 'Order departure and debrief': 'pa', 'Test comm relays and PA zones': 'pa',
+  'Alert-tone and fault-warning drill': 'decode', 'Relay lifesign data to sickbay': 'decode', 'Keep the sickbay link prioritised': 'junction', 'Link cargo and transporter channels': 'junction', 'Add backup tap for sickbay': 'junction',
+  'Allocate core capacity to sensor data intake': 'power', 'Cycle every environmental subsystem under load': 'power', 'Stage a controlled power-up test': 'power', 'Stress-test grid under high load': 'power', 'Hold steady output during scan': 'power',
+  'Stand ready for injuries during drills': 'hypo', 'Be on standby during drills': 'vitals', 'Fitness-for-duty review': 'vitals', 'Inspect cargo handlers for strain injuries': 'vitals', 'Help sickbay with crowd control and logistics': 'badge',
+  'Escort stretcher teams from transporter': 'badge', 'Escort medical supplies from stores': 'badge', 'Escort valuables to the transporter': 'badge', 'Test armory release and badge locks': 'badge',
+  'Check internal sensors and force fields': 'fieldtest', 'Test brig force field and sensors': 'fieldtest', 'Check force-field board': 'fieldtest', 'Test brig force-field panel': 'fieldtest', 'Verify armory chargers hold full charge': 'armscheck', 'Run a full weapons and emitter test': 'armscheck',
+  'Check transporter and cargo handling are certified': 'coils', 'Full transporter system test': 'coils', 'Test pad-to-pad transfer with inert mass': 'coils', 'Run full transporter test cycle': 'coils', 'Coil and buffer maintenance': 'coils',
+  'Help the cargo handlers stack crates in the playroom': 'loadbal', 'Verify pad weight limits and cargo manifest': 'loadbal', 'Beam cargo crates in batches': 'loadbal', 'Test the cargo lift and sled': 'loadbal', 'Clear and load cargo shuttle with cargo handlers': 'loadbal',
+  'Verify manifest and buffer purge': 'manifest', 'Reconcile arrivals with cargo bay': 'manifest', 'Confirm cargo manifest and route': 'manifest', 'Clear space and verify the cargo manifest': 'manifest', 'Verify spares kits against the stress-test plan': 'manifest',
+  'Ingest sensor sweep and render the survey chart': 'classify', 'Run patient blood and tissue panels': 'samples', 'Assess route for sensor hazards': 'course', 'Calibrate chart database against sensor test pattern': 'sensors', 'Full sensor array diagnostic': 'sensors',
+  'Prepare special-diet and soft-food trays': 'cook', 'Keep the mess open through drills': 'cook', 'Prepare extra meals and water for evacuees': 'cook', 'Bland meal batch for relief patients': 'cook', 'Extra rations for long lab shifts': 'fresh', 'Stock check and shopping list for the Galley Chief': 'fresh',
+  'Ready quarantine environment controls': 'valve', 'Raise air handling for extra lab and sensor load': 'valve', 'Re-balance atmosphere after bay opens': 'valve', 'Check inertial dampers and sensors': 'valve', 'Deflector and damper readout check': 'valve', 'Run injector stress test': 'valve',
+  'Keep the peace in mess and lounge': 'counsel', 'Brief cargo crew on lifting injuries': 'counsel', 'Keep order among the evacuees': 'badge', 'Armory sign-out and charge check': 'badge', 'Arm escort for away team': 'badge', 'Monitor hails and ship traffic': 'decode', 'Keep the science team\'s comm channel clear': 'comms', 'Hold clean relay link to the sickbay and bridge': 'comms', 'Align the subspace transceiver': 'comms', 'Subspace transceiver range test': 'comms',
 };
 // [tool id, label/sys regex, rooms (optional)]. Order matters: the first match wins.
 export const RULES = [
+  // paperwork / command / helm / transporter targeting (second pass): what the job's verb is, before the department rules
+  ['queue', /(compile|collect|submit) fault list|work orders|backlog|deficienc|\bqueue\b|decide on requests|route science requests|order system trials|log every fault|assign survey priorities|test sequence|prioritise (medical records|comms)/i, null],
+  ['roster', /roster|staffing|assign (shuttle|watch)|watch bill|reassign|personnel reassign|surge staff/i, null],
+  ['schedule', /schedule|calendar|bookings|arrival window|berths/i, null],
+  ['pa', /announce|declare relief|\bpa\b|cycle doors/i, null],
+  ['backup', /back ?up|backup|mirror|index and archive|seal records|archive|pattern buffer (diagnostics|check after|and biofilter)|flush pattern|reconcile sensor data|cross-check results|package survey data/i, null],
+  ['beam', /^beam|process beam/i, null],
+  ['station', /hold (course|station|steady for|position)|steady drift/i, null],
+  ['burn', /thruster|docking approach|ease to|deceleration|maneuver test|hard turn|launch|recover shuttle|smooth recovery|emergency recovery|damper checks|test flight/i, null],
+  ['fix', /position fix|position-fix|fix accuracy|plot and fixes|survey fixes/i, null],
+  ['trend', /^watch (core|grid|tap|reactor|temperature)|baseline core log|status board|review helm and nav status|department status review|chart audit|reviews cartography|o2 (reclamation|reserve)|o2 output test|coolant for sensor|compare dampers|core diagnostic|ops systems test|keep log|observe reactor|sensor power draw|power draw anomalies|review trial results|time and note/i, null],
+  ['report', /^(?!.*(cargo crew|on lifting)).*(report|summary|status to|findings|write up|draft|submit|file defect|defect list for|log (inspection|consumed)|update load sheet|send (summary|updated plot|the delivery)|present|brief|request|fuel and flight log|confirm all ops)/i, null],
   // medical
   ['counsel', /counsel|morale|wellness|fatigue|exhaustion|support medical staff|debrief the (medical|sensor)/i, null],
   ['meds', /controlled meds|pharmac|drug|medicine|meds count/i, null],
@@ -149,7 +265,7 @@ export const RULES = [
   ['armscheck', /charger|charge/i, null],
   ['doorlog', /patrol|walk (the|crew)|door checks|cell check|serial|audit|roster and readiness|security status|readiness drill|alert drill|security alert|count\b/i, SEC.concat(['quarters', 'lounge', 'corridor'])],
   // galley / hydroponics
-  ['cook', /cook|meal|serve|refreshment|coffee|sanitis|scrub|sanitation|trays/i, null],
+  ['cook', /cook|meal|\bserve|refreshment|coffee|sanitis|scrub|sanitation|trays/i, null],
   ['nutrient', /hydropon|hydro\b|nutrient|grow bed|harvest|botan|herb|plant stock|soil|\bo2\b/i, null],
   ['fresh', /pantry|cold.?store|food|\brations?\b|rotate|expir|restock|stock check|stores count|stock\b|feedstock|shopping|matter stores|consumed/i, null],
   ['cook', /galley/i, GAL],
@@ -179,10 +295,11 @@ export const RULES = [
 export const BY_SYS = { reactor: 'valve', coolant: 'valve', eps: 'power', sensors: 'sensors', helm: 'course', comms: 'decode', security: 'doorlog', sickbay: 'vitals', emh: 'emh', hydro: 'nutrient', replicators: 'fresh', transport: 'transporter', armory: 'armscheck', holo: 'holocube', life: 'valve' };
 export function gameFor(it) {
   if (!it) return null; const base = toolFor(it.spot); if (!base) return null;   // a place, not a station: the job just runs
-  const label = it.label || it.task || '', ov = OVERRIDES[label]; if (ov && TOOLS[ov]) return TOOLS[ov];
-  for (const [id, re, rooms] of RULES) if ((!rooms || rooms.includes(it.room)) && re.test(label)) return TOOLS[id];
-  const bySys = BY_SYS[it.sys]; if (bySys && TOOLS[bySys] && !(it.spot === 'junction' || it.spot === 'door' || it.spot === 'corridor')) return TOOLS[bySys];   // a junction / door panel stays wiring
-  return base;
+  const label = it.label || it.task || '', ov = OVERRIDES[label], themed = (t) => t.theme || !THEMES[t.kind] ? t : { ...t, theme: themeFor(t.kind, label, it.room) };
+  if (ov && TOOLS[ov]) return themed(TOOLS[ov]);
+  for (const [id, re, rooms] of RULES) if ((!rooms || rooms.includes(it.room)) && re.test(label)) return themed(TOOLS[id]);
+  const bySys = BY_SYS[it.sys]; if (bySys && TOOLS[bySys] && !(it.spot === 'junction' || it.spot === 'door' || it.spot === 'corridor')) return themed(TOOLS[bySys]);   // a junction / door panel stays wiring
+  return themed(base);
 }
 // ---- every duty loop + mission task in duties.json -> its game: counts per kind (tests and the TODO report)
 export function coverage(duties) {
@@ -223,6 +340,23 @@ const COUNSEL = [
   ['The new rota means I never see my partner.', 'That matters. Let\'s see whether the rota can be adjusted, and how you two can keep in touch.', 'Duty comes first.', 'Rotas change. Wait it out.'],
   ['I snapped at a junior crewman today.', 'It\'s good you noticed. What was going on for you, and how might you put it right?', 'They probably deserved it.', 'Rank has its privileges.'],
 ];
+// themed conversations (counsel themes: the job's situation), mixed with the general bank above
+const COUNSEL_T = {
+  fatigue: [['I\'ve been on this console fourteen hours. I\'m fine.', 'You\'ve done a long stretch. Let\'s get you relieved for a proper rest; I\'ll square it with your chief.', 'Then keep going.', 'Coffee helps.'],
+    ['My hands keep shaking on the lifts.', 'That\'s your body telling you to stop. Sit down with me, drink something, and we\'ll swap you out.', 'Grip harder.', 'Everyone\'s tired.'],
+    ['I keep making small mistakes on the readings.', 'That happens when you\'re worn out. Let\'s get a second pair of eyes on it and get you a break.', 'Be more careful.', 'Nobody will notice.']],
+  grief: [['We lost everything down there. Our home is gone.', 'I\'m so sorry. You\'re safe here now. Tell me who is with you, and what you need first.', 'At least you\'re alive.', 'The captain will sort it out.'],
+    ['My daughter is in your sickbay and nobody tells me anything.', 'That waiting is awful. Let me find out how she is and come back to you myself.', 'The doctors are busy.', 'Please calm down.'],
+    ['I watched people not make it out.', 'That\'s a lot to carry. You don\'t have to tell me everything now; I\'m here when you want to.', 'Try not to think about it.', 'It wasn\'t your fault, so move on.']],
+  nerves: [['What if I freeze when the trials start?', 'Most people feel that. Let\'s run through your steps together so they\'re automatic.', 'Then don\'t freeze.', 'It\'s only a test.'],
+    ['Everyone here seems to know what they\'re doing except me.', 'You\'re new, and that\'s fine. Who\'s your buddy on shift? Let\'s make sure you have one.', 'You\'ll learn.', 'Fake it.'],
+    ['The alarms make my heart race even in drills.', 'That\'s a normal stress response. A slow breath on each alarm helps; let\'s practise one now.', 'Ignore them.', 'Ask to skip the drills.']],
+  staff: [['I had to choose who got the bed first.', 'That\'s one of the hardest calls there is. You made it with what you knew. How are you holding up?', 'That\'s the job.', 'Don\'t second-guess yourself.'],
+    ['I haven\'t eaten since the casualties came in.', 'Then that comes first. Ten minutes and a meal; I\'ll cover the desk while you go.', 'Eat later.', 'Patients come first.'],
+    ['I snapped at a patient\'s family.', 'You\'re running on empty. Let\'s get you a break, and you can talk to them again when you\'re ready.', 'They\'ll get over it.', 'Report yourself.']],
+  lonely: [['I\'m the only one on this post all watch.', 'That\'s isolating. Would a check-in call each watch help? I can set one up.', 'Some people like quiet.', 'It\'s only eight hours.'],
+    ['I eat alone most days.', 'Would you like me to introduce you to the night-shift table? They\'re a good crowd.', 'Eat faster.', 'Bring a PADD.']],
+};
 const CONTACT = [
   { name: 'Debris', size: 'small', em: 'none', mo: 'tumbling' }, { name: 'Asteroid', size: 'large', em: 'none', mo: 'drifting' },
   { name: 'Shuttle', size: 'small', em: 'steady', mo: 'powered' }, { name: 'Freighter', size: 'large', em: 'steady', mo: 'powered' },
@@ -238,19 +372,66 @@ const BENCH = {
   craft: [['Port thruster', '% thrust', 92, 100], ['Landing strut', 'mm play', 0, 3], ['Hull plate seal', 'kPa', 98, 104], ['Fuel cell', '% charge', 85, 100], ['Nav beacon', 'dB', 40, 55], ['Life-support scrubber', '% eff.', 90, 100]],
   arms: [['Hand zapper charger', '% hold', 95, 100], ['Rifle cell', '% hold', 92, 100], ['Tracker battery', 'h', 30, 40], ['Charger rack bus', 'V', 23, 25], ['Holster lock', 'N', 40, 60]],
   field: [['Cell 1 emitter', 'MJ', 4.0, 4.8], ['Cell 2 emitter', 'MJ', 4.0, 4.8], ['Corridor emitter', 'MJ', 3.2, 3.8], ['Field node', '% stable', 96, 100], ['Isolation emitter', 'MJ', 2.6, 3.1]],
+  galley: [['Hot plate', '°C', 220, 260], ['Replicator line', '% fidelity', 97, 100], ['Cold store', '°C', 1, 4], ['Dishwasher rinse', '°C', 80, 90], ['Food unit pattern', '% match', 98, 100], ['Manual stove', 'kPa', 3, 5]],
+  lab: [['Spectrometer', 'nm error', 0, 2], ['Centrifuge', 'rpm ×1000', 11, 13], ['Fume hood flow', 'm/s', 0.4, 0.6], ['Sample fridge', '°C', 2, 6], ['Microscope stage', 'µm drift', 0, 3], ['Gas analyser', '% span', 98, 102]],
   coil: [['Primary energizing coil', '% wear', 0, 20], ['Phase transition coil', '% wear', 0, 25], ['Pattern buffer coil', '% wear', 0, 15], ['Emitter array coil', '% wear', 0, 20], ['Targeting scanner coil', '% wear', 0, 30]],
 };
 const SHELF = [['Ration packs', 'pack'], ['Fresh greens', 'tray'], ['Protein cubes', 'tin'], ['Milk substitute', 'carton'], ['Bread loaves', 'bag'], ['Spice paste', 'jar'], ['Med gel', 'tube'], ['Breather filters', 'box'], ['Reagent kit', 'case'], ['Soup concentrate', 'pouch']];
+const SHELFSET = { feedstock: [['Protein base', 'cask'], ['Carb base', 'cask'], ['Trace minerals', 'tin'], ['Flavour matrix', 'cart.'], ['Fibre stock', 'drum'], ['Lipid base', 'cask']],
+  medical: [['Med gel', 'tube'], ['Burn dressing', 'pack'], ['Hypo ampoules', 'box'], ['Splint foam', 'can'], ['Saline', 'bag'], ['Antibiotic', 'vial']],
+  rations: [['Field ration A', 'pack'], ['Field ration B', 'pack'], ['Water pouch', 'case'], ['Energy bar', 'box'], ['Soup concentrate', 'pouch'], ['Hard biscuit', 'tin']] };
 const COOK = ['Clear broth', 'Root hash', 'Flatbread', 'Spiced rice', 'Bean stew', 'Noodles', 'Vegetable curry', 'Omelette'];
-const BUSES = { power: ['Life support', 'Sickbay', 'Sensors', 'Shields', 'Impulse', 'Replicators', 'Holodeck'], nutrient: ['Nitrate', 'Phosphate', 'Potash'] };
+const COOKSET = { bland: ['Plain rice', 'Soft oats', 'Steamed fish', 'Mashed roots', 'Clear broth'], bulk: ['Bean stew', 'Big pasta bake', 'Root hash', 'Chili pot', 'Flatbread stack'], field: ['Sealed wraps', 'Rice parcels', 'Bean pouches', 'Flatbread rolls'], broth: ['Bone broth', 'Vegetable stock', 'Miso', 'Clear broth', 'Barley water'] };
+const BUSES = { power: ['Life support', 'Sickbay', 'Sensors', 'Shields', 'Impulse', 'Replicators', 'Holodeck', 'Transporter', 'Lifts'], nutrient: ['Nitrate', 'Phosphate', 'Potash'] };
 const MSGS = ['Hail', 'Docking request', 'Distress call', 'Traffic advisory', 'Course change', 'Medical priority', 'Cargo schedule', 'All clear'];
+const MSGSET = { medical: ['Bed count', 'Casualty inbound', 'Supply request', 'Quarantine', 'Doctor to bridge', 'All stable'], alert: ['Yellow alert', 'Red alert', 'Stand down', 'Drill start', 'Drill end', 'Fault tone', 'Lockdown'],
+  relay: ['Link test', 'Relay up', 'Relay down', 'Failover', 'Echo', 'Data burst', 'Resync'] };
+// one line under the title: what this particular job's version of the game is (theme -> subtitle)
+const SUB = { counsel: { fatigue: 'Tired crew', grief: 'Survivors and families', nerves: 'Nervous crew', staff: 'Staff under strain', lonely: 'Isolated crew' }, course: { debris: 'Debris field', ion: 'Ion storm cells', traffic: 'Traffic lanes', survey: 'Survey grid', asteroids: 'Asteroid field' }, decode: { hail: 'Ship traffic', medical: 'Medical channel', alert: 'Alert net', relay: 'Relay test' },
+  tune: { array: 'Sensor array · GHz', comms: 'Subspace band · MHz', deflector: 'Deflector harmonic', core: 'Core data bus' }, calibrate: { lock: 'Pattern lock', buffer: 'Pattern buffer purge', holo: 'Emitter matrix', emh: 'Hologram matrix', core: 'Reactor output' },
+  dial: { coolant: 'Coolant loop', injector: 'Plasma injector', damper: 'Inertial damper', air: 'Air handler', matter: 'Matter stream', water: 'Reclamation line' }, cook: { meal: 'Main meal', bland: 'Patient diet', bulk: 'Bulk batch', field: 'Sealed field meals', broth: 'Broth and water' },
+  manifest: { cargo: 'Cargo hold', medical: 'Medical supplies', science: 'Science cases', pads: 'Pad staging', spares: 'Spares and kits' }, loadbal: { crates: 'Hold trim', sleds: 'Sled loading', pads: 'Pad weight limits', shuttle: 'Shuttle hold' },
+  fresh: { pantry: 'Pantry', feedstock: 'Replicator feedstock', medical: 'Medical stores', rations: 'Ration packs' }, station: { scan: 'Hold for the scan', transfer: 'Hold for transfer', orbit: 'Orbit hold', hold: 'Station keeping' },
+  burn: { dock: 'Docking approach', test: 'Manoeuvre test', shuttle: 'Shuttle recovery', decel: 'Deceleration run' }, coords: { team: 'Away team', cargo: 'Cargo', patients: 'Patients to sickbay', samples: 'Samples to the lab' },
+  power: Object.fromEntries(['Sickbay', 'Sensors', 'Transporter', 'Lifts', 'Holodeck', 'Impulse'].map(b => [b, `${b} priority`])), badge: {} };
 const CODECH = 'ABCDEFGHKMNPRSTVXZ';
+// paperwork content per department theme (eng / med / flight / sec / sci / ops / stores / cmd): readings, posts, queue items, volumes, PA lines, bookings, logs
+const FORMS = {
+  eng: { to: 'Chief Engineer', rd: [['Core temp', 'K', 1900, 2100], ['EPS load', '%', 40, 85], ['Coolant flow', 'L/s', 22, 28], ['Injector wear', '%', 0, 30], ['Grid margin', '%', 15, 40], ['Gravity plating', 'g', 0.9, 1.1], ['Open defects', '', 0, 6]] },
+  med: { to: 'CMO', rd: [['Beds occupied', '', 0, 6], ['Hypo stock', 'units', 20, 60], ['Isolation pressure', 'kPa', 96, 99], ['Staff on watch', '', 3, 6], ['Pending scans', '', 0, 4], ['Blood stock', 'units', 8, 20]] },
+  flight: { to: 'Bridge', rd: [['Position error', 'km', 0, 40], ['Heading drift', '°', 0, 1.5], ['Fuel', '%', 60, 100], ['Damper lag', 'ms', 0, 12], ['ETA error', 'min', 0, 5], ['Thruster output', '%', 92, 100]] },
+  sec: { to: 'Deputy', rd: [['Doors checked', '', 40, 60], ['Field strength', 'MJ', 4.0, 5.2], ['Incidents', '', 0, 2], ['Cells occupied', '', 0, 3], ['Sidearms out', '', 0, 8], ['Drill time', 'min', 2, 6]] },
+  sci: { to: 'Science', rd: [['Array gain', 'dB', 30, 45], ['Contacts logged', '', 0, 12], ['Chart drift', 'AU', 0, 1.5], ['Sample backlog', '', 0, 8], ['Resolution', 'm', 2, 9], ['Scan coverage', '%', 80, 100]] },
+  ops: { to: 'Ops', rd: [['Relay uptime', '%', 97, 100], ['Buffer integrity', '%', 95, 100], ['Ticket queue', '', 0, 9], ['Core load', '%', 20, 70], ['Pad alignment', 'mm', 0, 1.5], ['Link latency', 'ms', 4, 20]] },
+  stores: { to: 'Quartermaster', rd: [['Crates logged', '', 20, 60], ['Rations on hand', 'days', 20, 45], ['Cold store', '°C', 1, 4], ['Feedstock', '%', 40, 100], ['Spares kits', '', 6, 12], ['Water reserve', '%', 60, 100]] },
+  cmd: { to: 'Captain', rd: [['Departments green', '', 5, 8], ['Open defects', '', 0, 6], ['Crew on duty', '', 30, 45], ['Drills run', '', 1, 4], ['Requests pending', '', 0, 5], ['Readiness', '%', 85, 100]] },
+};
+const RECIPS = [[/captain/i, 'Captain'], [/\bxo\b|first officer/i, 'First Officer'], [/deputy/i, 'Deputy'], [/quartermaster/i, 'Quartermaster'], [/\bops\b/i, 'Ops'], [/navigation|\bnav\b/i, 'Navigation'], [/\byard\b/i, 'Starbase yard'], [/the chief\b|chief engineer/i, 'Chief Engineer'], [/sickbay|doctor/i, 'CMO'], [/bridge/i, 'Bridge'], [/\blog\b/i, 'Ship\'s log'], [/^$/, 'Science']];
+const QUALS = { eng: ['Reactor', 'EPS', 'Damage control', 'Environmental', 'Lifts'], med: ['Nurse', 'Medic', 'Surgeon', 'Orderly', 'Lab'], flight: ['Pilot', 'Deck crew', 'Navigator', 'Fuelling', 'Recovery'], sec: ['Guard', 'Armory', 'Patrol', 'Brig', 'Escort'],
+  sci: ['Sensors', 'Cartography', 'Lab tech', 'Botany', 'Survey'], ops: ['Transporter', 'Comms', 'Core', 'Cargo', 'Relay'], stores: ['Cargo', 'Galley', 'Stores', 'Sled driver', 'Hazmat'], cmd: ['Helm', 'Ops', 'Sensors', 'Tactical', 'Comms'] };
+const QITEMS = { eng: ['Coolant leak, deck 4', 'Lift 2 brake squeal', 'Replace hot tap J-12', 'Gravity plate flicker', 'Door 7 sticks', 'Repaint conduit tags', 'Plasma vent alarm', 'Lighting fault, aft'], med: ['Isolation seal alarm', 'Restock burn gel', 'Biobed 2 sensor drift', 'Chart audit', 'Hypo recall check', 'New linen order'],
+  flight: ['Damper fault on shuttle 2', 'Fuel log mismatch', 'Bay door seal wear', 'Nav beacon update', 'Repaint deck lines', 'Suit locker latch'], sec: ['Cell field flicker', 'Expired badge in use', 'Armory door latch', 'Patrol route change', 'Update visitor list', 'Locker key audit'],
+  sci: ['Array overheat warning', 'Unknown contact bearing 090', 'Sample fridge temp', 'Chart drift correction', 'Recalibrate spectrometer', 'Rename survey files'], ops: ['Relay node down', 'Pattern buffer error', 'Core cache full', 'PA zone 3 quiet', 'Ticket from galley', 'Update console skins'],
+  stores: ['Leaking hazmat crate', 'Cold store warm', 'Short delivery, sickbay', 'Feedstock low', 'Relabel shelf C', 'Order spare mops'], cmd: ['Hull breach report', 'Away-team medical clearance', 'Survey priority call', 'Shore leave request', 'Award citation', 'Mess menu complaint', 'Uniform reorder'] };
+const VOLS = { eng: ['Engineering logs', 'Defect database', 'Load sheets'], med: ['Medical records', 'Patient charts', 'Pharmacy ledger'], flight: ['Flight logs', 'Nav charts', 'Shuttle telemetry'], sec: ['Security logs', 'Door logs', 'Armory ledger'],
+  sci: ['Chart database', 'Survey data', 'Sensor archive'], ops: ['Program archive', 'Pattern buffer', 'Core stack', 'Relay config'], stores: ['Manifest records', 'Stores ledger', 'Feedstock log'], cmd: ['Ship\'s log', 'Standing orders', 'Crew records'] };
+const PAZ = ['Bridge', 'Engineering', 'Sickbay', 'Science', 'Cargo', 'Crew decks'];
+const PAMSG = { eng: ['Power test in five minutes', 'Lift 2 out of service', 'Coolant venting, keep clear'], med: ['Medical team to sickbay', 'Sickbay at capacity', 'Blood donors please report'], flight: ['Shuttle launch, clear the bay', 'Stand by for manoeuvres', 'Recovery in progress'],
+  sec: ['Lockdown drill begins', 'Corridor closed for transfer', 'All clear, drill ends'], sci: ['Sensor sweep: hold transmissions', 'Survey begins', 'Lab sealed'], ops: ['Transporter in use', 'Comms test, ignore tones', 'Network restart'], stores: ['Loading in the cargo bay', 'Meal service open', 'Stores closed for count'],
+  cmd: ['Green alert, quiet watch', 'Yellow alert drill', 'Relief operation complete', 'All hands: shakedown begins'] };
+const SCHED = { eng: ['Power trial', 'Core inspection', 'Lift service'], med: ['Physicals', 'Surgery', 'Staff briefing'], flight: ['Shuttle flight', 'Launch window', 'Deck drill'], sec: ['Patrol', 'Drill', 'Armory audit'], sci: ['Deep scan', 'Survey pass', 'Lab cleanup'],
+  ops: ['Transfer window', 'Backup', 'Relay test'], stores: ['Delivery', 'Stock count', 'Loading'], cmd: ['Captain\'s briefing', 'Heads meeting', 'Inspection', 'Station call'] };
+const TRENDS = { eng: [['Core temp', 'K', 1900, 2100], ['Grid load', '%', 40, 85], ['Tap load J-7', 'A', 20, 60], ['Reactor margin', '%', 15, 40]], med: [['Patient HR', 'bpm', 60, 100], ['Isolation pressure', 'kPa', 96, 99], ['Ward temp', '°C', 19, 23]],
+  flight: [['Course deviation', 'm', -50, 50], ['Damper error', 'ms', 0, 12], ['Heading drift', '°', -1, 1]], sec: [['Field strength', 'MJ', 4, 5], ['Door cycle rate', '/h', 0, 30], ['Sensor coverage', '%', 90, 100]],
+  sci: [['Array temp', 'K', 70, 90], ['Signal noise', 'dB', -90, -70], ['Chart residual', 'AU', 0, 1]], ops: [['Relay latency', 'ms', 4, 20], ['Core load', '%', 20, 70], ['Buffer error rate', 'ppm', 0, 5]],
+  stores: [['Cold store temp', '°C', 1, 4], ['Humidity', '%', 40, 60], ['Feedstock draw', 'kg/h', 2, 6]], cmd: [['Alert response', 's', 30, 90], ['Crew fatigue index', '', 1, 4], ['Hull stress', '%', 0, 60]] };
+const DESTS = { medical: ['Sickbay', 'Isolation', 'Med stores', 'Medical shuttle'], science: ['Lab', 'Shuttle 2', 'Sample fridge', 'Probe rack'], pads: ['Pad 1', 'Pad 2', 'Pad 3', 'Pad 4', 'Pad 5', 'Pad 6'], spares: ['Workshop', 'Repair locker', 'Engineering', 'DC locker'] };
 
 // ---- games
 export function createGame(kind, seed = 1, opts = {}) {
   const K = KINDS[kind]; if (!K) throw new Error('no mini-game ' + kind);
   const rnd = mulberry32((seed >>> 0) || 1), calm = !!opts.calm, slow = calm ? 0.6 : 1, theme = opts.theme || null;
-  const g = { kind, title: K.title, rule: K.rule, state: 'play', strikes: 0, maxStrikes: K.strikes, t: 0, limit: K.limit * (calm ? 1.5 : 1), events: [], held: {}, theme };
+  const g = { kind, title: K.title, rule: K.rule, state: 'play', strikes: 0, maxStrikes: K.strikes, t: 0, limit: K.limit * (calm ? 1.5 : 1), events: [], held: {}, theme, sub: SUB[kind]?.[theme] || '' };
   const ev = (type, extra = {}) => { g.events.push({ type, t: +g.t.toFixed(2), ...extra }); if (g.events.length > 40) g.events.shift(); };
   const strike = (why) => { g.strikes++; ev('strike', { why }); if (g.maxStrikes && g.strikes >= g.maxStrikes) end('fail', 'strikes'); };
   const end = (state, why) => { if (g.state !== 'play') return; g.state = state; g.why = why; ev(state, { why }); };
@@ -351,14 +532,14 @@ export function createGame(kind, seed = 1, opts = {}) {
       return { n: 9, answer: count - 1, drug, other, count, manifest, vials: slots, why: 'count off' };
     });
   } else if (kind === 'counsel') {   // three short conversations, choose the reply that listens
-    const order = shuffle(rnd, COUNSEL.map((_, i) => i)).slice(0, 3);
-    rounds(3, (i) => { const c = COUNSEL[order[i]], opt = shuffle(rnd, [0, 1, 2]); return { n: 3, answer: opt.indexOf(0), prompt: c[0], who: `${pick(rnd, RANKS)} ${pick(rnd, SURN)}`, replies: opt.map(k => c[1 + k]), why: 'they close up' }; });
+    const bank = [...(COUNSEL_T[theme] || []), ...(COUNSEL_T[theme] ? shuffle(rnd, COUNSEL).slice(0, 2) : COUNSEL)], order = [...(COUNSEL_T[theme] ? shuffle(rnd, COUNSEL_T[theme].map((_, i) => i)).slice(0, 2) : []), ...shuffle(rnd, bank.map((_, i) => i).filter(i => !COUNSEL_T[theme] || i >= COUNSEL_T[theme].length))].slice(0, 3);
+    rounds(3, (i) => { const c = bank[order[i]], opt = shuffle(rnd, [0, 1, 2]); return { n: 3, answer: opt.indexOf(0), prompt: c[0], who: `${pick(rnd, RANKS)} ${pick(rnd, SURN)}`, replies: opt.map(k => c[1 + k]), why: 'they close up' }; });
   }
   // ---------------------------------------------------------------- engineering + hydroponics: move units between a reserve and bars, Enter commits
   else if (kind === 'power' || kind === 'nutrient') {
     const nb = kind === 'power' ? 4 : 3; g.need = kind === 'power' ? 1 : 2; g.hits = 0; g.sel = 0; g.cap = 6;
     const next = () => {
-      g.names = kind === 'power' ? shuffle(rnd, BUSES.power).slice(0, nb) : BUSES.nutrient.slice(); g.bed = kind === 'nutrient' ? pick(rnd, ['Tomato bed', 'Lettuce bed', 'Bean bed', 'Herb bed', 'Root bed', 'Algae tank']) : null;
+      g.names = kind === 'power' ? (BUSES.power.includes(theme) ? [theme, ...shuffle(rnd, BUSES.power.filter(b => b !== theme)).slice(0, nb - 1)] : shuffle(rnd, BUSES.power).slice(0, nb)) : BUSES.nutrient.slice(); g.bed = kind === 'nutrient' ? pick(rnd, ['Tomato bed', 'Lettuce bed', 'Bean bed', 'Herb bed', 'Root bed', 'Algae tank']) : null;
       g.target = Array.from({ length: nb }, () => ri(rnd, 1, 5)); g.cur = g.target.map(t => clamp(t + ri(rnd, -3, 3), 0, g.cap));
       if (g.cur.every((c, i) => c === g.target[i])) g.cur[0] = g.target[0] === 0 ? 1 : 0;
       g.total = Math.max(g.target.reduce((a, b) => a + b, 0), g.cur.reduce((a, b) => a + b, 0)) + ri(rnd, 0, 2); g.reserve = g.total - g.cur.reduce((a, b) => a + b, 0); g.sel = 0;
@@ -411,8 +592,9 @@ export function createGame(kind, seed = 1, opts = {}) {
   }
   // ---------------------------------------------------------------- security
   else if (kind === 'badge') {   // the door rule, then five badges: admit (1) or deny (2)
-    const doors = [['Armory', ['Security', 'Command'], 3], ['Science lab', ['Science', 'Command', 'Medical'], 2], ['Main engineering', ['Engineering', 'Command'], 2], ['Isolation ward', ['Medical'], 3], ['Shuttlebay', ['Operations', 'Command', 'Engineering'], 2], ['Brig', ['Security'], 2]];
-    const [door, depts, min] = pick(rnd, doors); g.rule = { door, depts, min };
+    const doors = [['Armory', ['Security', 'Command'], 3], ['Science lab', ['Science', 'Command', 'Medical'], 2], ['Main engineering', ['Engineering', 'Command'], 2], ['Isolation ward', ['Medical'], 3], ['Shuttlebay', ['Operations', 'Command', 'Engineering'], 2], ['Brig', ['Security'], 2],
+      ['Transporter room', ['Operations', 'Security', 'Command'], 2], ['Cargo bay', ['Operations', 'Engineering', 'Security'], 1], ['Bridge', ['Command', 'Security'], 4]];
+    const [door, depts, min] = doors.find(d => d[0] === theme) || pick(rnd, doors); g.rule = { door, depts, min };
     rounds(5, (i) => {
       const deny = i === 0 ? rnd() < 0.5 : rnd() < 0.5, why = deny ? pick(rnd, ['dept', 'clear', 'expired']) : null;
       const dept = why === 'dept' ? pick(rnd, DEPTS.filter(d => !depts.includes(d))) : pick(rnd, depts), clear = why === 'clear' ? ri(rnd, 1, min - 1) : ri(rnd, min, 5), expired = why === 'expired';
@@ -430,7 +612,7 @@ export function createGame(kind, seed = 1, opts = {}) {
   }
   // ---------------------------------------------------------------- galley
   else if (kind === 'cook') {   // three pans: pull each while it sits in the DONE window
-    g.win = [0.72, 0.92]; g.dishes = shuffle(rnd, COOK).slice(0, 3);
+    g.win = [0.72, 0.92]; g.dishes = shuffle(rnd, COOKSET[theme] || COOK).slice(0, 3);
     g.pans = [0, 1, 2].map(i => ({ p: -i * (0.22 + rnd() * 0.1), rate: (0.1 + rnd() * 0.05) * slow, done: false }));
     g.inWin = (i) => !g.pans[i].done && g.pans[i].p >= g.win[0] && g.pans[i].p <= g.win[1];
     g.key = (code, down = true) => {
@@ -444,7 +626,7 @@ export function createGame(kind, seed = 1, opts = {}) {
     g.view = () => ({ pans: g.pans.map(x => ({ p: +x.p.toFixed(3), done: x.done })), win: g.win });
   } else if (kind === 'fresh') {   // one item on each shelf is past its use-by day
     rounds(3, () => {
-      const today = ri(rnd, 40, 330), items = shuffle(rnd, SHELF).slice(0, 5), answer = ri(rnd, 0, 4);
+      const today = ri(rnd, 40, 330), items = shuffle(rnd, SHELFSET[theme] || SHELF).slice(0, 5), answer = ri(rnd, 0, 4);
       return { n: 5, answer, today, items: items.map(([name, unit], k) => ({ name, unit, day: k === answer ? today - ri(rnd, 1, 9) : today + ri(rnd, 0, 40), qty: ri(rnd, 2, 12) })), why: 'still in date' };
     });
   }
@@ -454,10 +636,10 @@ export function createGame(kind, seed = 1, opts = {}) {
     const near = (c) => { const a = c.split(''), m = rnd(); if (m < 0.33) { const i = pick(rnd, [3, 4]); a[i] = String((+a[i] + ri(rnd, 1, 8)) % 10); } else if (m < 0.66) { if (a[3] !== a[4]) [a[3], a[4]] = [a[4], a[3]]; else a[3] = String((+a[3] + 1) % 10); } else { const i = pick(rnd, [0, 1, 6]); let ch; do { ch = pick(rnd, CODECH.split('')); } while (ch === a[i]); a[i] = ch; } return a.join(''); };
     rounds(4, () => {
       const want = code(), set = new Set([want]); while (set.size < 4) set.add(near(want));
-      const crates = shuffle(rnd, [...set]); return { n: 4, answer: crates.indexOf(want), want, crates, dest: pick(rnd, ['Bay 1', 'Bay 2', 'Hold A', 'Hold B', 'Sickbay', 'Lab', 'Galley']), why: 'wrong crate' };
+      const crates = shuffle(rnd, [...set]); return { n: 4, answer: crates.indexOf(want), want, crates, dest: pick(rnd, DESTS[theme] || ['Bay 1', 'Bay 2', 'Hold A', 'Hold B', 'Sickbay', 'Lab', 'Galley']), why: 'wrong crate' };
     });
   } else if (kind === 'loadbal') {   // stow six crates port / starboard, keep the trim within the limit
-    g.queue = Array.from({ length: 6 }, () => ri(rnd, 1, 3)); g.L = ri(rnd, 0, 2); g.R = ri(rnd, 0, 2); g.lim = 3; g.i = 0;
+    g.queue = Array.from({ length: 6 }, () => ri(rnd, 1, 3)); g.L = ri(rnd, 0, 2); g.R = ri(rnd, 0, 2); g.lim = 3; g.i = 0; g.sides = theme === 'pads' ? ['PAD BANK A', 'PAD BANK B'] : theme === 'sleds' ? ['SLED 1', 'SLED 2'] : ['PORT', 'STARBOARD'];
     g.key = (code, down = true) => {
       if (!down || g.state !== 'play') return false; const a = ARROW[code]; if (a !== 'L' && a !== 'R') return false; const w = g.queue[g.i];
       const L = g.L + (a === 'L' ? w : 0), R = g.R + (a === 'R' ? w : 0);
@@ -470,13 +652,13 @@ export function createGame(kind, seed = 1, opts = {}) {
   }
   // ---------------------------------------------------------------- bridge
   else if (kind === 'course') {   // step a plot through a hazard field to two waypoints
-    const W = 9, H = 5; g.W = W; g.H = H; g.need = 2; g.hits = 0;
+    const W = 9, H = 5; g.W = W; g.H = H; g.need = 2; g.hits = 0; g.nHaz = { debris: 12, ion: 10, traffic: 9, survey: 8, asteroids: 11 }[theme] || 11; g.hazName = { debris: 'debris', ion: 'ion cell', traffic: 'traffic', survey: 'unsurveyed', asteroids: 'rock' }[theme] || 'hazard';
     const key = (x, y) => y * W + x, nb = (x, y) => [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]].filter(([a, b]) => a >= 0 && b >= 0 && a < W && b < H);
     const bfs = (sx, sy, tx, ty) => { const prev = new Map([[key(sx, sy), null]]), q = [[sx, sy]]; while (q.length) { const [x, y] = q.shift(); if (x === tx && y === ty) break; for (const [a, b] of nb(x, y)) if (!g.haz.has(key(a, b)) && !prev.has(key(a, b))) { prev.set(key(a, b), [x, y]); q.push([a, b]); } } if (!prev.has(key(tx, ty))) return null; const path = []; let c = [tx, ty]; while (c && !(c[0] === sx && c[1] === sy)) { path.unshift(c); c = prev.get(key(c[0], c[1])); } return path; };
     g.pos = [0, ri(rnd, 0, H - 1)];
     const leg = () => {
       const tx = g.pos[0] < W / 2 ? W - 1 : 0, ty = ri(rnd, 0, H - 1); g.goal = [tx, ty];
-      for (let tries = 0; tries < 30; tries++) { g.haz = new Set(); while (g.haz.size < 11) { const x = ri(rnd, 1, W - 2), y = ri(rnd, 0, H - 1); if (!(x === g.pos[0] && y === g.pos[1])) g.haz.add(key(x, y)); } const p = bfs(g.pos[0], g.pos[1], tx, ty); if (p && p.length >= 8) return; }
+      for (let tries = 0; tries < 30; tries++) { g.haz = new Set(); while (g.haz.size < g.nHaz) { const x = ri(rnd, 1, W - 2), y = ri(rnd, 0, H - 1); if (!(x === g.pos[0] && y === g.pos[1])) g.haz.add(key(x, y)); } const p = bfs(g.pos[0], g.pos[1], tx, ty); if (p && p.length >= 8) return; }
       g.haz = new Set();   // never unsolvable
     };
     leg();
@@ -494,8 +676,199 @@ export function createGame(kind, seed = 1, opts = {}) {
     const dist = (a, b) => { let d = 0, x = a ^ b; while (x) { d += x & 1; x >>= 1; } return d; };
     rounds(3, () => {
       const codes = []; for (let tries = 0; codes.length < 4 && tries < 500; tries++) { const c = ri(rnd, 1, 254); if (codes.every(o => dist(o, c) >= 3)) codes.push(c); }
-      const names = shuffle(rnd, MSGS).slice(0, 4), answer = ri(rnd, 0, 3), flip = ri(rnd, 0, 7), rx = codes[answer] ^ (1 << flip);
+      const names = shuffle(rnd, MSGSET[theme] || MSGS).slice(0, 4), answer = ri(rnd, 0, 3), flip = ri(rnd, 0, 7), rx = codes[answer] ^ (1 << flip);
       return { n: 4, answer, codes, names, rx, flip, why: 'misread' };
+    });
+  }
+  // ---------------------------------------------------------------- helm: station keeping, braking burn, position fix
+  else if (kind === 'station') {   // a current pushes the ship outward from the mark; hold arrows to thrust back into the box and keep it there
+    g.need = 4; g.fill = 0; g.box = calm ? 0.34 : 0.26; g.thrust = 0.5; g.drift = (0.15 + rnd() * 0.04) * slow; g.rot = (rnd() - 0.5) * 1.6; g.ph = rnd() * 6.28;
+    const a0 = rnd() * 6.28; g.pos = [Math.cos(a0) * 0.62, Math.sin(a0) * 0.62];
+    g.key = (code, down = true) => { const a = ARROW[code]; if (!a) return false; g.held[a] = !!down; return true; };
+    g.inBox = () => Math.abs(g.pos[0]) <= g.box && Math.abs(g.pos[1]) <= g.box;
+    g.step = (dt) => {
+      const r = Math.hypot(...g.pos) || 1e-3, ang = Math.atan2(g.pos[1], g.pos[0]) + g.rot * Math.sin(g.t * 0.5 + g.ph);   // outward, swinging
+      const tx = (g.held.R ? 1 : 0) - (g.held.L ? 1 : 0), ty = (g.held.D ? 1 : 0) - (g.held.U ? 1 : 0);
+      g.pos = g.pos.map((p, i) => clamp(p + (Math.cos(ang - (i ? Math.PI / 2 : 0)) * g.drift * Math.min(1, r * 4) + (i ? ty : tx) * g.thrust) * dt, -1, 1));
+      if (g.inBox()) g.fill += dt; else g.fill = Math.max(0, g.fill - dt * 0.4);
+      if (g.fill >= g.need) end('win', 'held');
+    };
+    g.hint = () => { const [x, y] = g.pos, e = 0.04; return [['ArrowRight', x < -e], ['ArrowLeft', x > e], ['ArrowDown', y < -e], ['ArrowUp', y > e]]; };
+    g.view = () => ({ pos: g.pos.map(v => +v.toFixed(3)), box: g.box, fill: +g.fill.toFixed(2), need: g.need });
+  } else if (kind === 'burn') {   // brake (hold Space) so the ship reaches the marker inside the speed band; too fast = wave-off (go round), stalled short = fault
+    g.need = 3; g.hits = 0; g.acc = 0.16 * (calm ? 0.8 : 1); g.band = calm ? [0.015, 0.1] : [0.02, 0.08];
+    const next = () => { g.d0 = 0.75 + rnd() * 0.15; g.d = g.d0; g.v = (0.26 + rnd() * 0.06) * (calm ? 0.8 : 1); };
+    next(); g.waveoffs = 0;
+    g.key = (code, down = true) => { if (code !== 'Space') return false; g.held.S = !!down; return true; };
+    g.step = (dt) => {
+      if (g.held.S) g.v = Math.max(0, g.v - g.acc * dt); g.d -= g.v * dt;
+      if (g.v <= 0.004 && g.d > 0.02) { strike('stalled'); if (g.state === 'play') next(); return; }
+      if (g.d <= 0) { if (g.v >= g.band[0] && g.v <= g.band[1]) { g.hits++; ev('hit', { v: +g.v.toFixed(3) }); if (g.hits >= g.need) end('win', 'docked'); else next(); } else { g.waveoffs++; ev('waveoff', {}); next(); } }
+    };
+    const tgt = () => (g.band[0] + g.band[1]) / 2;
+    g.hint = () => [['Space', g.v * g.v - tgt() * tgt() >= 2 * g.acc * Math.max(0, g.d) * 0.9 && g.v > tgt()]];
+    g.bad = () => 'Space';
+    g.view = () => ({ d: +g.d.toFixed(3), d0: g.d0, v: +g.v.toFixed(3), band: g.band, hits: g.hits, need: g.need });
+  } else if (kind === 'fix') {   // three bearing lines from reference stars cross at the ship; three decoys sit on one line each
+    const STARS = ['Vega', 'Deneb', 'Altair', 'Rigel', 'Sirius', 'Arcturus', 'Capella', 'Antares', 'Spica', 'Canopus', 'Polaris', 'Aldebaran'];
+    rounds(3, () => {
+      const P = [0.3 + rnd() * 0.4, 0.3 + rnd() * 0.4], names = shuffle(rnd, STARS).slice(0, 3), base = rnd() * 6.28;
+      const stars = names.map((name, i) => { const a = base + i * 2.09 + (rnd() - 0.5) * 0.5; return { name, a, x: P[0] + Math.cos(a) * 0.9, y: P[1] + Math.sin(a) * 0.9 }; });
+      const pts = [P]; for (let i = 0, tries = 0; pts.length < 4 && tries < 200; tries++) { const s = stars[i % 3], t = (rnd() < 0.5 ? -1 : 1) * (0.14 + rnd() * 0.16), q = [P[0] - Math.cos(s.a) * t, P[1] - Math.sin(s.a) * t]; if (q.every(v => v > 0.06 && v < 0.94) && pts.every(o => Math.hypot(o[0] - q[0], o[1] - q[1]) > 0.1)) { pts.push(q); i++; } }
+      while (pts.length < 4) pts.push([0.1 + 0.25 * pts.length, 0.12]);
+      const order = shuffle(rnd, [0, 1, 2, 3]); return { n: 4, answer: order.indexOf(0), stars, cands: order.map(k => pts[k]), why: 'bad fix' };
+    });
+  }
+  // ---------------------------------------------------------------- transporter targeting
+  else if (kind === 'coords') {   // dial three axes onto drifting target coordinates, Enter energises
+    g.need = 2; g.hits = 0; g.sel = 0; g.every = calm ? 4.5 : 3; g.next = g.every;
+    const next = () => { g.target = [0, 1, 2].map(() => ri(rnd, 10, 89)); g.cur = g.target.map(t => t + pick(rnd, [-1, 1]) * ri(rnd, 2, 6)); g.sel = 0; };
+    next();
+    g.step = () => { if (g.t >= g.next) { g.next += g.every; const ax = ri(rnd, 0, 2); g.target[ax] = clamp(g.target[ax] + pick(rnd, [-1, 1]), 0, 99); ev('drift', { ax }); } };
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const a = ARROW[code];
+      if (a === 'U' || a === 'D') { g.sel = (g.sel + (a === 'D' ? 1 : 2)) % 3; return true; }
+      if (a === 'L' || a === 'R') { g.cur[g.sel] = clamp(g.cur[g.sel] + (a === 'R' ? 1 : -1), 0, 99); return true; }
+      if (code !== 'Enter' && code !== 'Space') return false;
+      if (g.cur.every((c, i) => c === g.target[i])) { g.hits++; ev('hit', {}); if (g.hits >= g.need) end('win', 'energised'); else next(); } else strike('scattered pattern');
+      return true;
+    };
+    g.hint = () => { const i = g.cur.findIndex((c, k) => c !== g.target[k]); if (i < 0) return [['Enter', true]]; if (i !== g.sel) return [[(i - g.sel + 3) % 3 === 1 ? 'ArrowDown' : 'ArrowUp', true]]; return [[g.cur[i] < g.target[i] ? 'ArrowRight' : 'ArrowLeft', true]]; };
+    g.bad = () => g.cur.every((c, i) => c === g.target[i]) ? null : 'Enter';
+    g.view = () => ({ target: g.target.slice(), cur: g.cur.slice(), sel: g.sel, hits: g.hits, need: g.need });
+  }
+  // ---------------------------------------------------------------- paperwork and command (theme = department, from the job)
+  else if (kind === 'form') {   // copy a reading, set the status, address it; Enter files. Two reports
+    const T = FORMS[theme] || FORMS.cmd, to = (opts.label && RECIPS.find(([re]) => re.test(opts.label))?.[1]) || T.to; g.need = 2; g.hits = 0; g.sel = 0;
+    const fmt = (v, step) => step < 1 ? v.toFixed(1) : String(Math.round(v));
+    const next = () => {
+      const rd = shuffle(rnd, T.rd).slice(0, 4).map(([name, unit, lo, hi]) => { const step = Number.isInteger(lo) && Number.isInteger(hi) ? 1 : 0.1, v = lo + (hi - lo) * (0.1 + rnd() * 0.8); return { name, unit, lo, hi, step, v: +fmt(v, step) }; });
+      const out = rnd() < 0.55 ? ri(rnd, 0, 3) : -1; if (out >= 0) { const r = rd[out], span = r.hi - r.lo; r.v = +fmt(rnd() < 0.5 ? r.hi + span * (0.15 + rnd() * 0.3) : Math.max(0, r.lo - span * (0.15 + rnd() * 0.3)), r.step); if (r.v >= r.lo && r.v <= r.hi) r.v = +fmt(r.hi + span * 0.3, r.step); }
+      const k = ri(rnd, 0, 3), r = rd[k], val = fmt(r.v, r.step), vals = new Set([val]);
+      for (let t = 0; vals.size < 4 && t < 40; t++) vals.add(t < 30 ? fmt(Math.max(0, r.v + pick(rnd, [-3, -2, -1, 1, 2, 3, 10, -10]) * r.step * (t < 10 ? 1 : 3)), r.step) : String(t));
+      const outs = shuffle(rnd, rd.map(x => x.name).filter((_, i) => i !== out)).slice(0, out >= 0 ? 2 : 3), st = ['All in limits', ...[...(out >= 0 ? [rd[out].name] : []), ...outs].map(n => `${n} out of limits`)];
+      const tos = [to, ...shuffle(rnd, RECIPS.map(x => x[1]).filter(x => x !== to)).slice(0, 3)];
+      g.rd = rd; g.fields = [{ name: `${r.name}${r.unit ? ` (${r.unit})` : ''}`, opts: shuffle(rnd, [...vals]), want: val }, { name: 'Status', opts: shuffle(rnd, st), want: out >= 0 ? `${rd[out].name} out of limits` : 'All in limits' }, { name: 'To', opts: shuffle(rnd, tos), want: to }];
+      for (const f of g.fields) f.i = ri(rnd, 0, f.opts.length - 1); if (g.fields.every(f => f.opts[f.i] === f.want)) g.fields[0].i = (g.fields[0].i + 1) % g.fields[0].opts.length; g.sel = 0; g.bads = [];
+    };
+    next();
+    const ok = (f) => f.opts[f.i] === f.want;
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const a = ARROW[code], f = g.fields[g.sel];
+      if (a === 'U' || a === 'D') { g.sel = (g.sel + (a === 'D' ? 1 : g.fields.length - 1)) % g.fields.length; return true; }
+      if (a === 'L' || a === 'R') { f.i = (f.i + (a === 'R' ? 1 : f.opts.length - 1)) % f.opts.length; return true; }
+      if (code !== 'Enter') return false;
+      if (g.fields.every(ok)) { g.hits++; ev('hit', {}); if (g.hits >= g.need) end('win', 'filed'); else next(); } else { g.bads = g.fields.map((x, i) => ok(x) ? -1 : i).filter(i => i >= 0); strike('form bounced'); }
+      return true;
+    };
+    g.hint = () => { const i = g.fields.findIndex(x => !ok(x)); if (i < 0) return [['Enter', true]]; if (i !== g.sel) return [[i > g.sel ? 'ArrowDown' : 'ArrowUp', true]]; return [['ArrowRight', true]]; };
+    g.bad = () => g.fields.every(ok) ? null : 'Enter';
+    g.view = () => ({ rd: g.rd, fields: g.fields.map(f => ({ name: f.name, v: f.opts[f.i] })), sel: g.sel, hits: g.hits, need: g.need });
+  } else if (kind === 'roster') {   // three posts, five people: exactly one qualified + free person per post
+    const quals = shuffle(rnd, QUALS[theme] || QUALS.cmd).slice(0, 3), watches = shuffle(rnd, ['First watch', 'Second watch', 'Night watch', 'Day relief', 'Swing shift']).slice(0, 3), names = shuffle(rnd, SURN).slice(0, 5);
+    const spare = (QUALS[theme] || QUALS.cmd).find(q => !quals.includes(q)) || 'Admin';
+    const people = [0, 1, 2].map(i => ({ name: `${pick(rnd, RANKS)} ${names[i]}`, quals: rnd() < 0.5 ? [quals[i], spare] : [quals[i]], note: 'free' }));
+    people.push({ name: `${pick(rnd, RANKS)} ${names[3]}`, quals: [quals[0], quals[1]].slice(0, ri(rnd, 1, 2)), note: pick(rnd, ['on leave', 'in sickbay', 'over hours']) });
+    people.push({ name: `${pick(rnd, RANKS)} ${names[4]}`, quals: [quals[ri(rnd, 1, 2)]], note: pick(rnd, ['on another watch', 'on away team']) });
+    g.people = shuffle(rnd, people); g.posts = quals.map((q, i) => ({ q, watch: watches[i], who: -1 }));
+    rounds(3, (i) => ({ n: 5, answer: g.people.findIndex(p => p.note === 'free' && p.quals[0] === quals[i]), post: i, why: 'cannot take that post' }));
+    const k0 = g.key; g.key = (code, down = true) => { const r0 = g.round, ok = k0(code, down); if (g.round > r0) g.posts[r0].who = g.people.findIndex(p => p.note === 'free' && p.quals[0] === quals[r0]); return ok; };
+    g.view = () => ({ round: g.round, rounds: g.rounds, cur: g.cur, posts: g.posts.map(p => ({ ...p })), people: g.people });
+  } else if (kind === 'queue') {   // five items: severity first, then age; press them in order
+    const pool = shuffle(rnd, QITEMS[theme] || QITEMS.cmd), ages = shuffle(rnd, Array.from({ length: 30 }, (_, i) => i + 1));
+    g.items = pool.slice(0, 5).map((title, i) => ({ title, sev: i === 0 ? 0 : ri(rnd, 0, 2), age: ages[i], done: false }));
+    g.order = g.items.map((_, i) => i).sort((a, b) => g.items[a].sev - g.items[b].sev || g.items[b].age - g.items[a].age); g.k = 0;
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const d = DIG(code); if (!d || d > 5) return false; const it = g.items[d - 1]; if (it.done) return true;
+      if (d - 1 === g.order[g.k]) { it.done = true; g.k++; ev('hit', { d }); if (g.k >= 5) end('win', 'cleared'); } else strike('out of order');
+      return true;
+    };
+    g.hint = () => [['Digit' + (g.order[g.k] + 1), true]]; g.bad = () => { const i = g.items.findIndex((x, k) => !x.done && k !== g.order[g.k]); return i >= 0 ? 'Digit' + (i + 1) : null; };
+    g.view = () => ({ items: g.items.map(x => ({ ...x })), k: g.k });
+  } else if (kind === 'verify') {   // eight blocks: flag the ones whose copy checksum differs, Enter re-sends. Two volumes
+    g.need = 2; g.hits = 0; const vols = shuffle(rnd, VOLS[theme] || VOLS.cmd), hex = () => ri(rnd, 0, 0xffff).toString(16).toUpperCase().padStart(4, '0');
+    const next = () => {
+      g.vol = vols[g.hits % vols.length]; const nb = ri(rnd, 1, 3), badSet = new Set(shuffle(rnd, [0, 1, 2, 3, 4, 5, 6, 7]).slice(0, nb));
+      g.blocks = Array.from({ length: 8 }, (_, i) => { const src = hex(); let cp = src; if (badSet.has(i)) { const a = cp.split(''), j = ri(rnd, 0, 3); let ch; do { ch = '0123456789ABCDEF'[ri(rnd, 0, 15)]; } while (ch === a[j]); a[j] = ch; cp = a.join(''); } return { src, cp, bad: badSet.has(i), flag: false }; });
+    };
+    next();
+    const right = () => g.blocks.every(b => b.flag === b.bad);
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const d = DIG(code);
+      if (d && d <= 8) { g.blocks[d - 1].flag = !g.blocks[d - 1].flag; return true; }
+      if (code !== 'Enter' && code !== 'Space') return false;
+      if (right()) { g.hits++; ev('hit', {}); if (g.hits >= g.need) end('win', 'verified'); else next(); } else strike('checksum mismatch');
+      return true;
+    };
+    g.hint = () => { const i = g.blocks.findIndex(b => b.flag !== b.bad); return i < 0 ? [['Enter', true]] : [['Digit' + (i + 1), true]]; };
+    g.bad = () => right() ? null : 'Enter';
+    g.view = () => ({ vol: g.vol, blocks: g.blocks.map(b => ({ ...b })), hits: g.hits, need: g.need });
+  } else if (kind === 'pa') {   // pick the decks the message is for, then Space while the channel is clear. Two announcements
+    g.need = 2; g.hits = 0; g.period = calm ? 3.2 : 2.6; g.ph = rnd() * g.period;
+    const all = opts.label && /every zone|all hands|shipwide|alert|drill|quiet watch|relief complete|shakedown|announce/i.test(opts.label);
+    const next = () => {
+      const m = pick(rnd, PAMSG[theme] || PAMSG.cmd), want = all && g.hits === 0 ? PAZ.map((_, i) => i) : shuffle(rnd, [0, 1, 2, 3, 4, 5]).slice(0, ri(rnd, 1, 3)).sort();
+      g.msg = { text: m, to: want }; g.on = PAZ.map(() => rnd() < 0.3); if (g.on.every((o, i) => o === want.includes(i))) g.on[want[0]] = !g.on[want[0]];
+    };
+    next();
+    g.clear = () => ((g.t + g.ph) % g.period) / g.period < 0.45;
+    const right = () => g.on.every((o, i) => o === g.msg.to.includes(i));
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const d = DIG(code);
+      if (d && d <= 6) { g.on[d - 1] = !g.on[d - 1]; return true; }
+      if (code !== 'Space' && code !== 'Enter') return false;
+      if (!right()) strike('wrong decks'); else if (!g.clear()) strike('talked over traffic'); else { g.hits++; ev('hit', {}); if (g.hits >= g.need) end('win', 'announced'); else next(); }
+      return true;
+    };
+    g.hint = () => { const i = g.on.findIndex((o, k) => o !== g.msg.to.includes(k)); if (i >= 0) return [['Digit' + (i + 1), true]]; const ph = ((g.t + g.ph) % g.period) / g.period; return ph > 0.05 && ph < 0.38 ? [['Space', true]] : []; };
+    g.bad = () => !right() || !g.clear() ? 'Space' : null;
+    g.view = () => ({ msg: g.msg, on: g.on.slice(), hits: g.hits, need: g.need, clear: g.clear() });
+  } else if (kind === 'schedule') {   // slide each block into free time inside its window; Enter books it. Three blocks
+    g.H = 12; g.need = 3; g.hits = 0; const names = shuffle(rnd, SCHED[theme] || SCHED.cmd);
+    g.busy = []; for (let k = 0; k < 2; k++) { const s = ri(rnd, 0, 10), l = ri(rnd, 1, 2); g.busy.push({ s, l: Math.min(l, g.H - s), name: pick(rnd, ['Drill', 'Meal', 'Briefing', 'Watch change', 'Maintenance']) }); }
+    const taken = (s, l) => [...g.busy].some(b => s < b.s + b.l && b.s < s + l);
+    const next = () => {
+      for (let tries = 0; tries < 60; tries++) {
+        const l = ri(rnd, 1, 3), free = []; for (let s = 0; s + l <= g.H; s++) if (!taken(s, l)) free.push(s); if (!free.length) continue;
+        const s0 = pick(rnd, free), a = Math.max(0, s0 - ri(rnd, 0, 2)), b = Math.min(g.H, s0 + l + ri(rnd, 0, 2));
+        const bad = []; for (let s = 0; s + l <= g.H; s++) if (taken(s, l) || s < a || s + l > b) bad.push(s); if (!bad.length) continue;
+        g.blk = { name: names[g.hits % names.length], l, win: [a, b] }; g.pos = pick(rnd, bad); return;
+      }
+      g.busy = []; g.blk = { name: names[0], l: 1, win: [0, g.H] }; g.pos = 0;   // never unsolvable
+    };
+    next();
+    g.valid = (s = g.pos) => s >= g.blk.win[0] && s + g.blk.l <= g.blk.win[1] && !taken(s, g.blk.l);
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const a = ARROW[code];
+      if (a === 'L' || a === 'R') { g.pos = clamp(g.pos + (a === 'R' ? 1 : -1), 0, g.H - g.blk.l); return true; }
+      if (code !== 'Enter' && code !== 'Space') return false;
+      if (g.valid()) { g.busy.push({ s: g.pos, l: g.blk.l, name: g.blk.name, mine: true }); g.hits++; ev('hit', {}); if (g.hits >= g.need) end('win', 'booked'); else next(); } else strike('clash');
+      return true;
+    };
+    g.hint = () => { if (g.valid()) return [['Enter', true]]; let best = -1; for (let s = 0; s + g.blk.l <= g.H; s++) if (g.valid(s) && (best < 0 || Math.abs(s - g.pos) < Math.abs(best - g.pos))) best = s; return best < 0 ? [] : [[best > g.pos ? 'ArrowRight' : 'ArrowLeft', true]]; };
+    g.bad = () => g.valid() ? null : 'Enter';
+    g.view = () => ({ busy: g.busy.map(b => ({ ...b })), blk: { ...g.blk }, pos: g.pos, hits: g.hits, need: g.need });
+  }
+  else if (kind === 'sign') {   // five log entries: sign the complete ones, query the rest (missing initials, time out of order, reading out of limits with no note)
+    const T = FORMS[theme] || FORMS.cmd, names = shuffle(rnd, SURN); let last = ri(rnd, 60, 600);
+    g.entries = Array.from({ length: 5 }, (_, i) => {
+      const [name, unit, lo, hi] = pick(rnd, T.rd), step = Number.isInteger(lo) && Number.isInteger(hi) ? 1 : 0.1, fmt = (v) => step < 1 ? v.toFixed(1) : String(Math.round(v));
+      const bad = i === 0 ? rnd() < 0.5 : rnd() < 0.45, why = bad ? pick(rnd, i === 0 ? ['initials', 'limits'] : ['initials', 'time', 'limits']) : null;
+      const e = { hm: why === 'time' ? last - ri(rnd, 5, 40) : last + ri(rnd, 5, 50), name, unit, lo, hi, v: fmt(lo + (hi - lo) * (0.15 + rnd() * 0.7)), who: names[i].slice(0, 2).toUpperCase(), note: '', why };
+      if (!bad && rnd() < 0.3) { e.v = fmt(hi + (hi - lo) * 0.6); e.note = pick(rnd, ['fault logged', 'reported to chief', 'retest booked']); }
+      if (why === 'initials') e.who = ''; if (why === 'limits') e.v = fmt(hi + (hi - lo) * (0.5 + rnd() * 0.5));
+      last = e.hm; return e;
+    });
+    for (const e of g.entries) e.t = `${String(Math.floor(e.hm / 60) % 24).padStart(2, '0')}${String(e.hm % 60).padStart(2, '0')}`;
+    rounds(5, (i) => ({ n: 2, answer: g.entries[i].why ? 1 : 0, i, why: g.entries[i].why ? 'signed an incomplete entry' : 'queried a good entry' }), true);
+    g.view = () => ({ round: g.round, rounds: g.rounds, entries: g.entries.map(e => ({ t: e.t, name: e.name, v: e.v, who: e.who, note: e.note })) });
+  }
+  else if (kind === 'trend') {   // a 24-sample log: the segment (of six) where the trace first leaves its limits. Three logs
+    const pool = shuffle(rnd, TRENDS[theme] || TRENDS.cmd);
+    rounds(3, (i) => {
+      const [name, unit, lo, hi] = pool[i % pool.length], onset = ri(rnd, 3, 22), up = rnd() < 0.5, pts = [];
+      let v = 0.5 + (rnd() - 0.5) * 0.2; for (let k = 0; k < 24; k++) { if (k < onset) { v = clamp(v + (rnd() - 0.5) * 0.12 + (up ? 0.012 : -0.012), 0.36, 0.64); } else v = up ? Math.max(v, 0.74) + rnd() * 0.08 : Math.min(v, 0.26) - rnd() * 0.08; pts.push(+v.toFixed(3)); }
+      return { n: 6, answer: Math.floor(onset / 4), name, unit, lo, hi, pts, onset, why: 'wrong segment' };
     });
   }
   g.tick = (dt) => { if (g.state !== 'play') return; g.t += dt; g.step?.(dt); if (g.state === 'play' && g.t >= g.limit) end('fail', 'time'); };
@@ -511,6 +884,9 @@ const RUSH = {
   bench: ['Passed the lot without the meter.'], tune: ['Logged the strongest static as the signal.'], classify: ['Logged every contact as debris.'], badge: ['Waved everyone through.'],
   doorlog: ['Skimmed the log for anything obvious.'], cook: ['Served it a little early.', 'Turned the heat up and hoped.'], nutrient: ['Topped up every line the same.'], fresh: ['Pushed the old stock to the back.'],
   manifest: ['Scanned the pallet, not each crate.'], loadbal: ['Stacked it where there was room.'], course: ['Took the straight line and trusted the deflector.'], decode: ['Logged the first close match.'],
+  station: ['Let her drift and logged "holding".'], burn: ['Came in hot and let the dampers eat it.'], fix: ['Used the dead-reckoning position.'], coords: ['Energised on the nearest lock.'],
+  form: ['Copied last watch\'s figures into the form.', 'Ticked "all in limits" without reading.'], roster: ['Put the same three names on every watch.'], queue: ['Took the easy items first.'], verify: ['Skipped the verify pass.'],
+  pa: ['Announced it on whatever channel was open.'], sign: ['Signed the whole page without reading it.'], schedule: ['Double-booked and hoped nobody noticed.'], trend: ['Glanced at the last reading only.'],
 };
 export function rushNote(tool, seed = 1) { const a = RUSH[tool?.kind] || RUSH.sequence; return a[(seed >>> 0) % a.length]; }
 
