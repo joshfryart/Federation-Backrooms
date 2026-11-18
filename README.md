@@ -72,6 +72,14 @@ hazmat seals, zero sights at the range. Every job in the ship was audited twice 
 | largest single activity | console code, 11.7 % | verbal brief, 5.6 % |
 | largest share inside one department | console code, 50 % of command | verbal brief, 15 % of command |
 
+**One game per job (in progress).** The goal is that each of the 701 jobs has a mechanic of its own: its own
+rules, input, win condition and failure mode, built from what a person in that job really does. Each one is a small
+module in `js/jobs/`. So far 30 of the 701 have one. For example, a reactor watch where you call real temperature
+crossings and ignore spikes, a fuel hose that keeps flowing after you let go, a thumb screw you stop turning when it
+goes stiff, a one-way galley scrub toward the drain, and a counsellor coaching a panicking crewman's breathing.
+`docs/procedures.md` is the authoring guide, and `node tools/check-jobs.mjs` validates new modules. Jobs without a
+module still use the shared activities below.
+
 Each round is seeded, and two jobs of the same kind get different content (theme, props, tool, band) from their
 label. A clean job is faster; a fumbled one still gets done and is logged as rushed. Rushing is
 always one key and never a game. Esc (or **J → Stop working**) cancels, and the job stays due. Everything is
