@@ -46,11 +46,28 @@ for the current action.
 console style (elbow frame, station pill and ship time, a rail of status blocks, a segmented timer), and the first
 time you meet each tool an instruction card in the same frame tells you how it works. Sickbay reads patient
 monitors, counts controlled meds and runs counselling sessions; engineering routes power and bench-tests parts;
-science sweeps for a signal and classifies contacts; security checks badges and audits the door log; the galley
-works the range and rotates stock; cargo matches crate codes and keeps the deck in trim; the bridge plots a course
-through a hazard field and decodes signals. Across the ship's 700-odd rounds and tasks there are 16 kinds of work
-site and 22 console games, and no single kind covers more than an eighth of the jobs. Each round is seeded, so no
-two are quite the same. A clean job is faster; a fumbled one still gets done and is logged as rushed. Rushing is
+science sweeps for a signal and classifies contacts; security checks badges; the galley works the range; cargo
+matches crate codes and keeps the deck in trim; the helm plots courses, keeps station against a current, flies
+braking burns and takes star fixes; the transporter dials drifting beam coordinates. Paperwork is never the same
+code twice: report forms filled from the readings, roster posts, priority queues, schedule slots, backup verify,
+PA announcements, log trend reviews and log sign-off, each themed by the job (an engineering status report reads
+core temperature and EPS load; a medical one, beds and hypo stock).
+
+Physical jobs happen in the room with the real tool: crank valves with a spanner by turning your view, reset
+tripped breakers panel by panel, weld hull seams with the plasma torch, sweep the flight deck with a push broom,
+fuel the shuttles, charge cells at the rack, sweep force-field emitters with the security tricorder, dog hatches,
+carry trays, crates and sample cases from a trolley to each drop point. Every job in the ship was audited
+(docs/job-audit.md):
+
+| | before | now |
+|---|---|---|
+| distinct activities (console games + work sites) | 38 | 81 |
+| jobs done hands-on in the room | 147 | 252 of 701 |
+| largest single activity | console code, 11.7 % | report form, 8.1 % |
+| largest share inside one department | console code, 50 % of command | ID check, 22 % of security |
+
+Each round is seeded, and two jobs of the same kind get different content (theme, props, tool, band) from their
+label. A clean job is faster; a fumbled one still gets done and is logged as rushed. Rushing is
 always one key and never a game. Esc (or **J → Stop working**) cancels, and the job stays due. Everything is
 keyboard-driven and honours calm visuals, sound captions and the colour-blind palette.
 
