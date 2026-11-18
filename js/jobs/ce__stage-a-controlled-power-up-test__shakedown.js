@@ -2,7 +2,7 @@
 // (Space held) until the gauges settle: injector temperature and field strength overshoot when the step lands and only the settled figure
 // counts. Read them against the sheet's limits. Clean: step up again. Over a limit: drop back one notch (Down) and sign the test off (Enter).
 // Stepping before the soak is done, stepping past a limit, or signing off before the ramp has found its top is the test's mistake.
-import { define, machine, ARROW, SPACE, ENTER, ri, rf, clamp, txt, box, bar, COL } from './kit.js';
+import { define, machine, ARROW, SPACE, ENTER, ri, clamp, txt, box, bar, COL } from './kit.js';
 
 const NOTCH = 6;
 export default define({
