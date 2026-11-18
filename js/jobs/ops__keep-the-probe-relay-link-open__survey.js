@@ -23,7 +23,7 @@ export default define({
       if (i === 0) { if (inp.press) { m.card++; m.ev(m.card === 1 ? 'draw' : 'seat'); if (m.card >= 2) { m.finish(0); return; } } s.prog = m.card / 2; return; }
       if (i === 1) {
         if (inp.press) { m.turns++; if (m.turns > m.snug) { m.fault('over-tightened'); m.turns = m.snug - 2; } else if (m.turns === m.snug) { m.ev('snug'); } }
-        if (m.turns === m.snug && inp.hold === false && inp.press === false && rel === false && m.sTime != null && m.t - m.sTime > 0.4) { m.finish(1); return; }
+        if (m.turns === m.snug && !inp.press && m.sTime != null && m.t - m.sTime > 0.4) { m.finish(1); return; }
         if (m.turns === m.snug && m.sTime == null) m.sTime = m.t; if (m.turns !== m.snug) m.sTime = null;
         s.prog = clamp(m.turns / (m.snug + 1)); return;
       }

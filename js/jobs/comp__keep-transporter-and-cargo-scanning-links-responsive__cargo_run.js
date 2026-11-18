@@ -15,7 +15,7 @@ export default define({
   captions: { 'purged live entry': 'pattern buffer warning', 'lookup slow': 'lookup timeout tone', 'chief stalled': 'transporter chief grumbles' },
   create(seed, opts) {
     const m = machine(this, seed, opts), r = m.rnd, n = 6, ns = ri(r, 2, 3), stale = new Set(shuffle(r, [0, 1, 2, 3, 4, 5]).slice(0, ns));
-    m.buf = Array.from({ length: n }, (_, i) => ({ id: `PB-${ri(r, 100, 999)}`, age: stale.has(i) ? ri(r, 34, 90) : ri(r, 2, 22) }));
+    m.buf = Array.from({ length: n }, (_, i) => ({ id: `PB-${ri(r, 100, 999)}`, age: stale.has(i) ? ri(r, 34, 90) : ri(r, 2, 26) }));
     m.p = ri(r, 0, 2); m.lo = ri(r, 3, 6); m.w = m.calm ? 2 : 1; m.c0 = ri(r, 140, 180); m.t0 = ri(r, 40, 70);
     m.lc = m.c0 - 12 * m.lo; m.lt = m.t0 + 9 * (m.lo + m.w); m.sel = 0; m.nt = 5; m.gap = m.calm ? 3.6 : 3; m.streak = 0; m.last = null; m.rounds = 3; m.round = 0;
     const cargo = () => m.c0 + 15 * m.buf.filter(b => b.age > 30).length - 12 * m.p, chief = () => m.t0 + 9 * m.p;
@@ -28,7 +28,7 @@ export default define({
       m.buf.splice(m.sel, 1); m.sel = clamp(m.sel, 0, m.buf.length - 1); m.ev('purge', { id: b.id }); return true;
     };
     m.tick = (dt) => {
-      if (!m.live(dt)) return; m.buf.forEach(b => { b.age += dt; }); m.nt -= dt; if (m.nt > 0) return; m.nt = m.gap;
+      if (!m.live(dt)) return; m.nt -= dt; if (m.nt > 0) return; m.nt = m.gap;
       const c = cargo(), t = chief(); m.last = [c, t];
       if (c > m.lc) { m.fault('lookup slow'); m.streak = 0; } else if (t > m.lt) { m.fault('chief stalled'); m.streak = 0; } else { m.streak++; }
       m.round = m.streak; if (m.streak >= 3) m.win();
