@@ -19,7 +19,7 @@ import { HH_MAP } from './signart.js';   // U-1 handheld glyphs (regen, scalpel,
 
 export const HOLD_MS = 220;
 const HOLD_KEYS = { KeyQ: 'main', KeyJ: 'duty', KeyH: 'radio', KeyV: 'tools' };
-export const HH_ICON = (id) => HH_MAP[id] && ICONS[HH_MAP[id]] ? HH_MAP[id] : /^tricorder/.test(id) ? 'tricorder' : /^phaser/.test(id) ? 'phaser' : ({ commbadge: 'badge', padd: 'padd', hypospray: 'hypo', dermal: 'hypo', scalpel: 'lab', hydrospanner: 'spanner', spanner: 'spanner', plasma_torch: 'fire', toolbag: 'tools', flashlight: 'torch', extinguisher: 'fire', mop: 'clean', cargo_hook: 'grab', crowbar: 'workshop' })[id] || 'tools';
+export const HH_ICON = (id) => HH_MAP[id] && ICONS[HH_MAP[id]] ? HH_MAP[id] : /^tricorder/.test(id) ? 'tricorder' : /^phaser/.test(id) ? 'phaser' : ({ commbadge: 'badge', padd: 'padd', hypospray: 'hypo', dermal: 'hypo', scalpel: 'lab', hydrospanner: 'spanner', spanner: 'spanner', plasma_torch: 'fire', toolbag: 'tools', flashlight: 'torch', extinguisher: 'fire', mop: 'clean', broom: 'clean', cargo_hook: 'grab', crowbar: 'workshop' })[id] || 'tools';
 const BELT_CSS = `body.nominal #grap{display:none}
 #ui-belt{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:5;display:none;gap:4px;pointer-events:none;font:700 9px var(--f-m,monospace)}
 #ui-belt.on{display:flex}#ui-belt span{position:relative;width:30px;height:30px;display:grid;place-items:center;background:rgba(5,8,14,.62);border:1px solid rgba(150,180,210,.28);color:#cfe0f0}

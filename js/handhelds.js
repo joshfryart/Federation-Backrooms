@@ -82,6 +82,9 @@ export const HANDHELDS = {
   extinguisher: { name: 'fire extinguisher', real: 'ABC dry-powder extinguisher', carriers: { billets: ['dc'] }, holster: 'hand', model: 'extinguisher', dur: 30,
     job: { verbs: ['extinguish'], effect: 'fire', wear: 5, where: ['post', 'junction', 'warpcore'], script: [S('aim_phaser', [2, 3], { cue: 'hiss', fx: 'spray' })] },
     weapon: { melee: melee(1.0, 1.6, 3.2, 1.5, 9, 1.4, 2), throw: toss(0.8, 1.8, 5, 4, 0.05), ranged: { charge: 30, range: 4, cd: 0.25, noise: 6, settings: { spray: { dmg: 0, stun: 2.5, cost: 1, blind: true } } } } },
+  broom: { name: 'push broom', real: 'wide push broom (hangar FOD broom)', carriers: { billets: [] }, holster: 'hand', model: 'broom', dur: 200,   // issued at a supply point for a deck sweep (js/worksites.js); nobody carries one on the belt
+    job: { verbs: ['sweep'], effect: 'clean', wear: 0.5, where: ['post', 'pad'], script: [S('wipe_surface', [2.4, 3.4], { cue: 'water' })] },
+    weapon: { melee: melee(0.3, 0.9, 2.6, 2.2, 5, 1.0, 2), throw: toss(0.2, 0.6, 5, 5, 0.02) } },
   mop: { name: 'mop', real: 'mop and bucket', carriers: { billets: ['galley', 'cook', 'holo'] }, holster: 'hand', model: 'mop', dur: 200,
     job: { verbs: ['clean'], effect: 'clean', wear: 0.5, where: ['post', 'table', 'counter', 'sinkunit'], script: [S('wipe_surface', [2.4, 3.4], { cue: 'water' })] },
     weapon: { melee: melee(0.3, 0.9, 2.6, 2.2, 5, 1.0, 2), throw: toss(0.2, 0.6, 5, 5, 0.02) } },

@@ -321,7 +321,7 @@ export const ITEMS = {
   badge: { name: 'comm badge', w: 0.02, pose: null, hand: 'r' }, phaser1: { name: 'type-1 phaser', w: 0.3, pose: 'hold_r', hand: 'r' }, phaser2: { name: 'type-2 phaser', w: 0.7, pose: 'hold_r', hand: 'r' },
   rifle: { name: 'phaser rifle', w: 3.2, pose: 'hold_r', hand: 'r' }, hypospray: { name: 'hypospray', w: 0.2, pose: 'hold_r', hand: 'r' }, dermal: { name: 'dermal regenerator', w: 0.3, pose: 'hold_r', hand: 'r' },
   scalpel: { name: 'laser scalpel', w: 0.05, pose: 'hold_r', hand: 'r' }, wrench: { name: 'spanner', w: 0.6, pose: 'hold_r', hand: 'r' }, torch: { name: 'plasma torch', w: 1.8, pose: 'hold_r', hand: 'r' },
-  flashlight: { name: 'hand lamp', w: 0.4, pose: 'hold_r', hand: 'r' }, extinguisher: { name: 'fire extinguisher', w: 6, pose: 'hold_r', hand: 'r' }, mop: { name: 'mop', w: 1.5, pose: 'hold_r', hand: 'r' },
+  flashlight: { name: 'hand lamp', w: 0.4, pose: 'hold_r', hand: 'r' }, extinguisher: { name: 'fire extinguisher', w: 6, pose: 'hold_r', hand: 'r' }, broom: { name: 'push broom', w: 1.6, pose: 'hold_r', hand: 'r' }, mop: { name: 'mop', w: 1.5, pose: 'hold_r', hand: 'r' },
   hook: { name: 'cargo hook', w: 0.5, pose: 'hold_r', hand: 'r' }, crowbar: { name: 'pry bar', w: 2.5, pose: 'hold_r', hand: 'r' },
   // galley and medical batches (js/itemart-galley.js, js/itemart-medical.js; ids = model kinds)
   ladle: { name: 'ladle', w: 0.3, pose: 'hold_r', hand: 'r' }, stockpot: { name: 'stock pot', w: 4, pose: 'hold_r', hand: 'r', load: true }, fryingpan: { name: 'frying pan', w: 1.3, pose: 'hold_r', hand: 'r' },

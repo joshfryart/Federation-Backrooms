@@ -9,7 +9,7 @@
 import { createSiteRun, resolveSites, ACTS, siteRushNote } from './worksites.js';
 import { HANDHELDS, newInstance, isBroken } from './handhelds.js';
 
-const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', flight: '#8fb7ff', bridge: '#6ea8ff' };
+const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', flight: '#8fb7ff', bridge: '#6ea8ff', ops: '#b99be6' };
 const CSS = `#wsite{position:fixed;left:.875rem;top:30%;z-index:14;width:15.5rem;display:none;pointer-events:none;color:var(--k-ink,#f3eee6);font:600 .8rem/1.35 var(--f-d,Arial,sans-serif);
   border-left:.85rem solid var(--kc,#f0933a);border-top:.5rem solid var(--kc,#f0933a);border-bottom:.5rem solid var(--k-lav,#b99be6);border-radius:1.4rem 0 0 1.4rem;background:var(--k-plate,rgba(6,8,16,.8));padding:.55rem .7rem .55rem .65rem;box-shadow:0 0 18px rgba(0,0,0,.45)}
 #wsite.on{display:block}
@@ -31,7 +31,7 @@ const REACH = 2.35;
 
 export class WorkSites {
   constructor(o) {
-    Object.assign(this, o); this.run = null; this.job = null; this.at = -1; this.pressed = false; this.marks = []; this.lastYaw = null; this.lastPitch = null; this.wipe = 0; this.inputOverride = null; this.log = [];
+    Object.assign(this, o); this.run = null; this.job = null; this.at = -1; this.pressed = false; this.marks = []; this.lastYaw = null; this.lastPitch = null; this.wipe = 0; this.turn = 0; this.inputOverride = null; this.log = [];
     if (typeof document === 'undefined') return;
     if (!document.getElementById('wsite-css')) { const st = document.createElement('style'); st.id = 'wsite-css'; st.textContent = CSS; document.head.appendChild(st); }
     let el = document.getElementById('wsite'); if (!el) { el = document.createElement('div'); el.id = 'wsite'; el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
@@ -48,17 +48,17 @@ export class WorkSites {
   }
   hasItem() { const d = this.run?.def || this.job?.def; if (!d?.item?.length) return true; const it = this.G.kit?.inst; return !!it && d.item.includes(it.id) && !isBroken(it); }
   onBelt(def) { return (this.G.kit?.belt || []).findIndex(b => def.item.includes(b.id) && !isBroken(b)); }
-  itemName(def) { const id = def.item?.[0]; return id ? HANDHELDS[id]?.name || id : ''; }
+  itemName(def) { const id = (this.run?.def === def && this.run.item) || def.item?.[0]; return id ? HANDHELDS[id]?.name || id : ''; }
 
   start(it, def, opts = {}) {
     if (this.active) return { ok: false, why: `Finish ${this.run.def.name.toLowerCase()} first (J: stop working)` };
     const w = this.world, rect = this.roomRect(it.room); if (!w || !rect) return { ok: false, why: `Do this in the ${it.room}` };
     const seed = opts.seed || 1, fetch = def.item.length > 0 && this.onBelt(def) < 0, d = w.d;
-    const sites = resolveSites(def, { rect, props: d.props, free: (tx, ty) => d.grid[ty]?.[tx] === 0 }, seed, { fetch });
+    const sites = resolveSites(def, { rect, props: d.props, free: (tx, ty) => d.grid[ty]?.[tx] === 0 }, seed, { fetch, variant: opts.variant });
     if (!sites.length) return { ok: false, why: 'no room to work' };
-    this.job = { it, def, opts, rect, world: w, label: it.label || it.task }; this.run = createSiteRun(def, seed, sites, { calm: !!this.CFG?.calm });
+    this.job = { it, def, opts, rect, world: w, label: it.label || it.task }; this.run = createSiteRun(def, seed, sites, { calm: !!this.CFG?.calm, variant: opts.variant });
     this.at = -1; this.pressed = false; this.lastYaw = null; this.anchor = null; this.buildMarks(); this.render(true); this.el?.classList.add('on'); this.pinNext();
-    const first = this.run.sites[0]; this.G.say?.(`${def.name}: ${sites.filter(s => s.act !== 'fetch').length} ${def.site.toLowerCase()}s marked${def.item.length ? ` · needs a ${this.itemName(def)}${fetch ? ' (draw one at the marked supply point)' : ''}` : ''}. ${def.how}`, 'good');
+    const first = this.run.sites[0]; this.G.say?.(`${def.name}: ${sites.filter(s => s.act !== 'fetch' && !s.hub).length} ${def.site.toLowerCase()}s marked${def.item.length ? ` · needs a ${this.itemName(def)}${fetch ? ' (draw one at the marked supply point)' : ''}` : ''}. ${def.how}`, 'good');
     this.sound?.tone?.(660, 0.08, 'sine', 0.06); this.note(`start ${def.id} ${sites.length}${fetch ? ' fetch' : ''}`); void first;
     return { ok: true, sites: sites.length, fetch };
   }
@@ -86,7 +86,7 @@ export class WorkSites {
     if (G.phase !== 'play') return;
     const w = this.world, [ptx, pty] = w.tile(P.x, P.z), R = this.job.rect, away = !(ptx >= R.x - 1 && ptx < R.x + R.w + 1 && pty >= R.y - 1 && pty < R.y + R.h + 1);
     // look motion (scrub strokes): view turn speed, smoothed
-    if (this.lastYaw != null && dt > 0) { const v = (Math.abs(wrap(P.yaw - this.lastYaw)) + Math.abs((P.pitch || 0) - (this.lastPitch || 0))) / dt; this.wipe += (v - this.wipe) * Math.min(1, dt * 8); }
+    if (this.lastYaw != null && dt > 0) { const v = (Math.abs(wrap(P.yaw - this.lastYaw)) + Math.abs((P.pitch || 0) - (this.lastPitch || 0))) / dt; this.wipe += (v - this.wipe) * Math.min(1, dt * 8); this.turn += (Math.abs(wrap(P.yaw - this.lastYaw)) / dt - this.turn) * Math.min(1, dt * 10); }
     this.lastYaw = P.yaw; this.lastPitch = P.pitch || 0;
     // which site is in reach and in view (the next one wins)
     const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); let at = -1, bd = 1e9;
@@ -96,11 +96,11 @@ export class WorkSites {
     else {   // scan: the hidden reading is a bearing relative to where you first faced the site (stable even standing on a floor site)
       const s = r.sites[at]; if (at < 0) this.anchor = null; else if (!this.anchor || this.anchor.i !== at) { const [cx, cz] = w.center(s.tx, s.ty), d = Math.hypot(cx - P.x, cz - P.z); this.anchor = { i: at, yaw: d > 0.9 ? Math.atan2(-(cx - P.x), -(cz - P.z)) : P.yaw }; }
       if (this.pressed && s?.act === 'scrub') this.wipe = Math.max(this.wipe, 1.6);   // keyboard-only: re-tapping E scrubs too (arrow keys turn the view as well)
-      inp = { at, hold: !!this.keys.KeyE && at >= 0, press: this.pressed, look: this.anchor ? wrap(P.yaw - this.anchor.yaw) : 0, wipe: this.wipe }; }
+      inp = { at, hold: !!this.keys.KeyE && at >= 0, press: this.pressed, look: this.anchor ? wrap(P.yaw - this.anchor.yaw) : 0, wipe: this.wipe, turn: this.turn }; }
     inp.hasItem = inp.hasItem ?? this.hasItem(); inp.away = away; this.pressed = false; this.at = inp.at ?? at;
     const before = r.sites.map(s => s.done), f0 = r.faults, e = r.step(dt, inp);
     if (e) this.onEvent(e);
-    if (r.faults > f0) { const why = r.events.filter(x => x.type === 'fault').slice(-1)[0]?.why; this.sound?.denied?.(); this.G.caption?.(why === 'miscount' ? 'wrong count buzz' : why === 'over' ? 'over-limit buzz' : 'fault buzz'); this.G.say?.(why === 'miscount' ? 'Miscount — start that one again.' : why === 'over' ? 'Too far — let go sooner.' : 'Too soon — hold a little longer.', 'warn'); }
+    if (r.faults > f0) { const why = r.events.filter(x => x.type === 'fault').slice(-1)[0]?.why; this.sound?.denied?.(); this.G.caption?.(why === 'miscount' ? 'wrong count buzz' : why === 'over' ? 'over-limit buzz' : why === 'loose' ? 'gauge drops back' : 'fault buzz'); this.G.say?.(why === 'miscount' ? 'Miscount — start that one again.' : why === 'over' ? 'Too far — let go sooner.' : why === 'loose' ? 'Still loose — turn it further before you let go.' : 'Too soon — hold a little longer.', 'warn'); }
     const fresh = r.sites.findIndex((s, i) => s.done && !before[i]);
     if (fresh >= 0) { const s = r.sites[fresh]; this.sound?.chip?.(); this.G.caption?.('chime'); if (r.state === 'work') { this.G.say?.(`${s.name}: done (${r.sites.filter(x => x.done).length}/${r.sites.length}).`, 'good'); this.pinNext(); } }
     this.updateMarks(dt); this.render();
@@ -108,13 +108,15 @@ export class WorkSites {
   }
   onEvent(e) {
     const G = this.G, r = this.run, def = r.def, K = G.kit;
+    if (e.type === 'lift') { this.sound?.pickup?.(); this.G.caption?.('load lifted'); G.say?.(`Lifted. Carry it to ${r.sites[r.next]?.name || 'the marked spot'} and hold [E] to set it down.`, 'good'); this.pinNext(); return; }
+    if (e.type === 'drop') { this.sound?.tone?.(440, 0.06, 'sine', 0.05); this.G.caption?.('load set down'); this.pinNext(); return; }
     if (e.type === 'needItem') {
       const i = this.onBelt(def); if (i >= 0 && K) { K.hand = i; G.say?.(`You take the ${HANDHELDS[K.belt[i].id].name} off your belt. [E] ${def.verb.toLowerCase()}.`, 'good'); this.sound?.pickup?.(); }
       else { const f = r.sites.findIndex(s => s.act === 'fetch'); G.say?.(`You need a ${this.itemName(def)}${f >= 0 ? ' — the supply point is marked' : ''}.`, 'warn'); }
     } else if (e.type === 'fetch') {
-      const id = def.item[0], inst = newInstance(id, (G.runSeed || 1) + 77); if (K) { if (!K.add(inst)) { const j = K.belt.findIndex(b => b.id !== 'commbadge'); K.belt[j >= 0 ? j : K.belt.length - 1] = inst; K.hand = j >= 0 ? j : K.belt.length - 1; } }
+      const id = r.item || def.item[0], inst = newInstance(id, (G.runSeed || 1) + 77); if (K) { if (!K.add(inst)) { const j = K.belt.findIndex(b => b.id !== 'commbadge'); K.belt[j >= 0 ? j : K.belt.length - 1] = inst; K.hand = j >= 0 ? j : K.belt.length - 1; } }
       r.fetched(); this.sound?.pickup?.(); G.say?.(`Issued: ${HANDHELDS[id].name} (in hand). Now the ${def.site.toLowerCase()}s.`, 'good'); this.pinNext();
-    } else if (e.type === 'blocked') G.say?.(e.why === 'fetch' ? `Draw the ${this.itemName(def)} at the supply point first.` : `${r.sites[r.next]?.name || 'The next site'} first — follow the marker.`, 'warn');
+    } else if (e.type === 'blocked') G.say?.(e.why === 'fetch' ? `Draw the ${this.itemName(def)} at the supply point first.` : e.why === 'hands' ? `Your hands are full — set the load down at ${r.sites[r.next]?.name || 'a marked spot'} first.` : e.why === 'empty' ? `Nothing to set down — lift a load at ${r.sites[r.next]?.name || 'the marked point'} first.` : `${r.sites[r.next]?.name || 'The next site'} first — follow the marker.`, 'warn');
   }
   finish() {
     const r = this.run, j = this.job, res = r.outcome(); this.note(`done ${r.def.id} ${r.state} ${res?.quality}`);
@@ -126,7 +128,8 @@ export class WorkSites {
     if (!s) return `${r.def.name}: go to ${nx?.name || 'the next site'} (marked) · ${r.left} left · [J] stop working`;
     if (s.act === 'fetch') return `[E] draw a ${this.itemName(r.def)} here`;
     if (!this.hasItem()) return `[E] take the ${this.itemName(r.def)} off your belt`;
-    return { scrub: `Hold [E] and swing your view across the grime — ${s.name}`, scan: `Hold [E] and sweep your view slowly — lock the peak · ${s.name}`, timing: `Hold [E] to charge, let go in the band · ${s.name}`, count: `Tap [E] ${s.n}× then pause · ${s.name}` }[s.act] || '';
+    return { scrub: `Hold [E] and swing your view back and forth — ${s.name}`, scan: `Hold [E] and sweep your view slowly — lock the peak · ${s.name}`, timing: `Hold [E] to charge, let go in the band · ${s.name}`, count: `Tap [E] ${s.n}× then pause · ${s.name}`,
+      turn: `Hold [E] and turn your view to crank, let go in the band · ${s.name}`, carry: s.role === 'pick' ? `[E] lift a load · ${s.name}` : `Hold [E] to set it down · ${s.name}` }[s.act] || '';
   }
 
   // ---- 3D markers (procedural: rings, beams, number tags, grime decals, scan fan)
@@ -135,12 +138,13 @@ export class WorkSites {
     const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d'), T = new this.THREE.CanvasTexture(cv); T.colorSpace = this.THREE.SRGBColorSpace; return { cv, c, T, key: '' };
   }
   drawTag(m, s, i, next) {
-    const key = `${s.done}|${next}|${Math.round(s.prog * 20)}|${s.c ?? ''}|${s.n ?? ''}|${this.CFG?.cb ? 1 : 0}`; if (m.tag.key === key) return; m.tag.key = key;
+    const key = `${s.done}|${next}|${Math.round(s.prog * 20)}|${s.c ?? ''}|${s.n ?? ''}|${this.CFG?.cb ? 1 : 0}|${this.run?.carrying ? 1 : 0}`; if (m.tag.key === key) return; m.tag.key = key;
     const c = m.tag.c, col = s.done ? (this.CFG?.cb ? '#4f9dff' : '#4fd18b') : next ? this.colour() : '#8fa0b6'; c.clearRect(0, 0, 128, 128);
     c.beginPath(); for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * Math.PI / 3; c.lineTo(64 + Math.cos(a) * 40, 64 + Math.sin(a) * 40); } c.closePath(); c.fillStyle = 'rgba(5,8,16,.85)'; c.fill(); c.lineWidth = 6; c.strokeStyle = col; c.stroke();
     c.beginPath(); c.arc(64, 64, 54, -Math.PI / 2, -Math.PI / 2 + Math.max(0.001, s.prog) * Math.PI * 2); c.lineWidth = 7; c.strokeStyle = col; c.stroke();
     c.fillStyle = col; c.font = '800 40px Arial Narrow, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(s.done ? '✓' : s.act === 'fetch' ? '+' : String(this.run.sites.filter(x => x.act !== 'fetch').indexOf(s) + 1), 64, 66);
+    c.fillText(s.done ? '✓' : s.act === 'fetch' ? '+' : s.hub ? (s.role === 'pick' ? '▲' : '▼') : String(this.run.sites.filter(x => x.act !== 'fetch' && !x.hub).indexOf(s) + 1), 64, 66);
+    if (s.hub && !s.done) { for (let k = 0; k < s.trips; k++) { c.fillStyle = k < s.c ? '#f4c25b' : 'rgba(244,194,91,.25)'; c.fillRect(64 - s.trips * 9 + k * 18 + 2, 104, 14, 14); } }
     if (s.act === 'count' && !s.done) { for (let k = 0; k < s.n; k++) { c.fillStyle = k < s.c ? '#f4c25b' : 'rgba(244,194,91,.25)'; c.fillRect(64 - s.n * 9 + k * 18 + 2, 104, 14, 14); } }
     m.tag.T.needsUpdate = true;
   }
@@ -180,10 +184,10 @@ export class WorkSites {
     const el = this.el, r = this.run; if (!el || !r) return; const def = r.def, s = r.sites[this.at] || null, cur = s && !s.done ? s : null;
     el.style.setProperty('--kc', this.colour());
     const key = r.sites.map(x => x.done ? 1 : 0).join('') + '|' + r.next + '|' + this.hasItem() + '|' + this.at;
-    if (full || key !== this._key) {
-      this._key = key; const need = def.item.length && !this.hasItem();
+    if (full || key + '|' + r.carrying !== this._key) {
+      this._key = key + '|' + r.carrying; const need = def.item.length && !this.hasItem();
       el.innerHTML = `<div class="ws-h"><span class="k-pill">Work site</span><span class="ws-t">${esc(def.name)}</span></div>
-        <div class="ws-item${need ? ' need' : ''}">${def.item.length ? `Item · <b>${esc(this.itemName(def))}</b> ${this.hasItem() ? '· in hand' : this.onBelt(def) >= 0 ? '· on belt ([E] takes it)' : '· draw at supply'}` : 'Item · hands'} · ${esc(ACTS[def.act])}</div>
+        <div class="ws-item${need ? ' need' : ''}">${def.item.length ? `Item · <b>${esc(this.itemName(def))}</b> ${this.hasItem() ? '· in hand' : this.onBelt(def) >= 0 ? '· on belt ([E] takes it)' : '· draw at supply'}` : 'Item · hands'} · ${esc(ACTS[def.act])}${def.act === 'carry' ? ` · ${r.carrying ? '<b>carrying</b>' : 'hands free'}` : ''}</div>
         <ol>${r.sites.map((x, i) => `<li class="${x.done ? 'done' : i === r.next ? 'next' : ''}"><i></i><span>${esc(x.name)}</span><em data-p="${i}">${x.done ? 'OK' : Math.round(x.prog * 100) + '%'}</em></li>`).join('')}</ol>
         <div class="ws-m"></div><div class="ws-f"><span class="ws-fl"></span><span class="ws-tm"></span></div>`;
     }
@@ -192,6 +196,8 @@ export class WorkSites {
       const lbl = (a, b) => `<div class="ws-ml"><span>${a}</span><span>${b}</span></div>`;
       if (!cur) m.innerHTML = lbl('Next', esc(r.sites[r.next]?.name || '—')) + `<div class="ws-bar"><b style="width:${Math.round((1 - r.left / r.sites.length) * 100)}%"></b></div>`;
       else if (cur.act === 'scan') m.innerHTML = lbl('Signal', cur.sig > 0.8 ? 'peak — hold' : cur.sig > 0.4 ? 'warmer' : 'sweep') + `<div class="ws-bar"><b style="width:${Math.round(cur.sig * 100)}%"></b></div><div class="ws-bar"><b style="width:${Math.round(cur.prog * 100)}%;background:var(--ok,#4fd18b)"></b></div>`;
+      else if (cur.act === 'turn') m.innerHTML = lbl(def.verb, `${cur.hits}/${cur.need}`) + `<div class="ws-bar"><s style="left:${cur.band[0] * 100}%;width:${(cur.band[1] - cur.band[0]) * 100}%"></s><b style="width:${Math.round(cur.m * 100)}%;background:var(--k-gold,#f4c25b)"></b><u style="left:${cur.m * 100}%"></u></div>`;
+      else if (cur.act === 'carry') m.innerHTML = lbl(cur.role === 'pick' ? 'Lift' : 'Set down', r.carrying ? 'carrying' : 'hands free') + `<div class="ws-bar"><b style="width:${Math.round((cur.role === 'drop' ? (cur.set || 0) / 0.6 : 0) * 100)}%"></b></div>`;
       else if (cur.act === 'timing') m.innerHTML = lbl(def.verb, `${cur.hits}/${cur.need}`) + `<div class="ws-bar"><s style="left:${cur.band[0] * 100}%;width:${(cur.band[1] - cur.band[0]) * 100}%"></s><b style="width:${Math.round(cur.m * 100)}%;background:var(--k-gold,#f4c25b)"></b><u style="left:${cur.m * 100}%"></u></div>`;
       else if (cur.act === 'count') m.innerHTML = lbl(def.verb, `${cur.c} / ${cur.n}`) + `<div class="ws-pips">${Array.from({ length: cur.n }, (_, k) => `<span class="${k < cur.c ? 'on' : ''}"></span>`).join('')}</div>`;
       else if (cur.act === 'scrub') m.innerHTML = lbl('Clean', this.wipe > 0.5 ? 'scrubbing' : 'move your view') + `<div class="ws-bar"><b style="width:${Math.round(cur.prog * 100)}%"></b></div>`;

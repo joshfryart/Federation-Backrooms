@@ -626,7 +626,7 @@ function startJob(it, opts = {}) {
   if (G.sites?.active) return { ok: false, why: `Finish ${G.sites.run.def.name.toLowerCase()} first ([J] stop working)` };
   if (job?.type === 'sites' && !opts.console && world && G.ui) {
     const seed = hash('worksite', G.runSeed || 1, it.id, G.jobSeq++);
-    const r = G.sites.start(it, job.def, { seed, apply: (res) => {
+    const r = G.sites.start(it, job.def, { seed, variant: job.variant, apply: (res) => {
       const rr = run(res.quality, { timeMul: res.timeMul, game: res }); if (!rr.ok) { G.say(rr.why, 'warn'); return; }
       G.say(`${res.label}: ${label}`, res.quality === 'proper' ? 'good' : 'warn'); },
       cancelled: () => G.say(`Stopped — ${label} is still due.`) });

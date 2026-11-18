@@ -62,6 +62,7 @@ export function makeItemMesh(id) {
     case 'flashlight': g.add(cyl(0.017, 0.017, 0.15, m.dark, 0, 0, 0)); g.add(cyl(0.026, 0.018, 0.04, m.metal, 0, 0.09, 0)); g.add(cyl(0.022, 0.022, 0.004, m.screen, 0, 0.112, 0)); rest = 0.02; g.userData.lie = true; break;
     case 'extinguisher': g.add(cyl(0.07, 0.07, 0.38, m.red, 0, -0.24, 0)); g.add(cyl(0.02, 0.02, 0.05, m.dark, 0, -0.03, 0)); g.add(box(0.12, 0.015, 0.025, m.dark, 0.03, 0.0, 0)); { const h = cyl(0.008, 0.008, 0.25, m.rubber, 0.08, -0.12, 0, 6); h.rotation.z = 0.2; g.add(h); } rest = 0.43; break;
     case 'mop': g.add(cyl(0.012, 0.012, 1.3, m.metal, 0, 0.1, 0, 8)); g.add(box(0.28, 0.03, 0.08, m.blue, 0, -0.55, 0)); g.add(box(0.26, 0.05, 0.07, m.cloth, 0, -0.59, 0)); rest = 0.62; break;
+    case 'broom': g.add(cyl(0.013, 0.013, 1.3, m.brown, 0, 0.1, 0, 8)); g.add(box(0.46, 0.05, 0.07, m.dark, 0, -0.56, 0)); g.add(box(0.44, 0.07, 0.05, m.cloth, 0, -0.62, 0)); rest = 0.65; break;
     case 'hook': g.add(cyl(0.018, 0.018, 0.1, m.brown, 0, 0, 0)); { const t = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.006, 6, 12, Math.PI * 1.3), m.metal); t.position.set(0.0, 0.1, 0); t.rotation.y = Math.PI / 2; g.add(t); } rest = 0.02; g.userData.lie = true; break;
     case 'crowbar': g.add(cyl(0.012, 0.012, 0.7, m.red, 0, 0.15, 0, 8)); g.add(box(0.02, 0.05, 0.012, m.metal, 0.012, 0.51, 0)); g.add(box(0.03, 0.015, 0.012, m.metal, 0.02, -0.2, 0)); rest = 0.012; g.userData.lie = true; break;
     default: g.add(box(0.12, 0.08, 0.1, m.metal)); rest = 0.04;
@@ -87,7 +88,7 @@ export function holsterItem(H, id, slot = 'hip_r') {
   holder.add(mesh); holder.userData = { id, slot }; H.worn[slot] = holder; return holder;
 }
 const GRIP_OF = { cup: 'default', glass: 'default', vial: 'default', toolbox: 'hang', medkit: 'hang', hose: 'hang', extinguisher: 'hang', tool: 'rod', zapper: 'rod', dumbbell: 'rod', padd: 'flat', scanner: 'flat', chip: 'flat', ration: 'flat',
-  tricorder: 'flat', tricorder_med: 'flat', tricorder_sec: 'flat', badge: 'flat', phaser1: 'gun', phaser2: 'gun', rifle: 'gun', hypospray: 'rod', dermal: 'rod', scalpel: 'rod', wrench: 'rod', torch: 'rod', flashlight: 'rod', mop: 'rod', hook: 'rod', crowbar: 'rod' };
+  tricorder: 'flat', tricorder_med: 'flat', tricorder_sec: 'flat', badge: 'flat', phaser1: 'gun', phaser2: 'gun', rifle: 'gun', hypospray: 'rod', dermal: 'rod', scalpel: 'rod', wrench: 'rod', torch: 'rod', flashlight: 'rod', mop: 'rod', broom: 'rod', hook: 'rod', crowbar: 'rod' };
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
 
 // parent an item (id or mesh) to a hand bone. Returns the holder. The holder cancels the bone's scale so offsets are in metres.
