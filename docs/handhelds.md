@@ -3,7 +3,7 @@
 Everything a crew member can hold has a **job** and can be used as a **weapon**; both wear the same durability. Data: `js/handhelds.js` (pure). Glue: `js/kit.js`. Meshes: `js/carry.js`. Tests: `node tools/test-handhelds.mjs`, browser block `handhelds:` in `tools/test.mjs`.
 
 ## Items (23)
-Tricorders (engineering, medical, science, security, geological, atmospheric — flip-open clamshells, `foldable`), comm badge, PADD (`foldable`), type-1 phaser, type-2 phaser, phaser rifle, hypospray, dermal regenerator, laser scalpel, hydrospanner, spanner, plasma torch, tool bag, hand lamp, fire extinguisher, mop, cargo hook, pry bar. Each has a real-world equivalent from `docs/ship-inventory/`, carriers (billets / departments / rank), a holster (belt / back / hand / chest / pocket), a model, a job profile (`verbs`, `effect`, `repairMul`, `heal`, `wear`, `where` = equipment entries where NPCs take it out, Operator `script`) and a weapon profile.
+Tricorders (engineering, medical, science, security, geological, atmospheric — flip-open clamshells, `foldable`), comm badge, PADD (`foldable`), type-1 phaser, type-2 phaser, phaser rifle, hypospray, dermal regenerator, laser scalpel, hydrospanner, spanner, plasma torch, tool bag, hand lamp, fire extinguisher, push broom (no carriers: issued at a supply point for the deck-sweep work site), mop, cargo hook, pry bar. Each has a real-world equivalent from `docs/ship-inventory/`, carriers (billets / departments / rank), a holster (belt / back / hand / chest / pocket), a model, a job profile (`verbs`, `effect`, `repairMul`, `heal`, `wear`, `where` = equipment entries where NPCs take it out, Operator `script`) and a weapon profile.
 
 ## Rules
 - **Durability is shared**: job use costs `job.wear`, a swing `melee.wear`, a throw `throw.wear`. At 0 the item is broken: its job no longer works and it hits at 60%. Foldables (tricorders, PADDs) and thrown items can also snap outright (`breakP`).
@@ -70,6 +70,8 @@ dmg = hostile hit points, stun = seconds, knock = m/s push, noise = hearing radi
 | extinguisher | melee | 1 | 1.6 | 3.2 | 1.5 | 9 | 1.4 | 2 |  |
 | extinguisher | throw | 0.8 | 1.8 |  | 5 | 5 |  | 4 | break 0.05 |
 | extinguisher | ranged:spray | 0 | 2.5 |  | 4 | 6 | 0.25 | 1 | charge 30, blinds |
+| broom | melee | 0.3 | 0.9 | 2.6 | 2.2 | 5 | 1 | 2 |  |
+| broom | throw | 0.2 | 0.6 |  | 5 | 5 |  | 5 | break 0.02 |
 | mop | melee | 0.3 | 0.9 | 2.6 | 2.2 | 5 | 1 | 2 |  |
 | mop | throw | 0.2 | 0.6 |  | 5 | 5 |  | 5 | break 0.02 |
 | cargo_hook | melee | 0.8 | 0.6 | 1.2 | 1.5 | 5 | 0.8 | 1 |  |
