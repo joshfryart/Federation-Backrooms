@@ -1,52 +1,59 @@
-// Chief of security: test internal sensors and force fields. The brig console says every emitter section is good; the handheld field meter is
-// the only truth. Slide the meter along the emitter grid (← →), cycle the field from the console (Space) and watch the needle rise. One cycle
-// can mislead (the needle jitters), so each section needs two cycles under the meter before you log it: 1 good, 2 weak, 3 dead (blind).
-import { define, machine, ARROW, SPACE, DIG, rf, ri, pick, txt, box, bar, lamp, COL } from './kit.js';
+// Chief of security: test the internal sensors and force fields. An eight-cell emitter strip shows the grid; three cells are dead. Hold an arrow to
+// drag the sweep line along the strip and tap Space when it sits on a dead cell to tag it. A live emitter hums: tagging it writes a healthy field off.
+import { define, machine, ARROW, SPACE, clamp, txt, box, lamp, COL } from './kit.js';
 
-const N = 5, LV = { good: 0.8, weak: 0.4, dead: 0.03 }, KEY = { 1: 'good', 2: 'weak', 3: 'dead' };
-const CORR = ['Corridor 3A', 'Corridor 3B', 'Brig lobby', 'Holding aft', 'Turbolift 3'];
+const N = 8;
 export default define({
   job: { billet: 'cos', label: 'Test internal sensors and force fields', type: 'loop' },
-  title: 'Emitter grid meter cycling', dept: 'security', host: 'console', tool: 'Handheld field meter on the emitter grid',
-  how: 'Move the field meter along the emitter grid (← →) and cycle the field (Space). After two cycles on a section, log it from the needle: 1 good, 2 weak, 3 dead.',
-  keys: ['← → move meter', 'Space cycle field', '1 good · 2 weak · 3 dead'], limit: 38, maxFaults: 3,
-  fingerprint: { verb: 'meter the cycles', input: 'arrows+space+digits', win: 'all five emitter sections graded good, weak or dead from at least two meter cycles each',
-    fail: 'logging a section on the console word before the meter has seen two cycles, or grading weak as good or dead as weak',
-    rule: 'Park the meter on a section, press Space to pulse the field and read where the needle peaks; after two pulses the average shows. Needle near the top band: 1; middle: 2; flat: 3.' },
-  rush: 'Logged every section green because the console said so.',
-  captions: { 'logged unread': 'slate beep', 'misgraded': 'error buzz', pulse: 'field hum' },
+  title: 'Emitter strip sweep tag', dept: 'security', host: 'console', tool: 'Emitter strip',
+  how: 'Hold the left or right arrow to drag the sweep line along the emitter strip. When the line sits on a dead emitter, tap Space to tag it. Never tag a live one.',
+  keys: ['← → hold: sweep the line', 'Space: tag a dead emitter'], limit: 32, maxFaults: 3,
+  fingerprint: { verb: 'sweep and tag', input: 'arrows-hold+space', win: 'every dead emitter on the strip tagged with the sweep line and no live one tagged',
+    fail: 'tagging a live emitter, so a healthy field is written up as dead',
+    rule: 'Hold an arrow to drag the sweep line along the strip. Space tags the emitter under the line. Dead cells show as dark squares; live ones hum as round lamps.' },
+  rush: 'Glanced at the strip and wrote every emitter down as live.',
+  captions: { 'tagged live': 'strip buzzes' }, says: {},
   create(seed, opts) {
     const m = machine(this, seed, opts), r = m.rnd;
-    const kinds = ['good', 'weak', 'dead']; const ks = Array.from({ length: N }, () => pick(r, kinds)); if (!ks.includes('dead')) ks[ri(r, 0, N - 1)] = 'dead';
-    m.secs = ks.map((k, i) => ({ k, name: CORR[i], reads: [], log: null, jit: Array.from({ length: 6 }, () => rf(r, -0.12, 0.12)) }));
-    m.at = 0; m.pulse = 0; m.needle = 0; m.rounds = N; m.round = 0; const PT = m.calm ? 0.7 : 0.5;
-    const sec = () => m.secs[m.at], avg = (s) => s.reads.reduce((a, v) => a + v, 0) / (s.reads.length || 1);
-    const grade = (s) => { const a = avg(s); return a > 0.6 ? 'good' : a > 0.2 ? 'weak' : 'dead'; };
+    m.dead = new Set(); while (m.dead.size < 3) m.dead.add(Math.floor(r() * N));
+    m.tag = new Set(); m.pos = 0; m.speed = m.calm ? 2.2 : 3;
+    const cell = () => Math.min(N - 1, Math.max(0, Math.floor(m.pos)));
     m.key = (code, down = true) => {
-      if (m.state !== 'play' || !down) return false; const a = ARROW(code), d = DIG(code);
-      if (a === 'L' || a === 'R') { if (m.pulse <= 0) m.at = Math.max(0, Math.min(N - 1, m.at + (a === 'L' ? -1 : 1))); return true; }
-      if (SPACE(code)) { if (m.pulse <= 0) { m.pulse = PT; m.ev('pulse'); } return true; }
-      if (d >= 1 && d <= 3) { const s = sec(); if (s.log) return true; if (s.reads.length < 2) { m.fault('logged unread'); return true; }
-        s.log = KEY[d]; if (KEY[d] !== s.k) m.fault('misgraded'); m.round = m.secs.filter(x => x.log).length; if (m.secs.every(x => x.log) && m.state === 'play') m.win(); return true; }
+      if (m.state !== 'play') return false; const a = ARROW(code);
+      if (a === 'L' || a === 'R') { m.held[a] = !!down; return true; }
+      if (SPACE(code) && down) {
+        const c = cell();
+        if (m.dead.has(c)) { if (!m.tag.has(c)) { m.tag.add(c); m.ev('tag', { c }); if (m.tag.size === m.dead.size) m.win(); } }
+        else m.fault('tagged live');
+        return true;
+      }
       return false;
     };
-    m.tick = (dt) => { if (!m.live(dt)) return; const s = sec();
-      if (m.pulse > 0) { m.pulse -= dt; const peak = Math.max(0, LV[s.k] + s.jit[s.reads.length % 6]); m.needle += (peak - m.needle) * Math.min(1, dt * 12); if (m.pulse <= 0) { s.reads.push(peak); m.needle = 0; } }
-      else m.needle *= 0.8; };
-    m.hint = () => { const i = m.secs.findIndex(s => !s.log); if (i < 0 || m.pulse > 0) return []; if (i !== m.at) return [[i < m.at ? 'ArrowLeft' : 'ArrowRight', true]];
-      const s = sec(); if (s.reads.length < 2) return [['Space', true]]; return [['Digit' + { good: 1, weak: 2, dead: 3 }[grade(s)], true]]; };
-    m.bad = () => (m.pulse > 0 ? null : sec().log ? 'ArrowRight' : 'Digit1');
-    m.view = () => ({ secs: m.secs.map(s => s.k) });
-    m.buttons = () => [['ArrowLeft', '◀'], ['ArrowRight', '▶'], ['Space', 'Cycle'], ['Digit1', '1 good'], ['Digit2', '2 weak'], ['Digit3', '3 dead']];
+    m.tick = (dt) => { if (!m.live(dt)) return; const d = (m.held.R ? 1 : 0) - (m.held.L ? 1 : 0); m.pos = clamp(m.pos + d * m.speed * dt, 0, N - 1); };
+    const target = () => [...m.dead].filter(c => !m.tag.has(c)).sort((a, b) => a - b)[0];
+    m.hint = () => {
+      const t = target(); if (t === undefined) return [];
+      const c = cell(); if (c === t) return [['ArrowLeft', false], ['ArrowRight', false], ['Space', true]];
+      return c < t ? [['ArrowRight', true], ['ArrowLeft', false]] : [['ArrowLeft', true], ['ArrowRight', false]];
+    };
+    m.bad = () => {
+      const c = cell(); if (!m.dead.has(c)) return ['Space', true];
+      const l = [...Array(N).keys()].find(x => !m.dead.has(x)); return [l > c ? 'ArrowRight' : 'ArrowLeft', true];
+    };
+    m.view = () => ({ dead: [...m.dead].sort((a, b) => a - b) });
+    m.buttons = () => [['ArrowLeft', '◀ sweep'], ['Space', 'tag'], ['ArrowRight', 'sweep ▶']];
     m.draw = (c, W, H, P) => {
-      txt(c, 'CONSOLE: ALL SECTIONS NOMINAL', 20, 18, { size: 10, col: COL.dim });
-      m.secs.forEach((s, i) => { const x = 20 + i * 72; box(c, x, 26, 64, 60, i === m.at ? 'rgba(244,194,91,.15)' : COL.panel, i === m.at ? COL.gold : null);
-        txt(c, s.name, x + 32, 40, { size: 8, align: 'center', col: COL.pale }); txt(c, `cycles ${s.reads.length}`, x + 32, 56, { size: 9, align: 'center', col: COL.dim });
-        if (s.reads.length >= 2) txt(c, `avg ${Math.round(avg(s) * 100)}`, x + 32, 70, { size: 10, align: 'center' });
-        if (s.log) { lamp(c, x + 32, 80, 5, s.log === 'good' ? P.good : P.bad, s.log === 'good' ? 'circle' : s.log === 'weak' ? 'triangle' : 'square'); } });
-      txt(c, 'METER', 20, 108, { size: 10, col: COL.pale }); bar(c, 70, 100, 300, 10, m.needle, { col: m.pulse > 0 ? COL.peri : COL.dim, mark: 0.6 });
-      txt(c, 'flat', 70, 124, { size: 9, col: COL.dim }); txt(c, 'weak', 160, 124, { size: 9, col: COL.dim }); txt(c, 'good ▸', 250, 124, { size: 9, col: COL.dim });
-      txt(c, m.pulse > 0 ? 'FIELD ON — reading' : 'Space: cycle the field', 20, 146, { size: 11, col: m.pulse > 0 ? COL.gold : COL.ink });
+      const x0 = 40, w = 320, cw = w / N, y = 70, h = 40;
+      for (let k = 0; k < N; k++) {
+        const x = x0 + k * cw, dead = m.dead.has(k), tg = m.tag.has(k);
+        box(c, x + 3, y, cw - 6, h, dead ? 'rgba(240,147,58,.18)' : 'rgba(125,151,232,.14)', dead ? COL.orange : COL.peri, 6);
+        lamp(c, x + cw / 2, y + h / 2, 9, dead ? COL.orange : COL.peri, dead ? 'square' : 'circle');
+        if (tg) txt(c, 'X', x + cw / 2, y - 6, { size: 12, align: 'center', col: COL.warn });
+      }
+      const sx = x0 + m.pos * cw + cw / 2;
+      c.strokeStyle = COL.gold; c.lineWidth = 2; c.beginPath(); c.moveTo(sx, y - 14); c.lineTo(sx, y + h + 14); c.stroke();
+      txt(c, `Tagged ${m.tag.size} / ${m.dead.size} dead`, 200, 150, { size: 12, align: 'center', col: COL.ink });
+      txt(c, 'hold ← → to sweep, Space to tag', 200, 164, { size: 10, align: 'center', col: COL.dim });
     };
     return m;
   },

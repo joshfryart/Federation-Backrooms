@@ -1,41 +1,37 @@
-// Chief of security: inspect the armory and chargers. Every charger lamp on the rack shows amber. A cycling charger's amber is steady and its
-// cell figure creeps up while you watch; a stuck amber looks the same but the figure never moves. Aim at each lamp and hold E to watch it:
-// let go after the watch mark to pass a creeping one, keep watching to the tag mark to tag a stuck one. A glance proves nothing (a fault).
-import { define, machine, room, rf, shuffle, clamp } from './kit.js';
+// Chief of security: inspect the armory and chargers. Each rack has five charger lamps. A red lamp, or an amber one that never climbs to green,
+// is a stuck cell: aim the view along the row and tap E on it to tag it for the armory log. Tagging a lamp that is green wastes the log.
+import { define, machine, room, ri, shuffle } from './kit.js';
 
-const POS = [0.3, 0, -0.3], AIM = 0.12;
+const N = 5, SPAN = 0.42;
+const cellAt = (look) => Math.floor((look + SPAN) / (2 * SPAN) * N), centre = (k) => -SPAN + (k + 0.5) * (2 * SPAN / N);
 export default define({
   job: { billet: 'cos', label: 'Inspect armory and chargers', type: 'loop' },
-  title: 'Steady or stuck amber watch', dept: 'security', host: 'room', siteName: 'Charger bank', verb: 'Watch',
-  how: 'Aim at each amber charger lamp and hold E to watch its cell figure. If it creeps up, let go after the watch mark; if it never moves, keep holding to the tag mark.',
-  keys: ['look: aim at a lamp', 'E hold: watch it'], limit: 40, maxFaults: 3,
-  fingerprint: { verb: 'watch the amber', input: 'look+e-hold', win: 'every amber charger lamp watched long enough to see whether its cell figure creeps, cycling ones passed and stuck ones tagged',
-    fail: 'passing a stuck amber so a half-charged cell is signed into the log, or judging a lamp from a glance',
-    rule: 'Aim at a lamp and hold E. After 1.5 s the watch mark is reached: let go if the cell figure has crept, otherwise keep holding to 3 s to tag it stuck. Letting go before the watch mark is a glance.' },
-  rush: 'Signed the armory log on the lamp colours alone.',
-  captions: { glanced: 'stylus taps', 'half-charged passed': 'log chime', 'tagged good': 'tag tears' },
-  says: { glanced: 'A glance tells you nothing: watch the figure until the watch mark.', 'half-charged passed': 'That amber was stuck — the figure never moved. A half-charged cell went into the log.', 'tagged good': 'That one was creeping up: it was cycling, not stuck.' },
+  title: 'Charger lamp row tag', dept: 'security', host: 'room', item: 'flashlight', siteName: 'Rack', verb: 'Read',
+  how: 'At each rack, aim the view along the row of five charger lamps. Tap E on each red or stuck amber lamp to tag it. Leave the green ones alone.',
+  keys: ['E tap: tag a stuck lamp', 'aim along the lamp row'], limit: 34, maxFaults: 3,
+  fingerprint: { verb: 'read lamp row', input: 'e-tap+look', win: 'every red or stuck amber lamp on each rack tagged and no green lamp tagged',
+    fail: 'tagging a full green lamp, so the armory log names a cell that was fine',
+    rule: 'Five lamps per rack. Aim at one and tap E if it is red or amber and not climbing. Green means full: never tag it.' },
+  rush: 'Glanced along the racks and signed the log with the lamps as they stood.',
+  captions: { 'tagged green': 'stylus taps the log' }, says: { 'tagged green': 'That lamp is green. Only tag the stuck ones.' },
   create(seed, opts) {
-    const m = room(machine(this, seed, opts), [{ name: 'Charger rack, upper bank', prop: 'chargerack' }, { name: 'Charger rack, lower bank', prop: 'weaponrack' }]), r = m.rnd;
-    const stuck = new Set(shuffle(r, [0, 1, 2, 3, 4, 5]).slice(0, 1 + Math.floor(r() * 2))), MARK = 1.5, TAG = 3.0;
-    m.banks = m.sites.map((_, b) => POS.map((pos, k) => ({ pos, stuck: stuck.has(b * 3 + k), cell: Math.round(rf(r, 38, 82)), rate: rf(r, 1.6, 2.6), w: 0, res: 0 })));
-    const aimed = (b, look) => b.find(l => !l.res && Math.abs(look - l.pos) < AIM);
-    let prev = false, cur = null;
+    const m = room(machine(this, seed, opts), [{ name: 'Charger rack', prop: 'chargerack' }, { name: 'Weapon rack', prop: 'weaponrack' }]), r = m.rnd;
+    m.racks = m.sites.map(() => ({ bad: new Set(shuffle(r, [0, 1, 2, 3, 4]).slice(0, ri(r, 1, 2))), tagged: new Set() }));
+    const good = (i) => [0, 1, 2, 3, 4].find(c => !m.racks[i].bad.has(c));
     m.step = (dt, inp = {}) => {
-      if (!m.live(dt, inp.away)) return; const s = m.cur(inp); if (!s) { prev = !!inp.hold; return; } const i = m.next, bank = m.banks[i];
-      const hold = !!inp.hold, l = aimed(bank, inp.look || 0);
-      if (hold) { if (!cur) cur = l || null; if (cur && cur === l) { cur.w += dt; if (cur.w >= TAG) { cur.res = 2; if (!cur.stuck) m.fault('tagged good'); m.ev('tag', { site: i }); cur = null; } } }
-      else if (prev && cur) { if (cur.w < MARK) { m.fault('glanced'); cur.w = 0; } else { cur.res = 1; if (cur.stuck) m.fault('half-charged passed'); } cur = null; }
-      prev = hold; s.prog = bank.filter(x => x.res).length / 3 * 0.95; if (bank.every(x => x.res)) m.finish(i);
+      if (!m.live(dt, inp.away)) return; const s = m.cur(inp); if (!s || !inp.press) return;
+      const i = m.next, rk = m.racks[i], c = cellAt(inp.look || 0);
+      if (c < 0 || c >= N || rk.tagged.has(c)) return;
+      if (rk.bad.has(c)) { rk.tagged.add(c); m.ev('tag', { site: i, cell: c }); if (rk.tagged.size === rk.bad.size) m.finish(i); }
+      else m.fault('tagged green');
+      s.prog = rk.tagged.size / rk.bad.size * 0.9;
     };
-    m.read = (l) => l.cell + (l.stuck ? 0 : l.rate * l.w);
-    m.hint = () => { const i = m.next; if (i < 0) return { at: -1 }; const l = m.banks[i].find(x => !x.res); if (!l) return { at: i }; return { at: i, look: l.pos, hold: l.stuck ? true : l.w < MARK + 0.1 }; };
-    m.bad = (f = 0) => { const i = m.next, l = i >= 0 && m.banks[i].find(x => !x.res); return { at: i, look: l ? l.pos : 0, hold: f % 8 < 4 }; };
-    m.view = () => ({ banks: m.banks.map(b => b.map(l => [l.stuck, l.cell])) });
-    m.panel = (i) => { const b = m.banks[i]; if (!b) return null; const l = cur || b.find(x => !x.res); if (!l) return { label: 'Bank', value: 'done', bar: 1 };
-      return { label: l.w >= MARK ? 'Watched' : 'Amber lamp', value: `cell ${m.read(l).toFixed(1)} %  (Δ ${(m.read(l) - l.cell).toFixed(1)})`, bar: clamp(l.w / TAG), band: [MARK / TAG, MARK / TAG + 0.08] }; };
-    m.prompt = (i) => { const b = m.banks[i]; if (!b) return ''; const l = cur; if (l && l.w >= MARK) return m.read(l) > l.cell ? 'It crept up — let go of [E] to pass it' : 'No change — keep holding [E] to tag it stuck';
-      return 'Aim at an amber lamp and hold [E] to watch its cell figure'; };
+    m.hint = () => { const i = m.next; if (i < 0) return { at: -1 }; const rk = m.racks[i], k = [...rk.bad].find(c => !rk.tagged.has(c));
+      return { at: i, look: centre(k), press: true }; };
+    m.bad = () => { const i = m.next; if (i < 0) return { at: -1 }; return { at: i, look: centre(good(i)), press: true }; };
+    m.view = () => ({ racks: m.racks.map(rk => [...rk.bad].sort((a, b) => a - b)) });
+    m.panel = (i) => { const rk = m.racks[i]; return rk ? { label: 'Lamps tagged', value: `${rk.tagged.size} / ${rk.bad.size}`, bar: rk.tagged.size / rk.bad.size } : null; };
+    m.prompt = (i) => (m.racks[i] ? 'Aim along the row and tap [E] on each red or stuck lamp' : '');
     return m;
   },
 });
