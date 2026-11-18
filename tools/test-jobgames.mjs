@@ -20,13 +20,15 @@ export function autoPlay(g, how = 'win', dt = 1 / 30, maxT = 60) {
 export const DEPT_ROOMS = { medical: ['sickbay'], engineering: ['engineering', 'plant', 'workshop'], science: ['lab'], security: ['brig', 'armory'], galley: ['mess', 'arboretum'], cargo: ['cargo', 'stores'], bridge: ['bridge', 'readyroom'] };
 export const MAX_SHARE = 0.25;
 // one label per themed kind (OVERRIDES: the same game whatever the room): the browser block plays each through startJob
-export const KIND_LABELS = { vitals: 'Crew health screening', hypo: 'Dispense meds and update patient list', tray: 'Sterilise instruments and surgical bay', meds: 'Pharmacy and controlled meds count', counsel: 'Scheduled counselling sessions',
-  power: 'Balance grid load against reactor output', bench: 'Coil wear check and swap', tune: 'Scan subspace bands for signals', classify: 'Lifeform scanner spot check', badge: 'Issue and returns desk', doorlog: 'Routine core sweep and log review',
+export const KIND_LABELS = { vitals: 'Meet returning shuttle with medical team', hypo: 'Dispense meds and update patient list', tray: 'Sterilise instruments and surgical bay', meds: 'Pharmacy and controlled meds count', counsel: 'Scheduled counselling sessions',
+  power: 'Balance grid load against reactor output', bench: 'Coil wear check and swap', tune: 'Scan subspace bands for signals', classify: 'Mark hazards along the route', badge: 'Issue and returns desk', doorlog: 'Lock cargo bay after loading',
   cook: 'Captain\'s refreshment and comfort', nutrient: 'Hydroponics O2 balance', fresh: 'Rotate expiring stock to the galley', manifest: 'Count and verify cargo against manifest', loadbal: 'Move cargo sleds',
-  course: 'Plot orbit and transporter-range hold', decode: 'Monitor hails and ship traffic',
+  course: 'Clear the approach with nav', decode: 'Monitor hails and ship traffic',
   // second pass (job audit): helm, transporter targeting, paperwork
-  station: 'Hold station for deep scan', burn: 'Smooth deceleration, minimal jolt', fix: 'Position fix against star references', coords: 'Beam patients direct to sickbay', form: 'Engineering status to the XO', roster: 'Rebalance rosters',
-  queue: 'Review work orders and assign crew', verify: 'Back up chart database', pa: 'Announce quiet watch and set green alert', schedule: 'Update flight schedule and sign-offs', trend: 'Watch core temps at high output', sign: 'Sign the log and review reports' };
+  station: 'Hold station for deep scan', burn: 'Smooth deceleration, minimal jolt', fix: 'Position fix against star references', coords: 'Beam patients direct to sickbay', form: 'Write up fix accuracy results', roster: 'Rebalance rosters',
+  queue: 'Review work orders and assign crew', verify: 'Back up chart database', pa: 'Announce quiet watch and set green alert', schedule: 'Update flight schedule and sign-offs', trend: 'O2 reclamation check', sign: 'Sign the log and review reports',
+  // third pass: spoken brief, decision, flying, guard post, instrument run, triage, standby
+  brief: 'Report arrival', decide: 'Decide whether to extend the survey', fly: 'Hard turn and stop test', post: 'Hold post at brig door', assay: 'Analyse sensor-collected samples', triage: 'Triage incoming patients', standby: 'Stand by for emergency beam-out' };
 // billet -> department (js/crew.js BILLETS): the variety checks are per department, as the job audit (docs/job-audit.md) is
 export const BILLET_DEPT = { co: 'command', xo: 'command', so: 'command', yeoman: 'command', cfo: 'flight', helm: 'flight', nav: 'flight', pilot: 'flight', deck: 'flight', ops: 'operations', comms: 'operations', tchief: 'operations', ttech: 'operations', comp: 'operations',
   ce: 'engineering', ace: 'engineering', reactor: 'engineering', env: 'engineering', eps: 'engineering', dc: 'engineering', cos: 'security', dep: 'security', armory: 'security', sec: 'security', guard: 'security',
@@ -67,7 +69,7 @@ export async function jobgameTests(fail) {
       }
       const f = J.createGame(kind, seed, { theme }); const r2 = autoPlay(f, 'strike'); ck(r2.state === 'fail', `${kind} seed ${seed} fails on bad play: ${JSON.stringify(r2)}`);
       if (r2.state === 'fail') out.fails++; ck(J.outcome(f).quality === 'rushed' && J.outcome(f).timeMul === 1, `${kind} fail -> rushed (the job still gets done)`);
-      const idle = J.createGame(kind, seed, { theme }); autoPlay(idle, 'idle', 0.25, 200); ck(idle.state === 'fail' && (idle.why === 'time' || kind === 'cook') && idle.t <= idle.limit + 0.3, `${kind} always ends by itself (timer): ${idle.state} ${idle.why} ${idle.t}`);
+      const idle = J.createGame(kind, seed, { theme }); autoPlay(idle, 'idle', 0.25, 200); ck(idle.state === 'fail' && (idle.why === 'time' || ['cook', 'post', 'standby'].includes(kind)) && idle.t <= idle.limit + 0.3, `${kind} always ends by itself (timer): ${idle.state} ${idle.why} ${idle.t}`);
       ck(idle.limit >= 14 && idle.limit <= 24, `${kind} limit within the 10-20 s design (+ reading time): ${idle.limit}`);
     }
     // a wrong key strikes (when one exists); keys outside the game are ignored
@@ -99,6 +101,19 @@ export async function jobgameTests(fail) {
     { const g = J.createGame('form', s, { theme: th, label: 'Report to the captain' }); ck(g.fields.every(f => f.opts.includes(f.want) && new Set(f.opts).size === f.opts.length) && g.fields[2].want === 'Captain', `form seed ${s}: every field offers its answer once; the addressee comes from the label`); }
     { const g = J.createGame('fix', s), r = g.cur, P = r.cands[r.answer]; ck(r.stars.every(st => Math.abs(Math.sin(Math.atan2(st.y - P[1], st.x - P[0]) - st.a)) < 1e-6), `fix seed ${s}: every bearing line passes through the answer`); }
   }
+  // third-pass kinds: the content has exactly the answer the rule says
+  for (let s = 1; s < 40; s++) {
+    const th = ['eng', 'med', 'flight', 'sec', 'sci', 'ops', 'stores', 'cmd'][s % 8];
+    { const g = J.createGame('brief', s, { theme: th, label: 'Report to the captain' }), it = g.items, o = g.order, rank = (x) => (x.v < x.lo || x.v > x.hi) ? 0 : x.prev != null ? 1 : 2;
+      ck(g.recips.filter(r => r === 'Captain').length === 1 && o.every((k, j) => !j || rank(it[o[j - 1]]) < rank(it[k]) || (rank(it[o[j - 1]]) === rank(it[k]) && o[j - 1] < k)) && it.filter(x => rank(x) === 0).length === 1 && it.filter(x => rank(x) === 1).length === 1, `brief seed ${s}: one recipient named in the label, order = out, changed, steady top to bottom`);
+      const diff = g.rb.map((r, j) => r.v !== (it[o[j]].step < 1 ? it[o[j]].v.toFixed(1) : String(Math.round(it[o[j]].v))) ? j : -1).filter(j => j >= 0); ck(diff.length === 1 && diff[0] === g.wrong, `brief seed ${s}: exactly one read-back figure is wrong`); }
+    { const g = J.createGame('decide', s, { theme: ['cmd', 'survey', 'ready', 'approach', 'holo'][s % 5] }); for (let k = 0; k < 3 && g.state === 'play'; k++) { const r = g.cur, fits = (v, A, L) => A[2] === 'max' ? v <= L : v >= L, ok = r.opts.map((x, i) => fits(x.a, r.A, r.lim[0]) && fits(x.b, r.B, r.lim[1]) ? i : -1).filter(i => i >= 0), best = ok.sort((a, b) => r.opts[b].v - r.opts[a].v);
+      ck(best[0] === r.answer && (best.length < 2 || r.opts[best[1]].v < r.opts[best[0]].v), `decide seed ${s}: the answer is the single best option inside both limits`); g.key('Digit' + (r.answer + 1)); } }
+    { const g = J.createGame('post', s, { theme: J.THEMES.post.list[s % 8] }), R = g.rule; for (const p of g.queue) { const badge = R.depts.includes(p.dept) && p.clear >= R.min && p.exp >= R.today, want = p.tail || !badge ? 1 : p.orders && !(p.orders.signed && p.orders.date === R.today) ? 2 : 0; ck(p.answer === want, `post seed ${s}: admit / refuse / hold follows the rule (${JSON.stringify(p)})`); } }
+    { const g = J.createGame('triage', s); ck(g.pts.every(p => g.truth(p) === (p.walks ? 3 : (p.rr > 30 || !p.pulse || p.cap > 2 || !p.obeys) ? 1 : 2)) && new Set(g.pts.map(p => g.truth(p))).size === 3, `triage seed ${s}: every tag follows the START rule, all three colours present`); }
+    { const g = J.createGame('assay', s, { theme: J.THEMES.assay.list[s % 10] }), curve = (r) => Array.from({ length: 60 }, (_, k) => r.peaks.reduce((m, p) => m + p.h * Math.exp(-((k / 59 - p.x) ** 2) / (2 * p.w * p.w)), 0)), err = g.refs.map(r => curve(r).reduce((m, v, k) => m + Math.abs(v - g.trace[k]), 0));
+      ck(err.indexOf(Math.min(...err)) === g.answer && g.proto !== g.v, `assay seed ${s}: the trace is closest to the answer reference; the setting starts off protocol`); }
+  }
   // variety: a theme per job (labels with different words get different content), and per department no mechanic dominates
   ck(J.themeFor('badge', 'Guard the science lab entrance during sensor sweeps') === 'Science lab' && J.themeFor('badge', 'Badge check at shuttlebay') === 'Shuttlebay', 'badge: the door comes from the job');
   ck(J.themeFor('form', 'Health summary to captain', 'bridge') === 'med' && J.themeFor('form', 'Engineering status to the XO', 'engineering') === 'eng', 'report form: the department comes from the job');
@@ -121,7 +136,7 @@ export async function jobgameTests(fail) {
   ck(W.jobFor({ label: 'Balance grid load against reactor output', room: 'engineering', spot: 'console' })?.type === 'game' && W.jobFor({ label: 'Plot orbit and transporter-range hold', room: 'bridge', spot: 'console' })?.type === 'game', 'console work stays a console game');
   const rect = { x: 2, y: 2, w: 6, h: 5 }, free = (x, y) => x >= 2 && x < 8 && y >= 2 && y < 7;
   for (const def of Object.values(W.SITE_DEFS)) {
-    ck(['scrub', 'scan', 'timing', 'count', 'turn', 'carry'].includes(def.act) && def.how && def.name && def.props.length && def.n[0] >= 2 && (def.act !== 'carry' || (def.hub?.length && ['in', 'out'].includes(def.carry))), `${def.id}: an interactive act, how-to, props, at least 2 sites`);
+    ck(['scrub', 'scan', 'timing', 'count', 'turn', 'carry', 'read'].includes(def.act) && def.how && def.name && def.props.length && def.n[0] >= 2 && (def.act !== 'carry' || (def.hub?.length && ['in', 'out'].includes(def.carry))), `${def.id}: an interactive act, how-to, props, at least 2 sites`);
     // sites: from props when the room has them, from the floor when it has none, plus a fetch point when the item is not carried
     const props = def.props.slice(0, 3).map((k, i) => ({ kind: k, tx: 3 + i * 2, ty: 3 }));
     const s1 = W.resolveSites(def, { rect, props, free }, 7), s0 = W.resolveSites(def, { rect, props: [], free }, 7), sf = W.resolveSites(def, { rect, props: [{ kind: 'shelving', tx: 7, ty: 6 }], free }, 7, { fetch: true });
@@ -137,7 +152,7 @@ export async function jobgameTests(fail) {
       if (def.item.length) { const e2 = r.step(0.1, { at: 0, press: true, hold: true, hasItem: false, look: r.sites[0].bearing, wipe: 2 }); ck(e2?.type === 'needItem' && r.sites[0].prog === 0 && r.faults === 0, `${def.id}: no item in hand -> needItem, no progress`); } }
     // bad play: timing / count fault; scrub / scan without the skill crawl; idle times out -> rushed (still done)
     { const r = W.createSiteRun(def, 5, W.resolveSites(def, { rect, props, free }, 5)); for (let f = 0; f < 30 * 10 && r.state === 'work'; f++) r.step(1 / 30, r.bad(r.next, f));
-      if (def.act === 'timing' || def.act === 'count' || def.act === 'turn') ck(r.faults >= 1, `${def.id}: bad play is a fault (${r.faults})`); else ck(r.sites[r.next]?.prog < 0.7 && r.sites.filter(s => s.done).length === 0, `${def.id}: no skill, slow progress (${r.sites[r.next]?.prog})`); }
+      if (['timing', 'count', 'turn', 'read'].includes(def.act) || def.drop === 'count') ck(r.faults >= 1, `${def.id}: bad play is a fault (${r.faults})`); else ck(r.sites[r.next]?.prog < 0.7 && r.sites.filter(s => s.done).length === 0, `${def.id}: no skill, slow progress (${r.sites[r.next]?.prog})`); }
     { const r = W.createSiteRun(def, 6, W.resolveSites(def, { rect, props, free }, 6)); for (let f = 0; f < 30 * 600 && r.state === 'work'; f++) r.step(1 / 30, { at: -1 }); ck(r.state === 'fail' && r.why === 'time' && r.outcome().quality === 'rushed', `${def.id}: idle ends by itself, rushed`); }
     { const r = W.createSiteRun(def, 6, W.resolveSites(def, { rect, props, free }, 6)); r.step(10, { at: -1, away: true }); ck(r.t === 0, `${def.id}: the clock stops outside the room`); r.cancel(); ck(r.outcome() === null, `${def.id}: cancel has no outcome`); }
     ck(W.siteRushNote(def, 2).length > 5, `${def.id}: has a rushed line`);
@@ -330,7 +345,7 @@ export async function jobsiteBrowser(page, fail) {
     // 5) the second-pass acts through the real UI tick: a valve walk (turn: crank with the view, spanner issued at the supply point) and a delivery
     //    (carry: lift at the trolley, set down at each drop). Hinted input via inputOverride; markers, checklist and the result as for the clean.
     out.more = {};
-    for (const [label, id] of [['Coolant loop check', 'valves'], ['Carry trays to sickbay', 'deliver'], ['Lock cargo bay after loading', 'lockup']]) {
+    for (const [label, id] of [['Coolant loop check', 'valves'], ['Carry trays to sickbay', 'deliver'], ['Lock cargo bay after loading', 'lockup'], ['Coolant and damper walk', 'gauges'], ['Requisition round', 'stockup'], ['Screen away-team members on return', 'screening']]) {
       if (D.busy) D.busy = null; G.phase = 'play'; Object.assign(l, { label, room: type, spot: 'console', sys: '', state: 'due', dueAt: D.t }); G.kit.belt = G.kit.belt.filter(b => !['spanner', 'hydrospanner'].includes(b.id)); G.kit.hand = -1;
       goTo(inRoom(room)); step(1); const rs = g.startJob(l), run = S.run, o = out.more[id] = { ok: rs.ok, def: run?.def.id, n: run?.sites.length, acts: [...new Set(run?.sites.map(x => x.act) || [])].join(','), marks: g.scene.children.filter(m => m.userData.worksite != null).length, hints: new Set() };
       for (let f = 0; f < 30 * 400 && S.run; f++) { const i = run.next; S.inputOverride = run.hint(i, f); step(1); if (f % 15 === 0) o.hints.add(S.hint().replace(/ · .*$/, '')); }
@@ -352,6 +367,9 @@ export async function jobsiteBrowser(page, fail) {
   chk(!R.done.active && !R.done.run && R.done.busy && R.done.q === 'proper' && R.done.marks === 0 && !R.done.panel, 'every site scrubbed: the job is done properly; markers and checklist gone');
   for (const [id, o] of Object.entries(R.more)) chk(o.ok && o.def === id && o.marks === o.n && o.done.q === 'proper' && !o.done.active && o.done.marks === 0 && o.done.faults === 0, `${id}: the site job starts in the room, plays through the UI to a proper result, markers gone`);
   chk(R.more.valves.acts.includes('turn') && (R.more.valves.done.hand === R.more.valves.done.item), 'valve walk: the turn act, the spanner it issued is in hand');
+  chk(R.more.gauges.acts === 'read' && /Tap \[E\]: in limits/.test(R.more.gauges.hints) && /Reading/.test(R.more.gauges.hints), 'gauge walk: the read act, settle then tap / hold to call it');
+  chk(R.more.stockup.acts === 'carry' && /count it in/.test(R.more.stockup.hints), 'carry and count: lift at the stock point, count it onto each shelf');
+  chk(R.more.screening.acts.includes('scan') && R.more.screening.done.hand === 'tricorder_med', 'crew screening: the medical tricorder is issued and swept over each crew member');
   chk(R.more.deliver.acts === 'carry' && /lift a load/.test(R.more.deliver.hints) && /set it down/.test(R.more.deliver.hints), 'delivery: the carry act, lift / set-down hints');
   chk(R.belt.ok && !R.belt.fetch && R.belt.hand === 'cargo_hook' && !R.belt.cancel.active && R.belt.cancel.state === 'due' && R.belt.cancel.marks === 0, 'item on the belt: first E takes it out; a phase change cancels, the job stays due');
 }
