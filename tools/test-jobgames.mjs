@@ -173,13 +173,27 @@ export async function jobgameTests(fail) {
   // per department (billet -> dept): no mechanic over DEPT_MAX_SHARE, plenty of different kinds, hands-on work in every department; per billet no
   // single kind + theme (the same game with the same content set) over BILLET_MAX_VARIANT
   { const dep = {}, bil = {};
-    for (const [bk, b] of Object.entries(duties.billets)) for (const it of [...(b.loops || []).map(l => ({ ...l })), ...Object.values(b.tasks || {}).flat().map(t => ({ ...t, label: t.task }))]) {
-      const j = W.jobFor(it), d = BILLET_DEPT[bk] || '?', key = j.type === 'sites' ? j.kind : j.kind + ':' + (j.tool.theme || ''); (dep[d] ||= {})[j.kind] = (dep[d][j.kind] || 0) + 1; (bil[bk] ||= {})[key] = (bil[bk][key] || 0) + 1; }
+    for (const [bk, b] of Object.entries(duties.billets)) for (const it of [...(b.loops || []).map(l => ({ ...l, billet: bk, jtype: 'loop' })), ...Object.entries(b.tasks || {}).flatMap(([ms, ts]) => ts.map(t => ({ ...t, label: t.task, billet: bk, jtype: 'task:' + ms })))]) {
+      const j = W.jobFor(it), d = BILLET_DEPT[bk] || '?', key = j.type !== 'game' ? j.kind : j.kind + ':' + (j.tool.theme || ''); (dep[d] ||= {})[j.kind] = (dep[d][j.kind] || 0) + 1; (bil[bk] ||= {})[key] = (bil[bk][key] || 0) + 1; }
     out.depts = {};
     for (const [d, k] of Object.entries(dep)) { const n = Object.values(k).reduce((a, b) => a + b, 0), top = Object.entries(k).sort((a, b) => b[1] - a[1])[0], sites = Object.entries(k).filter(([x]) => x.startsWith('site:')).reduce((a, [, v]) => a + v, 0); out.depts[d] = { jobs: n, kinds: Object.keys(k).length, top: top[0], share: +(top[1] / n).toFixed(2), sites };
       ck(d !== '?' && top[1] / n <= DEPT_MAX_SHARE && Object.keys(k).length >= 12 && sites >= 8, `${d}: no mechanic over ${DEPT_MAX_SHARE * 100} % (${top.join(' ')} of ${n}), ${Object.keys(k).length} kinds, ${sites} hands-on`); }
     for (const [bk, k] of Object.entries(bil)) { const n = Object.values(k).reduce((a, b) => a + b, 0), top = Object.entries(k).sort((a, b) => b[1] - a[1])[0]; ck(top[1] / n <= BILLET_MAX_VARIANT, `billet ${bk}: no single game + content set over ${BILLET_MAX_VARIANT * 100} % (${top.join(' ')} of ${n})`); }
     console.log('per department: ' + Object.entries(out.depts).map(([d, o]) => `${d} ${o.jobs} jobs, ${o.kinds} kinds, ${o.sites} hands-on, top ${o.top} ${Math.round(o.share * 100)} %`).join(' · ')); }
+  // ---- job modules (js/jobs/, docs/procedures.md): every module is in the registry, jobFor picks it by billet + label + type, a room module plays
+  //      to a proper result through the in-room host (js/jobs/host.js: sites from props / floor, a fetch point when its item is missing)
+  { const X = await imp('js/jobs/index.js'), H = await imp('js/jobs/host.js'); out.modules = X.MODULES.length;
+    ck(X.MODULES.length >= 30 && new Set(X.MODULES.map(m => m.id)).size === X.MODULES.length, 'job modules registered: ' + X.MODULES.length);
+    for (const m of X.MODULES) { const j = W.jobFor({ billet: m.job.billet, jtype: m.job.type, label: m.job.label, room: 'bridge', spot: 'console' }); ck(j?.type === 'job' && j.mod === m, `${m.job.label}: jobFor picks its module`); }
+    ck(W.jobFor({ billet: 'nobody', jtype: 'loop', label: 'Ward rounds', room: 'sickbay', spot: 'biobed' })?.type === 'sites', 'no module: the old mapping');
+    for (const m of X.MODULES.filter(m => m.host === 'room')) for (const seed of [1, 2, 3]) {
+      const g = m.create(seed, {}), sites = H.resolveJobSites(g, { rect, props: [{ kind: g.sites[0].prop, tx: 3, ty: 3 }, { kind: 'shelving', tx: 7, ty: 6 }], free }, seed, { fetch: !!m.item && seed === 2 }), r = H.jobRun(m, g, sites);
+      ck(sites.length === g.sites.length + (m.item && seed === 2 ? 1 : 0) && sites.every(s => free(s.tx, s.ty) || s.prop), `${m.id}: sites resolve in the room`);
+      for (let f = 0; f < 30 * 120 && r.state === 'work'; f++) { const e = r.step(1 / 30, r.hint(r.next, f)); if (e?.type === 'fetch') r.fetched(); }
+      ck(r.state === 'win' && r.outcome().quality === 'proper' && r.faults === 0, `${m.title} seed ${seed}: hinted play through the host wins proper (${r.state} ${r.faults})`);
+      const b = H.jobRun(m, m.create(seed, {}), H.resolveJobSites(m.create(seed, {}), { rect, props: [], free }, seed)); for (let f = 0; f < 30 * 120 && b.state === 'work'; f++) b.step(1 / 30, b.bad(b.next, f)); ck(b.state === 'fail' && b.outcome().quality === 'rushed', `${m.title}: bad play -> rushed`);
+    }
+  }
   { const def = W.SITE_DEFS.lash, r = W.createSiteRun(def, 2, W.resolveSites(def, { rect, props: [], free }, 2)); const s = r.sites[0]; for (let f = 0; f < 80; f++) r.step(1 / 30, { at: 0, hold: true, hasItem: true }); ck(r.faults === 1 && s.prog === 0, 'timing: holding past the top is a fault'); }
   { const def = W.SITE_DEFS.tally, r = W.createSiteRun(def, 2, W.resolveSites(def, { rect, props: [], free }, 2)); const s = r.sites[0]; for (let k = 0; k <= s.n; k++) r.step(1 / 30, { at: 0, press: true, hasItem: true }); for (let f = 0; f < 40; f++) r.step(1 / 30, { at: 0, hasItem: true }); ck(r.faults === 1 && !s.done && s.c === 0, 'count: one too many is a miscount; start again'); }
   return out;
@@ -372,4 +386,52 @@ export async function jobsiteBrowser(page, fail) {
   chk(R.more.screening.acts.includes('scan') && R.more.screening.done.hand === 'tricorder_med', 'crew screening: the medical tricorder is issued and swept over each crew member');
   chk(R.more.deliver.acts === 'carry' && /lift a load/.test(R.more.deliver.hints) && /set it down/.test(R.more.deliver.hints), 'delivery: the carry act, lift / set-down hints');
   chk(R.belt.ok && !R.belt.fetch && R.belt.hand === 'cargo_hook' && !R.belt.cancel.active && R.belt.cancel.state === 'due' && R.belt.cancel.marks === 0, 'item on the belt: first E takes it out; a phase change cancels, the job stays due');
+}
+
+// ---- browser: three jobs with their own mechanic module (js/jobs/) through the real UI. Two console modules (card once, the module's own canvas
+//      game and buttons, win -> proper, bad play -> rushed, Esc -> still due) and one in-room module (markers, checklist, mop drawn at the supply
+//      point, played through WorkSites.tick to a proper result)
+export async function jobmoduleBrowser(page, fail) {
+  const { installHelpers } = await import('./test-helpers.mjs'); await installHelpers(page);
+  await page.evaluate(() => { document.exitPointerLock?.(); window.__jmLock = __game.G.menus.lock; __game.G.menus.lock = () => null; });
+  const R = await page.evaluate(() => {
+    const g = __game, G = g.G, CFG = g.CFG, J = g.jobgame, P = g.P, out = {}, hide = () => document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+    g.newRun(); hide(); g.setQuality('low'); G.phase = 'play'; G.hp = G.maxHp = 1e6; CFG.learned = {}; CFG.calm = false; CFG.caps = true; CFG.cb = false; const restore = __T.quiet();
+    const D = g.duty, w = g.world, d = w.d, deck = G.shipDeck + 1, l = D.loops[0]; let t = 0; const step = (n = 1) => { for (let i = 0; i < n; i++) { t += 1 / 30; g.step(1 / 30, t); } };
+    const set = (billet, jtype, label, room = l.room) => { if (D.busy) D.busy = null; Object.assign(l, { billet, jtype, label, room, spot: 'console', sys: '', state: 'due', dueAt: D.t }); D.setPlace(deck, room); };
+    const play = (how) => { const gm = J.game; for (let i = 0; i < 3000 && gm.state === 'play'; i++) { if (how === 'win') { for (const [c, dn] of gm.hint()) J.key(c, dn); } else { const b = gm.bad(); if (Array.isArray(b)) J.key(b[0], b[1]); else if (b) J.key(b, true); } J.tick(1 / 30); } J.tick(1); return gm.result(); };
+    for (const [key, billet, jtype, label] of [['status', 'co', 'loop', 'Department status review'], ['core', 'reactor', 'task:medical_relief', 'Watch core temps at high output']]) {
+      const o = out[key] = {}; set(billet, jtype, label); const j = g.jobFor(l); o.type = j?.type; o.host = j?.host;
+      const r = g.startJob(l); o.start = r.ok && !!r.job; o.card = J.phase === 'intro' && /New tool/.test(document.getElementById('jobgame')?.textContent || '') && (document.getElementById('jobgame')?.textContent || '').includes(j.mod.fingerprint.rule.slice(0, 30));
+      J.key('Enter'); o.own = J.game?.id === j.mod.id; o.canvas = !!document.querySelector('#jobgame canvas'); o.btns = document.querySelectorAll('#jobgame [data-k]').length;
+      const w1 = play('win'); o.win = w1.state; o.q = D.busy?.q; o.closed = !J.active && !G.ui.has('jobgame');
+      set(billet, jtype, label); g.startJob(l); o.again = J.phase; const f = play('bad'); o.fail = f.state; o.fq = D.busy?.q; o.caption = [...document.querySelectorAll('#caps div')].map(x => x.textContent).join('|');
+      set(billet, jtype, label); g.startJob(l); J.cancel(); o.cancel = { state: l.state, busy: !!D.busy, layer: G.ui.has('jobgame') };
+      if (D.busy) D.busy = null;
+    }
+    // in-room module: the cook's one-way scrub, mop off the belt -> a supply point first
+    const inRoom = (r) => { for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const [cx, cz] = w.center(x, y); if (__T.open(cx, cz, 0.3)) return [cx, cz]; } return null; };
+    const room = d.rooms.find(r => r.w >= 3 && r.h >= 3 && inRoom(r)), S = g.sites; const [px, pz] = inRoom(room); P.x = px; P.z = pz; P.vx = P.vz = 0;
+    set('cook', 'loop', 'Scrub and sanitise the galley', room.type); G.kit.belt = G.kit.belt.filter(b => b.id !== 'mop'); G.kit.hand = -1; step(1);
+    const rs = g.startJob(l), run = S.run, o = out.room = { ok: rs.ok, job: rs.job, mech: !!run?.mech, n: run?.sites.length, fetch: run?.sites[0]?.act === 'fetch', marks: g.scene.children.filter(m => m.userData.worksite != null).length, panel: document.getElementById('wsite')?.classList.contains('on'), pill: document.querySelector('#wsite .k-pill')?.textContent, hints: new Set() };
+    for (let f = 0; f < 30 * 200 && S.run; f++) { const h = run.hint(run.next, f); S.inputOverride = { ...h, hasItem: undefined }; step(1); if (f % 20 === 0) o.hints.add(S.hint().replace(/ · .*$/, '')); }
+    S.inputOverride = null; step(2); o.hints = [...o.hints].join('|');
+    o.done = { active: S.active, busy: D.busy?.loop === l, q: D.busy?.q, faults: run?.faults, marks: g.scene.children.filter(m => m.userData.worksite != null).length, hand: G.kit.inst?.id };
+    // rushing a module job opens nothing: one line, the module's own corner cut
+    if (D.busy) D.busy = null; set('co', 'loop', 'Department status review'); const rr = D.perform(l.id, 'rushed'); out.rushed = { ok: rr.ok, active: !!J.active || S.active };
+    restore(); if (D.busy) D.busy = null; CFG.caps = false; return out;
+  });
+  await page.evaluate(() => { __game.G.menus.lock = window.__jmLock; });
+  console.log('jobmodules:', JSON.stringify(R));
+  const chk = (c, m) => { if (!c) fail('jobmodules browser: ' + m + ' ' + JSON.stringify(R)); };
+  for (const k of ['status', 'core']) { const o = R[k];
+    chk(o.type === 'job' && o.host === 'console' && o.start && o.card, `${k}: the module job opens its own instruction card (title + rule)`);
+    chk(o.own && o.canvas && o.btns >= 2, `${k}: Enter begins the module's own game, canvas + buttons`);
+    chk(o.win === 'win' && o.q === 'proper' && o.closed, `${k}: hinted play wins -> proper, layer closed`);
+    chk(o.again === 'play' && o.fail === 'fail' && o.fq === 'rushed', `${k}: second time no card; bad play fails -> rushed`);
+    chk(o.cancel.state === 'due' && !o.cancel.busy && !o.cancel.layer, `${k}: cancel -> still due, nothing performed`); }
+  chk(R.core.caption.length > 0, 'captions: a module strike leaves a caption line');
+  const o = R.room; chk(o.ok && o.mech && o.fetch && o.marks === o.n && o.panel && o.pill === 'Job', 'room module: markers, checklist, supply point first (no mop on the belt)');
+  chk(/toward the drain/.test(o.hints) && !o.done.active && o.done.busy && o.done.q === 'proper' && o.done.faults === 0 && o.done.marks === 0 && o.done.hand === 'mop', 'room module: the mop is issued, the one-way scrub plays through WorkSites to a proper result, markers gone');
+  chk(R.rushed.ok && !R.rushed.active, 'rushing a module job opens nothing');
 }
