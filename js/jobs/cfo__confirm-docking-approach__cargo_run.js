@@ -1,5 +1,5 @@
 // CFO: confirm docking approach. The ship coasts in toward the dock; the approach profile lowers the allowed closing speed as the range falls.
-// Each Space calls one short braking pulse from the helm (a fixed bite off the closing speed). Keep the speed inside the profile band at every
+// Each Space calls one short braking pulse from the helm (it takes a fixed share off the closing speed). Keep the speed inside the profile band at every
 // range gate: too fast is a hot approach, too slow stalls short of the dock. Reach the stop mark under docking speed.
 import { define, machine, SPACE, rf, clamp, txt, box, bar, COL } from './kit.js';
 
@@ -14,18 +14,18 @@ export default define({
   rush: 'Called a long burn at the last minute and let the dock bumpers take it.',
   captions: { 'hot approach': 'proximity alarm', 'stalled short': 'helm reports no way on', 'hard dock': 'docking clamps bang' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd, band = m.calm ? 7 : 6, bite = rf(r, 2.6, 3.4), slope = rf(r, 0.045, 0.055), floor = rf(r, 3.5, 4.5);
+    const m = machine(this, seed, opts), r = m.rnd, band = m.calm ? 0.42 : 0.35, bite = rf(r, 0.15, 0.21), slope = rf(r, 0.045, 0.055), floor = rf(r, 3.5, 4.5);
     m.c = { R: 500, v: 0, cd: 0, gates: [400, 300, 200, 100], bite, slope, floor, n: 0 }; m.c.v = floor + 500 * slope + rf(r, 0, 2);
-    m.vmax = (R) => m.c.floor + Math.max(0, R) * m.c.slope; m.vmin = (R) => Math.max(0.8, m.vmax(R) - band);
+    m.vmax = (R) => m.c.floor + Math.max(0, R) * m.c.slope; m.vmin = (R) => m.vmax(R) * (1 - band);
     m.rounds = 5; m.round = 1;
-    m.key = (code, down = true) => { if (m.state !== 'play' || !down || !SPACE(code)) return false; const c = m.c; if (c.cd > 0) return true; c.v = Math.max(0, c.v - c.bite); c.cd = 0.3; c.n++; return true; };
+    m.key = (code, down = true) => { if (m.state !== 'play' || !down || !SPACE(code)) return false; const c = m.c; if (c.cd > 0) return true; c.v *= 1 - c.bite; c.cd = 0.3; c.n++; return true; };
     m.tick = (dt) => {
       if (!m.live(dt)) return; const c = m.c; c.cd -= dt; const R0 = c.R; c.R -= c.v * dt * 3.2;
-      if (c.v < 0.8) { m.fault('stalled short'); c.v = m.vmax(c.R) - band / 2; }
+      if (c.v < 0.8) { m.fault('stalled short'); c.v = m.vmax(c.R) * (1 - band / 2); }
       for (const g of c.gates) if (R0 > g && c.R <= g) { m.round++; if (c.v > m.vmax(g)) { m.fault('hot approach'); c.v = m.vmax(g) - 1; } else if (c.v < m.vmin(g)) { m.fault('stalled short'); c.v = m.vmax(g) - 1; } }
       if (c.R <= 0) { if (c.v <= c.floor + 1) m.win(); else { m.fault('hard dock'); c.R = 120; c.v = m.vmax(120) - 1; } }
     };
-    m.hint = () => { const c = m.c; return c.cd <= 0 && c.v > m.vmax(c.R) - band * 0.15 ? [['Space', true]] : []; };
+    m.hint = () => { const c = m.c; return c.cd <= 0 && c.v > m.vmax(c.R) * 0.96 ? [['Space', true]] : []; };
     m.bad = () => 'Space';
     m.view = () => ({ b: +bite.toFixed(2), s: +slope.toFixed(4), v: +m.c.v.toFixed(2) });
     m.buttons = () => [['Space', 'Brake pulse']];
