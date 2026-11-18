@@ -2,7 +2,7 @@
 // goes to TESTING. The department often says "looks like a pass" before the light has changed: ignore the voice and wait for the light. Mark
 // 1 pass on a green light; on a red one mark 2 fail and then key the reading they report (one digit) beside it. Marking on the voice alone,
 // marking the wrong result or writing the wrong number is a fault.
-import { define, machine, DIG, ENTER, shuffle, ri, rf, pick, txt, box, lamp, COL } from './kit.js';
+import { define, machine, DIG, ENTER, shuffle, ri, rf, txt, box, lamp, COL } from './kit.js';
 
 const TESTS = [['Engineering', 'Warp field coil ramp', 'coil temp'], ['Tactical', 'Shield emitter cycle', 'cycle time'], ['Operations', 'Transporter pattern lock', 'lock drift'],
   ['Science', 'Sensor array sweep', 'gain loss'], ['Medical', 'Biobed monitor self-test', 'channel errors'], ['Helm', 'RCS thruster pulse', 'pulse lag']];
