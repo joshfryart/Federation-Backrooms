@@ -61,6 +61,14 @@ export const KINDS = {
   schedule: { title: 'Schedule slot', limit: 22, strikes: 3, keys: ['←', '→', 'Enter'], rule: 'Slide each block (← / →) into free time inside its window, then Enter to book it. Three blocks.' },
   sign: { title: 'Log sign-off', limit: 20, strikes: 3, keys: ['1 sign', '2 query'], rule: 'An entry is complete with a time later than the line above, a reading inside its limits (or a note) and initials. 1 signs it, 2 queries it. Five entries.' },
   trend: { title: 'Log trend review', limit: 18, strikes: 3, keys: ['1 – 6'], rule: 'Read the logged trace: press the segment where it first left its limits. Three logs.' },
+  // third pass (docs/job-audit.md "Second pass: weak and mismatched"): spoken briefs, decisions, flying, guard posts, instrument runs, triage, standby
+  brief: { title: 'Verbal brief', limit: 22, strikes: 3, keys: ['1 – 4'], rule: 'Turn to the right person (1 – 4), give your items most urgent first (out of limits, then changed since last report, then steady, top to bottom), then listen to the read-back and press the line they got wrong.' },
+  decide: { title: 'Command decision', limit: 20, strikes: 3, keys: ['1', '2', '3'], rule: 'Each option shows what it costs against two limits. Press the option that stays inside both limits with the most value. Three decisions.' },
+  fly: { dept: 'bridge', title: 'Flight manoeuvre', limit: 24, strikes: 3, hold: true, keys: ['← / → hold', '↑ / ↓ hold'], rule: 'Hold ← / → to turn onto the heading bug and ↑ / ↓ to set the throttle so the speed sits in the green band; hold both until the leg meter fills. Past the red line is a fault.' },
+  post: { dept: 'security', title: 'Guard post', limit: 22, strikes: 3, keys: ['1 admit', '2 refuse', '3 hold'], rule: 'People walk up to the door; read them when they reach the line. 1 admits and logs them, 2 refuses (wrong department, low clearance, expired, or a tailgater with no swipe), 3 holds a transfer whose orders are not signed for today. Nobody walks past you.' },
+  assay: { dept: 'science', title: 'Instrument run', limit: 22, strikes: 3, keys: ['←', '→', 'Enter', '1 – 4'], rule: 'Set the run to the protocol value (← / →) and Enter to start it; wait for the trace, then press the reference it matches. Two runs.' },
+  triage: { dept: 'medical', title: 'Triage sort', limit: 22, strikes: 3, keys: ['↑', '↓', '1 red', '2 yellow', '3 green'], rule: 'Walking wounded are green (3). Breathing over 30, no radial pulse, refill over 2 s or not obeying is red (1). Everyone else is yellow (2). Tag everyone (↑ / ↓ picks), then re-tag anyone whose readings change.' },
+  standby: { title: 'Standby watch', limit: 24, strikes: 3, keys: ['1', '2', '3'], rule: 'Stay ready with your hands still: lamp tests and calls for other stations are not yours. When your call comes, press the action it asks for (1 – 3) before its lamp times out. Two calls.' },
 };
 // ---- the station / tool a job uses: name, mini-game, one-line how-to (shown once, on the instruction card). theme: content set for the game
 const TOOL = (id, name, kind, how, theme) => ({ id, name, kind, how, keys: KINDS[kind].keys, ...(theme ? { theme } : {}), ...(KINDS[kind].dept ? { dept: KINDS[kind].dept } : {}) });
@@ -132,6 +140,25 @@ export const TOOLS = {
   pa: TOOL('pa', 'Shipwide PA', 'pa', 'Pick the decks the announcement is for, wait for a CLEAR channel and press Space to speak.'),
   schedule: TOOL('schedule', 'Schedule board', 'schedule', 'Slide each block into free time inside its window and book it with Enter.'),
   trend: TOOL('trend', 'Log trend viewer', 'trend', 'Find where the logged reading first left its limits: press that segment.'),
+  // third pass: what the weak / mismatched jobs really are (spoken briefs, decisions, flying, posts, instrument runs, triage, standby)
+  brief: TOOL('brief', 'Verbal brief', 'brief', 'Face the person you report to, give your items most urgent first, then listen to them read it back and catch the wrong figure.'),
+  decide: TOOL('decide', 'Decision board', 'decide', 'Weigh each option against the two limits on the board: take the best one that stays inside both.'),
+  fly: TOOL('fly', 'Helm flight controls', 'fly', 'Hold ← / → to bring the heading onto the bug, ↑ / ↓ to set the throttle, and hold the leg until its meter fills.'),
+  post: TOOL('post', 'Door post', 'post', 'Stand the door: read each person as they reach the line; admit and log, refuse a bad badge or a tailgater, hold a transfer with no signed orders.'),
+  assay: TOOL('assay', 'Assay analyser', 'assay', 'Dial the run to the protocol value and start it; when the trace is drawn, press the reference it matches.', 'assay'),
+  bloodpanel: TOOL('bloodpanel', 'Blood analyser', 'assay', 'Set the analyser to the panel protocol, run the sample and match the marker trace to a reference profile.', 'blood'),
+  culture: TOOL('culture', 'Culture reader', 'assay', 'Set the incubation step, run the plate and match the growth curve to the organism references.', 'culture'),
+  deepscan: TOOL('deepscan', 'Array integration', 'assay', 'Set the integration time, run the scan and match the return to the reference signatures.', 'scan'),
+  coretest: TOOL('coretest', 'Stress-test rig', 'assay', 'Set the test load, run it and read which unit the trace says is failing.', 'diag'),
+  selftest: TOOL('selftest', 'Thruster self-test', 'assay', 'Set the test pulse, fire the self-test and read which thruster the response trace says is weak.', 'thrusters'),
+  loadtest: TOOL('loadtest', 'Load test rig', 'assay', 'Set the test weight, run the load and read the hold trace against the references.', 'lift'),
+  matrix: TOOL('matrix', 'Hologram self-test', 'assay', 'Set the test level, run the matrix self-test and read the result against the fault references.', 'matrix'),
+  sensorcal: TOOL('sensorcal', 'Array calibration run', 'assay', 'Set the reference star channel, run the calibration and read the drift trace against the references.', 'spectrum'),
+  fieldpulse: TOOL('fieldpulse', 'Field pulse test', 'assay', 'Set the pulse strength, fire the test and read which emitter the trace says is weak.', 'field'),
+  triage: TOOL('triage', 'Triage tags', 'triage', 'Read each casualty (walking, breathing, pulse, refill, obeying), tag red / yellow / green, and re-tag when they change.'),
+  standby: TOOL('standby', 'Standby board', 'standby', 'Keep watch with your hands still; when your call comes, press the action it asks for before the lamp times out.'),
+  aim: TOOL('aim', 'Array aiming', 'calibrate', 'Keep the array on the moving target: hold ← / → to stay on it until the lock meter fills.', 'aim'),
+  chartcheck: TOOL('chartcheck', 'Chart point check', 'bench', 'Each updated chart point shows its offset against the tolerance: 1 accepts it, 2 sends it back.', 'chart'),
 };
 TOOLS['command chair'] = TOOLS.captain_chair;
 export function toolFor(spot) { return (spot && TOOLS[spot]) || null; }
@@ -143,7 +170,7 @@ const DEPT_RE = [[/sickbay|medical|patient|casualt|triage|health|injur|fitness|c
   [/security|armory|brig|intruder|patrol|guard|watch officers|lockdown/i, 'sec'], [/reactor|core temp|injector|grid|\beps\b|power|engineering|\btaps?\b|junction|defect|fault|damper|coolant|yard|shakedown/i, 'eng'],
   [/sensor|survey|science|chart|scan|\blab\b|anomal|sample/i, 'sci'], [/transporter|\bops\b|comm|relay|database|\bcore\b|archive|backup|records|ticket|network/i, 'ops'], [/cargo|manifest|stores|ration|galley|stock|consumed|quartermaster/i, 'stores']];
 const ROOM_THEME = { engineering: 'eng', plant: 'eng', workshop: 'eng', sickbay: 'med', lab: 'sci', arboretum: 'sci', datacore: 'ops', transporter: 'ops', holodeck: 'ops', bridge: 'cmd', readyroom: 'cmd', brig: 'sec', armory: 'sec', shuttlebay: 'flight', cargo: 'stores', stores: 'stores', mess: 'stores' };
-const DEPT_THEMED = ['form', 'roster', 'queue', 'verify', 'pa', 'schedule', 'trend'];
+const DEPT_THEMED = ['form', 'roster', 'queue', 'verify', 'pa', 'schedule', 'trend', 'brief'];
 export const THEMES = {   // kind -> [label regex, theme]...; list: every theme the kind knows (tests play each one)
   course: { re: [[/debris|fod|dust/i, 'debris'], [/storm|ion|hazard/i, 'ion'], [/dock|station|traffic|rendezvous|transfer|arrival|approach/i, 'traffic'], [/survey|grid|chart/i, 'survey']], list: ['debris', 'ion', 'traffic', 'survey', 'asteroids'] },
   decode: { re: [[/medical|sickbay/i, 'medical'], [/alert|drill|tone/i, 'alert'], [/relay|network|link|failover|junction/i, 'relay']], list: ['hail', 'medical', 'alert', 'relay'] },
@@ -160,8 +187,14 @@ export const THEMES = {   // kind -> [label regex, theme]...; list: every theme 
   burn: { re: [[/dock|approach|berth/i, 'dock'], [/thruster|test|turn|maneuv/i, 'test'], [/recover|launch|flight|land/i, 'shuttle'], [/decel|speed|run|stricken/i, 'decel']], list: ['dock', 'test', 'shuttle', 'decel'] },
   coords: { re: [[/patient|casualt|sickbay|stretcher/i, 'patients'], [/cargo|crate|batch|supplies|bulk/i, 'cargo'], [/sample|specimen/i, 'samples'], [/team|away|surveyor|beacon/i, 'team']], list: ['team', 'cargo', 'patients', 'samples'] },
   fix: { list: ['stars'] },
+  fly: { re: [[/burst|maximise/i, 'burst'], [/best-speed|stricken|run to/i, 'run'], [/hard turn|turn and stop/i, 'turn'], [/orbit/i, 'orbit'], [/grid|survey pattern/i, 'grid'], [/calibration courses|test series|maneuver test/i, 'courses'], [/launch/i, 'launch'], [/hold|deviation/i, 'hold']], list: ['grid', 'run', 'turn', 'orbit', 'courses', 'hold', 'launch', 'burst'] },
+  standby: { re: [[/beam-?out|beam out/i, 'beam'], [/launch/i, 'launch'], [/foam|clamps|damage/i, 'damage'], [/hologram|grid in case/i, 'holo'], [/\block\b/i, 'lock'], [/core|reactor/i, 'core'], [/sweep|hazards|watch for|passive/i, 'sensors'], [/recovery/i, 'recover'], [/intruder|lockdown/i, 'lockdown'], [/drill|injur|standby|time and note/i, 'drill']], list: ['beam', 'launch', 'damage', 'holo', 'lock', 'core', 'sensors', 'recover', 'lockdown', 'drill'] },
+  decide: { re: [[/survey|extend/i, 'survey'], [/request|department/i, 'cmd'], [/readiness|accept or reject/i, 'ready'], [/approach|sensor power/i, 'approach'], [/program|calm|relax/i, 'holo']], list: ['cmd', 'survey', 'ready', 'approach', 'holo'] },
+  assay: { re: [[/blood|tissue/i, 'blood'], [/culture|pathogen/i, 'culture'], [/deep scan|lifesign|lifeform|target vessel/i, 'scan'], [/thruster/i, 'thrusters'], [/\blift\b|dummy|weighted/i, 'lift'], [/hologram|matrix/i, 'matrix'], [/long-range|calibration/i, 'spectrum'], [/force field/i, 'field'], [/core|stress|diagnostic|power-up|under load/i, 'diag']], list: ['assay', 'blood', 'culture', 'scan', 'diag', 'thrusters', 'lift', 'matrix', 'spectrum', 'field'] },
   counsel: { re: [[/fatigue|exhaustion|long scan|loading/i, 'fatigue'], [/medical staff|triage|medical team/i, 'staff'], [/evacuee|relief|families/i, 'grief'], [/new crew|trials|drills?\b|after a fault/i, 'nerves'], [/lonely|walkabout|open-door|wellness|peace/i, 'lonely']], list: ['general', 'fatigue', 'grief', 'nerves', 'staff', 'lonely'] },
 };
+THEMES.post = { re: THEMES.badge.re, list: THEMES.badge.list };
+THEMES.calibrate.list.push('aim');
 for (const k of DEPT_THEMED) THEMES[k] = { re: DEPT_RE, list: ['eng', 'med', 'flight', 'sec', 'sci', 'ops', 'stores', 'cmd'], room: true };
 export function themeFor(kind, label = '', room = null) {
   const T = THEMES[kind]; if (!T) return null;
@@ -236,6 +269,40 @@ export const OVERRIDES = {
   'Prepare special-diet and soft-food trays': 'cook', 'Keep the mess open through drills': 'cook', 'Prepare extra meals and water for evacuees': 'cook', 'Bland meal batch for relief patients': 'cook', 'Extra rations for long lab shifts': 'fresh', 'Stock check and shopping list for the Galley Chief': 'fresh',
   'Ready quarantine environment controls': 'valve', 'Raise air handling for extra lab and sensor load': 'valve', 'Re-balance atmosphere after bay opens': 'valve', 'Check inertial dampers and sensors': 'valve', 'Deflector and damper readout check': 'valve', 'Run injector stress test': 'valve',
   'Keep the peace in mess and lounge': 'counsel', 'Brief cargo crew on lifting injuries': 'counsel', 'Keep order among the evacuees': 'badge', 'Armory sign-out and charge check': 'badge', 'Arm escort for away team': 'badge', 'Monitor hails and ship traffic': 'decode', 'Keep the science team\'s comm channel clear': 'comms', 'Hold clean relay link to the sickbay and bridge': 'comms', 'Align the subspace transceiver': 'comms', 'Subspace transceiver range test': 'comms',
+  // third pass (the jobs rated weak or mismatched in the human-work review, docs/job-audit.md): spoken briefs, decisions, flying, posts, instrument runs, triage, standby
+  'Department status review': 'brief', 'Captain\'s log and standing orders': 'brief', 'Decide on requests from departments': 'decide', 'Approve approach and sensor power': 'decide',
+  'Decide whether to extend the survey': 'decide', 'Order departure and debrief': 'brief', 'Authorise transfer and docking': 'brief', 'Sign receipt and close out': 'backup', 'Declare relief complete': 'brief',
+  'Review trial results with heads': 'bench', 'Accept or reject ship readiness': 'decide', 'Brief a landing party if a site is chosen': 'brief', 'Sign off the transfer log': 'backup',
+  'Command the bridge watch': 'brief', 'Clear deficiency list with chiefs': 'signoff', 'Assign survey priorities to science and flight': 'schedule', 'Pre-brief transporter and shuttlebay': 'brief',
+  'Brief chiefs on test sequence': 'brief', 'Collect fault list from all departments': 'brief', 'Review helm and nav status': 'brief', 'Hold course and report': 'fly',
+  'Brief helm and nav on slow approach': 'brief', 'Report pass complete': 'brief', 'Report arrival': 'brief', 'Report ETA to the bridge': 'brief', 'Brief helm on test manoeuvres': 'brief',
+  'Test shuttle launch': 'fly', 'Report results': 'brief', 'Drill emergency recovery with the pilot': 'standby', 'Brief captain on schedule': 'brief', 'Relay sickbay requests to captain and bridge': 'brief',
+  'Time and note each drill result': 'standby', 'Hold course and log deviations': 'fly', 'Attitude thruster pre-check': 'selftest', 'Thruster pre-check': 'selftest',
+  'Fly the survey grid at slow, steady speed': 'fly', 'Best-speed run to the stricken site': 'fly', 'Run the helm maneuver test series': 'fly', 'Hard turn and stop test': 'fly',
+  'Update charts with the latest sensor data': 'backup', 'Merge survey fixes into the chart': 'backup', 'Plot orbit and transporter-range hold': 'fly', 'Run the full set of calibration courses': 'fly',
+  'Stand ready for launch': 'standby', 'Launch and fly survey pattern': 'fly', 'Keep the science team\'s comm channel clear': 'junction', 'Hail the receiving station and confirm the schedule': 'brief',
+  'Relay medical updates to the bridge': 'brief', 'Core diagnostic sweep': 'coretest', 'Routine core sweep and log review': 'trend', 'Full core diagnostic and stress test': 'coretest',
+  'Prioritise comms with the receiving station': 'brief', 'Watch reactor margin during scans': 'standby', 'Hold transporter lock on team': 'standby', 'Stand by for emergency beam-out': 'standby',
+  'Hold standby lock on away team': 'standby', 'Clear pads and hold lock on casualty group': 'standby', 'Test emergency lock with a weighted dummy load': 'loadtest', 'Engineering status to the XO': 'brief',
+  'Stage a controlled power-up test': 'coretest', 'Stand by with foam and clamps at loading': 'standby', 'Hold steady output during scan': 'trim', 'Maximise burst output for speed': 'fly',
+  'Watch core temps at high output': 'standby', 'Security status to XO': 'brief', 'Guard hold during loading': 'post', 'Escort and control the sickbay entrance': 'post', 'Keep order among the evacuees': 'counsel',
+  'Restrict lab and sensor access to survey personnel': 'post', 'Post an officer at the shuttlebay for away-team traffic': 'post', 'Guard transporter pad during transfers': 'post',
+  'Control access to quarantine area': 'post', 'Test armory release and badge locks': 'post', 'Hold post at brig or transporter': 'post', 'Hold post at brig door': 'post',
+  'Guard the science lab entrance during sensor sweeps': 'post', 'Station for intruder drill': 'standby', 'Quarantine-check samples against the beds': 'samples', 'Hand updated plot to navigation': 'brief',
+  'Send updated plot to navigation': 'brief', 'Present finished chart to bridge': 'brief', 'Check internal sensors and force fields': 'fieldpulse', 'Check force-field board': 'backup',
+  'Check long-range sensor calibration': 'sensorcal', 'Routine passive sweep and log': 'standby', 'Sensor officer reviews cartography updates': 'chartcheck',
+  'Brief sensor, carto and botany on survey targets': 'brief', 'Run primary deep scan of target': 'deepscan', 'Analyse samples for the medical team': 'assay',
+  'Scan the relief destination for pathogens and radiation': 'sensors', 'Full sensor array diagnostic': 'coretest', 'Routine sample queue and calibration': 'assay', 'Analyse sensor-collected samples': 'assay',
+  'Send summary to bridge': 'brief', 'Log inspection results': 'backup', 'Run patient blood and tissue panels': 'bloodpanel', 'Culture and pathogen ID': 'culture', 'Deliver results to sickbay': 'brief',
+  'Test lab instruments under load': 'coretest', 'Lifeform scanner spot check': 'deepscan', 'Routine sweep and drift check': 'standby', 'Report all-clear to bridge': 'brief', 'Aim arrays at survey target': 'aim',
+  'Run full-spectrum scan and bracket': 'sensors', 'Package survey data for the bridge': 'report', 'Sweep approach lanes for debris': 'standby', 'Locate the target vessel and lifesign count': 'deepscan',
+  'Relay lifesign data to sickbay': 'brief', 'Watch for hazards around the vessel': 'standby', 'Report range and resolution figures': 'brief', 'Crew health screening': 'trend',
+  'Health summary to captain': 'brief', 'Receive and triage arriving patients': 'triage', 'Brief captain on capacity and supplies': 'brief', 'Request transporter and cargo support': 'roster',
+  'Stand ready for injuries during drills': 'standby', 'Report medical readiness to captain': 'brief', 'Crew morale report to the captain': 'brief', 'Report load-crew exhaustion to the quartermaster': 'brief',
+  'Triage incoming patients': 'triage', 'Daily status to bridge on casualties': 'brief', 'Be on standby during drills': 'standby', 'Test the cargo lift and sled': 'loadtest',
+  'Run rapid scans and bloodwork for the doctor': 'bloodpanel', 'Check medical hologram matrix': 'matrix', 'Run a calm relaxation program for off-shift survey crew': 'decide',
+  'Switch grid emitters to a calm recovery program for patients\' families': 'decide', 'Stand by with the grid in case the medical hologram needs emitter help': 'standby',
+  'Spare parts printed for engineering': 'bench',
 };
 // [tool id, label/sys regex, rooms (optional)]. Order matters: the first match wins.
 export const RULES = [
@@ -374,6 +441,7 @@ const BENCH = {
   field: [['Cell 1 emitter', 'MJ', 4.0, 4.8], ['Cell 2 emitter', 'MJ', 4.0, 4.8], ['Corridor emitter', 'MJ', 3.2, 3.8], ['Field node', '% stable', 96, 100], ['Isolation emitter', 'MJ', 2.6, 3.1]],
   galley: [['Hot plate', '°C', 220, 260], ['Replicator line', '% fidelity', 97, 100], ['Cold store', '°C', 1, 4], ['Dishwasher rinse', '°C', 80, 90], ['Food unit pattern', '% match', 98, 100], ['Manual stove', 'kPa', 3, 5]],
   lab: [['Spectrometer', 'nm error', 0, 2], ['Centrifuge', 'rpm ×1000', 11, 13], ['Fume hood flow', 'm/s', 0.4, 0.6], ['Sample fridge', '°C', 2, 6], ['Microscope stage', 'µm drift', 0, 3], ['Gas analyser', '% span', 98, 102]],
+  chart: [['Point A-12', 'AU off', 0, 0.4], ['Beacon Kell-3', 'AU off', 0, 0.3], ['Dust edge, sector 9', 'AU off', 0, 0.6], ['Nav buoy 4', 'km off', 0, 50], ['Hazard marker 7', 'km off', 0, 80], ['Survey point C', 'AU off', 0, 0.5]],
   coil: [['Primary energizing coil', '% wear', 0, 20], ['Phase transition coil', '% wear', 0, 25], ['Pattern buffer coil', '% wear', 0, 15], ['Emitter array coil', '% wear', 0, 20], ['Targeting scanner coil', '% wear', 0, 30]],
 };
 const SHELF = [['Ration packs', 'pack'], ['Fresh greens', 'tray'], ['Protein cubes', 'tin'], ['Milk substitute', 'carton'], ['Bread loaves', 'bag'], ['Spice paste', 'jar'], ['Med gel', 'tube'], ['Breather filters', 'box'], ['Reagent kit', 'case'], ['Soup concentrate', 'pouch']];
@@ -393,7 +461,13 @@ const SUB = { counsel: { fatigue: 'Tired crew', grief: 'Survivors and families',
   manifest: { cargo: 'Cargo hold', medical: 'Medical supplies', science: 'Science cases', pads: 'Pad staging', spares: 'Spares and kits' }, loadbal: { crates: 'Hold trim', sleds: 'Sled loading', pads: 'Pad weight limits', shuttle: 'Shuttle hold' },
   fresh: { pantry: 'Pantry', feedstock: 'Replicator feedstock', medical: 'Medical stores', rations: 'Ration packs' }, station: { scan: 'Hold for the scan', transfer: 'Hold for transfer', orbit: 'Orbit hold', hold: 'Station keeping' },
   burn: { dock: 'Docking approach', test: 'Manoeuvre test', shuttle: 'Shuttle recovery', decel: 'Deceleration run' }, coords: { team: 'Away team', cargo: 'Cargo', patients: 'Patients to sickbay', samples: 'Samples to the lab' },
-  power: Object.fromEntries(['Sickbay', 'Sensors', 'Transporter', 'Lifts', 'Holodeck', 'Impulse'].map(b => [b, `${b} priority`])), badge: {} };
+  power: Object.fromEntries(['Sickbay', 'Sensors', 'Transporter', 'Lifts', 'Holodeck', 'Impulse'].map(b => [b, `${b} priority`])), badge: {},
+  fly: { grid: 'Survey grid at slow, steady speed', run: 'Best-speed run', turn: 'Hard turn and stop', orbit: 'Orbit hold', courses: 'Calibration courses', hold: 'Hold course against drift', launch: 'Lift-off and climb-out', burst: 'Burst output' },
+  standby: { beam: 'Emergency beam-out', launch: 'Ready for launch', damage: 'Damage-control standby', holo: 'Emitter standby', lock: 'Standby lock', core: 'Core watch', sensors: 'Quiet sweep watch', recover: 'Recovery drill', lockdown: 'Intruder drill', drill: 'Drill standby' },
+  decide: { cmd: 'Department requests', survey: 'Extend the survey?', ready: 'Readiness call', approach: 'Approach and sensor power', holo: 'Program for the request' },
+  assay: { assay: 'Sample assay', blood: 'Blood and tissue panel', culture: 'Culture ID', scan: 'Deep scan integration', diag: 'Diagnostic under load', thrusters: 'Thruster self-test', lift: 'Load test', matrix: 'Hologram matrix self-test', spectrum: 'Calibration against a reference star', field: 'Force-field pulse test' } };
+SUB.calibrate.aim = 'Array on a moving target';
+SUB.post = Object.fromEntries(THEMES.badge.list.map(d => [d, `${d} door`]));
 const CODECH = 'ABCDEFGHKMNPRSTVXZ';
 // paperwork content per department theme (eng / med / flight / sec / sci / ops / stores / cmd): readings, posts, queue items, volumes, PA lines, bookings, logs
 const FORMS = {
@@ -426,6 +500,40 @@ const TRENDS = { eng: [['Core temp', 'K', 1900, 2100], ['Grid load', '%', 40, 85
   sci: [['Array temp', 'K', 70, 90], ['Signal noise', 'dB', -90, -70], ['Chart residual', 'AU', 0, 1]], ops: [['Relay latency', 'ms', 4, 20], ['Core load', '%', 20, 70], ['Buffer error rate', 'ppm', 0, 5]],
   stores: [['Cold store temp', '°C', 1, 4], ['Humidity', '%', 40, 60], ['Feedstock draw', 'kg/h', 2, 6]], cmd: [['Alert response', 's', 30, 90], ['Crew fatigue index', '', 1, 4], ['Hull stress', '%', 0, 60]] };
 const DESTS = { medical: ['Sickbay', 'Isolation', 'Med stores', 'Medical shuttle'], science: ['Lab', 'Shuttle 2', 'Sample fridge', 'Probe rack'], pads: ['Pad 1', 'Pad 2', 'Pad 3', 'Pad 4', 'Pad 5', 'Pad 6'], spares: ['Workshop', 'Repair locker', 'Engineering', 'DC locker'] };
+
+// third-pass content: decision boards, flight legs, post arrivals, instrument references, triage casualties, standby calls
+const DECIDE = {
+  cmd: { a: ['Crew hours', 'h', 'max'], b: ['Power', 'MW', 'max'], val: 'Priority', opts: ['Engineering refit', 'Science deep scan', 'Security drill', 'Medical stores run', 'Shore leave rota', 'Cargo transfer'] },
+  survey: { a: ['Fuel left', '%', 'min'], b: ['Back by', 'h', 'max'], val: 'Finds', opts: ['Go home now', 'Extend 6 h', 'Extend 12 h', 'One more sector', 'Deep pass', 'Probe only'] },
+  ready: { a: ['Open faults', '', 'max'], b: ['Waivers needed', '', 'max'], val: 'Readiness', opts: ['Accept', 'Accept with waivers', 'Reject: refit', 'Accept after retest', 'Partial accept'] },
+  approach: { a: ['Sensor draw', 'MW', 'max'], b: ['Stand-off', 'km', 'min'], val: 'Resolution', opts: ['Close pass', 'Standard pass', 'Far orbit', 'Slow drift', 'Two passes'] },
+  holo: { a: ['Intensity', '/10', 'max'], b: ['Length', 'min', 'max'], val: 'Match', opts: ['Shoreline', 'Forest rain', 'Night sky', 'Walled garden', 'Mountain lake', 'Quiet library'] },
+};
+const POSTS = ['Prisoner transfer', 'Sample cases', 'Patient on a stretcher', 'Weapons crate', 'Away-team kit', 'Evidence locker'];
+const ASSAY = {   // [setting name, unit, lo, hi], reference names (4 shown, one matches the trace)
+  assay: [['Column temp', '°C', 20, 60], ['Tri-ox', 'Sedorin', 'Coagulex', 'Hydrolase', 'Neurocalm', 'Saline blank']],
+  blood: [['Panel', 'no.', 1, 12], ['Normal', 'Anaemia', 'Infection', 'Dehydration', 'Radiation dose', 'Clotting fault']],
+  culture: [['Incubation', 'h', 6, 36], ['Bacterial', 'Fungal', 'Viral', 'Sterile', 'Spore former', 'Mixed growth']],
+  scan: [['Integration', 's', 10, 60], ['Freighter', 'Shuttle', 'Probe', 'Lifeforms ×12', 'Lifeforms ×30', 'Debris cloud']],
+  diag: [['Test load', '%', 50, 100], ['Stack A failing', 'Stack B failing', 'Stack C failing', 'All nominal', 'Bus noise', 'Cooling lag']],
+  thrusters: [['Test pulse', 'ms', 20, 80], ['Port aft weak', 'Starboard aft weak', 'Port fore weak', 'Starboard fore weak', 'All nominal', 'Valve sticking']],
+  lift: [['Test weight', 't', 1, 9], ['Holds', 'Brake slipping', 'Cable stretch', 'Motor stall', 'Lock creeps', 'Sensor fault']],
+  matrix: [['Test level', '', 1, 10], ['Nominal', 'Emitter 2 fault', 'Old version', 'Memory fault', 'Trigger lag', 'Audio fault']],
+  spectrum: [['Reference star', 'ch', 1, 24], ['In calibration', 'Drift +', 'Drift −', 'Noisy', 'Gain low', 'Offset']],
+  field: [['Pulse', 'MJ', 1, 8], ['Cell 1 weak', 'Cell 2 weak', 'Corridor weak', 'All holding', 'Node flicker', 'Isolation weak']],
+};
+const STANDBY = {   // [call, right action, two wrong actions]; idle: lamps that are not your call
+  beam: { calls: [['Away team 2: emergency beam-out!', 'Energise pad 2', 'Energise pad 1', 'Hold for orders'], ['Casualty on the surface, beacon 4', 'Lock beacon 4 and energise', 'Lock beacon 1', 'Call sickbay first'], ['Team reports hostile contact, beam now', 'Energise all pads', 'Energise pad 1 only', 'Ask for confirmation']], idle: ['Lamp test', 'Call for transporter 2', 'Comm check, no action'] },
+  launch: { calls: [['Bridge: launch shuttle 1', 'Release clamps, launch', 'Open the wrong bay door', 'Wait for the deck chief'], ['Launch hold: debris on the pad', 'Hold and report', 'Launch anyway', 'Close the bay'], ['Flight: go for launch, shuttle 2', 'Launch shuttle 2', 'Launch shuttle 1', 'Re-run the checklist']], idle: ['Bay lighting test', 'Call for shuttle 3', 'Clock check'] },
+  damage: { calls: [['Spill at loading bay 2!', 'Foam bay 2', 'Foam bay 1', 'Call engineering'], ['Hose split on the lift', 'Clamp the hose', 'Foam the lift', 'Stop the loading log'], ['Small fire, crate 7', 'Extinguish crate 7', 'Evacuate the deck', 'Move crate 6']], idle: ['Alarm test', 'Call for damage team 2', 'Lift chime'] },
+  holo: { calls: [['Sickbay: hologram emitter 3 failing', 'Route power to emitter 3', 'Reset the grid', 'Wait for the nurse'], ['Medical hologram flickering', 'Boost the matrix feed', 'Shut the grid down', 'Restart the program'], ['Sickbay needs a second emitter', 'Bring emitter 2 online', 'Bring the grid down', 'Log it for later']], idle: ['Program end chime', 'Booking request', 'Lamp test'] },
+  lock: { calls: [['Beacon 2 fading', 'Switch to the backup beacon', 'Drop the lock', 'Boost beacon 1'], ['Team signal noisy', 'Narrow the lock', 'Energise now', 'Widen the lock'], ['Lock drifting, team moving', 'Re-centre on the team', 'Hold position', 'Drop the lock']], idle: ['Pad lamp test', 'Call for transporter 2', 'Buffer cycle chime'] },
+  core: { calls: [['Core temp spiking!', 'Call a throttle-back', 'Raise output', 'Vent coolant'], ['Margin under 10 %', 'Shed the burst load', 'Hold steady', 'Add a power tap'], ['Injector 3 running hot', 'Trim injector 3', 'Trim injector 1', 'Ignore it']], idle: ['Gauge lamp test', 'Call for the plant', 'Shift chime'] },
+  sensors: { calls: [['Faint return, bearing 040', 'Tag and log bearing 040', 'Log bearing 400', 'Ignore it'], ['Closing contact, 2 km/s', 'Warn the helm', 'Log it for later', 'Raise shields'], ['Drift past the limit', 'Log drift and recalibrate', 'Shut down the array', 'Raise the gain']], idle: ['Sensor lamp test', 'Self-test chime', 'Call for the lab'] },
+  recover: { calls: [['Shuttle on final', 'Paddles: come ahead', 'Paddles: wave off', 'Open the wrong bay'], ['Shuttle over the mark', 'Signal stop', 'Signal come ahead', 'Chock the wrong wheel'], ['Skids down', 'Chock and tie down', 'Start fuelling', 'Wave off']], idle: ['Bay lamp test', 'Call for deck 2', 'Comm check'] },
+  lockdown: { calls: [['Intruder drill: seal deck 4', 'Seal the deck 4 doors', 'Seal deck 2', 'Announce it first'], ['Drill: hold the transporter room', 'Lock the room and hold', 'Leave to help', 'Open the door'], ['All clear from security', 'Unseal and report', 'Stay sealed', 'Ask again']], idle: ['Door lamp test', 'Call for brig post', 'Comm check'] },
+  drill: { calls: [['Drill casualty, deck 3', 'Send the team to deck 3', 'Send them to deck 5', 'Wait for more'], ['Burn injury, galley', 'Burn kit to the galley', 'Splint kit to the galley', 'Ask for details'], ['Station reports ready', 'Stop the clock and log it', 'Reset the drill', 'Log it later']], idle: ['Alarm test', 'Call for sickbay 2', 'Comm chime'] },
+};
 
 // ---- games
 export function createGame(kind, seed = 1, opts = {}) {
@@ -871,6 +979,161 @@ export function createGame(kind, seed = 1, opts = {}) {
       return { n: 6, answer: Math.floor(onset / 4), name, unit, lo, hi, pts, onset, why: 'wrong segment' };
     });
   }
+  // ---------------------------------------------------------------- third pass: spoken brief, decision, flying, guard post, instrument run, triage, standby
+  else if (kind === 'brief') {   // address the right person, give four items most urgent first, then catch the wrong figure in their read-back
+    const T = FORMS[theme] || FORMS.cmd, to = (opts.label && RECIPS.find(([re]) => re.test(opts.label))?.[1]) || T.to, fmt = (v, step) => step < 1 ? v.toFixed(1) : String(Math.round(v));
+    g.need = 3; g.hits = 0; g.to = to; g.recips = shuffle(rnd, [to, ...shuffle(rnd, RECIPS.map(x => x[1]).filter(x => x !== to)).slice(0, 3)]);
+    const rd = shuffle(rnd, T.rd).slice(0, 4).map(([name, unit, lo, hi], i) => { const step = Number.isInteger(lo) && Number.isInteger(hi) ? 1 : 0.1, span = hi - lo, v = lo + span * (0.25 + rnd() * 0.5); return { name, unit, lo, hi, step, v: +fmt(v, step), kind: i === 0 ? 'out' : i === 1 ? 'changed' : 'steady' }; });
+    { const r = rd[0], span = r.hi - r.lo; r.v = +fmt(rnd() < 0.5 ? r.hi + span * (0.2 + rnd() * 0.3) : Math.max(0, r.lo - span * (0.2 + rnd() * 0.3)), r.step); if (r.v >= r.lo && r.v <= r.hi) r.v = +fmt(r.hi + span * 0.3 + r.step, r.step); }
+    { const r = rd[1], span = r.hi - r.lo; r.prev = +fmt(Math.min(r.hi, Math.max(r.lo, r.v + (rnd() < 0.5 ? -1 : 1) * Math.max(r.step * 2, span * 0.25))), r.step); if (r.prev === r.v) r.prev = +fmt(r.v + r.step * 2, r.step); }
+    g.items = shuffle(rnd, rd); const at = (k) => g.items.findIndex(x => x.kind === k);
+    g.order = [at('out'), at('changed'), ...g.items.map((x, i) => x.kind === 'steady' ? i : -1).filter(i => i >= 0)]; g.k = 0; g.said = [];
+    g.rb = g.order.map(i => ({ name: g.items[i].name, unit: g.items[i].unit, v: fmt(g.items[i].v, g.items[i].step) })); g.wrong = ri(rnd, 0, 3);
+    { const r = g.items[g.order[g.wrong]], d = pick(rnd, [-3, -2, 2, 3, 10, -10]) * r.step; g.rb[g.wrong].v = fmt(Math.max(0, r.v + d) === r.v ? r.v + r.step * 4 : Math.max(0, r.v + d), r.step); }
+    g.phase = 0; g.answer = () => g.phase === 0 ? g.recips.indexOf(to) : g.phase === 1 ? g.order[g.k] : g.wrong;
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const d = DIG(code); if (!d || d > 4) return false;
+      if (g.phase === 1 && g.said.includes(d - 1)) return true;
+      if (d - 1 === g.answer()) { ev('hit', { phase: g.phase, d });
+        if (g.phase === 0) { g.phase = 1; g.hits = 1; } else if (g.phase === 1) { g.said.push(d - 1); g.k++; if (g.k >= 4) { g.phase = 2; g.hits = 2; } } else { g.hits = 3; end('win', 'briefed'); } }
+      else strike(g.phase === 0 ? 'wrong person' : g.phase === 1 ? 'buried the lead' : 'missed the wrong figure');
+      return true;
+    };
+    g.hint = () => [['Digit' + (g.answer() + 1), true]];
+    g.bad = () => { const a = g.answer(); for (let k = 1; k <= 4; k++) { const i = (a + k) % 4; if (i !== a && !(g.phase === 1 && g.said.includes(i))) return 'Digit' + (i + 1); } return null; };
+    g.view = () => ({ phase: g.phase, to, recips: g.recips, items: g.items.map(x => ({ ...x })), said: g.said.slice(), rb: g.phase === 2 ? g.rb.map(x => ({ ...x })) : null, hits: g.hits, need: g.need });
+  } else if (kind === 'decide') {   // three options against two limits: the best one inside both
+    const D = DECIDE[theme] || DECIDE.cmd, names = shuffle(rnd, D.opts);
+    rounds(3, (i) => {
+      const L = [ri(rnd, 20, 60), ri(rnd, 20, 60)], ok = (lim, kind) => kind === 'max' ? ri(rnd, Math.max(1, lim - 15), lim) : ri(rnd, lim, lim + 15), bad = (lim, kind) => kind === 'max' ? ri(rnd, lim + 3, lim + 15) : ri(rnd, Math.max(0, lim - 15), Math.max(0, lim - 3));
+      const best = ri(rnd, 6, 9), breaks = rnd() < 0.5 ? 0 : 1;
+      const o = [{ a: ok(L[0], D.a[2]), b: ok(L[1], D.b[2]), v: best }, { a: ok(L[0], D.a[2]), b: ok(L[1], D.b[2]), v: best - ri(rnd, 2, 4) }, { a: breaks === 0 ? bad(L[0], D.a[2]) : ok(L[0], D.a[2]), b: breaks === 1 ? bad(L[1], D.b[2]) : ok(L[1], D.b[2]), v: Math.min(10, best + ri(rnd, 1, 2)) }];
+      o.forEach((x, k) => { x.name = names[(i * 3 + k) % names.length]; }); const order = shuffle(rnd, [0, 1, 2]);
+      return { n: 3, answer: order.indexOf(0), opts: order.map(k => o[k]), lim: L, A: D.a, B: D.b, val: D.val, why: 'bad call' };
+    });
+  } else if (kind === 'fly') {   // hold ← / → to turn onto the heading bug, ↑ / ↓ to set the throttle; hold each leg until its meter fills
+    const T = theme || 'courses', ang = (a) => ((a % 360) + 540) % 360 - 180, tol = calm ? 12 : 8;
+    g.hdg = Math.floor(rnd() * 360); g.spd = 0.4; g.thr = 0.4; g.heat = 0; g.leg = 0; g.fill = 0; g.rate = 45 * slow; g.acc = 0.3 * slow; g.red = 0.96; g.tol = tol;
+    const L = (dh, band, hold, name = '') => ({ hdg: (g.hdg + dh + 360) % 360, band, hold, name }), sg = () => (rnd() < 0.5 ? -1 : 1);
+    if (T === 'grid') { const s0 = sg(); g.legs = [L(s0 * ri(rnd, 60, 120), [0.2, 0.34], 1.4, 'leg 1')]; g.legs.push({ ...g.legs[0], hdg: (g.legs[0].hdg + 90 * s0) % 360, name: 'turn' }, { ...g.legs[0], hdg: (g.legs[0].hdg + 180) % 360, name: 'leg 2' }); }
+    else if (T === 'run' || T === 'burst') g.legs = [L(sg() * ri(rnd, 20, 50), [0.82, 0.91], T === 'burst' ? 3 : 2, T === 'burst' ? 'burst' : 'run'), ...(T === 'run' ? [L(sg() * ri(rnd, 20, 50), [0.82, 0.91], 2, 'run')] : [])];
+    else if (T === 'turn') { const h = sg() * ri(rnd, 110, 150); g.legs = [L(h, [0.45, 0.6], 1, 'hard turn'), L(h, [0, 0.08], 1.2, 'stop')]; }
+    else if (T === 'orbit') g.legs = [L(sg() * ri(rnd, 20, 40), [0.46, 0.6], 4, 'orbit')];
+    else if (T === 'hold') g.legs = [L(sg() * ri(rnd, 10, 25), [0.5, 0.64], 4, 'hold')];
+    else if (T === 'launch') { g.spd = g.thr = 0; g.legs = [L(sg() * ri(rnd, 0, 10), [0.15, 0.28], 1.2, 'lift'), L(sg() * ri(rnd, 40, 70), [0.45, 0.6], 1.2, 'climb out')]; }
+    else g.legs = [0, 1, 2].map(i => { const lo = rnd() < 0.3 ? 0.12 + rnd() * 0.12 : 0.46 + rnd() * 0.3; /* never around the starting 0.4 */ return L(sg() * ri(rnd, 40, 120) * (i + 1) / 2, [+lo.toFixed(2), +(lo + 0.14).toFixed(2)], 1.2, 'course ' + (i + 1)); });
+    g.ph = rnd() * 6.28; g.heats = T === 'run' || T === 'burst';
+    g.key = (code, down = true) => { const a = ARROW[code]; if (!a) return false; g.held[a] = !!down; return true; };
+    g.diff = () => ang(g.legs[Math.min(g.leg, g.legs.length - 1)].hdg - g.hdg);
+    g.step = (dt) => {
+      const Lg = g.legs[g.leg]; if (!Lg) return;
+      if (T === 'orbit') Lg.hdg = (Lg.hdg + 12 * slow * dt) % 360;
+      if (T === 'hold') g.hdg = (g.hdg + 9 * slow * Math.sin(g.t * 0.9 + g.ph) * dt + 360) % 360;
+      g.hdg = (g.hdg + ((g.held.R ? 1 : 0) - (g.held.L ? 1 : 0)) * g.rate * dt + 360) % 360;
+      g.thr = clamp(g.thr + ((g.held.U ? 1 : 0) - (g.held.D ? 1 : 0)) * 0.45 * dt, 0, 1);
+      g.spd += clamp(g.thr - g.spd, -g.acc * dt, g.acc * dt);
+      if (g.heats) { if (g.spd > 0.93) g.heat += dt * 0.35; else g.heat = Math.max(0, g.heat - dt * 0.25); if (g.heat >= 1) { strike('overheat'); g.heat = 0.4; g.thr = Math.min(g.thr, 0.7); } }
+      if (g.spd > g.red) { strike('overspeed'); g.spd = 0.8; g.thr = 0.7; }
+      if (g.state !== 'play') return;
+      const onH = Math.abs(g.diff()) <= tol, onS = g.spd >= Lg.band[0] && g.spd <= Lg.band[1];
+      if (onH && onS) g.fill += dt; else g.fill = Math.max(0, g.fill - dt * 0.5);
+      if (g.fill >= Lg.hold) { g.fill = 0; g.leg++; ev('hit', { leg: g.leg }); if (g.leg >= g.legs.length) end('win', 'flown'); }
+    };
+    g.hint = () => { const Lg = g.legs[Math.min(g.leg, g.legs.length - 1)], d = g.diff(), mid = (Lg.band[0] + Lg.band[1]) / 2; return [['ArrowLeft', d < -tol * 0.4], ['ArrowRight', d > tol * 0.4], ['ArrowUp', g.thr < mid - 0.02], ['ArrowDown', g.thr > mid + 0.02]]; };
+    g.bad = () => 'ArrowUp';
+    g.view = () => ({ hdg: +g.hdg.toFixed(1), spd: +g.spd.toFixed(3), thr: +g.thr.toFixed(3), heat: +g.heat.toFixed(2), leg: g.leg, legs: g.legs.map(x => ({ ...x, hdg: +x.hdg.toFixed(1) })), fill: +g.fill.toFixed(2), tol, red: g.red });
+  } else if (kind === 'post') {   // people walk up to the door; read them at the line: admit + log, refuse, or hold a transfer without signed orders
+    const door = theme || 'Armory', ds = shuffle(rnd, DEPTS); g.rule = { door, depts: ds.slice(0, 2), min: ri(rnd, 2, 4), today: ri(rnd, 120, 300) };
+    g.walk = calm ? 6.5 : 4.5; g.reach = 0.4; g.log = [];
+    const person = () => ({ name: `${pick(rnd, RANKS)} ${pick(rnd, SURN)}`, dept: pick(rnd, g.rule.depts), clear: ri(rnd, g.rule.min, 5), exp: g.rule.today + ri(rnd, 1, 200), tail: false, orders: null });
+    const kinds = shuffle(rnd, ['ok', 'bad', 'tail', 'hold', 'orders']);
+    g.queue = kinds.map(k => { const p = person();
+      if (k === 'bad') { const w = pick(rnd, ['dept', 'clear', 'exp']); if (w === 'dept') p.dept = ds[ri(rnd, 2, ds.length - 1)]; else if (w === 'clear') p.clear = g.rule.min - 1; else p.exp = g.rule.today - ri(rnd, 1, 60); p.answer = 1; }
+      else if (k === 'tail') { p.tail = true; p.answer = 1; }
+      else if (k === 'hold' || k === 'orders') { p.orders = { what: pick(rnd, POSTS), signed: k === 'orders', date: k === 'orders' || rnd() < 0.5 ? g.rule.today : g.rule.today - ri(rnd, 1, 5) }; if (k === 'hold' && p.orders.date === g.rule.today) p.orders.signed = false; p.answer = k === 'orders' ? 0 : 2; }
+      else p.answer = 0;
+      return { ...p, pos: 0 }; });
+    g.need = g.queue.length; g.hits = 0; g.cur = g.queue[0];
+    const next = () => { g.hits++; if (g.hits >= g.need) end('win', 'post held'); else g.cur = g.queue[g.hits]; };
+    g.step = (dt) => { const c = g.cur; if (!c) return; c.pos += dt / g.walk; if (c.pos >= 1) { g.log.push({ name: c.tail ? 'tailgater' : c.name, act: 'walked past' }); strike('walked past'); if (g.state === 'play') next(); } };
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const d = DIG(code); if (!d || d > 3) return false; const c = g.cur; if (c.pos < g.reach) return true;   // too far off to read yet
+      if (d - 1 === c.answer) { g.log.push({ name: c.tail ? 'tailgater' : c.name, act: ['admitted', 'refused', 'held'][d - 1] }); ev('hit', { d }); next(); }
+      else strike(d === 1 ? 'let the wrong person in' : d === 2 ? 'turned away crew who belong' : 'held them for nothing');
+      return true;
+    };
+    g.hint = () => g.cur && g.cur.pos >= g.reach + 0.02 ? [['Digit' + (g.cur.answer + 1), true]] : [];
+    g.bad = () => g.cur && g.cur.pos >= g.reach + 0.02 ? 'Digit' + ((g.cur.answer + 1) % 3 + 1) : null;
+    g.view = () => ({ rule: g.rule, cur: g.cur && { ...g.cur }, hits: g.hits, need: g.need, log: g.log.slice(-4) });
+  } else if (kind === 'assay') {   // set the protocol value, run (wait), match the trace to one of four references. Two runs
+    const A = ASSAY[theme] || ASSAY.assay, [set, refs] = A; g.need = 2; g.hits = 0; g.dur = calm ? 3.4 : 2.4;
+    const pat = () => Array.from({ length: 3 }, () => ({ x: 0.08 + rnd() * 0.84, h: 0.35 + rnd() * 0.6, w: 0.03 + rnd() * 0.03 }));
+    const dist = (a, b) => a.reduce((m, p, i) => m + Math.abs(p.x - b[i].x) + Math.abs(p.h - b[i].h) * 0.5, 0);
+    const next = () => {
+      const [, unit, lo, hi] = set; g.proto = ri(rnd, lo, hi); g.v = clamp(g.proto + pick(rnd, [-1, 1]) * ri(rnd, 2, 5), lo, hi); if (g.v === g.proto) g.v = g.proto + (g.proto < hi ? 1 : -1);
+      g.set = { name: set[0], unit, lo, hi }; g.phase = 'set'; g.prog = 0;
+      const names = shuffle(rnd, refs).slice(0, 4), ps = []; for (let k = 0, tries = 0; ps.length < 4 && tries < 200; tries++) { const p = pat().sort((a, b) => a.x - b.x); if (ps.every(q => dist(p, q) > 0.45)) ps.push(p); } while (ps.length < 4) ps.push(pat().sort((a, b) => a.x - b.x));
+      g.refs = names.map((name, i) => ({ name, peaks: ps[i] })); g.answer = ri(rnd, 0, 3);
+      g.trace = Array.from({ length: 60 }, (_, k) => { const x = k / 59; return +clamp(ps[g.answer].reduce((m, p) => m + p.h * Math.exp(-((x - p.x) ** 2) / (2 * p.w * p.w)), 0) + (rnd() - 0.5) * 0.06, 0, 1.2).toFixed(3); });
+    };
+    next();
+    g.step = (dt) => { if (g.phase === 'run') { g.prog += dt / g.dur; if (g.prog >= 1) { g.prog = 1; g.phase = 'read'; ev('done', {}); } } };
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const a = ARROW[code], d = DIG(code);
+      if (g.phase === 'set') { if (a === 'L' || a === 'R') { g.v = clamp(g.v + (a === 'R' ? 1 : -1), g.set.lo, g.set.hi); return true; } if (code === 'Enter' || code === 'Space') { if (g.v === g.proto) { g.phase = 'run'; ev('start', {}); } else strike('wrong protocol'); return true; } return false; }
+      if (g.phase === 'run') return !!(a || d || code === 'Enter');   // the run is going: nothing to do but wait
+      if (!d || d > 4) return false;
+      if (d - 1 === g.answer) { g.hits++; ev('hit', {}); if (g.hits >= g.need) end('win', 'matched'); else next(); } else strike('misread trace');
+      return true;
+    };
+    g.hint = () => g.phase === 'set' ? [[g.v < g.proto ? 'ArrowRight' : g.v > g.proto ? 'ArrowLeft' : 'Enter', true]] : g.phase === 'read' ? [['Digit' + (g.answer + 1), true]] : [];
+    g.bad = () => g.phase === 'set' ? (g.v !== g.proto ? 'Enter' : null) : g.phase === 'read' ? 'Digit' + ((g.answer + 1) % 4 + 1) : null;
+    g.view = () => ({ phase: g.phase, v: g.v, proto: g.proto, set: g.set, prog: +g.prog.toFixed(2), refs: g.refs, trace: g.trace, answer: g.phase === 'read' ? g.answer : null, hits: g.hits, need: g.need });
+  } else if (kind === 'triage') {   // tag four casualties by the rule; two of them change and need re-tagging
+    const mk = (cat) => { const p = { name: `${pick(rnd, RANKS)} ${pick(rnd, SURN)}`, walks: cat === 3, rr: ri(rnd, 14, 26), pulse: true, cap: ri(rnd, 1, 2), obeys: true, tag: 0, changed: false };
+      if (cat === 1) { const w = pick(rnd, ['rr', 'pulse', 'cap', 'obeys']); if (w === 'rr') p.rr = ri(rnd, 32, 40); else if (w === 'pulse') p.pulse = false; else if (w === 'cap') p.cap = ri(rnd, 3, 4); else p.obeys = false; }
+      return p; };
+    g.truth = (p) => p.walks ? 3 : (p.rr > 30 || !p.pulse || p.cap > 2 || !p.obeys) ? 1 : 2;
+    g.pts = shuffle(rnd, [1, 2, 3, pick(rnd, [1, 2, 3])]).map(mk); g.sel = 0; g.need = 3; g.hits = 0; g.wait = -1; g.gap = calm ? 2.2 : 1.4;   // three sorts: the first, then after each of two changes
+    const fix = (p) => p.tag === g.truth(p), allOk = () => g.pts.every(fix);
+    const change = () => {   // someone gets worse: green -> yellow (stops walking), yellow -> red (breathing climbs / refill slows)
+      const c = g.pts.map((p, i) => g.truth(p) > 1 ? i : -1).filter(i => i >= 0), i = c.length ? pick(rnd, c) : 0, p = g.pts[i];
+      if (g.truth(p) === 3) p.walks = false; else if (g.truth(p) === 2) { if (rnd() < 0.5) p.rr = ri(rnd, 32, 38); else p.cap = 3; } else { p.obeys = false; p.rr = ri(rnd, 32, 38); p.tag = 2; }
+      p.changed = true; g.wait = -1; ev('change', { i });
+    };
+    g.step = () => { if (g.wait >= 0 && g.t >= g.wait) change(); };
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const a = ARROW[code];
+      if (a === 'U' || a === 'D') { g.sel = (g.sel + (a === 'D' ? 1 : 3)) % 4; return true; }
+      const d = DIG(code); if (!d || d > 3) return false; const p = g.pts[g.sel];
+      if (d !== g.truth(p)) { strike('mistagged'); return true; }
+      const was = fix(p); p.tag = d; p.changed = false; if (was) return true; ev('hit', { i: g.sel, d });
+      const nx = g.pts.findIndex(q => !fix(q)); if (nx >= 0) { g.sel = nx; return true; }
+      g.hits++; if (g.hits >= g.need) end('win', 'sorted'); else g.wait = g.t + g.gap;
+      return true;
+    };
+    g.hint = () => { const i = g.pts.findIndex(p => !fix(p)); if (i < 0) return []; if (i !== g.sel) return [[((i - g.sel + 4) % 4) <= 2 ? 'ArrowDown' : 'ArrowUp', true]]; return [['Digit' + g.truth(g.pts[i]), true]]; };
+    g.bad = () => 'Digit' + (g.truth(g.pts[g.sel]) % 3 + 1);
+    g.view = () => ({ pts: g.pts.map(p => ({ ...p, truth: g.truth(p) })), sel: g.sel, hits: g.hits, need: g.need, waiting: g.wait >= 0 });
+  } else if (kind === 'standby') {   // quiet watch: lamps that are not yours come and go; your call wants one action, fast
+    const S = STANDBY[theme] || STANDBY.drill, calls = shuffle(rnd, S.calls), k = calm ? 1.3 : 1; g.need = 2; g.hits = 0; g.ev = null; g.win = (calm ? 4.8 : 3.2); g.n = 0;
+    g.nextAt = (2 + rnd() * 1.2) * k; g.falses = ri(rnd, 0, 1);
+    const spawn = () => {
+      if (g.falses > 0) { g.falses--; g.ev = { real: false, text: pick(rnd, S.idle), until: g.t + 1.4 }; return; }
+      const c = calls[g.n++ % calls.length], order = shuffle(rnd, [0, 1, 2]); g.ev = { real: true, text: c[0], opts: order.map(j => c[1 + j]), answer: order.indexOf(0), until: g.t + g.win }; g.falses = ri(rnd, 0, 1);
+    };
+    const quiet = () => { g.ev = null; g.nextAt = g.t + (1.5 + rnd()) * k; };
+    g.step = () => { if (!g.ev && g.t >= g.nextAt) spawn(); else if (g.ev && g.t >= g.ev.until) { const missed = g.ev.real; quiet(); if (missed) strike('missed call'); } };
+    g.key = (code, down = true) => {
+      if (!down || g.state !== 'play') return false; const d = DIG(code); if (!d || d > 3) return false;
+      if (!g.ev?.real) { strike('false start'); return true; }
+      if (d - 1 === g.ev.answer) { g.hits++; ev('hit', {}); quiet(); if (g.hits >= g.need) end('win', 'responded'); } else { strike('wrong action'); quiet(); }
+      return true;
+    };
+    g.hint = () => g.ev?.real ? [['Digit' + (g.ev.answer + 1), true]] : [];
+    g.bad = () => g.ev?.real ? 'Digit' + ((g.ev.answer + 1) % 3 + 1) : 'Digit1';
+    g.view = () => ({ ev: g.ev && { ...g.ev }, hits: g.hits, need: g.need, quiet: !g.ev, next: +g.nextAt.toFixed(2), calls: calls.map(c => c[0]) });
+  }
   g.tick = (dt) => { if (g.state !== 'play') return; g.t += dt; g.step?.(dt); if (g.state === 'play' && g.t >= g.limit) end('fail', 'time'); };
   return g;
 }
@@ -887,6 +1150,8 @@ const RUSH = {
   station: ['Let her drift and logged "holding".'], burn: ['Came in hot and let the dampers eat it.'], fix: ['Used the dead-reckoning position.'], coords: ['Energised on the nearest lock.'],
   form: ['Copied last watch\'s figures into the form.', 'Ticked "all in limits" without reading.'], roster: ['Put the same three names on every watch.'], queue: ['Took the easy items first.'], verify: ['Skipped the verify pass.'],
   pa: ['Announced it on whatever channel was open.'], sign: ['Signed the whole page without reading it.'], schedule: ['Double-booked and hoped nobody noticed.'], trend: ['Glanced at the last reading only.'],
+  brief: ['Read the numbers out in whatever order and did not wait for the read-back.', 'Said "all fine" and left.'], decide: ['Picked the option with the biggest number.'], fly: ['Set the autopilot and looked away.', 'Flew it on the dampers.'],
+  post: ['Waved them through in a group.', 'Let the door hold itself.'], assay: ['Ran it on the default setting and logged the first match.'], triage: ['Tagged everyone yellow.'], standby: ['Stood down early and listened from the mess.'],
 };
 export function rushNote(tool, seed = 1) { const a = RUSH[tool?.kind] || RUSH.sequence; return a[(seed >>> 0) % a.length]; }
 

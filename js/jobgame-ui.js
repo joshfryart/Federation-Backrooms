@@ -48,7 +48,9 @@ const CSS = `#jobgame{--kc:#f0933a;--kc2:var(--k-lav,#b99be6);--kc3:var(--k-peri
 const PAL = { wires: ['#ff5a48', '#4fd06a', '#4f9dff', '#ffd23f'], good: '#4fd06a', bad: '#ff5a48' };
 const PAL_CB = { wires: ['#ffb000', '#4f9dff', '#f2f2f2', '#d45fd4'], good: '#4f9dff', bad: '#ffb000' };
 // sound captions for a strike, by the game's reason
-const CAPS = { spark: 'sparks', spike: 'pressure spike', overdose: 'patient monitor alarm', underdose: 'patient monitor alarm', 'wrong bed': 'monitor alarm', burnt: 'pan sizzles, smoke', raw: 'chef tuts', static: 'static hiss', 'breaker trip': 'breaker clunk', 'bad mix': 'pump gurgles', list: 'deck groans', hazard: 'proximity alarm', 'they close up': 'awkward silence', 'let the wrong person in': 'door alarm', 'turned away crew who belong': 'grumbling', 'passed a bad part': 'rig buzzer', 'rejected a good part': 'rig buzzer', 'that slot is fine': 'tray buzzer', 'count off': 'count mismatch beep', misclassified: 'sensor chirp', 'that entry is fine': 'log beep', 'still in date': 'scanner beep', 'wrong crate': 'scanner buzz', misread: 'decoder buzz', stalled: 'thrusters cut out', 'bad fix': 'plot error tone', 'scattered pattern': 'transporter whine fails', 'form bounced': 'form rejected chime', 'cannot take that post': 'roster error beep', 'out of order': 'queue buzzer', 'checksum mismatch': 'verify error beep', 'wrong decks': 'PA error tone', 'talked over traffic': 'crosstalk squeal', clash: 'calendar clash beep', 'signed an incomplete entry': 'log rejects signature', 'queried a good entry': 'clerk sighs', 'wrong segment': 'log beep' };
+const CAPS = { spark: 'sparks', spike: 'pressure spike', overdose: 'patient monitor alarm', underdose: 'patient monitor alarm', 'wrong bed': 'monitor alarm', burnt: 'pan sizzles, smoke', raw: 'chef tuts', static: 'static hiss', 'breaker trip': 'breaker clunk', 'bad mix': 'pump gurgles', list: 'deck groans', hazard: 'proximity alarm', 'they close up': 'awkward silence', 'let the wrong person in': 'door alarm', 'turned away crew who belong': 'grumbling', 'passed a bad part': 'rig buzzer', 'rejected a good part': 'rig buzzer', 'that slot is fine': 'tray buzzer', 'count off': 'count mismatch beep', misclassified: 'sensor chirp', 'that entry is fine': 'log beep', 'still in date': 'scanner beep', 'wrong crate': 'scanner buzz', misread: 'decoder buzz', stalled: 'thrusters cut out', 'bad fix': 'plot error tone', 'scattered pattern': 'transporter whine fails', 'form bounced': 'form rejected chime', 'cannot take that post': 'roster error beep', 'out of order': 'queue buzzer', 'checksum mismatch': 'verify error beep', 'wrong decks': 'PA error tone', 'talked over traffic': 'crosstalk squeal', clash: 'calendar clash beep', 'signed an incomplete entry': 'log rejects signature', 'queried a good entry': 'clerk sighs', 'wrong segment': 'log beep',
+  'wrong person': 'wrong-person cough', 'buried the lead': 'listener frowns', 'missed the wrong figure': 'read-back error tone', 'bad call': 'decision board buzz', overspeed: 'overspeed klaxon', overheat: 'engine overheat alarm',
+  'walked past': 'door alarm', 'held them for nothing': 'grumbling', 'wrong protocol': 'analyser error beep', 'misread trace': 'analyser buzz', mistagged: 'triage tag beep', 'missed call': 'call alarm', 'false start': 'false-start beep', 'wrong action': 'wrong-action tone' };
 const DEPT_COL = { medical: '#3fd6a0', engineering: '#e8892b', science: '#c58be0', security: '#ff7a6b', galley: '#c6d25e', cargo: '#d6c85a', bridge: '#6ea8ff' };   // css/hud-skin.css --m-* (department meaning colours)
 const DEPT_NAME = { medical: 'Medical', engineering: 'Engineering', science: 'Sciences', security: 'Security', galley: 'Services', cargo: 'Operations', bridge: 'Command' };
 const MARKS = ['circle', 'triangle', 'square', 'diamond'], SYM = ['◆', '▲', '●', '■'];
@@ -168,6 +170,13 @@ export class JobGameUI {
       case 'schedule': return B('ArrowLeft', '◀') + B('ArrowRight', '▶') + B('Enter', `Book ${kb('Enter')}`);
       case 'trend': return D(6);
       case 'sign': return B('Digit1', '1 Sign') + B('Digit2', '2 Query');
+      case 'brief': return D(4, d => g?.phase === 0 ? `${d} ${esc(g.recips[d - 1] || '')}` : String(d));
+      case 'decide': return D(3, d => `${d} ${esc(g?.cur?.opts?.[d - 1]?.name || '')}`);
+      case 'fly': return B('ArrowLeft', '◀ hold') + B('ArrowRight', 'hold ▶') + B('ArrowUp', '▲ throttle') + B('ArrowDown', '▼ throttle');
+      case 'post': return B('Digit1', '1 Admit') + B('Digit2', '2 Refuse') + B('Digit3', '3 Hold');
+      case 'assay': return B('ArrowLeft', '◀') + B('ArrowRight', '▶') + B('Enter', `Start ${kb('Enter')}`) + D(4);
+      case 'triage': return B('ArrowUp', '▲') + B('ArrowDown', '▼') + B('Digit1', '1 Red') + B('Digit2', '2 Yellow') + B('Digit3', '3 Green');
+      case 'standby': return D(3);
       default: return '';
     }
   }
@@ -446,6 +455,70 @@ const DRAW = {
     for (let s = 0; s < 6; s++) { const a = X(s * 4 - 0.5), b = X(s * 4 + 3.5); c.strokeStyle = 'rgba(125,151,232,.3)'; c.beginPath(); c.moveTo(clamp(a, x0, x1), y0); c.lineTo(clamp(a, x0, x1), y1); c.stroke(); T(c, s + 1, (clamp(a, x0, x1) + clamp(b, x0, x1)) / 2, y1 + 16, 12, '#f7c9a2', 'center'); }
     c.strokeStyle = '#7d97e8'; c.lineWidth = 2; c.beginPath(); r.pts.forEach((v, k) => { const yy = Y(clamp01(v)); k ? c.lineTo(X(k), yy) : c.moveTo(X(k), yy); }); c.stroke();
     r.pts.forEach((v, k) => { if (v < 0.3 || v > 0.7) { c.fillStyle = P.bad; c.fillRect(X(k) - 2, Y(clamp01(v)) - 2, 4, 4); } });
+  },
+  // ---- third pass: spoken brief, decision board, flight controls, door post, instrument run, triage tags, standby board
+  brief(c, W, H, g, P) {
+    const items = g.items, said = g.said;
+    T(c, g.phase === 0 ? 'WHO IS THIS FOR?' : g.phase === 1 ? 'YOUR ITEMS · out of limits → changed → steady' : 'YOUR ITEMS', 10, 13, 10, '#a8a6b9', 'left', 600);
+    items.forEach((r, i) => { const y = 18 + i * 37, out = r.v < r.lo || r.v > r.hi, k = said.indexOf(i); box(c, 6, y, 196, 33, k >= 0 ? '#1d1a33' : '#0c0b1a', g.phase === 1 && k < 0 ? '#7d97e8' : '#55507e', 4);
+      T(c, `${i + 1}`, 14, y + 21, 13, '#f7c9a2'); T(c, r.name, 30, y + 13, 10, k >= 0 ? '#6b68a0' : '#d8d2e6', 'left', 600); T(c, `${r.v}${r.unit ? ' ' + r.unit : ''}`, 30, y + 28, 13, k >= 0 ? '#6b68a0' : '#fff');
+      T(c, `${r.lo}–${r.hi}${r.prev != null ? ` · was ${r.prev}` : ''}`, 196, y + 13, 9, '#a8a6b9', 'right', 600); if (out) T(c, 'OUT', 196, y + 28, 10, P.bad, 'right'); else if (r.prev != null) T(c, r.v > r.prev ? '▲ CHANGED' : '▼ CHANGED', 196, y + 28, 9, '#f7c9a2', 'right'); if (k >= 0) T(c, `#${k + 1}`, 150, y + 28, 11, P.good, 'right'); });
+    if (g.phase === 0) g.recips.forEach((n, i) => { const y = 18 + i * 37; box(c, 210, y, 184, 33, '#0c0b1a', '#7d97e8', 16); T(c, `${i + 1}  ${n}`, 224, y + 22, 13, '#fff'); });
+    else if (g.phase === 1) { box(c, 210, 18, 184, 144, '#0c0b1a', '#55507e', 6); T(c, 'SPEAKING TO', 220, 34, 9, '#a8a6b9', 'left', 600); T(c, g.to || '', 220, 50, 13, '#fff'); T(c, 'Most urgent first.', 220, 80, 11, '#f7c9a2', 'left', 600); T(c, `${said.length} / 4 given`, 220, 100, 11, '#d8d2e6', 'left', 600); }
+    else { T(c, 'READ-BACK · press the wrong line', 210, 13, 10, '#f7c9a2', 'left', 700); (g.rb || []).forEach((r, i) => { const y = 18 + i * 37; box(c, 210, y, 184, 33, '#17142a', '#f7c9a2', 4); T(c, i + 1, 218, y + 21, 13, '#f7c9a2'); T(c, `“${r.name} ${r.v}${r.unit ? ' ' + r.unit : ''}”`, 234, y + 21, 11, '#fff', 'left', 600); }); }
+  },
+  decide(c, W, H, g, P) {
+    const r = g.cur, lim = (A, L) => `${A[0]} ${A[2] === 'max' ? '≤' : '≥'} ${L}${A[1] ? ' ' + A[1] : ''}`;
+    T(c, `LIMITS: ${lim(r.A, r.lim[0])} · ${lim(r.B, r.lim[1])}`, W / 2, 14, 11, '#f7c9a2', 'center'); T(c, `decision ${Math.min(g.round + 1, g.rounds)}/${g.rounds} · most ${r.val.toLowerCase()} inside both limits`, W / 2, 164, 9, '#a8a6b9', 'center', 600);
+    r.opts.forEach((o, i) => { const x = 6 + i * 131; box(c, x, 22, 125, 128, '#0c0b1a', '#7d97e8', 6); T(c, `${i + 1}`, x + 10, 42, 16, '#f7c9a2'); T(c, o.name, x + 28, 40, 11, '#fff');
+      T(c, r.A[0], x + 10, 66, 9, '#a8a6b9', 'left', 600); T(c, `${o.a}${r.A[1] ? ' ' + r.A[1] : ''}`, x + 115, 66, 13, '#fff', 'right'); T(c, r.B[0], x + 10, 90, 9, '#a8a6b9', 'left', 600); T(c, `${o.b}${r.B[1] ? ' ' + r.B[1] : ''}`, x + 115, 90, 13, '#fff', 'right');
+      T(c, r.val, x + 10, 116, 9, '#a8a6b9', 'left', 600); for (let k = 0; k < 10; k++) { c.fillStyle = k < o.v ? '#f4c25b' : '#2a2748'; c.fillRect(x + 10 + k * 10.5, 122, 8, 14); } T(c, o.v, x + 115, 116, 12, '#f4c25b', 'right'); });
+  },
+  fly(c, W, H, g, P) {
+    const Lg = g.legs[Math.min(g.leg, g.legs.length - 1)], cx = 82, cy = 84, R = 62, rad = (d) => (d - 90) * Math.PI / 180;
+    c.strokeStyle = '#55507e'; c.lineWidth = 2; c.beginPath(); c.arc(cx, cy, R, 0, 6.283); c.stroke(); for (let d = 0; d < 360; d += 30) { const a = rad(d - g.hdg); c.beginPath(); c.moveTo(cx + Math.cos(a) * (R - 6), cy + Math.sin(a) * (R - 6)); c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); c.stroke(); if (d % 90 === 0) T(c, ['N', 'E', 'S', 'W'][d / 90], cx + Math.cos(a) * (R - 16), cy + Math.sin(a) * (R - 16) + 4, 10, '#a8a6b9', 'center'); }
+    const ba = rad(Lg.hdg - g.hdg), on = Math.abs(g.diff()) <= g.tol; c.fillStyle = on ? P.good : '#f0933a'; c.beginPath(); c.moveTo(cx + Math.cos(ba) * (R + 2), cy + Math.sin(ba) * (R + 2)); c.lineTo(cx + Math.cos(ba - 0.12) * (R + 14), cy + Math.sin(ba - 0.12) * (R + 14)); c.lineTo(cx + Math.cos(ba + 0.12) * (R + 14), cy + Math.sin(ba + 0.12) * (R + 14)); c.closePath(); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); c.moveTo(cx, cy - R + 10); c.lineTo(cx - 8, cy + 6); c.lineTo(cx + 8, cy + 6); c.closePath(); c.fill(); T(c, `HDG ${String(Math.round(g.hdg)).padStart(3, '0')}`, cx, cy + 28, 11, '#fff', 'center'); T(c, `BUG ${String(Math.round(Lg.hdg)).padStart(3, '0')}`, cx, cy + 42, 10, on ? P.good : '#f7c9a2', 'center');
+    const x0 = 176, y0 = 18, h = 130, Y = (v) => y0 + h - v * h; c.fillStyle = '#1d1a33'; c.fillRect(x0, y0, 22, h); c.fillStyle = 'rgba(79,208,106,.35)'; c.fillRect(x0, Y(Lg.band[1]), 22, Y(Lg.band[0]) - Y(Lg.band[1])); c.strokeStyle = '#fff'; c.lineWidth = 2; c.strokeRect(x0, Y(Lg.band[1]), 22, Y(Lg.band[0]) - Y(Lg.band[1]));
+    c.fillStyle = P.bad; c.fillRect(x0 - 3, Y(g.red) - 1, 28, 3); T(c, 'RED', x0 + 30, Y(g.red) + 4, 9, P.bad, 'left'); c.fillStyle = '#f0933a'; c.fillRect(x0 - 6, Y(g.spd) - 2, 34, 4); c.fillStyle = '#7d97e8'; c.beginPath(); c.moveTo(x0 + 24, Y(g.thr)); c.lineTo(x0 + 34, Y(g.thr) - 5); c.lineTo(x0 + 34, Y(g.thr) + 5); c.closePath(); c.fill();
+    T(c, 'SPEED', x0 + 11, y0 + h + 14, 9, '#a8a6b9', 'center', 600); T(c, `${Math.round(g.spd * 100)} %`, x0 + 11, y0 - 4, 10, '#fff', 'center');
+    T(c, g.sub || 'Manoeuvre', 230, 26, 11, '#a8a6b9', 'left', 600); T(c, `LEG ${Math.min(g.leg + 1, g.legs.length)}/${g.legs.length} · ${Lg.name}`, 230, 46, 13, '#f7c9a2'); T(c, `band ${Math.round(Lg.band[0] * 100)}–${Math.round(Lg.band[1] * 100)} %`, 230, 64, 11, '#d8d2e6', 'left', 600);
+    c.fillStyle = '#1d1a33'; c.fillRect(230, 76, 160, 12); c.fillStyle = P.good; c.fillRect(230, 76, 160 * clamp01(g.fill / Lg.hold), 12); c.strokeStyle = '#a8a6b9'; c.lineWidth = 1; c.strokeRect(230, 76, 160, 12); T(c, 'HOLD', 230, 100, 9, '#a8a6b9', 'left', 600);
+    if (g.heats) { c.fillStyle = '#1d1a33'; c.fillRect(230, 112, 160, 10); c.fillStyle = g.heat > 0.7 ? P.bad : '#f4c25b'; c.fillRect(230, 112, 160 * clamp01(g.heat), 10); T(c, 'ENGINE HEAT', 230, 134, 9, '#a8a6b9', 'left', 600); }
+    pips(c, g.legs.length, g.leg, 236, 152, P);
+  },
+  post(c, W, H, g, P) {
+    const R = g.rule, p = g.cur; T(c, `${R.door.toUpperCase()} · ${R.depts.join(' / ')} · clearance ${R.min}+ · day ${R.today}`, 10, 14, 10, '#f7c9a2', 'left');
+    const x0 = 14, x1 = 240, y = 70, X = (v) => x0 + (x1 - x0) * clamp01(v); c.strokeStyle = 'rgba(125,151,232,.4)'; c.lineWidth = 2; c.beginPath(); c.moveTo(x0, y + 22); c.lineTo(x1 + 20, y + 22); c.stroke();
+    c.fillStyle = '#55507e'; c.fillRect(x1 + 6, 26, 10, 70); c.strokeStyle = '#fff'; c.setLineDash([4, 3]); c.beginPath(); c.moveTo(X(g.reach), 30); c.lineTo(X(g.reach), y + 26); c.stroke(); c.setLineDash([]); T(c, 'LINE', X(g.reach), 28, 8, '#a8a6b9', 'center', 600);
+    if (p) { const px = X(p.pos); c.fillStyle = '#f3eee6'; c.beginPath(); c.arc(px, y - 18, 6, 0, 6.283); c.fill(); c.fillRect(px - 5, y - 11, 10, 22); if (p.tail) { c.fillStyle = '#a8a6b9'; c.beginPath(); c.arc(px - 18, y - 16, 5, 0, 6.283); c.fill(); c.fillRect(px - 22, y - 10, 8, 20); }
+      const near = p.pos >= g.reach; box(c, 266, 22, 128, 104, '#0c0b1a', near ? '#f7c9a2' : '#55507e', 6);
+      if (!near) T(c, 'approaching…', 330, 76, 11, '#a8a6b9', 'center', 600);
+      else { T(c, p.tail ? 'NO SWIPE' : p.name, 274, 40, 11, p.tail ? P.bad : '#fff'); if (p.tail) T(c, 'following through behind', 274, 56, 9, '#d8d2e6', 'left', 600); else { T(c, `${p.dept} · clr ${p.clear}`, 274, 56, 10, '#d8d2e6', 'left', 600); T(c, `badge to day ${p.exp}`, 274, 71, 10, p.exp < R.today ? P.bad : '#d8d2e6', 'left', 600); }
+        if (p.orders) { T(c, p.orders.what, 274, 90, 10, '#f7c9a2', 'left', 600); T(c, `orders ${p.orders.signed ? 'signed' : 'NOT signed'} · day ${p.orders.date}`, 274, 105, 9, p.orders.signed && p.orders.date === R.today ? '#d8d2e6' : P.bad, 'left', 600); } } }
+    (g.log || []).slice(-3).forEach((l, i) => T(c, `${l.name} — ${l.act}`, 14, 120 + i * 14, 9, l.act === 'walked past' ? P.bad : '#a8a6b9', 'left', 600)); pips(c, g.need, g.hits, 280, 148, P);
+  },
+  assay(c, W, H, g, P) {
+    const s = g.set, x0 = 10, x1 = g.phase === 'read' ? 230 : W - 10, y0 = 40, y1 = 150; T(c, `PROTOCOL ${s.name} ${g.proto}${s.unit ? ' ' + s.unit : ''}`, 10, 14, 11, '#f7c9a2'); T(c, g.phase === 'set' ? `SET ◀ ${g.v} ▶  · Enter starts` : g.phase === 'run' ? `RUNNING ${Math.round(g.prog * 100)} %` : 'MATCH THE TRACE', 10, 30, 11, g.phase === 'set' && g.v === g.proto ? P.good : '#fff');
+    box(c, x0, y0, x1 - x0, y1 - y0, '#0c0b1a', '#55507e', 4); const n = Math.floor(g.trace.length * (g.phase === 'set' ? 0 : g.prog)); c.strokeStyle = '#7d97e8'; c.lineWidth = 2; c.beginPath(); for (let k = 0; k < n; k++) { const xx = x0 + 4 + k / 59 * (x1 - x0 - 8), yy = y1 - 4 - Math.min(1.2, g.trace[k]) / 1.2 * (y1 - y0 - 10); k ? c.lineTo(xx, yy) : c.moveTo(xx, yy); } c.stroke();
+    if (g.phase === 'read') g.refs.forEach((r, i) => { const y = 6 + i * 40, bx = 238; box(c, bx, y, 156, 36, '#0c0b1a', '#7d97e8', 4); T(c, i + 1, bx + 8, y + 22, 13, '#f7c9a2'); T(c, r.name, bx + 22, y + 12, 9, '#d8d2e6', 'left', 600); c.strokeStyle = '#f7c9a2'; c.lineWidth = 1.5; c.beginPath(); for (let k = 0; k <= 40; k++) { const x = k / 40, v = r.peaks.reduce((m, p) => m + p.h * Math.exp(-((x - p.x) ** 2) / (2 * p.w * p.w)), 0), xx = bx + 22 + x * 128, yy = y + 33 - Math.min(1.2, v) / 1.2 * 18; k ? c.lineTo(xx, yy) : c.moveTo(xx, yy); } c.stroke(); });
+    pips(c, g.need, g.hits, W - 40, 14, P);
+  },
+  triage(c, W, H, g, P) {
+    const TAG = ['', 'RED', 'YELLOW', 'GREEN'], TC = ['#2a2748', '#c05050', '#c8a040', '#4f9d6a']; T(c, 'WALK  ·  BREATHS  ·  RADIAL PULSE  ·  REFILL  ·  OBEYS', 120, 13, 9, '#a8a6b9', 'left', 700);
+    g.pts.forEach((p, i) => { const y = 18 + i * 34, on = i === g.sel; box(c, 6, y, W - 12, 30, on ? '#17142a' : '#0c0b1a', on ? '#f7c9a2' : p.changed ? '#f0933a' : '#55507e', 4); T(c, `${i + 1}`, 14, y + 20, 12, '#f7c9a2'); T(c, p.name, 28, y + 20, 10, '#fff', 'left', 600);
+      T(c, `${p.walks ? 'yes' : 'no'}   ${p.rr}/min   ${p.pulse ? 'yes' : 'NONE'}   ${p.cap} s   ${p.obeys ? 'yes' : 'NO'}`, 120, y + 20, 11, '#d8d2e6', 'left', 600);
+      box(c, W - 86, y + 5, 74, 20, TC[p.tag], '#a8a6b9', 10); T(c, p.tag ? TAG[p.tag] : 'untagged', W - 49, y + 19, 10, p.tag ? '#0a0912' : '#a8a6b9', 'center'); if (p.changed) T(c, '▲ changed', W - 92, y + 19, 9, '#f0933a', 'right'); });
+    T(c, g.waiting ? 'watching for changes…' : 'red: breaths > 30, no pulse, refill > 2 s or not obeying · yellow: can\'t walk · green: walking', W / 2, 164, 9, '#a8a6b9', 'center', 600);
+  },
+  standby(c, W, H, g, P) {
+    const e = g.ev; box(c, 6, 6, W - 12, 52, e?.real ? '#2a1a20' : '#0c0b1a', e?.real ? '#f0933a' : '#55507e', 8);
+    if (!e) { T(c, 'STANDING BY', W / 2, 30, 16, '#55507e', 'center'); T(c, 'hands still · nothing to do until your call', W / 2, 48, 10, '#6b68a0', 'center', 600); }
+    else if (!e.real) { T(c, e.text.toUpperCase(), W / 2, 30, 15, '#a8a6b9', 'center'); T(c, 'not your call', W / 2, 48, 10, '#6b68a0', 'center', 600); }
+    else { T(c, e.text, W / 2, 30, 15, '#fff', 'center'); const left = clamp01((e.until - g.t) / g.win); c.fillStyle = '#1d1a33'; c.fillRect(20, 44, W - 40, 6); c.fillStyle = left < 0.3 ? P.bad : '#f4c25b'; c.fillRect(20, 44, (W - 40) * left, 6);
+      e.opts.forEach((o, i) => { const y = 66 + i * 30; box(c, 30, y, W - 60, 26, '#17142a', '#f7c9a2', 13); T(c, `${i + 1}  ${o}`, 46, y + 18, 12, '#fff'); }); }
+    if (!e?.real) { for (let i = 0; i < 6; i++) { c.fillStyle = e && !e.real && i % 2 ? '#f4c25b' : '#2a2748'; c.beginPath(); c.arc(80 + i * 48, 100, 10, 0, 6.283); c.fill(); } }
+    pips(c, g.need, g.hits, W - 40, 160, P);
   },
 };
 const clamp01 = (v) => Math.max(0, Math.min(1, v)), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
