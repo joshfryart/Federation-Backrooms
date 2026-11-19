@@ -11,7 +11,7 @@ export default define({
   title: 'Point to the system fault in the log', dept: 'medical', host: 'room', siteName: 'Stop', verb: 'Check',
   how: 'Wait for the reset to finish, then tap E at the panel. Tap E to ask the junior if they blame themselves. At the log, turn your view to the SYSTEM entry and tap E to point to it.',
   keys: ['E tap: step in / ask / point', 'look along the log'], limit: 36, maxFaults: 3,
-  fingerprint: { verb: 'point to the cause', input: 'e-tap+look', win: 'the reset left to finish, the junior asked, and the log entry showing the system cause pointed out before their self-blame sets',
+  fingerprint: { verb: 'point out cause', input: 'e-tap+look', win: 'the reset left to finish, the junior asked, and the log entry showing the system cause pointed out before their self-blame sets',
     fail: 'stepping in during the reset, pointing at the entry with the junior\'s own action on it, or leaving them to freeze in their guilt',
     rule: 'Tap E at the panel only once the reset reads DONE. Tap E to ask the junior. At the log, the panel names the entry under your view; aim at the SYS line (±0.12 rad) and tap E.' },
   rush: 'Told the crew "these things happen" from the doorway.',
@@ -24,7 +24,7 @@ export default define({
     const bears = [-0.45, -0.15, 0.15, 0.45]; m.log = lines.map(([s, k], i) => ({ s, k, at: bears[i] + rf(r, -0.04, 0.04) }));
     const under = (lk) => m.log.find(x => Math.abs(lk - x.at) <= tol);
     m.step = (dt, inp = {}) => {
-      if (!m.live(dt, inp.away)) return; m.reset = Math.min(1, m.reset + dt / m.resetAt);
+      if (!m.live(dt, inp.away)) return; m.lk = inp.look || 0; m.reset = Math.min(1, m.reset + dt / m.resetAt);
       if (m.asked) { m.blame += dt * (m.calm ? 0.045 : 0.06); if (m.blame >= 1) { m.fault('froze'); m.blame = 0.4; } }
       const s = m.cur(inp); m.released(inp); if (!s) return; const i = m.next;
       if (i === 0) { if (inp.press) { if (m.reset < 1) { m.fault('interrupted reset'); m.reset = 0; } else { m.finish(0); return; } } s.prog = m.reset * 0.9; return; }
@@ -37,10 +37,9 @@ export default define({
     m.bad = (f = 0) => { const i = m.next; if (i === 0 && m.reset < 0.9) return { at: 0, press: f % 6 === 0 }; if (i < 2) return { at: i, press: f % 6 === 0 }; return { at: 2, look: m.log.find(x => x.k === 'jun').at, press: f % 6 === 0 }; };
     m.view = () => ({ jun: m.jun, reset: +m.resetAt.toFixed(2), log: m.log.map(x => [x.s, +x.at.toFixed(2)]) });
     m.panel = (i) => i === 0 ? { label: m.reset >= 1 ? 'Reset DONE' : 'Reset running…', value: `${Math.round(m.reset * 100)} %`, bar: m.reset, band: [0.99, 1] }
-      : i === 1 ? { label: m.jun, value: 'avoiding the lead\'s eye', bar: 0 } : { label: `${m.jun}: self-blame`, value: 'look along the log to read entries', bar: m.blame };
+      : i === 1 ? { label: m.jun, value: 'avoiding the lead\'s eye', bar: 0 } : { label: `${m.jun}: self-blame`, value: under(m.lk || 0)?.s || 'look along the log to read entries', bar: m.blame };
     m.prompt = (i) => i === 0 ? (m.reset >= 1 ? 'Reset done — tap [E] to step in' : 'Let them finish the reset — wait') : i === 1 ? `Tap [E] to ask ${m.jun} whether they think the fault was theirs`
       : 'Turn your view along the log entries; tap [E] on the SYS line that shows the system cause';
-    m.aimText = (lk) => under(lk)?.s || '';
     return m;
   },
 });
