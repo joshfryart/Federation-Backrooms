@@ -2,7 +2,7 @@
 // Carrying a sample case: ask to see the seal first, and turn them back if it is broken. Everyone else may go in, but never while the status
 // board shows SWEEP LIVE: they have to wait for the gap, and a scientist kept waiting too long pushes past you. Admitting mid-sweep, waving in
 // an unshown or broken seal or someone off the list, turning back a listed scientist, or being pushed past are faults.
-import { define, machine, ARROW, SPACE, ENTER, rf, ri, shuffle, pick, txt, box, bar, lamp, COL } from './kit.js';
+import { define, machine, ARROW, SPACE, ENTER, rf, ri, shuffle, txt, box, bar, lamp, COL } from './kit.js';
 
 const LIST = ['Dr. Anand', 'Lt. Mbeki', 'Ens. Torvik', 'Dr. Laszlo', 'Sci. Quill', 'Ens. Paget'], OFF = ['Cmdr. Rusk', 'Tech Varga', 'Ens. Lowe'];
 export default define({
