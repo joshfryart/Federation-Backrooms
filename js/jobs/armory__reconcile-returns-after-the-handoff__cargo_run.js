@@ -21,7 +21,7 @@ export default define({
     m.log = Array.from({ length: 6 }, () => ({ s: uniq(() => ser(r)), x: 0 }));
     const back = shuffle(r, [0, 1, 2, 3, 4, 5]); m.open = back.slice(4).map(i => m.log[i]);
     const outOne = r() < 0.5 ? 1 : 2; m.open.forEach((l, k) => { l.k = k < outOne ? 'out' : 'gone'; });
-    m.rack = shuffle(r, [...back.slice(0, 4).map(i => m.log[i]), null, null, null, r() < 0.5 ? null : null]).map(l => ({ l, hit: false }));
+    m.rack = shuffle(r, [...back.slice(0, 4).map(i => m.log[i]), null, null, null, null]).map(l => ({ l, hit: false }));
     const g = m.open.find(l => l.k === 'gone');
     m.slips = shuffle(r, [...m.open.filter(l => l.k === 'out').map(l => l.s), g ? uniq(() => g.s.slice(0, 5) + ((+g.s[5] + 3) % 10)) : uniq(() => ser(r)), uniq(() => ser(r))]);
     m.h = 0; m.ht = 0; m.phase = 'count'; m.c = 0; m.rounds = 2; m.round = 0;
