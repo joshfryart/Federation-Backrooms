@@ -31,7 +31,7 @@ export default define({
     m.step = (dt, inp = {}) => {
       if (!m.live(dt, inp.away)) return; const s = m.cur(inp); if (!s) return; const it = m.q[m.k]; if (!it) return; m.w += dt;
       if (m.w < 0) { m.hT = 0; m.held = !!inp.hold; return; }
-      if (inp.hold) { if (!m.held) m.hT = 0; m.hT += dt; if (m.hT >= HOLD && m.hT - dt < HOLD) act('hold'); }
+      if (inp.hold) { if (!m.held) m.hT = 1e-4; if (m.hT > 0) { m.hT += dt; if (m.hT >= HOLD && m.hT - dt < HOLD) act('hold'); } }
       else if (m.held && m.hT > 0 && m.hT < 0.4) act('tap');
       m.held = !!inp.hold;
       if (!it.final && m.w > W && m.q[m.k] === it) { m.fault('uncounted'); m.k++; m.w = -0.3; if (m.k < m.q.length && m.q[m.k].site === 1 && !m.sites[0].done) m.finish(0); }

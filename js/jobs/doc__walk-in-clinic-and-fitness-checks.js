@@ -4,7 +4,6 @@
 // probe reading is a fault; stamping a feverish or concussed crewman FIT is the worst one.
 import { define, machine, SPACE, ENTER, DIG, rf, ri, pick, shuffle, txt, box, bar, lamp, COL } from './kit.js';
 
-const STAMP = ['', 'TREAT', 'REFER', 'FIT'];
 export default define({
   job: { billet: 'doc', label: 'Walk-in clinic and fitness checks', type: 'loop' },
   title: 'Lamp, probe and duty stamp', dept: 'medical', host: 'console', tool: 'Clinic desk and duty sheet',
