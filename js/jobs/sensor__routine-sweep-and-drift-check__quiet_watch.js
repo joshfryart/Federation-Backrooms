@@ -10,7 +10,7 @@ export default define({
   title: 'Quiet sweep log, gain and faint mark', dept: 'sciences', host: 'console', tool: 'Sweep console',
   how: 'Log the drift (Enter) each time the interval lamp lights, step the gain down (↓) only once the drift line crosses its limit, and mark (Space) the faint return once it has painted on two passes.',
   keys: ['Enter log drift on the chime', '↓ gain one step', 'Space mark faint return'], limit: 36, maxFaults: 3,
-  fingerprint: { verb: 'keep the watch log', input: 'arrows+enter+space', win: 'five interval drift readings logged on their chimes, gain stepped only past the limit, and the slowly building return marked after its second pass',
+  fingerprint: { verb: 'keep watch log', input: 'arrows+enter+space', win: 'five interval drift readings logged on their chimes, gain stepped only past the limit, and the slowly building return marked after its second pass',
     fail: 'missing an interval chime or logging between chimes, stepping the gain under the limit, marking a one-off blip, or letting the faint return build unmarked',
     rule: 'Three duties on a quiet scope: Enter while the interval lamp is lit, ↓ only when the drift line is over its limit, Space once the faint return has painted twice.' },
   rush: 'Glanced at the scope at the end of the watch and wrote the same drift figure in every interval box.',

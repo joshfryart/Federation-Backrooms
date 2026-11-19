@@ -9,7 +9,7 @@ export default define({
   title: 'Subsystem start-up and reverse shutdown', dept: 'engineering', host: 'console', tool: 'Environmental test board',
   how: 'Switch each subsystem on (1-7) in checklist order, waiting for its lamp to turn green; open a pump\'s isolation valve before the pump. Then switch them off in reverse order, waiting for each lamp to go dark.',
   keys: ['1-7 throw a switch'], limit: 36, maxFaults: 3,
-  fingerprint: { verb: 'sequence up and down', input: 'digits', win: 'every environmental subsystem brought up in checklist order and shut down in reverse, each lamp settled before the next, no pump run dry',
+  fingerprint: { verb: 'cycle up, down', input: 'digits', win: 'every environmental subsystem brought up in checklist order and shut down in reverse, each lamp settled before the next, no pump run dry',
     fail: 'starting a pump with its isolation valve shut, throwing the next switch before the last lamp settled, or switching out of order',
     rule: 'Board numbers do not follow the checklist: find each name. Amber lamp = spinning up or down, wait. Valves are not listed but each pump needs its valve open first.' },
   rush: 'Threw every switch on the board at once and wrote PASS on the checklist.',
