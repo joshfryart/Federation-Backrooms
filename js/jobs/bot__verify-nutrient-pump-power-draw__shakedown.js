@@ -21,13 +21,13 @@ export default define({
     m.pumps = m.sites.map(() => { const spec = rf(r, 2.4, 4.2); return { spec, draw: spec * rf(r, 0.85, 1.2), st: 0, a: 0, v: 0, z: rf(r, 1.8, 3.2), w: rf(r, 7, 10), logged: null }; });
     m.step = (dt, inp = {}) => {
       if (!m.live(dt, inp.away)) return; const s = m.cur(inp); if (!s) return; const i = m.next, p = m.pumps[i];
-      if (p.st === 2) { const f = -p.w * p.w * (p.a - p.draw) - p.z * p.v; p.v += f * dt; p.a += p.v * dt; }
       if (inp.press) {
         if (p.st === 0) { p.st = 1; m.ev('clamp', { site: i }); }
         else if (p.st === 1) { p.st = 2; p.a = p.draw * 2.4; p.v = 0; m.ev('start', { site: i }); }
         else if (Math.abs(p.v) < still * 10 && Math.abs(p.a - p.draw) < still * p.draw) { p.logged = +p.a.toFixed(2); m.finish(i); return; }
         else { m.fault('surge'); p.st = 1; p.a = 0; p.v = 0; }
       }
+      if (p.st === 2) { const f = -p.w * p.w * (p.a - p.draw) - p.z * p.v; p.v += f * dt; p.a += p.v * dt; }
       s.prog = p.st === 2 ? clamp(0.4 + 0.5 * (1 - Math.abs(p.a - p.draw) / (p.draw * 1.4)), 0.4, 0.9) : p.st * 0.2;
     };
     m.hint = () => { const i = m.next; if (i < 0) return { at: -1 }; const p = m.pumps[i];
