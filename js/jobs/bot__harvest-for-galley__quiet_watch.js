@@ -16,16 +16,16 @@ export default define({
   says: { 'cut above node': 'Cut off the beat, too far above the node: the stem dropped. Wait for it to swing through the blades.' },
   create(seed, opts) {
     const m = room(machine(this, seed, opts), [{ name: 'Fruiting rack top', prop: 'tree' }, { name: 'Fruiting rack middle', prop: 'plant' }, { name: 'Fruiting rack low', prop: 'tree' }]), r = m.rnd;
-    const tol = m.calm ? 0.26 : 0.19;
+    const tol = m.calm ? 0.6 : 0.45;
     m.plants = m.sites.map(() => ({ share: ri(r, 1, 3), cut: 0, per: rf(r, 1.1, 1.6) * (m.calm ? 1.15 : 1), ph: rf(r, 0, 6.28) }));
     m.order = m.plants.reduce((a, p) => a + p.share, 0);
-    m.off = (p) => Math.sin(m.t * 6.283 / p.per + p.ph);   // -1..1, 0 = node at the blades
+    m.off = (p, t = m.t) => Math.sin(t * 6.283 / p.per + p.ph);   // -1..1, 0 = node at the blades
     m.step = (dt, inp = {}) => {
       if (!m.live(dt, inp.away)) return; const s = m.cur(inp); if (!s) return; const i = m.next, p = m.plants[i];
       if (inp.press) { if (Math.abs(m.off(p)) <= tol) { p.cut++; m.ev('snip', { site: i }); if (p.cut >= p.share) { m.finish(i); return; } } else m.fault('cut above node'); }
       s.prog = clamp(p.cut / p.share, 0, 0.95);
     };
-    m.hint = () => { const i = m.next; if (i < 0) return { at: -1 }; const p = m.plants[i]; const ok = Math.abs(m.off(p)) <= tol * 0.6 && m.t - (m.lastHint ?? -9) > 0.3;
+    m.hint = () => { const i = m.next; if (i < 0) return { at: -1 }; const p = m.plants[i]; const ok = Math.abs(m.off(p, m.t + 1 / 30)) <= tol * 0.6 && m.t - (m.lastHint ?? -9) > 0.3;
       if (ok) m.lastHint = m.t; return { at: i, press: ok }; };
     m.bad = (f = 0) => { const i = m.next, p = m.plants[i]; return { at: i, press: f % 6 === 0 && Math.abs(m.off(p)) > 0.7 }; };
     m.view = () => ({ plants: m.plants.map(p => [p.share, +p.per.toFixed(2)]) });
