@@ -2,7 +2,7 @@
 // within reach ahead of the stretcher, ask them to step aside (Space). Some are dazed and need asking twice. Asking when nobody is close
 // enough just shoves the crowd. At each junction door, hold it open (hold Up) while the stretcher passes; let go while it is in the frame and
 // the door closes on it. Anyone still in the lane, or a door nobody holds, stops the stretcher and the corridor jams.
-import { define, machine, SPACE, ARROW, rf, ri, txt, box, lamp, COL } from './kit.js';
+import { define, machine, SPACE, ARROW, rf, txt, box, lamp, COL } from './kit.js';
 
 export default define({
   job: { billet: 'dep', label: 'Escort patients and clear a corridor to sickbay', type: 'task:medical_relief' },
