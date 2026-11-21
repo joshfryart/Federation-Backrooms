@@ -49,9 +49,10 @@ import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation clos
 import { combatTests, combatBrowser, combatMadness } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
 import { jobgameTests, jobgameBrowser, jobsiteBrowser, jobmoduleBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
+import { touchTests, touchBrowser } from './test-touch.mjs';   // touch / mobile controls: stick, look drag, buttons, mini-game + room job by touch (tools/test-touch.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
-  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {
@@ -229,7 +230,7 @@ const gameReady = async (p) => p.evaluate(async ({ ship, manual }) => { await __
 const openPage = async (path, tag = '', viewport = { width: 320, height: 180 }, ready = gameReady) => {
   if (!browser) browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required'] });   // a running AudioContext: in a suspended one (no user gesture) every scheduled sound node stays alive, gigabytes over a run
   for (let attempt = 1; ; attempt++) {
-    const p = await browser.newPage({ viewport }); p.setDefaultTimeout(120000); p.setDefaultNavigationTimeout(120000);
+    const p = await browser.newPage(viewport.device ? { ...viewport.device, deviceScaleFactor: 1 } : { viewport });   // viewport.device: a Playwright device profile (touch page) p.setDefaultTimeout(120000); p.setDefaultNavigationTimeout(120000);
     await p.addInitScript((seed) => { window.__seedRandom = (s) => { let a = s >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }; window.__seedRandom(seed); }, SEED);   // Math.random seeded (the generator of tools/soak-walk.mjs); __seedRandom re-seeds per section
     const errs = []; p.on('pageerror', e => errs.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(tag + m.text()); }); p.on('crash', () => errs.push(tag + 'renderer crashed'));
     try { await p.goto(`http://localhost:${port}/${path}`); await ready(p); p.on('pageerror', e => errors.push(tag + e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(tag + m.text()); }); p.on('crash', () => errors.push(tag + 'renderer crashed')); errors.push(...errs); return p; }
@@ -241,7 +242,8 @@ const PAGES = {   // page kinds: how to open one
   nominal: () => openPage('index.html?test=1', 'nominal: '),
   voices: () => openPage('voices.html?ship=3&seed=2', 'voices.html: ', { width: 900, height: 600 }, (p) => p.waitForFunction(() => window.__ready, null, { timeout: 60000 })),
   nominal3: async () => { const p = await openPage('index.html?test=1', 'nominal: '); await p.evaluate(() => { __game.G.forceShip = 1; }); return p; },   // forceShip 1 as the lift-rider section on the previous page leaves it
-  smoke: () => openPage('index.html', 'smoke: '),   // no ?test=1: the one high-quality render runs on the real renderer settings
+  smoke: () => openPage('index.html', 'smoke: '),
+  touch: () => openPage('index.html?test=1', 'touch: ', { device: require('playwright').devices['Pixel 7 landscape'] }),   // phone profile: coarse pointer, touch events   // no ?test=1: the one high-quality render runs on the real renderer settings
 };
 
 // ---- madness page (?mode=madness, the old roguelike) ----
@@ -862,6 +864,7 @@ const smoke = (ship, seed) => async (page) => {
   console.log('smoke:', JSON.stringify(r));
   if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
+S('touch', 'touch', (p) => touchBrowser(p, fail));   // js/touch.js on a phone profile (tools/test-touch.mjs)
 S('smoke', 'smoke', smoke(SHIP, null));
 for (const [i, [ship, seed]] of SEED_SET.entries()) S('smoke-set' + i, 'smoke', smoke(ship, seed));
 
