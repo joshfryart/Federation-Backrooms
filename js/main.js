@@ -45,6 +45,7 @@ import { propsFor, classifyItem } from './equipment.js';
 import { Kit } from './kit.js';   // handheld job equipment / improvised weapons (js/handhelds.js)
 import { Melee } from './grapple.js';   // Systems Nominal hand-to-hand: grab / hold / shove / strike, security response, armory (js/combat.js rules, docs/combat.md)
 import { MISSIONS, party as commParty } from './bridge.js';
+import { PadInput } from './gamepad.js';   // gamepad: synthetic keys + right-stick look + glyph hints (js/gamepad.js)
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { briefNotes, rumourFor } from './socialui.js';   // run-start crew notes + rumours (docs/social.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
@@ -611,6 +612,7 @@ const data0 = () => mulberry32((G.runSeed ^ 0x5eed) >>> 0);
 initHaul({ get gorns() { return gorns; }, killMad, nearestRepair, get world() { return world; }, get ents() { return ents; }, scene, P, G, vmScene, sound, startWalk, simTileFor, gaitFor, pathField, cue: (p, c) => voiceCue(p, c), speak });   // js/haul.js glue context
 G.nav = new NavHUD({ G, P, TS, NOM, get world() { return world; }, get repairPts() { return repairPts; } });   // js/nav-hud.js
 G.menus = new Menus({ G, P, NOM, camera, renderer, canvas, get world() { return world; }, get ents() { return ents; }, isLocked: () => locked, requestLock, resumeGame, pause: () => { G.phase = 'paused'; showScreen('pause'); }, interact, talkMenu, terminalMenu, dutyMenu, showStatus });   // js/menus.js (key router: registered before main's keydown)
+G.pad = new PadInput({ G, P, CFG, NOM, fire, secondary: () => { if (!(NOM() && G.combat?.secondary(true))) fireGrapple(); }, resume: () => resumeGame() });
 G.jobgame = new JobGameUI({ G, CFG, sound, caption: (t) => caption(t), store: learnedStore(() => CFG.learned, (v) => { CFG.learned = v; saveCfg(); }) });   // the job mini-game layer (js/jobgame-ui.js); CFG.learned = tools already explained
 // Do a duty round / mission task "properly": at a station, the mini-game for what the job is (js/jobgames.js gameFor: label / room / sys, then the
 // station itself; duty loops and mission tasks alike), after a one-time
@@ -1972,7 +1974,7 @@ function frame() {
   requestAnimationFrame(frame);
   const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
   if (G.manual) return;   // test clock (tools/test.mjs): nothing runs on the wall clock (world, UI frame incl. portrait warm-up, drawing); tests drive __game.step / advance / menus.frame / renderOnce
-  elapsed += dt; tickWorld(dt, elapsed); G.menus?.frame(dt); G.jobgame?.tick(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
+  elapsed += dt; tickWorld(dt, elapsed); G.menus?.frame(dt); G.pad?.tick(dt); G.jobgame?.tick(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
   if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }

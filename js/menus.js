@@ -230,6 +230,7 @@ export class Menus {
   // ---------------------------------------------------------------- gamepad (Gamepad API; polled from frame)
   gamepad() {
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : []; const gp = pads[0]; if (!gp) return;
+    if (this.G.nav?.mapOpen) { this.pad.prev = gp.buttons.map(x => x.pressed); return; }   // the big map: js/gamepad.js owns the pad there
     const b = gp.buttons.map(x => x.pressed), pv = this.pad.prev, down = (i) => b[i] && !pv[i], up = (i) => !b[i] && pv[i]; this.pad.prev = b; const UI = this.UI;
     if (down(9)) { if (this.G.phase === 'paused' && this.G.scriptPaused) { this.G.scriptPaused = false; this.c.resumeGame(); } else if (this.G.phase === 'play') this.scriptPause(); return; }
     if (this.G.phase !== 'play') return;

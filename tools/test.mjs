@@ -48,6 +48,7 @@ import { uiTests, uiBrowser } from './test-ui.mjs';   // UI layer stack / Esc / 
 import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation close-up: state machine, framing, pause rules, intents (tools/test-talk.mjs)
 import { combatTests, combatBrowser, combatMadness } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
+import { padBrowser } from './test-gamepad.mjs';   // gamepad: mocked navigator.getGamepads (tools/test-gamepad.mjs)
 import { jobgameTests, jobgameBrowser, jobsiteBrowser, jobmoduleBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
@@ -814,6 +815,7 @@ console.log('voices.html:', JSON.stringify(vp)); if (!(vp.rows === vp.total && v
 S('nav', 'nominal3', (p) => navBrowser(p, fail));
 S('walk', 'nominal3', (p) => walkBrowser(p, fail));
 S('comms-hud', 'nominal3', (p) => commsHud(p, fail));
+S('gamepad', 'nominal3', (p) => padBrowser(p, fail));   // gamepad on a mocked navigator.getGamepads (tools/test-gamepad.mjs)
 S('ui', 'nominal3', (p) => uiBrowser(p, fail));   // Esc closes a layer without pausing, wheel select, portraits, belt digits (tools/test-ui.mjs)
 S('talk', 'nominal3', (p) => talkBrowser(p, fail));   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
 S('combat', 'nominal3', (p) => combatBrowser(p, null, fail));   // strike / grab / drag / release, witnesses, security, player HP (the madness zapper is combat-madness)
