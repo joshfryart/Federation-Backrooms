@@ -1362,6 +1362,7 @@ function step(dt, t) {
   // movement
   let fx = 0, fz = 0;
   if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1;
+  if (G.touchMove) { fx += G.touchMove.x; fz += G.touchMove.z; }   // js/touch.js: the on-screen move stick (analog direction)
   if (P.hidden) { fx = fz = 0; if (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || pressed.jump) exitHide(); }   // hiding: stand still; any move key steps out
   const moving = fx || fz;
   P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
