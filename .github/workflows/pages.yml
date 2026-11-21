@@ -1,0 +1,48 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a queued deploy is not cancelled by a newer push.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Allowlist, not a copy of the repo: tools/, node_modules/, .git/, .github/ and docs/screenshots/ stay out.
+      # docs/ is left out entirely because nothing at runtime loads from it (it is ~110 MB of notes and media).
+      # All asset references in the site are relative (./ or no prefix), so it works under /<repo>/.
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          rm -rf _site && mkdir _site
+          cp ./*.html ./CREDITS.md _site/
+          cp -r css js assets vendor _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
