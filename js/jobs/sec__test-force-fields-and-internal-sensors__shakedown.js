@@ -8,7 +8,7 @@ export default define({
   title: 'Hold the emitter to its plateau', dept: 'security', host: 'room', siteName: 'Emitter', verb: 'Test',
   how: 'Hold E to bring the emitter up. If strength settles above the spec line, let go. If it plateaus under spec, keep holding until the mark registers.',
   keys: ['E hold: bring the emitter up', 'release when settled over spec', 'keep holding when under spec'], limit: 38, maxFaults: 3,
-  fingerprint: { verb: 'hold to mark weak', input: 'e-hold',
+  fingerprint: { verb: 'hold to mark', input: 'e-hold',
     win: 'three emitters tested on the rig, sound ones released after the plateau and weak ones marked out of spec by a long hold',
     fail: 'letting go before the plateau, passing an emitter that settled under spec, or marking a sound emitter weak',
     rule: 'Strength climbs then plateaus. Over spec: release after it settles. Under spec: hold on until it marks (3.4 s). Do not mark a sound one.' },
