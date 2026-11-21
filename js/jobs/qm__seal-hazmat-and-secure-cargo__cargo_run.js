@@ -19,7 +19,7 @@ export default define({
       if (!m.live(dt, inp.away)) return; const s = m.cur(inp), rel = m.released(inp); if (!s) return; const i = m.next, d = m.d[i];
       if (m.li !== i) { m.li = i; d.lock = false; d.h = 0; }
       if (d.crimped) { if (Math.abs(inp.swing || 0) > 1.0 && !inp.hold) m.finish(i); s.prog = 0.85; return; }
-      if (inp.hold && !d.lock) { d.h += dt; if (d.h === dt || d.h - dt < d.click && d.h >= d.click) m.ev('click', { site: i }); if (d.h > d.click + grace) { m.fault('crushed'); d.lock = true; } }
+      if (inp.hold && !d.lock) { d.h += dt; if (d.h >= d.click && d.h - dt < d.click) m.ev('click', { site: i }); if (d.h > d.click + grace) { m.fault('crushed'); d.lock = true; } }
       if (rel) { if (d.lock) d.lock = false; else if (d.h >= d.click) d.crimped = true; else if (d.h > 0.1) m.fault('uncrimped'); d.h = d.crimped ? d.h : 0; }
       s.prog = clamp(d.h / (d.click + grace)) * 0.7;
     };
