@@ -7,7 +7,7 @@ Each job is a small ES module in `js/jobs/<billet>__<slug>.js` built on a shared
 (`js/jobs/index.js`) maps the job's id to its module; `jobFor()` in `js/worksites.js` uses the module when one exists and otherwise falls back
 to the old shared mechanics, so jobs can be authored in batches and merged safely.
 
-Status: **30 of 701** jobs have a module (the pilot: 20 console, 10 in-room, every department). `node tools/check-jobs.mjs --report` prints
+Status: all **701 of 701** jobs have a module. `node tools/check-jobs.mjs --report` prints
 the current count.
 
 You do not need to read the engine to author a module. This page, the kit's header comment and the 30 pilot modules are enough.
