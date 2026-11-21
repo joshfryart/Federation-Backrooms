@@ -48,6 +48,8 @@ import { MISSIONS, party as commParty } from './bridge.js';
 import { Menus } from './menus.js';   // Systems Nominal menus: UI layer stack (Esc pops one), quick wheel, belt slots, name tags, portraits, icon toasts (docs/ui.md)
 import { briefNotes, rumourFor } from './socialui.js';   // run-start crew notes + rumours (docs/social.md)
 import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E on crew -> phase 'talk' (docs/talk.md)
+import { Governor, LEVELS, applyLevel } from './perfgov.js';   // auto-quality ladder (dynamic resolution, shadow size, cones, Performance) + crowd draw culling (js/perfcull.js)
+import { cullCrowd, uncullCrowd, cullStats as cullStatsRef } from './perfcull.js';
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
@@ -133,8 +135,11 @@ function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e =
 const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high', calm: false, caps: false, cb: false }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
-function setQuality(q) {
-  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
+const gov = new Governor(); let perfWorld = null;
+const applyPerf = () => { perfWorld = world; applyLevel(gov.cfg, { post, torch, world }); };
+function setQuality(q, auto = false) {   // auto: the governor (js/perfgov.js) moved it: not saved, so the next session starts on High again
+  if (!auto) gov.setManual(q);
+  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); if (!auto) saveCfg(); applyPerf();
   const el = $('qsel'); if (el) el.value = q;
 }
 
@@ -1960,7 +1965,6 @@ function repairerStep(e, dt, d) {
   if (R.t >= R.need) { G.shipState.repair(R.sys); G.say(`${e.person.short} got ${SYS[R.sys].name} back online.`, 'good'); e.person.status = 'alive'; e.repairing = null; if (H) { H.play('idle'); H.standing = true; } }
 }
 
-let slow = 0;
 function dyingStep(dt, t) {
   G.dyingT += dt; world.update(dt, t); blood.update(dt); sparks.update(dt); steam.update(dt);
   const k = Math.min(1, G.dyingT / 1.3);
@@ -1970,12 +1974,12 @@ function dyingStep(dt, t) {
 }
 function frame() {
   requestAnimationFrame(frame);
-  const now = performance.now(); const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  const now = performance.now(), raw = now - lastT; const dt = Math.min(0.05, raw / 1000); lastT = now;
   if (G.manual) return;   // test clock (tools/test.mjs): nothing runs on the wall clock (world, UI frame incl. portrait warm-up, drawing); tests drive __game.step / advance / menus.frame / renderOnce
   elapsed += dt; tickWorld(dt, elapsed); G.menus?.frame(dt); G.jobgame?.tick(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
-  if (CFG.quality === 'high' && G.phase === 'play') { slow = (dt > 0.045) ? slow + dt : Math.max(0, slow - dt * 2); if (slow > 4) { setQuality('low'); G.say('Performance mode enabled (change in pause menu)', 'comp'); slow = 0; } }
+  { const lv = gov.tick(raw, G.phase === 'play'); if (lv >= 0) { const L = LEVELS[lv]; if (L.quality !== CFG.quality) { setQuality(L.quality, true); if (L.quality === 'low') G.say('Performance mode enabled (change in pause menu)', 'comp'); } else applyPerf(); } }   // js/perfgov.js: steps down / recovers with hysteresis
   if (G.phase !== 'loading') render(dt, elapsed);   // the loading overlay is opaque: do not spend the GPU drawing behind it
 }
 function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
@@ -1986,6 +1990,10 @@ function tickWorld(dt, t) {   // what one frame does to the world, by phase (fra
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
 }
 function render(dt, t) {
+  if (perfWorld !== world) applyPerf();
+  cullCrowd(ents, camera, P.x, P.z); try { render1(dt, t); } finally { uncullCrowd(); }
+}
+function render1(dt, t) {
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
     post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
@@ -2018,7 +2026,7 @@ const ready = (async () => {
   Loading.hide(TEST_MODE);
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)

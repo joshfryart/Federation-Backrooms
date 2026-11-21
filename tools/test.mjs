@@ -214,6 +214,21 @@ S('pace-presets', null, async () => {   // First watch / Crunch / Standard scale
   if (!(r.first.T === 2.5 && r.first.firstDue >= 180 && r.first.firstTask >= 240 && r.first.run === 3000 && r.first.phaseAt === 2400 && r.crunch.T === 0.7 && r.crunch.run === 840 && r.std.T === 1 && r.std.run === 1200 && r.first.rate < r.std.rate && r.std.rate < r.crunch.rate && r.read.join() === 'crunch,standard,standard')) fail('pace presets ' + JSON.stringify(r));
 });
 
+S('perf-governor', null, async () => {   // auto-quality ladder (js/perfgov.js): steps down in order, recovers with hysteresis, ignores spikes, honours a manual choice
+  const { Governor, LEVELS } = await imp('js/perfgov.js'), run = (g, ms, secs) => { let ch = []; for (let i = 0; i < secs * 1000 / ms; i++) { const r = g.tick(ms); if (r >= 0) ch.push(r); } return ch; };
+  const r = {}; let g = new Governor();
+  r.smooth = run(g, 16.7, 60).length;                                  // a healthy 60 fps machine never moves
+  g = new Governor(); r.slow = run(g, 40, 40); r.slowEnd = g.level;     // steady 25 fps: walks down rung by rung to 3 (high at 55 %) and stops: 40 ms is under the 45 ms Performance bar
+  g = new Governor(); r.vslow = run(g, 100, 10);                         // 10 fps: straight to Performance within seconds
+  g = new Governor(); run(g, 40, 20); const lv = g.level; r.recov = run(g, 14, 40); r.recovEnd = g.level; r.lv = lv;   // machine recovers (e.g. a busy scene is left): climbs back to High
+  g = new Governor(); r.spike = [...Array(50)].map(() => g.tick(900)).filter(x => x >= 0).length + run(g, 16, 5).length;   // tab-switch stalls are ignored
+  g = new Governor(); r.paused = [...Array(2000)].map(() => g.tick(100, false)).filter(x => x >= 0).length;   // not judged outside the world
+  g.setManual('low'); r.pinned = [...Array(3000)].map(() => g.tick(10)).filter(x => x >= 0).length + '/' + g.level; g.setManual('high'); r.manualHigh = g.level + '/' + g.auto;
+  g = new Governor(); const seq = []; for (let k = 0; k < 6; k++) { seq.push(...run(g, 40, 14), ...run(g, 12, 40)); } r.flaps = g.changes.filter(c => c[0] === 'down').length; r.upMul = g.upMul;   // load oscillating around the thresholds: recoveries back off, so downs stay few
+  console.log('perf governor:', JSON.stringify(r));
+  const ok = r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones;
+  if (!ok) fail('perf-governor ' + JSON.stringify(r));
+});
 // ---- browser ----
 const { chromium } = require('playwright');
 const server = createServer(async (req, res) => {
@@ -856,11 +871,11 @@ const smoke = (ship, seed) => async (page) => {
     let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
     out.bodies = g.ents.filter(e => e.simmed).length;
     const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
-    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; g.setQuality('low');   // one high-quality frame through the post chain
+    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1); g.setQuality('low');   // one high-quality frame through the post chain
     delete G.forceSeed; return out;
   }, { ship, seed });
   console.log('smoke:', JSON.stringify(r));
-  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
 S('smoke', 'smoke', smoke(SHIP, null));
 for (const [i, [ship, seed]] of SEED_SET.entries()) S('smoke-set' + i, 'smoke', smoke(ship, seed));

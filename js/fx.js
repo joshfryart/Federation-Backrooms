@@ -57,8 +57,10 @@ export class Post {
     this.composer.addPass(this.final);
     this.composer.addPass(new OutputPass());
     this.renderer.toneMapping = THREE.AgXToneMapping; this.renderer.toneMappingExposure = 1.05;
-    this.setSize(size.x, size.y);
+    this.baseRatio = renderer.getPixelRatio(); this.scale = 1; this.setSize(size.x, size.y);
   }
+  // dynamic resolution (js/perfgov.js): the post chain renders at baseRatio * k and the final pass upscales onto the canvas
+  setScale(k) { if (Math.abs(k - this.scale) < 1e-3) return; this.scale = k; this.composer.setPixelRatio(this.baseRatio * k) }
   setCalm(v) { this.final.uniforms.calm.value = v ? 1 : 0; }   // accessibility: no grain / scanline / wobble, weaker aberration
   setSize(w, h) { this.composer.setSize(w, h); this.final.uniforms.res.value.set(w, h); }
   render(dt, t, danger, hurt) {
