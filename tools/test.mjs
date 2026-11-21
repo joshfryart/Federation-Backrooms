@@ -49,9 +49,10 @@ import { talkTests, talkBrowser } from './test-talk.mjs';   // conversation clos
 import { combatTests, combatBrowser, combatMadness } from './test-combat.mjs';   // grapple + melee rules / bodies / security (tools/test-combat.mjs)
 import { wiringTests, wiringBrowser } from './test-wiring.mjs';   // art wiring pass: system hosts, art carts, wear glue, animations, stretcher, icons (tools/test-wiring.mjs)
 import { jobgameTests, jobgameBrowser, jobsiteBrowser, jobmoduleBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
+import { saveTests, saveBrowser } from './test-save.mjs';   // versioned save, boards, export/import/reset (tools/test-save.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
-  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {
@@ -458,7 +459,7 @@ const mech = await page.evaluate(async () => {
   // captions
   g.CFG.caps = true; G.caption('test roar', P.x + 5, P.z); const capEl = document.getElementById('caps'); out.caption = capEl?.lastChild?.textContent || null; g.CFG.caps = false;
   // career bonuses: milestones grant starting perks on the next madness run
-  localStorage.setItem('fb_meta', JSON.stringify({ runs: 9, bestDeck: 5, kills: 20, wins: 1 })); g.newRun(); out.meta = { perks: Object.keys(G.perks).sort(), bonus: (G.metaBonus || []).length }; localStorage.removeItem('fb_meta');
+  g.SAVE.setMeta({ runs: 9, bestDeck: 5, kills: 20, wins: 1 }); g.newRun(); out.meta = { perks: Object.keys(G.perks).sort(), bonus: (G.metaBonus || []).length }; g.SAVE.setMeta({});
   // hands: shown for parkour verbs, hidden otherwise
   const A = await import('/js/actors.js'), hd = A.makeHands(); for (let i = 0; i < 30; i++) hd.pose('mantle', 0.8, 0.05, { time: i * 0.05 }); const shown = hd.group.visible; for (let i = 0; i < 60; i++) hd.pose('none', 0, 0.05); out.hands = { shown, hiddenAgain: !hd.group.visible };
   return out;
@@ -818,6 +819,7 @@ S('ui', 'nominal3', (p) => uiBrowser(p, fail));   // Esc closes a layer without 
 S('talk', 'nominal3', (p) => talkBrowser(p, fail));   // E -> close-up conversation, frozen world, trust, Esc restores (tools/test-talk.mjs)
 S('combat', 'nominal3', (p) => combatBrowser(p, null, fail));   // strike / grab / drag / release, witnesses, security, player HP (the madness zapper is combat-madness)
 S('wiring', 'nominal3', (p) => wiringBrowser(p, fail));
+S('save', 'nominal3', (p) => saveBrowser(p, fail));
 S('jobgames', 'nominal3', (p) => jobgameBrowser(p, fail));
 S('jobsites', 'nominal3', (p) => jobsiteBrowser(p, fail));
 S('jobmodules', 'nominal3', (p) => jobmoduleBrowser(p, fail));   // three jobs with their own mechanic module (js/jobs/) through startJob: two console overlays, one in-room (tools/test-jobgames.mjs)   // J board / J menu route to the job and start it on arrival; a work-site job end to end (tools/test-jobgames.mjs)   // job mini-games: instruction card once per tool (fb_cfg), win / fail -> quality + time, Esc cancels, no soft-lock (tools/test-jobgames.mjs)   // clothes cache, repair points, breathers, sleepers, pod / field / sight animation, stretcher bracket, art carts, handheld icons (tools/test-wiring.mjs)

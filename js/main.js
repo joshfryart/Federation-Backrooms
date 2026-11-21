@@ -33,6 +33,8 @@ import { generateSocial } from './social.js';
 import { Duty, pickBillet, pickMission, briefing as makeBriefing, Q_LABEL, QUALITIES, JOB_WAIT } from './duty.js';
 import { DutyHUD } from './hud-duty.js';
 import { Phases, PHASES, FAILURE_MODES } from './phases.js';
+import { createSave } from './save.js';   // versioned local save: settings, meta, best deck, run stats, top-10 boards (js/save.js; UI in js/save-ui.js)
+import { renderBoard, mountSaveControls } from './save-ui.js';
 import { readPace, savePace, mountPaceControl, paceFor } from './pace.js';   // shift length / pace presets (title screen, ?pace=)
 import { RepairCrew } from './repair.js';   // NPC repair response (Systems Nominal)
 import { barkGate, gestureFor } from './etiquette.js';   // NPC speech etiquette (when crew may speak / nod)
@@ -130,9 +132,10 @@ function screenSplat(n, persist = false) {
 }
 function clearSplats() { document.querySelectorAll('.persist-splat').forEach(e => e.remove()); }
 
-const CFG = Object.assign({ sens: 1, vol: 0.8, quality: 'high', calm: false, caps: false, cb: false }, JSON.parse(localStorage.getItem('fb_cfg') || '{}'));
+const SAVE = createSave((() => { try { return localStorage; } catch (e) { return null; } })());
+const CFG = SAVE.cfg();
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
-function saveCfg() { localStorage.setItem('fb_cfg', JSON.stringify(CFG)); }
+function saveCfg() { SAVE.setCfg(CFG); }
 function setQuality(q) {
   CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); saveCfg();
   const el = $('qsel'); if (el) el.value = q;
@@ -149,7 +152,7 @@ const G = {
   mode: new URLSearchParams(location.search).get('mode') === 'madness' ? 'madness' : 'nominal',   // 'nominal' = Systems Nominal (default); 'madness' = the roguelike
   phase: 'title', deck: 0, runSeed: 1, shipOrder: [], hp: 100, maxHp: 100, stamina: 100,
   phaser: 3, maxPhaser: 3, perks: {}, chips: 0, tribbles: 0, kills: 0, stuns: 0, time: 0, deckTime: 0,
-  shield: false, endless: false, best: +(localStorage.getItem('fb_best') || 0),
+  shield: false, endless: false, best: SAVE.best(),
 };
 const P = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0, pitch: 0, crouch: false, sprint: false, bob: 0, stepD: 0, torch: true, shake: 0, kbx: 0, kbz: 0 };
 resetMover(P);
@@ -856,7 +859,7 @@ function summaryHTML(title, lead) {
 function nomDie(cause) {
   releaseCling();
   if (G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomdead'; document.exitPointerLock?.(); sound.death?.(); G.hp = 0; $('danger').style.opacity = 0;
-  const old = G.player; old.status = 'dead'; G.duty.chain.push(`${old.short} (${old.title}) died: ${cause}`);
+  G.nomDeaths = (G.nomDeaths || 0) + 1; G.lastCause = cause; const old = G.player; old.status = 'dead'; G.duty.chain.push(`${old.short} (${old.title}) died: ${cause}`);
   const near = G.roster.people.filter(p => !p.isPlayer && !['dead', 'corpse', 'crazed', 'evacuated'].includes(p.status));
   const mine = near.filter(p => p.dept === old.dept), pool = [...mine.slice(0, 3), ...near.filter(p => !mine.includes(p)).sort((a, b) => b.rank - a.rank).slice(0, 3)].slice(0, 5);
   G.hud2.showEnd(summaryHTML(`${old.short} is dead`, `${old.full || old.short}, ${old.title} — ${cause}.`) + '<h4>Carry on</h4>', [...pool.map(p => ({ label: `Continue as ${p.short} (${p.title})`, run: () => switchPlayer(p) })), { label: 'Back to the menu', run: () => toMenu() }]);
@@ -865,9 +868,11 @@ function nomEnd() {
   if (G.phase === 'nomend' || G.phase === 'nomdead' || !G.duty) return; G.phase = 'nomend'; document.exitPointerLock?.();
   const left = G.duty.shiftEnd(), pc = paceFor(G.pace?.id), ph = G.phases.status();   // shift end: unfinished mission tasks count against the score (js/duty.js)
   const tasksLine = G.duty.tasks.length ? ` Mission tasks: ${G.duty.tasks.length - left.length} of ${G.duty.tasks.length} done${left.length ? `, ${left.length} left unfinished` : ''}.` : '';
+  const rec = G.recorded ? { rank: G.lastRank } : (G.recorded = true, recordRun({ cause: `Watch ended, ship ${ph.phase === 'nominal' ? 'in good order' : ph.phase}`, won: true }));
   G.hud2.showEnd(summaryHTML('Watch ended', `${pc.label} — ${pc.minutes} minutes on ${G.ship.name}. The ship is ${ph.phase === 'nominal' ? 'in good order' : ph.phase}.${tasksLine}${G.repair ? ` The crew patched ${G.repair.stats.done} fault${G.repair.stats.done === 1 ? '' : 's'}.` : ''}`), [{ label: 'New watch', run: () => newRun() }, { label: 'Back to the menu', run: () => toMenu() }]);
+  { const card = G.hud2.endEl?.querySelector('.card'); if (card) { const el = document.createElement('div'); card.insertBefore(el, card.querySelector('.acts')); renderBoard(el, SAVE, G.mode, rec.rank); } }
 }
-function toMenu() { G.hud2?.hideEnd(); G.hud2?.destroy(); G.hud2 = null; G.phase = 'title'; showScreen('title'); }
+function toMenu() { if (G.phase === 'nomdead' && G.duty && !G.recorded) { G.recorded = true; recordRun({ cause: G.lastCause || 'Died on watch' }); } G.hud2?.hideEnd(); G.hud2?.destroy(); G.hud2 = null; G.phase = 'title'; titleBoard(); showScreen('title'); }
 function switchPlayer(p) {
   const at = G.sim.where(p), old = G.player; old.isPlayer = false; p.isPlayer = true; G.player = p; G.sim.setPlayer(p); G.comms?.sim.setPlayer(p);
   const nd = new Duty({ player: p, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say: G.duty.say, seed: G.runSeed, mission: G.mission, pace: G.pace }).inherit(G.duty); if (G.repair) { G.repair.duty = nd; G.repair.player = p; }
@@ -936,13 +941,21 @@ async function loadDuties() { try { DUTIES = await (await fetch('./assets/data/d
 
 // career (localStorage fb_meta): runs, best deck, kills, wins. Milestones give a free starting perk in the next run (madness mode)
 const META_KEY = 'fb_meta';
-function metaGet() { try { return Object.assign({ runs: 0, bestDeck: 0, kills: 0, wins: 0 }, JSON.parse(localStorage.getItem(META_KEY) || '{}')); } catch (e) { return { runs: 0, bestDeck: 0, kills: 0, wins: 0 }; } }
-function metaEnd(deck, won) { try { const M = metaGet(); M.runs++; M.bestDeck = Math.max(M.bestDeck, deck); M.kills += G.kills + G.stuns; if (won) M.wins++; localStorage.setItem(META_KEY, JSON.stringify(M)); } catch (e) { /* private window */ } }
+function metaGet() { return SAVE.meta(); }
+// one finished run -> career counters + best deck + stats + the mode's top 10 (js/save.js); returns { rank }
+function recordRun(extra) {
+  const D = G.duty, sm = NOM() && D ? D.summary() : null;
+  const r = SAVE.recordRun({ mode: G.mode, ship: G.ship?.name, seed: G.runSeed, decks: NOM() ? Object.keys(G.visits || {}).length : G.deck, time: NOM() && D ? D.t : G.time, kills: G.kills + G.stuns, deaths: G.nomDeaths || 0,
+    proper: sm?.stats.proper || 0, rushed: sm?.stats.rushed || 0, review: sm ? sm.score : null, ...extra });
+  G.best = SAVE.best(); G.lastRank = r.rank; return r;
+}
+function endBoard(screenId, rank) { const host = $(screenId)?.querySelector('.in'); if (!host) return; let el = host.querySelector('.sv-board'); if (!el) { el = document.createElement('div'); host.appendChild(el); } renderBoard(el, SAVE, G.mode, rank); }
+function titleBoard() { let el = $('svtitle'); if (!el) { el = document.createElement('div'); el.id = 'svtitle'; $('best').after(el); } renderBoard(el, SAVE, G.mode); $('best').textContent = G.best ? `Best run: Deck ${G.best}` : ''; }
 const META_UNLOCKS = [[(M) => M.bestDeck >= 3, 'boots', 'Reached deck 3'], [(M) => M.kills >= 8, 'cell', '8 hostiles stunned or downed'], [(M) => M.wins >= 1, 'legs', 'Escaped a ship'], [(M) => M.runs >= 5, 'hypo', '5 shifts survived or not']];
 function metaGrant() { const M = metaGet(), got = []; for (const [ok, id, why] of META_UNLOCKS) if (ok(M)) { G.perks[id] = (G.perks[id] || 0) + 1; if (id === 'hypo') { G.maxHp += 25; G.hp = G.maxHp; } if (id === 'cell') { G.maxPhaser++; G.phaser++; } got.push(`${PERKS.find(p => p.id === id).name} (${why})`); } G.metaBonus = got; if (got.length) later(() => { if (G.phase === 'play') G.say('Career bonus: ' + got.join(', '), 'good'); }, 3500); }
 G.metaGet = metaGet;
 function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 'loading' and return enter() (the loading screen's button calls it from a click, so pointer lock is allowed)
-  releaseCling(); G.taught = {}; G.visits = {};
+  releaseCling(); G.taught = {}; G.visits = {}; G.nomDeaths = 0; G.recorded = false;
   Object.assign(G, { hp: 100, maxHp: 100, stamina: 100, phaser: 3, maxPhaser: 3, perks: {}, tribbles: 0, kills: 0, stuns: 0, time: 0, endless: false, runSeed: G.forceSeed ?? Math.floor(Math.random() * 1e6) });   // G.forceSeed: tools/test.mjs seed-set smoke runs
   if (!NOM()) metaGrant();
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
@@ -1008,7 +1021,7 @@ function completeDeck() {
     if (G.deck >= winDeck() && !G.endless) {
       document.exitPointerLock?.();
       $('winstats').innerHTML = `${winDeck()} decks of the ${G.ship.name} · ${G.tribbles} furbles rescued · ${G.stuns} hostiles stunned<br>Time on shift ${fmtTime(G.time)}`;
-      localStorage.setItem('fb_best', Math.max(G.best, G.deck)); G.best = Math.max(G.best, G.deck); if (!NOM()) metaEnd(G.deck, true);
+      if (!NOM()) { const r = recordRun({ won: true, cause: 'Escaped' }); endBoard('win', r.rank); }
       showScreen('win'); G.phase = 'win'; return;
     }
     offerPerks();
@@ -1043,11 +1056,10 @@ function die(by, line = null) {
   bloodBurst(P.x, 1.0, P.z, 120, 5); for (let i = 0; i < 6; i++) decals.floor('blood', P.x + (Math.random() - 0.5) * 2, P.z + (Math.random() - 0.5) * 2, 1.2 + Math.random(), 1);
   screenSplat(14, true); sound.roar(0.35); by.roar = 1.5; $('danger').style.opacity = 1; $('prompt').textContent = '';
   const deckReached = G.deck;
-  if (!NOM()) metaEnd(deckReached, false);
-  if (deckReached > G.best) { G.best = deckReached; localStorage.setItem('fb_best', deckReached); }
+  const rec = NOM() ? null : recordRun({ cause: by?.name || 'Unknown' });
   $('deathline').textContent = line || pick(DEATH_LINES);
   $('stats').innerHTML = [['Last known position', `Deck ${deckReached} · ${ship.name}`], ['Registry', ship.reg], ['Cause', by?.name || 'Unknown'], ['Furbles rescued', G.tribbles], ['Hostiles stunned', G.stuns], ['Time on shift', fmtTime(G.time)], ['Best run', `Deck ${G.best}`]].map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join('');
-  later(() => showScreen('dead'), 2400);
+  later(() => { if (rec) endBoard('dead', rec.rank); showScreen('dead'); }, 2400);
 }
 
 // callbacks used by Gorn AI
@@ -2018,10 +2030,11 @@ const ready = (async () => {
   Loading.hide(TEST_MODE);
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, SAVE, recordRun, titleBoard, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
 Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact;   // conversation close-up (js/talk.js)
-$('best').textContent = G.best ? `Best run: Deck ${G.best}` : '';
+titleBoard();
+mountSaveControls(document, SAVE, { onChange: () => { Object.assign(CFG, SAVE.cfg()); G.best = SAVE.best(); sound.vol = CFG.vol; sound.setVolume?.(CFG.vol); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality; $('calm').checked = !!CFG.calm; $('capson').checked = !!CFG.caps; $('cbmode').checked = !!CFG.cb; document.body.classList.toggle('cb', !!CFG.cb); document.body.classList.toggle('lc-calm', !!CFG.calm); post.setCalm?.(CFG.calm); titleBoard(); } });   // pause menu: export / import / reset save (js/save-ui.js)
 frame();
