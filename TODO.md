@@ -148,7 +148,7 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 - [ ] Touch/mobile controls (none yet). Gamepad support.
 - [ ] Performance pass: measure on real GPUs; auto-quality currently drops to "Performance" if frames > 45 ms for ~4 s. Candidates: merge static props, cull light cones, lower shadow map, dynamic resolution.
 - [ ] Save settings/progress (best deck is in `localStorage`); add run stats/leaderboard.
-- [ ] GitHub Pages deploy; add CI that runs the generator sanity test (below).
+- [ ] GitHub Pages deploy; add CI that runs the generator sanity test (below). **Status:** `.github/workflows/ci.yml` (node-only sections of `tools/test.mjs`, `check-jobs.mjs --all --quiet`, `merge-jobs.mjs --check`) and `pages.yml` (uploads an allowlist: html pages, CREDITS.md, css, js, assets, vendor; no docs/, tools/, node_modules/, .git/) are written and the YAML parses, but **not run on GitHub Actions yet** (no Actions runner here). Local run of the node-only sections: 9 `jobgames` assertions fail (job coverage: "no mechanic over 25 %", "physical jobs are work sites"), so CI will be red until those pass. Browser sections (Playwright + Chromium) are not in CI.
 - [x] Smoke test for `generate()` + bot run (`tools/test.mjs`). Still to do: wire it into CI.
 
 ## Known issues / watch-outs

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node tests and job validators
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      # tools/test.mjs does `require('playwright')` at module load, so the package must resolve even
+      # for the node-only sections. No browser is downloaded: the browser sections are not run here.
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-playwright-1.49.1
+
+      - name: Install playwright module (no browser)
+        run: npm install --no-save --no-package-lock playwright@1.49.1
+
+      # Every [node] section from `node tools/test.mjs --list`: unit suites, generator, ship decks,
+      # inventory rooms, director cascade, crew voices, pace presets. Browser sections need Chromium and are not run in CI.
+      - name: Generator and unit tests (node-only sections)
+        run: >-
+          node tools/test.mjs --only
+          comms,sim,walk-unit,duty,social,gait,movement,equipment-unit,repair-unit,handhelds-unit,
+          nav-unit,ui-unit,talk-unit,combat-unit,wiring-unit,jobgames-unit,room-props,generator,
+          ship-decks,inventory-rooms,director-cascade,voices,pace-presets
+
+      - name: Validate all job modules
+        run: node tools/check-jobs.mjs --all --quiet
+
+      - name: Check job registry is up to date
+        run: node tools/merge-jobs.mjs --check
