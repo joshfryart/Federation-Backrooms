@@ -8,4 +8,6 @@ export function layout(ctx) {
   wallPut(r, interior, 'nutrient_tanks'); if (rnd() < 0.5) ringPut(r, 'specimen_tank');
   // SCI-7 botany kit: potted plants on free tiles
   for (let i = 0; i < 2; i++) anyPut(r, interior, 'plant');
+  // harvest totes by the beds
+  for (let i = 0; i < 2; i++) anyPut(r, interior, 'crate');
 }
