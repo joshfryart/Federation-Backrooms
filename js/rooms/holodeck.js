@@ -5,4 +5,6 @@ export function layout(ctx) {
   put(cx, cy, 'holocube'); ringPut(r, 'holodesk');
   // programme prop locker (FIT locker) against a wall, reached from the side
   ringPut(r, 'locker', { free: true });
+  // control console on a wall: the operator looks over it into the grid
+  ringPut(r, 'console', { face: 'out', free: true });
 }
