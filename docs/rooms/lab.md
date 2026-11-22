@@ -12,7 +12,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size** [done]: Chart table centre (SCI-3), benches / consoles on a checkerboard, spectrometer / sensor station / fume hood on walls.
 2. **Focal centrepiece / facing**: Chart table.
-3. **Wall-fixture pool / weights**: monitorG / shelf / locker / medcab / monitorB.
+3. **Wall-fixture pool / weights** [done]: monitorG / shelf / locker / medcab / monitorB.
 4. **Clutter**: Vials, beakers, sample racks.
 5. **Floor zones / markings**: (open)
 6. **Light colour / fixtures / emergency**: Cool white.
