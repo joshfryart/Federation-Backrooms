@@ -12,13 +12,15 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size**: 5x5 and big 7x9 (tall): grow beds in rows (SCI-1), trees at the rim, nutrient tanks (SCI-6).
 2. **Focal centrepiece / facing**: A tree hosts SYSTEMS.hydro: keep at least one.
-3. **Wall-fixture pool / weights**: planter x2 / fountain.
-4. **Clutter**: SCI-7 botany kit, harvest totes.
+3. **Wall-fixture pool / weights**: planter x2 / fountain. DONE (38e661b / 3c5b273 / 7e526c3).
+4. **Clutter**: SCI-7 botany kit, harvest totes. DONE (38e661b / 3c5b273 / 7e526c3).
 5. **Floor zones / markings**: Paver; walkway between bed rows.
-6. **Light colour / fixtures / emergency**: Green-white grow light; LED bars over beds.
+6. **Light colour / fixtures / emergency**: Green-white grow light; LED bars over beds. DONE (38e661b / 3c5b273 / 7e526c3).
 7. **Ceiling features**: Skylight / grow-light gantry (tall).
 8. **Signage / placards**: Sciences emblem.
 9. **Doorway treatment**: (open)
 10. **Wear / storytelling**: Soil spill, a wilting bed.
 
 Rules and the fast check: [README.md](README.md).
+
+Notes: 5x5 rooms are saturated after the beds; extra 'cart' / 'wastebin' / 'spill' placements added nothing. Non-corner ringPut here changed neighbouring shuttlebay rooms (use anyPut).
