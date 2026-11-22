@@ -6,6 +6,7 @@ export function layout(ctx) {
   if (r.w >= 7 || r.h >= 7) anyPut(r, interior, 'tree', { near: [cx, cy], min: 2 });   // second specimen on the big courts
   if (rnd() < 0.6) ringPut(r, 'specimen_tank', { only: 'corner' });   // glass-case specimen in a corner
   if (r.w >= 6 && r.h >= 6) ringPut(r, 'sofa', { along: true });   // a third seat on the larger courts
+  if (rnd() < 0.5) ringPut(r, 'plant', { only: 'corner', free: true });   // potted fern tucked in a corner
 }
 
 export const dress = { light: 0xeaf6ff, decor: ["planter", "planter", "fountain", "picture"], floor: "paver" };   // daylight tint under the skylight; garden wall fixtures
