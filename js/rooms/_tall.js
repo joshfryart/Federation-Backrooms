@@ -21,4 +21,6 @@ export function layout(ctx) {
   const n = r.type === 'shuttlebay' ? 2 : 3, cws = []; for (let i = 0; i < n; i++) { const cw = ringPut(r, 'catwalk', { along: true, free: true }); if (cw) cws.push(cw); }
   // a step-up crate stack near each catwalk foot, so the deck can be mantled from a neighbouring prop
   for (const c of cws) anyPut(r, interior, 'crate', { near: [c.tx, c.ty] });
+  // service stands beside a couple of pillars in engineering / cargo / shuttlebay (tools for the high-bay crews)
+  if (r.type === 'engineering' || r.type === 'cargo' || r.type === 'shuttlebay') { const ps = ctx.props.filter(p => p.kind === 'pillar' && ctx.inRect(r, p.tx, p.ty)); for (let i = 0; i < Math.min(2, ps.length); i++) { const p = ps[Math.floor(rnd() * ps.length)]; anyPut(r, interior, 'maint_stand', { near: [p.tx, p.ty] }); } }
 }
