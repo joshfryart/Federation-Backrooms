@@ -9,6 +9,7 @@ export function layout(ctx) {
       safePut(r, x, y, k, k === 'nursestation' ? { rot: faceTo(0, sg) } : k === 'steriliser' || k === 'med_dispenser' ? { rot: faceTo(0, sg) } : k === 'surgical_table' || k === 'exam_couch' ? { rot: rnd() < 0.5 ? 0 : Math.PI } : {});
     }
     ringPut(r, 'infusion_stand', { corner: true });
+    ringPut(r, 'sinkunit', { free: true }); ringPut(r, 'wastebin', { only: 'corner', free: true });   // scrub sink by the wall, bin in a corner
   } else {
     for (const [x, y] of interior) if (rnd() < 0.7 || (x === cx && y === cy)) { if (interior.length === 1) put(x, y, 'biobed'); else safePut(r, x, y, 'biobed', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); }   // a lone centre bed may be bare; longer rooms go through safePut, beds along the long axis
     ringPut(r, 'nursestation');
