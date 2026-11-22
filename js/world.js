@@ -3,6 +3,7 @@ import { SEARCHABLE, clutterFor } from './items.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { tubeStep, tubeBoxes } from './tube.js';
+import { dressTable } from './rooms/index.js';   // per-room dressing hook: a room module's optional `dress` export overrides its row in the tables below (docs/rooms/README.md)
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -387,7 +388,7 @@ export function buildProp(kind) {
   return g;
 }
 
-export function buildLift(accent) {
+export function buildLift(accent, deckNo) {
   const g = new THREE.Group();
   const frame = new THREE.MeshLambertMaterial({ color: 0x3a3f48 });
   const door = new THREE.MeshLambertMaterial({ color: 0x9aa0aa });
@@ -404,9 +405,18 @@ export function buildLift(accent) {
   });
   const txt = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.42), new THREE.MeshBasicMaterial({ map: sign, color: 0xdddddd }));
   txt.position.set(0, 2.3, 0.16); g.add(txt);
+  if (deckNo) {   // deck number plate over the doors (lift slot 8)
+    const plate = canvasTex(128, (c, s) => { c.fillStyle = '#0b0e16'; c.fillRect(0, 0, s, s); c.strokeStyle = '#' + new THREE.Color(accent).getHexString(); c.lineWidth = 6; c.strokeRect(5, 5, s - 10, s - 10);
+      c.fillStyle = '#fff'; c.font = 'bold 26px Helvetica, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('DECK', s / 2, 34); c.font = 'bold 62px Helvetica, Arial, sans-serif'; c.fillText(String(deckNo), s / 2, 82, s - 20); });
+    const pm = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), new THREE.MeshBasicMaterial({ map: plate, color: 0xdddddd })); pm.position.set(-0.95, 2.82, 0.16); g.add(pm);
+  }
   // call panel on the right-hand post, hazard kick plates, header lamp bar
   const haz = new THREE.MeshLambertMaterial({ color: 0xd8a818 }), dk = new THREE.MeshLambertMaterial({ color: 0x15181d });
   g.add(box(0.16, 0.26, 0.04, dk, 1.1, 1.15, 0.16)); const btn = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.02), new THREE.MeshBasicMaterial({ color: new THREE.Color(accent).multiplyScalar(1.6) })); btn.position.set(1.1, 1.3, 0.19); g.add(btn);
+  // worn call button: a scuffed plate around it and a pale thumb-polished pad (lift slot 10), plus a small amber call lamp under the panel (slot 6)
+  const scuff = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.2), new THREE.MeshBasicMaterial({ color: 0x050607, transparent: true, opacity: 0.55, depthWrite: false })); scuff.position.set(1.1, 1.3, 0.185); g.add(scuff);
+  const pad = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.05), new THREE.MeshBasicMaterial({ color: 0xcfd4da, transparent: true, opacity: 0.5, depthWrite: false })); pad.position.set(1.1, 1.3, 0.2); g.add(pad);
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.02), new THREE.MeshBasicMaterial({ color: 0xffb030 })); lamp.position.set(1.1, 1.06, 0.19); lamp.name = 'callLamp'; g.add(lamp);
   for (const sx of [-1.1, 1.1]) { g.add(box(0.27, 0.12, 0.32, haz, sx, 0, 0)); g.add(box(0.27, 0.06, 0.32, dk, sx, 0.12, 0)); }
   g.add(box(2.0, 0.05, 0.34, dk, 0, 2.5, 0));
   return g;
@@ -418,9 +428,11 @@ export function buildLift(accent) {
 // which bulkhead / deck variant a room gets (see tools/build-textures.mjs for the generated sets)
 const WALL_OF = { quarters: 'wallq', holodeck: 'wallq', sickbay: 'wallp', mess: 'wallp', bridge: 'wallp', arboretum: 'wallp', engineering: 'wallg', cargo: 'wallg', shuttlebay: 'wallg', transporter: 'wallg',
   readyroom: 'wallq', lounge: 'wallq', gym: 'wallp', lab: 'wallp', datacore: 'wallp', laundry: 'wallp', morgue: 'wallp', washroom: 'wallp', brig: 'wallg', armory: 'wallg', workshop: 'wallg', plant: 'wallg', stores: 'wallg', airlock: 'wallg' };
+dressTable('wall', WALL_OF);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.wall` (a bulkhead texture set)
 const CORRIDOR_WALL = { cairn: 'wall', longhouse: 'wallp', tandem: 'wall', cruller: 'wallp', plough: 'wall' };
 export const ROOM_LIGHT = { bridge: 0xbcd6ff, engineering: 0xffb060, sickbay: 0xd2fff2, mess: 0xffd49a, transporter: 0x9cc2ff, shuttlebay: 0xfff0b4, cargo: 0xffc472, holodeck: 0xffe070, quarters: 0xffc48c, arboretum: 0xd6ffae,
   readyroom: 0xffd8a8, brig: 0xc8d4ff, armory: 0xffe8c0, gym: 0xf4fff0, lab: 0xe8f4ff, laundry: 0xf0f0e8, lounge: 0xffcf9a, workshop: 0xffe2a0, plant: 0xffd0a0, morgue: 0xcfe8ff, datacore: 0x9cb8ff, stores: 0xffe0b0, washroom: 0xf0fbff, airlock: 0xfff0c0 };
+dressTable('light', ROOM_LIGHT);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.light` (hex colour)
 let dressCache = null;
 function dressTex() {
   if (dressCache) return dressCache;
@@ -544,6 +556,7 @@ const ROOM_DECOR = {
   plant: ['pipes', 'gauges', 'pipes', 'breaker', 'monitorO', 'hose', 'foamstation', 'hosecab', 'panelbox', 'dclocker'], morgue: ['medcab', 'locker', 'monitorG', 'kit'], datacore: ['monitorB', 'monitorO', 'comm', 'breaker', 'coil'], stores: ['rack', 'rack', 'shelf', 'locker', 'extinguisher', 'dclocker', 'coldstore_door'],
   washroom: ['mirror', 'fountain', 'shelf', 'kit'], airlock: ['locker', 'hose', 'rack', 'extinguisher', 'comm', 'podhatch', 'podhatch'],
 };
+dressTable('decor', ROOM_DECOR);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.decor`
 const kitCache = {};
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
 function kitMats() { const m = mats(); if (!m.kit) { m.kit = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }); m.kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true }); } return m; }
@@ -725,6 +738,7 @@ export class World {
     const fk = (k, fb) => T.d[k] ? k : fb;
     const FLOOR_OF = { engineering: fk('grate', 'deck'), shuttlebay: 'deck', cargo: 'deck', transporter: fk('rubber', 'deck'), jefferies: fk('grate', 'deck'), sickbay: fk('hex', 'tile'), mess: 'tile', holodeck: 'holo', arboretum: fk('paver', 'carpet'),
       brig: 'deck', armory: 'deck', airlock: 'deck', workshop: 'deck', stores: 'deck', plant: fk('grate', 'deck'), gym: fk('rubber', 'deck'), datacore: fk('rubber', 'deck'), laundry: 'tile', morgue: 'tile', lab: 'tile', washroom: fk('hex', 'tile') };
+    dressTable('floor', FLOOR_OF, { fk, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.floor` (a FLOOR_MAT kind)
     const corridorFloor = fk({ longhouse: 'rubber', plough: 'rubber', cruller: 'tile' }[ship.hull] || 'carpet', 'carpet');
     const byKind = {};
     for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? FLOOR_OF[r] || 'carpet' : corridorFloor; (byKind[k] || (byKind[k] = [])).push(t); }
@@ -752,6 +766,7 @@ export class World {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
       const ck = (k) => T.d[k] ? k : 'ceil';
       const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg') };
+      dressTable('ceil', CEIL_OF, { ck, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.ceil`
       const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
       const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
       for (const [kind, list] of Object.entries(byC)) {
@@ -768,8 +783,10 @@ export class World {
       const shell = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.8) });
       const inner = new THREE.MeshStandardMaterial({ color: 0x4a4f57, metalness: 0.7, roughness: 0.5, normalMap: T.d.deck.normal, normalScale: new THREE.Vector2(0.4, 0.4) });
       const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2) });
+      const red = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.7, 0.2, 0.12) });
       const grilleMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 0.95, 0.7) });   // the lit room glowing through a tube-wall vent
       const inst = (geo, mat, list) => { if (!list.length) return null; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([px, py, pz, ry], i) => { dummy.position.set(px, py, pz); dummy.rotation.set(0, ry || 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); im.castShadow = im.receiveShadow = true; g.add(im); return im; };
+      let tubeNo = 0;
       const headLo = [], headHi = [], base = [], side = [], sideTall = [], rib = [], strip = [], pipe = [], post = [], bar = [], rail = [], rung = [];
       const o = TS / 2 - TUBE_SIDE / 2, hw = TS / 2 - TUBE_SIDE, FULL = TUBE_UP + TUBE_H;   // side-wall offset, half width of the crawlway, shaft height
       for (const t of d.tubes) t.tiles.forEach(([x, y], i) => {
@@ -782,7 +799,7 @@ export class World {
             const q = dx ? [cx + dx * TS / 4, cz + sg * (hw - 0.02)] : [cx + sg * (hw - 0.02), cz + dz * TS / 4];
             const sm = new THREE.Mesh(new THREE.BoxGeometry(dx ? TS / 2 : 0.05, 0.05, dx ? 0.05 : TS / 2), amber); sm.position.set(q[0], y0 + 0.025, q[1]); g.add(sm);
           }
-          const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.4), amber); lamp.position.set(cx, y0 + TUBE_H - 0.04, cz); g.add(lamp);
+          const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.4), d.tubeBend[x + y * W].length > 2 ? red : amber); lamp.position.set(cx, y0 + TUBE_H - 0.04, cz); g.add(lamp);   // slot 6: a T junction gets a red lamp so it reads apart from a plain bend
           return;
         }
         const ry = ax === 'x' ? Math.PI / 2 : 0, P = (along, across) => ax === 'x' ? [cx + along, cz + across] : [cx + across, cz + along];
@@ -796,6 +813,9 @@ export class World {
               for (let s2 = 0; s2 < 5; s2++) { const sl = new THREE.Mesh(new THREE.BoxGeometry(ax === 'x' ? 0.8 : 0.045, 0.02, ax === 'x' ? 0.045 : 0.8), shell); sl.position.set(gq[0] - (ax === 'x' ? 0 : sg * 0.01), y0 + 0.58 + s2 * 0.07, gq[1] - (ax === 'x' ? sg * 0.01 : 0)); g.add(sl); } } }
           if (kind !== 'lad') { q = P(0, sg * (hw - 0.07)); pipe.push([q[0], y0 + TUBE_H - 0.08, q[1], ry]); for (const al of [-TS / 4, TS / 4]) { q = P(al, sg * (hw - 0.03)); rib.push([q[0], y0 + TUBE_H / 2, q[1], ry]); } }
         }
+        { const hh = Math.sin((x * 12.9898 + y * 78.233 + d.deck * 4.1) * 1.7) * 43758.5453, th = hh - Math.floor(hh);   // slot 10: a dropped tool / scorch smudge on some lower-run floors (visual only, deterministic per tile)
+          if (kind === 'lo' && th < 0.2) { const q = P((th * 5 - 0.5) * 1.2, (th * 37 % 1 - 0.5) * 0.7), tm = th < 0.1 ? new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.05), m.pipe) : new THREE.Mesh(new THREE.CircleGeometry(0.3, 10), new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.45 }));
+            if (th < 0.1) { tm.position.set(q[0], 0.025, q[1]); tm.rotation.y = th * 60; } else { tm.rotation.x = -Math.PI / 2; tm.position.set(q[0], 0.012, q[1]); } tm.receiveShadow = true; g.add(tm); } }
         if (kind !== 'lad') for (const al of [-TS / 4, TS / 4]) { const q = P(al, 0); bar.push([q[0], y0 + TUBE_H - 0.03, q[1], ry]); }
         else {   // ladder on the face of the upper run's base block
           const nxt = t.tiles[i + 1], dir = ax === 'x' ? Math.sign(nxt[0] - x) : Math.sign(nxt[1] - y), al = dir * (TS / 2 - 0.07);
@@ -814,6 +834,10 @@ export class World {
         for (const yy of y0 ? [y0 + TUBE_H + 0.07, y0 - 0.07] : [TUBE_H + 0.07]) { const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.28, 0.14, 0.14), m.hazard); top.position.set(bx + sx, yy, bz + sz); top.rotation.y = ry; g.add(top); }
         if (!y0) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), amber); lamp.position.set(bx + sx * 3, TUBE_H + 0.24, bz + sz * 3); lamp.rotation.y = ry; g.add(lamp); }
         this.tubeMouths.push({ x: bx, z: bz, y: y0 });
+        { const nm = 'JT-' + (d.deck + 1) + String.fromCharCode(65 + (tubeNo++ % 26)), dr = hz ? Math.sign(sx) : Math.sign(sz);   // slot 8: a stencilled hatch plate on the header above each mouth, facing out into the room
+          const tex = canvasTex(128, (c, s) => { c.fillStyle = '#d8b030'; c.fillRect(0, 0, s, s); c.fillStyle = '#14181e'; c.fillRect(4, 4, s - 8, s - 8); c.fillStyle = '#d8b030'; c.translate(s / 2, s / 2); c.scale(1, 3.1); c.font = 'bold 34px Helvetica, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(nm, 0, 1, s - 16); });   // pre-stretched: the plate is 3.1x wider than tall
+          const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.16), new THREE.MeshBasicMaterial({ map: tex, color: 0xb0b0b0 }));
+          pl.position.set(bx + sx * 1.4, y0 + TUBE_H + 0.32, bz + sz * 1.4); pl.rotation.y = hz ? dr * Math.PI / 2 : (dr > 0 ? 0 : Math.PI); g.add(pl); }
         // sliding hatch leaf in the frame: slides up behind the header while anyone (player, crew, hostile) is within ~2.6 m (World.update, nearFn set by main.js); visual only, collision never blocks
         { const leaf = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.1, TUBE_H - 0.1, 0.05), new THREE.MeshStandardMaterial({ color: 0x59606a, metalness: 0.75, roughness: 0.45 }));
           leaf.position.set(bx + sx * 0.5, y0 + (TUBE_H - 0.1) / 2, bz + sz * 0.5); leaf.rotation.y = ry; leaf.castShadow = true;
@@ -1003,7 +1027,7 @@ export class World {
     }
     // lift
     {
-      const lift = buildLift(ship.accent);
+      const lift = buildLift(ship.accent, d.deck + 1);
       const [ex, ey] = d.exit; const [cx, cz] = this.center(ex, ey);
       const [dx, dy] = d.exitDir;
       lift.position.set(cx - dx * (TS / 2 - 0.2), 0, cz - dy * (TS / 2 - 0.2));
@@ -1216,6 +1240,16 @@ export class World {
     // --- a beacon at the end of the hall
     const [ex, ey] = d.exit; const [cx, cz] = this.center(ex, ey);
     this.liftLight = new THREE.PointLight(0xff3030, 5, 11, 1.6); this.liftLight.position.set(cx, 2.3, cz); g.add(this.liftLight);
+    this._ladderWellDress(g);
+  }
+
+  // service ladder well dressing (deterministic, no random stream): a yellow hazard outline on the floor in front of the ladder
+  _ladderWellDress(g) {
+    const w = this.d.ladderWell; if (!w) return;
+    const [wx, wy, dx, dy] = w, [cx, cz] = this.center(wx + dx, wy + dy), m = kitMats(), grp = new THREE.Group();
+    for (const [sx, sz, bw, bd] of [[0, -0.95, 1.9, 0.07], [0, 0.95, 1.9, 0.07], [-0.95, 0, 0.07, 1.9], [0.95, 0, 0.07, 1.9]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.012, bd), m.hazard); b.position.set(sx, 0.007, sz); grp.add(b); }
+    grp.position.set(cx, 0, cz); g.add(grp);
+    const lamp = new THREE.PointLight(0xffb040, 2.2, 6, 1.6); lamp.position.set((wx + 0.5) * TS, 2.2, (wy + 0.5) * TS); g.add(lamp);   // shaft light above the ladder
   }
 
   // Visual density on top of the structural build: wall fixtures per room type, ribs, conduit, emergency lamps,
@@ -1282,6 +1316,7 @@ export class World {
       {
         const FIT = { sickbay: ['medcab', 'kit'], engineering: ['toolboard', 'locker'], shuttlebay: ['toolboard', 'hose', 'locker'], cargo: ['rack', 'locker'], mess: ['shelf', 'locker'], quarters: ['locker', 'shelf'], bridge: ['locker', 'kit'], transporter: ['locker', 'toolboard'], holodeck: ['locker'], arboretum: ['shelf', 'toolboard'], corridor: ['kit', 'locker'],
           readyroom: ['locker', 'shelf'], brig: ['locker'], armory: ['rack', 'locker'], gym: ['locker', 'shelf'], lab: ['medcab', 'shelf', 'locker'], laundry: ['shelf', 'locker'], lounge: ['shelf'], workshop: ['toolboard', 'rack', 'hose'], plant: ['toolboard', 'hose', 'locker'], morgue: ['medcab', 'kit', 'locker'], datacore: ['toolboard', 'locker'], stores: ['rack', 'shelf', 'locker'], washroom: ['kit', 'shelf'], airlock: ['locker', 'hose', 'rack'] };
+        dressTable('fit', FIT);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.fit`
         const free = {}; for (const f of faces) { if (f.deco || f.win || f.sign) continue; const r = f.room || 'corridor'; if (FIT[r] && (r !== 'corridor' || (f.tx + f.ty) % 3 === 0)) (free[r] || (free[r] = [])).push(f); }
         for (const [r, fl] of Object.entries(free)) { for (let i = fl.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [fl[i], fl[j]] = [fl[j], fl[i]]; }
           for (const f of fl.slice(0, 2)) { let k = FIT[r][Math.floor(rnd() * FIT[r].length)]; if (k === 'rack' && ceilOf(f) < WH) k = 'locker'; f.deco = true; (byKind[k] || (byKind[k] = [])).push(f); } }
@@ -1340,6 +1375,14 @@ export class World {
       const pg = new THREE.PlaneGeometry(1, 1); pg.rotateX(-Math.PI / 2); const cg = new THREE.PlaneGeometry(1, 1); cg.rotateX(Math.PI / 2);
       inst(pg, decal(T.stain, 0.7), fl.filter(t => d.room[t[1]][t[0]] !== 'holodeck'), ([x, y, a, b, c], o) => { o.position.set((x + 0.3 + a * 0.4) * TS, 0.011, (y + 0.3 + b * 0.4) * TS); o.rotation.y = c * 6.28; o.scale.setScalar(1.1 + a * 1.3); });
       inst(cg, decal(T.cstain, 0.8), cl, ([x, y, a, b, c], o) => { o.position.set((x + 0.3 + a * 0.4) * TS, this.ceilAt(x, y) - 0.008, (y + 0.3 + b * 0.4) * TS); o.rotation.y = c * 6.28; o.scale.setScalar(1.0 + b * 1.2); });
+    }
+    // --- loop corridor (main.js findLoopRun): chalk tally strokes on one wall, one more every third tile along the run, so the 2nd pass reads as "I have been here"
+    if (d.loopRun) {
+      const L = d.loopRun, lr = mulberry32(d.deck * 6151 + L.a * 31 + L.b * 17 + L.fixed + 3), chalkMat = new THREE.MeshBasicMaterial({ color: 0xe8e4d4, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+      const inRun = (f) => { const ox = f.tx + f.dx, oy = f.ty + f.dy; if (d.room[oy]?.[ox]) return -1; const u = L.ax === 'x' ? ox : oy, v = L.ax === 'x' ? oy : ox; return v === L.fixed && u >= L.a && u <= L.b ? u : -1; };
+      const marks = faces.filter(f => inRun(f) >= 0 && f.dx + f.dy > 0 && (inRun(f) - L.a) % 3 === 1).map(f => ({ f, n: 1 + Math.min(4, Math.floor((inRun(f) - L.a) / 3)), j: lr() }));
+      const sg = new THREE.PlaneGeometry(0.012, 0.22);
+      for (let k = 0; k < 5; k++) inst(sg, chalkMat, marks.filter(m => m.n > k), (m, o) => { onFace(m.f, o, 1.25 + m.j * 0.2, 0.009); o.translateX(-0.12 + k * 0.06); o.rotateZ(k === 4 ? 1.1 : 0.05 * (m.j - 0.5)); });
     }
     // --- way-finding painted on corridor floors: chevrons that follow the shortest route to the tubelift
     {
@@ -1508,7 +1551,7 @@ export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttl
   'growbed', 'nutrient_tanks', 'sensorstation', 'charttable', 'spectrometer', 'samplefridge', 'fumehood', 'fuelbowser', 'pallet', 'pallet_loaded', 'hoversled', 'reachin_cooler',
   'navstation', 'opsstation', 'commsstation', 'relayrack', 'buffertank', 'plottable', 'cellfield', 'chargerack', 'issuecounter',
   'briefing_table', 'platform_bed', 'workpod', 'maint_stand', 'cargo_pad', 'injector_crate', 'knee_mill', 'drill_press', 'scan_arch', 'specimen_tank', 'mat', 'grapple_dummy', 'sparring_set',
-  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk', 'pillar', 'ship_ladder'];
+  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk', 'pillar', 'ship_ladder', 'bench', 'lamp', 'stool'];
 // everything the art batches built (PROP_KINDS above = the floor props gen.js places; the rest are variants, chairs, stools, wall / ceiling pieces and add-ons)
 export const PROP_GALLERY = [...PROP_KINDS, ...PROP_ART_KINDS.filter(k => !PROP_KINDS.includes(k))];
 export { PROP_ART, PROP_ART_FIXTURES };

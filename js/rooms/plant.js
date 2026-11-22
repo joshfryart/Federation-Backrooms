@@ -1,0 +1,15 @@
+// Room layout: plant (moved from the js/gen.js room switch). Backlog and rules: docs/rooms/plant.md, docs/rooms/README.md.
+// ctx: see js/rooms/index.js. Draw randomness only from ctx.rnd (this room's own stream); place blocking props through safePut / ringPut / anyPut / wallPut.
+export function layout(ctx) {
+  const { r, interior, ix0, iy0, ix1, iy1, cx, cy, rnd, put, safePut, ringPut, wallPut, anyPut, freeIn, has, reserved, faceTo, faceOpen, inRect, shuffle, grid, props } = ctx;
+  const PLANT = ['pumpskid', 'heatexch', 'scrubber', 'tank', 'console', 'pumpskid'];   // ENG-1/4/5 among the old vessels and consoles, on a diagonal grid
+  let i = Math.floor(rnd() * 3); for (const [x, y] of interior) if ((x + y) % 2 === 0 || interior.length === 1) { const k = PLANT[i++ % PLANT.length]; safePut(r, x, y, k, k === 'heatexch' || k === 'pumpskid' ? { rot: rnd() < 0.5 ? 0 : Math.PI } : {}); }
+  if (interior.length > 1) ringPut(r, 'console', { door: true });   // plant operator console against the wall near the entrance
+  if (interior.length > 4) ringPut(r, 'maint_stand', { free: true });   // clutter: a maintenance stand parked by a wall
+  if (interior.length > 1) ringPut(r, 'wastebin', { only: 'corner', corner: true, free: true });   // wear: a drip bucket in a corner under the leaking pipes
+  if (interior.length > 8) ringPut(r, 'buffertank', { door: false });   // layout variant: 5x5 plants get a buffer tank on the wall
+  if (interior.length > 1) ringPut(r, 'drawers', { along: true });   // clutter: a spares drawer cabinet along a wall
+  if (interior.length > 8) anyPut(r, interior, 'workbench', { near: [cx, cy] });   // wear/story: a field-repair bench beside the pumps (5x5)
+}
+// Dressing (docs/rooms/plant.md slots 3 and 6): hotter amber light, and more pressure gear on the walls
+export const dress = { light: 0xffb878, decor: (pool) => [...pool, 'gauges', 'toolboard'] };

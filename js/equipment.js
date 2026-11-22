@@ -172,6 +172,9 @@ export const EQUIPMENT = {
       steps: [st('check_tablet', [2.4, 3.6], { holdL: 'padd', pose: 'hold_padd' }), wait([1, 2], { holdL: null }), st('lean_in', [2.5, 4], { pose: 'lean_on' }), st('talk_emphasis', [1.6, 2.4], { p: 0.5 }), st('nod', [0.7, 1]), st('look_up_screen', [1.8, 3], { p: 0.5 })] }),
     platform_bed: like('bunk', { name: 'platform bed', props: ['platform_bed'], seat: 0.55, box: [-0.72, 0.72, -1.05, 1.0], spots: [[1.01, 0.1, PI / 2], [-1.01, 0.1, -PI / 2]] }),
     workpod: like('shuttle', { name: 'work pod', props: ['workpod'], box: [-0.75, 0.75, -1.15, 1.15], spots: [[0, 1.5, PI], [0, -1.45, 0]] }),
+    bench: like('sofa', { name: 'waiting bench', props: ['bench'], box: [-0.8, 0.8, -0.25, 0.25], spots: [[-0.4, 0.46, 0], [0.4, 0.46, 0]] }),
+    stool: like('lonechair', { name: 'stool', props: ['stool'], seat: 0.45, box: [-0.22, 0.22, -0.22, 0.22], spots: [[0, 0.3, PI]] }),
+    lamp: like('crate', { name: 'work lamp', props: ['lamp'], box: [-0.2, 0.2, -0.2, 0.2], spots: [[0, 0.5, PI]] }),
     maint_stand: like('workbench', { name: 'maintenance stand', props: ['maint_stand'], box: [-0.65, 0.65, -0.75, 1.0], spots: [[0, 1.25, PI]] }),
     ship_ladder: like('crate', { name: 'service ladder', props: ['ship_ladder'], box: [-0.32, 0.32, -0.25, 1.5], spots: [[0, 1.9, PI]] }),   // nominal mode: climbs to the next deck (main.js climbWell)
     pillar: like('crate', { name: 'structural pillar', props: ['pillar'], box: [-0.46, 0.46, -0.46, 0.46], spots: [[0, 0.8, PI]] }),
