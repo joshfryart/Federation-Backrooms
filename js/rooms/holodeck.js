@@ -33,4 +33,6 @@ export const dress = {
   decor: (pool) => [...pool, 'monitorB'],
   // programme-running tint: a slightly greener grid yellow
   light: 0xf4e468,
+  // a first-aid kit joins the locker as a searchable fixture (safety-interlock injuries)
+  fit: (cur) => Array.isArray(cur) ? [...cur, 'kit'] : cur,
 };
