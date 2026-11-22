@@ -25,4 +25,6 @@ export function layout(ctx) {
   if (r.type === 'engineering' || r.type === 'cargo' || r.type === 'shuttlebay') { const ps = ctx.props.filter(p => p.kind === 'pillar' && ctx.inRect(r, p.tx, p.ty)); for (let i = 0; i < Math.min(2, ps.length); i++) { const p = ps[Math.floor(rnd() * ps.length)]; anyPut(r, interior, 'maint_stand', { near: [p.tx, p.ty] }); } }
   // a loading pad near the middle of cargo halls (the spot the catwalks look down on)
   if (r.type === 'cargo' && !ctx.has(r, 'cargo_pad')) anyPut(r, interior, 'cargo_pad', { near: [ctx.cx, ctx.cy] });
+  // a wastebin on the rim of every atrium and mess hall, where crowds gather under the catwalks
+  if (r.type === 'atrium' || r.type === 'mess') ringPut(r, 'wastebin', { free: true });
 }
