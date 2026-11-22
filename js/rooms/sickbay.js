@@ -12,6 +12,6 @@ export function layout(ctx) {
   } else {
     for (const [x, y] of interior) if (rnd() < 0.7 || (x === cx && y === cy)) { if (interior.length === 1) put(x, y, 'biobed'); else safePut(r, x, y, 'biobed', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); }   // a lone centre bed may be bare; longer rooms go through safePut, beds along the long axis
     ringPut(r, 'nursestation');
-    if (interior.length > 1) { ringPut(r, 'exam_couch'); ringPut(r, 'med_dispenser'); }
+    if (interior.length > 1) { ringPut(r, 'exam_couch'); ringPut(r, 'med_dispenser'); ringPut(r, 'infusion_stand', { only: 'corner', free: true }); }
   }
 }
