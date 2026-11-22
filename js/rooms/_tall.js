@@ -35,4 +35,6 @@ export function layout(ctx) {
   if ((r.type === 'cargo' || r.type === 'engineering') && cws[0]) anyPut(r, interior, 'hoversled', { min: [cws[0].tx, cws[0].ty, 4] });
   // a bench under the last catwalk of an atrium or mess hall: somewhere to sit out of the high-bay glare
   if ((r.type === 'atrium' || r.type === 'mess') && cws.length) { const c = cws[cws.length - 1]; anyPut(r, interior, 'sofa', { near: [c.tx, c.ty] }); }
+  // a console at the rim of engineering and shuttlebay halls: the high-bay crew's status board
+  if (r.type === 'engineering' || r.type === 'shuttlebay') ringPut(r, 'console', { door: true });
 }
