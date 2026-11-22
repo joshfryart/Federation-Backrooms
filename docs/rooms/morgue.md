@@ -12,10 +12,10 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size** (done: drawers via safePut): 3x3: autopsy table centre, drawers on a checkerboard; bigger rooms could split into cold bank + table.
 2. **Focal centrepiece / facing**: Autopsy table (MED-7).
-3. **Wall-fixture pool / weights**: medcab / locker / monitorG / kit.
+3. **Wall-fixture pool / weights** (done: gas_panel added): medcab / locker / monitorG / kit.
 4. **Clutter** (done: corner steriliser): MED-11 drawer tray with a shrouded form (pulled-out tray exists in world.js).
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: Cold blue-white, low.
+6. **Light colour / fixtures / emergency** (done: colder 0xbcdcff): Cold blue-white, low.
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Biological / cold placards.
 9. **Doorway treatment**: (open)
