@@ -6,3 +6,5 @@ export function layout(ctx) {
   if (interior.length > 1) safePut(r, cx, cy, 'servers');   // slot 2: a central core stack the rest stand around
   let n = 0; for (const [x, y] of interior) if ((x + y) % 2 === 0) safePut(r, x, y, (x + y) % 4 === 0 ? 'console' : n++ % 2 ? 'relayrack' : 'servers');   // OPS-4 relay racks among the stacks
 }
+// slot 3: wall fixtures weighted toward screens and breakers; sysboard added to the pool
+export const dress = { decor: (pool) => [...pool, 'monitorB', 'sysboard_half', 'breaker'] };
