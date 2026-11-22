@@ -11,4 +11,5 @@ export function layout(ctx) {
   if (r.big) ringPut(r, 'cargo_pad', { along: true });   // big bay: a staging pad for stores coming off the shuttle
   if (r.big) ringPut(r, 'chargerack', { along: true });   // big bay: tool and suit charging by the wall (slot 4 clutter)
   ringPut(r, 'suitrack', { door: true });   // flight crew suit rack by the bay door
+  ringPut(r, 'wastebin', { along: true });   // swept-up debris bin
 }
