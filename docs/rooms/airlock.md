@@ -13,7 +13,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 1. **Layout variants by size**: 3x3: suit rack centre, airlock doors (R-2) against the hull wall.
 2. **Focal centrepiece / facing**: Inner door.
 3. **Wall-fixture pool / weights**: locker / hose / rack / extinguisher / comm / podhatch x2 (R-1).
-4. **Clutter**: (open)
+4. **Clutter**: corner crate (done d300f8c). maint_stand / hoversled ring props found no free tile in the 3x3 ring (no gain).
 5. **Floor zones / markings**: Zone podarrow.
 6. **Light colour / fixtures / emergency**: Amber cycle lamp.
 7. **Ceiling features**: (open)
