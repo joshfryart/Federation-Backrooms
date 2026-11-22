@@ -9,4 +9,4 @@ export function layout(ctx) {
   if (rnd() < 0.5) ringPut(r, 'plant', { only: 'corner', free: true });   // potted fern tucked in a corner
 }
 
-export const dress = { light: 0xeaf6ff, decor: ["planter", "planter", "fountain", "picture"], floor: "paver" };   // daylight tint under the skylight; garden wall fixtures
+export const dress = { light: 0xeaf6ff, decor: ["planter", "planter", "fountain", "picture"], floor: "paver", fit: ["shelf", "kit"] };   // daylight tint under the skylight; garden wall fixtures
