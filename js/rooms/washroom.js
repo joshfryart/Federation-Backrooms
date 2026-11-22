@@ -3,4 +3,5 @@
 export function layout(ctx) {
   const { r, interior, ix0, iy0, ix1, iy1, cx, cy, rnd, put, safePut, ringPut, wallPut, anyPut, freeIn, has, reserved, faceTo, faceOpen, inRect, shuffle, grid, props } = ctx;
   put(cx, cy, 'sinkunit');
+  ringPut(r, 'wastebin', { only: 'corner', free: true });   // slot 4: a bin in a corner
 }
