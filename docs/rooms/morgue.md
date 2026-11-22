@@ -10,7 +10,7 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: 3x3: autopsy table centre, drawers on a checkerboard; bigger rooms could split into cold bank + table.
+1. **Layout variants by size** (done: drawers via safePut): 3x3: autopsy table centre, drawers on a checkerboard; bigger rooms could split into cold bank + table.
 2. **Focal centrepiece / facing**: Autopsy table (MED-7).
 3. **Wall-fixture pool / weights**: medcab / locker / monitorG / kit.
 4. **Clutter**: MED-11 drawer tray with a shrouded form (pulled-out tray exists in world.js).
