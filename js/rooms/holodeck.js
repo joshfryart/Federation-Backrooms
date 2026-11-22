@@ -12,3 +12,9 @@ export function layout(ctx) {
   // one stray programme prop left after a purge, away from the cube
   if (rnd() < 0.5) anyPut(r, interior, 'crate', { min: [cx, cy, 2] });
 }
+
+// world.js dressing for this room (README: dress hook)
+export const dress = {
+  // programme listing screens beside the sparse comm panels
+  decor: (pool) => [...pool, 'monitorB'],
+};
