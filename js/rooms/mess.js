@@ -12,5 +12,6 @@ export function layout(ctx) {
   if (r.big) ringPut(r, 'wastebin', { corner: true });
   if (r.big) { ringPut(r, 'range'); ringPut(r, 'servery'); ringPut(r, 'dishwasher'); }   // a proper kitchen in the galley hall: a second cooking line and dishwasher (ringPut keeps every front walkable)
   if (interior.length > 1) ringPut(r, 'feedstock_silo');                           // SVC-17
+  if (r.big) ringPut(r, 'reachin_cooler', { free: true });                       // cold store for the galley hall
   if (r.big) ringPut(r, 'galley_trolley', { only: 'corner', free: true });         // SVC-14
 }
