@@ -12,7 +12,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size**: Only 5x5 today (ROOMS.size [5,5]); a 7x5 variant with a raised command tier would need a size change in data.js (core: ask the integrator).
 2. **Focal centrepiece / facing**: Chair at centre facing the viewscreen on the forward wall; helm forward port (FLT-1), nav forward starboard (FLT-4). Keep the viewscreen wall free.
-3. **Wall-fixture pool / weights**: CMD-1 master systems board (`sysboard`, js/decorart-bridge.js) is not in the bridge pool yet: add via dress.decor.
+3. [x] **Wall-fixture pool / weights**: CMD-1 master systems board (`sysboard`, js/decorart-bridge.js) is not in the bridge pool yet: add via dress.decor.
 4. **Clutter**: OPS-7 headsets on consoles; PADDs on the chair arm.
 5. **Floor zones / markings**: (open)
 6. **Light colour / fixtures / emergency**: Cool blue; consider a dimmer "night watch" ring and red-alert strip along the aft wall.
