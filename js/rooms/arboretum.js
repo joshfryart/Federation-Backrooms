@@ -11,6 +11,8 @@ export function layout(ctx) {
   // harvest totes by the beds
   for (let i = 0; i < 2; i++) anyPut(r, interior, 'crate');
 
+  // a second dosing tank on the big hall
+  if (r.big) anyPut(r, interior, 'nutrient_tanks');
 }
 // wall fixtures: a watering hose, a humidity gauge and a green sensor screen join the planters
 export const dress = { decor: (pool) => [...pool, 'hose', 'gauges', 'monitorG'], fit: (f) => [...f, 'kit'], light: 0xe2ffc4 };   // grow-light: a whiter green
