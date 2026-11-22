@@ -13,4 +13,4 @@ export function layout(ctx) {
 
 }
 // wall fixtures: a watering hose, a humidity gauge and a green sensor screen join the planters
-export const dress = { decor: (pool) => [...pool, 'hose', 'gauges', 'monitorG'] };
+export const dress = { decor: (pool) => [...pool, 'hose', 'gauges', 'monitorG'], light: 0xe2ffc4 };   // grow-light: a whiter green
