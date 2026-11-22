@@ -10,4 +10,4 @@ export function layout(ctx) {
   if (interior.length > 1) ringPut(r, 'wastebin', { only: 'corner' });
 }
 // slot 3 wall fixtures: motivational posters join the pool and mirrors are weighted double (gym wall of glass)
-export const dress = { decor: (pool) => [...pool, 'picture', 'mirror'] };
+export const dress = { decor: (pool) => [...pool, 'picture', 'mirror'], light: 0xf8ffff };   // slot 6: a touch cooler, brighter white
