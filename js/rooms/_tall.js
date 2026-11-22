@@ -37,4 +37,6 @@ export function layout(ctx) {
   if ((r.type === 'atrium' || r.type === 'mess') && cws.length) { const c = cws[cws.length - 1]; anyPut(r, interior, 'sofa', { near: [c.tx, c.ty] }); }
   // a console at the rim of engineering and shuttlebay halls: the high-bay crew's status board
   if (r.type === 'engineering' || r.type === 'shuttlebay') ringPut(r, 'console', { door: true });
+  // shelving at the rim of tall cargo halls, tall enough to reach toward the catwalks
+  if (r.type === 'cargo') ringPut(r, 'shelving', { along: true });
 }
