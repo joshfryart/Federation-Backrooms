@@ -8,3 +8,5 @@ export function layout(ctx) {
   ringPut(r, 'cart', { along: true });   // a parked loader cart against the wall
   if (r.big) for (let i = 0; i < 4; i++) ringPut(r, 'shelving', { along: true, free: true });   // cargo racking along the walls of a big bay
 }
+// dressing (world.js dressTable): cargo wall fixtures gain a tool board, a damage-control locker and a hose cabinet among the racks
+export const dress = { decor: (pool) => [...pool, 'toolboard', 'dclocker', 'hosecab'] };
