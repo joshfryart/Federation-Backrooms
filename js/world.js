@@ -1376,6 +1376,14 @@ export class World {
       inst(pg, decal(T.stain, 0.7), fl.filter(t => d.room[t[1]][t[0]] !== 'holodeck'), ([x, y, a, b, c], o) => { o.position.set((x + 0.3 + a * 0.4) * TS, 0.011, (y + 0.3 + b * 0.4) * TS); o.rotation.y = c * 6.28; o.scale.setScalar(1.1 + a * 1.3); });
       inst(cg, decal(T.cstain, 0.8), cl, ([x, y, a, b, c], o) => { o.position.set((x + 0.3 + a * 0.4) * TS, this.ceilAt(x, y) - 0.008, (y + 0.3 + b * 0.4) * TS); o.rotation.y = c * 6.28; o.scale.setScalar(1.0 + b * 1.2); });
     }
+    // --- loop corridor (main.js findLoopRun): chalk tally strokes on one wall, one more every third tile along the run, so the 2nd pass reads as "I have been here"
+    if (d.loopRun) {
+      const L = d.loopRun, lr = mulberry32(d.deck * 6151 + L.a * 31 + L.b * 17 + L.fixed + 3), chalkMat = new THREE.MeshBasicMaterial({ color: 0xe8e4d4, transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+      const inRun = (f) => { const ox = f.tx + f.dx, oy = f.ty + f.dy; if (d.room[oy]?.[ox]) return -1; const u = L.ax === 'x' ? ox : oy, v = L.ax === 'x' ? oy : ox; return v === L.fixed && u >= L.a && u <= L.b ? u : -1; };
+      const marks = faces.filter(f => inRun(f) >= 0 && f.dx + f.dy > 0 && (inRun(f) - L.a) % 3 === 1).map(f => ({ f, n: 1 + Math.min(4, Math.floor((inRun(f) - L.a) / 3)), j: lr() }));
+      const sg = new THREE.PlaneGeometry(0.012, 0.22);
+      for (let k = 0; k < 5; k++) inst(sg, chalkMat, marks.filter(m => m.n > k), (m, o) => { onFace(m.f, o, 1.25 + m.j * 0.2, 0.009); o.translateX(-0.12 + k * 0.06); o.rotateZ(k === 4 ? 1.1 : 0.05 * (m.j - 0.5)); });
+    }
     // --- way-finding painted on corridor floors: chevrons that follow the shortest route to the tubelift
     {
       const fld = this.field(ex, ey), W = this.W, list = [];

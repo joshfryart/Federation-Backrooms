@@ -18,6 +18,6 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Liminal room signs that stop naming rooms (world.js).
 9. **Doorway treatment**: (open)
-10. **Wear / storytelling**: A chalk mark the player can notice on the second pass.
+10. **Wear / storytelling**: A chalk mark the player can notice on the second pass. DONE (chalk tally strokes along one wall of the run, growing every third tile; world.js _dressing, own stream; unverified visually, node checks only).
 
 Rules and the fast check: [README.md](README.md).
