@@ -13,4 +13,5 @@ export function layout(ctx) {
   ringPut(r, 'suitrack', { door: true });   // flight crew suit rack by the bay door
   ringPut(r, 'wastebin', { along: true });   // swept-up debris bin
   if (r.big) ringPut(r, 'shelving', { along: true });   // big bay: spares racking on a wall
+  if (r.big) anyPut(r, interior, 'pallet', { min: [cx, cy, 2] });   // big bay: an empty pallet left in the open, clear of the cradle
 }
