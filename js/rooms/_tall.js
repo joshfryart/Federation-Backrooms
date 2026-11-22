@@ -29,4 +29,6 @@ export function layout(ctx) {
   if (r.type === 'atrium' || r.type === 'mess') ringPut(r, 'wastebin', { free: true });
   // a pallet of stock in the shadow of the first catwalk of a cargo or engineering hall
   if ((r.type === 'cargo' || r.type === 'engineering') && cws[0]) anyPut(r, interior, r.type === 'cargo' ? 'pallet_loaded' : 'pallet', { near: [cws[0].tx, cws[0].ty], min: [cws[0].tx, cws[0].ty, 2] });
+  // a fuel bowser parked against the rim of a shuttlebay, for the craft under the high-bay lights
+  if (r.type === 'shuttlebay') ringPut(r, 'fuelbowser', { free: true, along: true });
 }
