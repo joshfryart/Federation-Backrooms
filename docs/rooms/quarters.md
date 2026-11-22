@@ -13,7 +13,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 1. **Layout variants by size**: 3x3: bunk (or platform bed, CMD-3, 30 %) + desk. Variants: twin bunk room, senior cabin with sofa.
 2. **Focal centrepiece / facing**: Bed against... currently centre: consider head-to-wall.
 3. **Wall-fixture pool / weights**: locker / picture / mirror / shelf.
-4. **Clutter**: Personal items: X-2 frames, lamp, books. DONE: chest of drawers in a corner (iter 1).
+4. **Clutter**: Personal items: X-2 frames, lamp, books. DONE: chest of drawers in a corner (iter 1); potted plant in a free corner (iter 2).
 5. **Floor zones / markings**: (open)
 6. **Light colour / fixtures / emergency**: Warm; reading lamp.
 7. **Ceiling features**: (open)
