@@ -12,4 +12,5 @@ export function layout(ctx) {
   if (r.big) ringPut(r, 'chargerack', { along: true });   // big bay: tool and suit charging by the wall (slot 4 clutter)
   ringPut(r, 'suitrack', { door: true });   // flight crew suit rack by the bay door
   ringPut(r, 'wastebin', { along: true });   // swept-up debris bin
+  if (r.big) ringPut(r, 'shelving', { along: true });   // big bay: spares racking on a wall
 }
