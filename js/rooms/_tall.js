@@ -4,7 +4,7 @@
 export const TALL_TYPES = new Set(['shuttlebay', 'cargo', 'engineering', 'arboretum', 'mess', 'atrium']);
 export const isTall = (r) => (r.big || r.type === 'atrium') && TALL_TYPES.has(r.type);
 export function layout(ctx) {
-  const { safePut, ringPut, reserved, r, interior, ix0, iy0, ix1, iy1, rnd, grid } = ctx;
+  const { safePut, ringPut, anyPut, reserved, r, interior, ix0, iy0, ix1, iy1, rnd, grid } = ctx;
   // pillars: a lattice every third tile, only where the room stays walkable (safePut). Layout varies per room: lattice, two colonnades,
   // a ring just inside the walls, or a sparse scatter; shifted by 0-2 tiles so no two halls share a pattern
   const pv = Math.floor(rnd() * 4), sx = Math.floor(rnd() * 3), sy = Math.floor(rnd() * 3), long = r.w >= r.h;
@@ -18,5 +18,7 @@ export function layout(ctx) {
     if (ok) safePut(r, x, y, 'pillar', { rot: 0 });
   }
   // mezzanine catwalk modules
-  const n = r.type === 'shuttlebay' ? 2 : 3; for (let i = 0; i < n; i++) ringPut(r, 'catwalk', { along: true, free: true });
+  const n = r.type === 'shuttlebay' ? 2 : 3, cws = []; for (let i = 0; i < n; i++) { const cw = ringPut(r, 'catwalk', { along: true, free: true }); if (cw) cws.push(cw); }
+  // a step-up crate stack near each catwalk foot, so the deck can be mantled from a neighbouring prop
+  for (const c of cws) anyPut(r, interior, 'crate', { near: [c.tx, c.ty] });
 }
