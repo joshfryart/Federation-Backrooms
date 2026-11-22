@@ -41,6 +41,7 @@ import { socialTests } from './test-social.mjs';   // social tracker + sim/duty 
 import { gaitTests } from './test-gait.mjs';
 import { movementTests } from './test-movement.mjs';
 import { equipmentTests } from './test-equipment.mjs';   // equipment motions / carry items (tools/test-equipment.mjs)
+import { roleTests } from './test-role.mjs';   // role choice: URL > storage > random (tools/test-role.mjs)
 import { repairTests } from './test-repair.mjs';   // NPC repair response, sim priorities, pace, speech etiquette (tools/test-repair.mjs)
 import { handheldTests } from './test-handhelds.mjs';   // handheld job equipment / improvised weapons (tools/test-handhelds.mjs)
 import { navTests, navBrowser } from './test-nav.mjs';   // routing / cross-deck plans / pins + nav HUD (tools/test-nav.mjs)
@@ -54,7 +55,7 @@ import { saveTests, saveBrowser } from './test-save.mjs';   // versioned save, b
 import { touchTests, touchBrowser } from './test-touch.mjs';   // touch / mobile controls: stick, look drag, buttons, mini-game + room job by touch (tools/test-touch.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
-  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {

@@ -157,6 +157,9 @@
   .pace button { background:none; border:0; color:var(--ink); font:inherit; letter-spacing:inherit; text-transform:inherit; padding:5px 12px; cursor:pointer; opacity:.7; transition:background .12s, opacity .12s; }
   .pace button:hover { opacity:1; background:rgba(111,143,184,.18); } .pace button.on { opacity:1; background:var(--lc2); color:#05070c; font-weight:700; }
   .pace button:focus-visible { outline:2px solid var(--lc4); outline-offset:-2px; }
+  .pace select { background:none; border:0; color:var(--ink); font:inherit; letter-spacing:inherit; text-transform:inherit; padding:5px 10px; cursor:pointer; max-width:60vw; }
+  .pace select option, .pace select optgroup { background:#0a0f18; color:var(--ink); text-transform:none; }
+  .pace select:focus-visible { outline:2px solid var(--lc4); outline-offset:-2px; }
   .pacesum { font-family:var(--f-m); font-size:clamp(9px,1.7vh,11px); color:var(--dim); letter-spacing:.06em; margin-top:.6vh; min-height:1.2em; }
   #bd-hint.glow { animation:hintglow 1.4s ease-in-out infinite; box-shadow:0 0 0 1px rgba(255,217,160,.5), 0 0 18px rgba(255,200,120,.45); } @keyframes hintglow { 50% { box-shadow:0 0 0 1px rgba(255,217,160,.9), 0 0 28px rgba(255,200,120,.8); } }
   @media (max-height:420px) { #title .keys { display:none; } #title .crest { display:none; } }
@@ -274,6 +277,8 @@
     </div>
     <div class="pace" id="pacesel" role="group" aria-label="Shift length"><span>Shift</span><button type="button" data-pace="first">First watch</button><button type="button" data-pace="standard">Standard</button><button type="button" data-pace="crunch">Crunch</button></div>
     <div id="pacesum" class="pacesum"></div>
+    <div class="pace" id="rolesel" role="group" aria-label="Role"><span>Role</span></div>
+    <div id="rolesum" class="pacesum"></div>
     <div><button class="btn" id="begin">Begin shift</button> <button class="btn alt" id="credbtn">Credits</button></div>
     <div id="best"></div>
   </div>
