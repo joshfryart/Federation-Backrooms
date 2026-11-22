@@ -15,6 +15,8 @@ export function layout(ctx) {
   anyPut(r, interior, 'stool', { near: [cx, cy] });
   // a real potted plant in a corner: the one thing in here that is not a projection
   ringPut(r, 'plant', { only: 'corner', free: true });
+  // second operator console opposite, for two-handed programme edits
+  ringPut(r, 'console', { free: true });
   // one stray programme prop left after a purge, away from the cube
   if (rnd() < 0.5) anyPut(r, interior, 'crate', { min: [cx, cy, 2] });
 }
