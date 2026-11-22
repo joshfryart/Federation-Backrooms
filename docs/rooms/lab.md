@@ -15,7 +15,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights** [done]: monitorG / shelf / locker / medcab / monitorB.
 4. **Clutter**: Vials, beakers, sample racks.
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: Cool white.
+6. **Light colour / fixtures / emergency** [done]: Cool white.
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Biological / cold / radiation placards.
 9. **Doorway treatment**: (open)
