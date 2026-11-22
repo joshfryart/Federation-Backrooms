@@ -15,7 +15,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights**: coil / monitorB / comm, plus panelbox / breaker. DONE
 4. **Clutter**: OPS-5 coil cartridge on the workbench. FIT adds dclocker (DONE); room is full, no floor clutter fits.
 5. **Floor zones / markings**: Rubber; keep-off chevrons round the pad.
-6. **Light colour / fixtures / emergency**: Cool blue; pad glow while energising.
+6. **Light colour / fixtures / emergency**: Cool blue (0x8fbcff, DONE); pad glow while energising.
 7. **Ceiling features**: Emitter array over the pad (matching the pad).
 8. **Signage / placards**: OPS-8 cargo pad variant (examine text) still open.
 9. **Doorway treatment**: (open)
