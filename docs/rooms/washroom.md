@@ -19,6 +19,6 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 7. **Ceiling features**: (open)
 8. **Signage / placards**: (open)
 9. **Doorway treatment**: (open)
-10. **Wear / storytelling**: Wet floor sign.
+10. **Wear / storytelling**: Wet floor sign; exposed pipe run (done).
 
 Rules and the fast check: [README.md](README.md).
