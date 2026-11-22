@@ -15,7 +15,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. [x] (camdome, badgereader added) **Wall-fixture pool / weights**: rack / locker / extinguisher / camdome.
 4. [x] (wastebin) **Clutter**: Battery cells on the charge rack.
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: (open)
+6. [x] (0xfff0d0, cleaner white) **Light colour / fixtures / emergency**: (open)
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Voltage / pressure placards.
 9. **Doorway treatment**: Counter + mesh screen at the door.
