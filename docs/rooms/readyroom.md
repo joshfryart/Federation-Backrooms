@@ -19,6 +19,6 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Command emblem plate (G-1).
 9. **Doorway treatment**: (open)
-10. **Wear / storytelling**: A single personal item: a plant, a framed photo.
+10. **Wear / storytelling** (done: potted plant in a corner): A single personal item: a plant, a framed photo.
 
 Rules and the fast check: [README.md](README.md).
