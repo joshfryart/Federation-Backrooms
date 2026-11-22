@@ -4,7 +4,8 @@ export function layout(ctx) {
   const { r, interior, ix0, iy0, ix1, iy1, cx, cy, rnd, put, safePut, ringPut, wallPut, anyPut, freeIn, has, reserved, faceTo, faceOpen, inRect, shuffle, grid, props } = ctx;
   // the shuttle sits on its cradle (FLT-3, world.js adds cradle and pad marking) with its long axis on x: both end tiles kept clear
   put(cx, cy, 'shuttle', { rot: rnd() < 0.5 ? 0 : Math.PI }); reserved.add((cx - 1) + ',' + cy); reserved.add((cx + 1) + ',' + cy);
-  put(ix0, iy0, 'crate'); put(ix1, iy1, 'pallet_loaded'); ringPut(r, 'baycontrol', { door: true }); ringPut(r, 'workbench');
+  safePut(r, ix0, iy0, 'crate'); safePut(r, ix1, iy1, 'pallet_loaded');   // corner stock, checked so it never boxes a tile in
+  ringPut(r, 'baycontrol', { door: true }); ringPut(r, 'workbench');
   anyPut(r, interior, 'workpod'); anyPut(r, interior, 'maint_stand', { near: [cx, cy] });              // FLT-8 work pod, FLT-9 maintenance stand
   ringPut(r, 'fuelbowser', { along: true }); ringPut(r, 'hoversled', { door: true, along: true });     // FLT-5, SVC-9 parked against the walls
 }
