@@ -15,6 +15,8 @@ export function layout(ctx) {
   if (r.big) anyPut(r, interior, 'nutrient_tanks');
   // extra grow beds in the big hall's walkway rows
   if (r.big) for (let i = 0; i < 3; i++) anyPut(r, interior, 'growbed');
+  // a harvest trolley parked in the room
+  anyPut(r, interior, 'cart');
 }
 // wall fixtures: a watering hose, a humidity gauge and a green sensor screen join the planters
 export const dress = { decor: (pool) => [...pool, 'hose', 'gauges', 'monitorG'], fit: (f) => [...f, 'kit'], light: 0xe2ffc4 };   // grow-light: a whiter green
