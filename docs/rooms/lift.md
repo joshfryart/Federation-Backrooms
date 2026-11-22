@@ -16,7 +16,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 5. **Floor zones / markings**: (open)
 6. **Light colour / fixtures / emergency**: Car light; call-button lamp.
 7. **Ceiling features**: (open)
-8. **Signage / placards**: Deck number plate over the doors.
+8. **Signage / placards**: Deck number plate over the doors. DONE (HASH1): `DECK n` plate on the left of the header.
 9. **Doorway treatment**: Lift doors move to the car mouth.
 10. **Wear / storytelling**: Worn call button.
 

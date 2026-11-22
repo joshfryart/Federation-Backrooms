@@ -388,7 +388,7 @@ export function buildProp(kind) {
   return g;
 }
 
-export function buildLift(accent) {
+export function buildLift(accent, deckNo) {
   const g = new THREE.Group();
   const frame = new THREE.MeshLambertMaterial({ color: 0x3a3f48 });
   const door = new THREE.MeshLambertMaterial({ color: 0x9aa0aa });
@@ -405,6 +405,11 @@ export function buildLift(accent) {
   });
   const txt = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.42), new THREE.MeshBasicMaterial({ map: sign, color: 0xdddddd }));
   txt.position.set(0, 2.3, 0.16); g.add(txt);
+  if (deckNo) {   // deck number plate over the doors (lift slot 8)
+    const plate = canvasTex(128, (c, s) => { c.fillStyle = '#0b0e16'; c.fillRect(0, 0, s, s); c.strokeStyle = '#' + new THREE.Color(accent).getHexString(); c.lineWidth = 6; c.strokeRect(5, 5, s - 10, s - 10);
+      c.fillStyle = '#fff'; c.font = 'bold 26px Helvetica, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('DECK', s / 2, 34); c.font = 'bold 62px Helvetica, Arial, sans-serif'; c.fillText(String(deckNo), s / 2, 82, s - 20); });
+    const pm = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), new THREE.MeshBasicMaterial({ map: plate, color: 0xdddddd })); pm.position.set(-0.95, 2.82, 0.16); g.add(pm);
+  }
   // call panel on the right-hand post, hazard kick plates, header lamp bar
   const haz = new THREE.MeshLambertMaterial({ color: 0xd8a818 }), dk = new THREE.MeshLambertMaterial({ color: 0x15181d });
   g.add(box(0.16, 0.26, 0.04, dk, 1.1, 1.15, 0.16)); const btn = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.02), new THREE.MeshBasicMaterial({ color: new THREE.Color(accent).multiplyScalar(1.6) })); btn.position.set(1.1, 1.3, 0.19); g.add(btn);
@@ -1009,7 +1014,7 @@ export class World {
     }
     // lift
     {
-      const lift = buildLift(ship.accent);
+      const lift = buildLift(ship.accent, d.deck + 1);
       const [ex, ey] = d.exit; const [cx, cz] = this.center(ex, ey);
       const [dx, dy] = d.exitDir;
       lift.position.set(cx - dx * (TS / 2 - 0.2), 0, cz - dy * (TS / 2 - 0.2));
