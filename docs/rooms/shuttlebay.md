@@ -10,10 +10,10 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: 5x5 and big 7x9 (tall). Shuttle on cradle centre, both end tiles clear; bay control by the door.
+1. **Layout variants by size**: 5x5 and big 7x9 (tall). Shuttle on cradle centre, both end tiles clear; bay control by the door. (done: see git log shuttlebay)
 2. **Focal centrepiece / facing**: Shuttle long axis on x (FLT-3 cradle + pad marking in world.js).
-3. **Wall-fixture pool / weights**: hose / toolboard / pipes / rack / extinguisher.
-4. **Clutter**: FLT-6 chocks and straps, FLT-7 tethers.
+3. **Wall-fixture pool / weights**: hose / toolboard / pipes / rack / extinguisher. (done: see git log shuttlebay)
+4. **Clutter**: FLT-6 chocks and straps, FLT-7 tethers. (done: see git log shuttlebay)
 5. **Floor zones / markings**: Zones parking / ejection / walkway (ZONE_ROOMS).
 6. **Light colour / fixtures / emergency**: Bright work light; amber rotating beacons near the space door.
 7. **Ceiling features**: Gantry rail over the cradle (tall variant).
@@ -22,3 +22,5 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 10. **Wear / storytelling**: Tyre marks, scorched pad.
 
 Rules and the fast check: [README.md](README.md).
+
+Notes: slots 1, 3, 4 advanced (safePut corners, big-bay pad / charge rack / shelving / pallet / bowser / pod / crate, suit rack, bin, cart, breaker+comm decor). Slots 5-10 need core hooks (floor markings, ceiling gantry, door, scorch decals) and are handed to the integrator. The wall ring of a big bay is full, so more ringPut props add nothing.
