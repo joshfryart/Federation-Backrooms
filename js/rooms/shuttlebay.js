@@ -16,6 +16,7 @@ export function layout(ctx) {
   if (r.big) anyPut(r, interior, 'pallet', { min: [cx, cy, 2] });   // big bay: an empty pallet left in the open, clear of the cradle
   anyPut(r, interior, 'cart', { near: [cx, cy] });   // service cart parked by the shuttle
   if (r.big) ringPut(r, 'fuelbowser', { along: true });   // big bay: a second bowser for the longer apron
+  if (r.big) anyPut(r, interior, 'workpod', { min: [cx, cy, 2] });   // big bay: second work pod away from the cradle
 }
 // slot 3: wall fixtures: a breaker panel and comm panel join the hose / toolboard pool
 export const dress = { decor: (pool) => [...pool, "breaker", "comm"] };
