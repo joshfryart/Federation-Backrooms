@@ -12,10 +12,10 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size**: 3x3: washer centre, dryer on a wall, folding table and linen cart (SVC-15).
 2. **Focal centrepiece / facing**: Washer.
-3. **Wall-fixture pool / weights**: shelf / pipes / locker / hose.
-4. **Clutter**: Linen stacks, galley whites (W-4).
+3. **Wall-fixture pool / weights**: shelf / pipes / locker / hose. DONE (dress.decor)
+4. **Clutter**: Linen stacks, galley whites (W-4). DONE (dress.fit); 3x3 room is full, no room for more blocking props
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: Flat white.
+6. **Light colour / fixtures / emergency**: Flat white. DONE (warm 0xfff4e0)
 7. **Ceiling features**: (open)
 8. **Signage / placards**: (open)
 9. **Doorway treatment**: (open)
