@@ -1547,7 +1547,7 @@ export const PROP_KINDS = ['console', 'chair', 'viewscreen', 'warpcore', 'shuttl
   'growbed', 'nutrient_tanks', 'sensorstation', 'charttable', 'spectrometer', 'samplefridge', 'fumehood', 'fuelbowser', 'pallet', 'pallet_loaded', 'hoversled', 'reachin_cooler',
   'navstation', 'opsstation', 'commsstation', 'relayrack', 'buffertank', 'plottable', 'cellfield', 'chargerack', 'issuecounter',
   'briefing_table', 'platform_bed', 'workpod', 'maint_stand', 'cargo_pad', 'injector_crate', 'knee_mill', 'drill_press', 'scan_arch', 'specimen_tank', 'mat', 'grapple_dummy', 'sparring_set',
-  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk', 'pillar', 'ship_ladder'];
+  'galley_trolley', 'dryer', 'folding_table', 'linen_cart', 'pool_table', 'card_table', 'arcade', 'feedstock_silo', 'exercise_bike', 'rower', 'dumbbell_rack', 'airlock_doors', 'catwalk', 'pillar', 'ship_ladder', 'bench', 'lamp', 'stool'];
 // everything the art batches built (PROP_KINDS above = the floor props gen.js places; the rest are variants, chairs, stools, wall / ceiling pieces and add-ons)
 export const PROP_GALLERY = [...PROP_KINDS, ...PROP_ART_KINDS.filter(k => !PROP_KINDS.includes(k))];
 export { PROP_ART, PROP_ART_FIXTURES };
