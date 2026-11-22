@@ -12,7 +12,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size**: 3x3: sink unit centre; attendant locker near the door (done). Variants: stalls along one wall, shower.
 2. **Focal centrepiece / facing**: Sink unit.
-3. **Wall-fixture pool / weights**: mirror / fountain / shelf / kit.
+3. **Wall-fixture pool / weights**: mirror / fountain / shelf / kit; mirrors double-weighted (done).
 4. **Clutter**: corner waste bin (done).
 5. **Floor zones / markings**: (open)
 6. **Light colour / fixtures / emergency**: Bright cool.
