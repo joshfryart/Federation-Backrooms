@@ -15,4 +15,5 @@ export function layout(ctx) {
   if (r.big) ringPut(r, 'reachin_cooler', { free: true });                       // cold store for the galley hall
   if (r.big) ringPut(r, 'galley_trolley', { only: 'corner', free: true });         // SVC-14
   if (interior.length > 1) ringPut(r, 'sinkunit');                                 // scullery sink after the main fixtures, only if a wall tile is left
+  if (interior.length > 1) ringPut(r, 'lonechair', { only: 'corner', free: true });   // chairs stacked in a corner at closing
 }
