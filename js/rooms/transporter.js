@@ -6,3 +6,8 @@ export function layout(ctx) {
   for (let i = 0; i < 2; i++) ringPut(r, 'buffertank', { only: 'corner', free: true });   // OPS-6 pattern buffers x2 in the corners
   // OPS-1 with its back to the pad: the chief looks over it at the pad
 }
+export const dress = {
+  decor: (pool) => [...pool, 'panelbox', 'breaker'],   // slot 3: power conditioning around the emitters
+  fit: (f) => [...f, 'dclocker'],   // slot 4: damage-control locker as a searchable fixture
+  light: 0x8fbcff,   // slot 6: deeper cool blue, the pad-glow cast
+};
