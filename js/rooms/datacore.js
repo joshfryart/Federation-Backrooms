@@ -8,4 +8,4 @@ export function layout(ctx) {
   if (interior.length > 1) ringPut(r, 'crate', { only: 'corner', free: true });   // slot 4: spare parts crate tucked in a corner
 }
 // slot 3: wall fixtures weighted toward screens and breakers; sysboard added to the pool
-export const dress = { decor: (pool) => [...pool, 'monitorB', 'sysboard_half', 'breaker'] };
+export const dress = { decor: (pool) => [...pool, 'monitorB', 'sysboard_half', 'breaker'], light: 0x8cb0ff };   // slot 6: a deeper rack-blue
