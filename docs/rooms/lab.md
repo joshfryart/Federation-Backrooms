@@ -10,7 +10,7 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: Chart table centre (SCI-3), benches / consoles on a checkerboard, spectrometer / sensor station / fume hood on walls.
+1. **Layout variants by size** [done]: Chart table centre (SCI-3), benches / consoles on a checkerboard, spectrometer / sensor station / fume hood on walls.
 2. **Focal centrepiece / facing**: Chart table.
 3. **Wall-fixture pool / weights**: monitorG / shelf / locker / medcab / monitorB.
 4. **Clutter**: Vials, beakers, sample racks.
