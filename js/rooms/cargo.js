@@ -6,6 +6,7 @@ export function layout(ctx) {
   for (const [x, y] of interior) if (rnd() < 0.65) { const u = rnd(); safePut(r, x, y, u < 0.45 ? 'crate' : u < 0.75 ? 'pallet_loaded' : 'pallet'); }   // SVC-6 pallets among the crates
   ringPut(r, 'console', { door: true }); ringPut(r, 'workbench', { door: true }); ringPut(r, 'hoversled', { door: true, along: true }); ringPut(r, 'cargo_pad');
   ringPut(r, 'cart', { along: true });   // a parked loader cart against the wall
+  anyPut(r, interior, 'crate', { rot: 0.5 + rnd() * 0.6 });   // a crate knocked askew, its packing spilled (wear / storytelling)
   if (r.big) for (let i = 0; i < 4; i++) ringPut(r, 'shelving', { along: true, free: true });   // cargo racking along the walls of a big bay
 }
 // dressing (world.js dressTable): cargo wall fixtures gain a tool board, a damage-control locker and a hose cabinet among the racks
