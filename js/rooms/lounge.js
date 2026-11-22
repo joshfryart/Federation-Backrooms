@@ -7,4 +7,5 @@ export function layout(ctx) {
   for (const [x, y] of interior) if (grid[y][x] === 0 && (x + y) % 2 === 0) safePut(r, x, y, (x * 3 + y) % 4 === 0 ? 'table' : (x + 2 * y) % 3 === 0 ? 'lonechair' : 'sofa');
   if (interior.length >= 5) wallPut(r, interior, 'arcade');                                         // a second cabinet in the bigger lounges
   if (interior.length > 1) ringPut(r, 'plant', { corner: true });                                   // a potted plant in a corner
+  if (interior.length >= 3) ringPut(r, 'bench', { free: true });                                   // a bench along a wall for spectators
 }
