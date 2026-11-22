@@ -8,4 +8,5 @@ export function layout(ctx) {
   wallPut(r, interior, 'drill_press');
   if (interior.length > 1 && !has(r, 'knee_mill')) anyPut(r, interior, 'knee_mill') || ringPut(r, 'knee_mill');   // safePut can drop the pattern's mill: keep one per shop
   ringPut(r, 'shelving');   // parts bins along the wall
+  if (interior.length > 1) anyPut(r, interior, 'wastebin');   // swarf bin
 }
