@@ -17,7 +17,7 @@ export default define({
     const m = machine(this, seed, opts), r = m.rnd, gap = m.calm ? 0.55 : 0.35;
     m.trays = Array.from({ length: 3 }, (_, i) => { const log = ri(r, 4, 7), short = i === 1 || r() < 0.3; return { drug: pick(r, DRUGS), log, act: short ? log - ri(r, 1, 2) : log, shown: 0, tally: 0 }; });
     m.k = 0; m.clk = 0; m.rounds = 3; m.round = 0;
-    const T = () => m.trays[m.k], full = () => T().shown >= T().act;
+    const T = () => m.trays[Math.min(m.k, 2)], full = () => T().shown >= T().act;
     const next = () => { m.k++; m.round = m.k; m.clk = 0; if (m.k >= 3) m.win(); };
     m.key = (code, down = true) => {
       if (m.state !== 'play') return false; const own = SPACE(code) || ENTER(code) || ARROW(code) === 'U'; if (!own) return false; if (!down) return true; const t = T();
@@ -28,7 +28,7 @@ export default define({
       return true;
     };
     m.tick = (dt) => { if (!m.live(dt)) return; const t = T(); if (!t || full()) return; m.clk += dt; if (m.clk >= gap) { m.clk = 0; t.shown++; m.ev('ampoule', { n: t.shown }); } };
-    m.hint = () => { const t = T(); if (!t) return []; if (t.tally < t.shown) return [['Space', true]]; if (!full()) return []; return [[t.act === t.log ? 'Enter' : 'ArrowUp', true]]; };
+    m.hint = () => { if (m.k >= 3) return []; const t = T(); if (t.tally < t.shown) return [['Space', true]]; if (!full()) return []; return [[t.act === t.log ? 'Enter' : 'ArrowUp', true]]; };
     m.bad = () => 'Enter';
     m.view = () => ({ trays: m.trays.map(t => [t.drug, t.log, t.act]) });
     m.buttons = () => [['Space', 'Tally'], ['Enter', 'Sign'], ['ArrowUp', 'Flag short']];

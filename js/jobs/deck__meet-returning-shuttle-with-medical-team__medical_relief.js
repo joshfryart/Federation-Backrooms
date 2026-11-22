@@ -18,7 +18,7 @@ export default define({
     const m = machine(this, seed, opts), r = m.rnd, ring = m.calm ? 0.12 : 0.08, run = m.calm ? 6 : 5;
     m.cases = [0, 1].map(() => ({ A: rf(r, 0.2, 0.32), f: rf(r, 0.8, 1.3), ph: rf(r, 0, 6), cards: shuffle(r, PARTS), name: `${['Ens.', 'Lt.', 'Crew'][Math.floor(r() * 3)]} ${['Vale', 'Okoro', 'Shen', 'Mbeki', 'Ross', 'Tarn'][Math.floor(r() * 6)]}`, inj: ['burns', 'fracture', 'concussion', 'blood loss'][Math.floor(r() * 4)] }));
     m.c = 0; m.s = 0; m.h = 0; m.out = 0; m.wt = 0; m.stage = 'ramp'; m.said = 0; m.rounds = 2; m.round = 1;
-    const C = () => m.cases[m.c];
+    const C = () => m.cases[Math.min(m.c, m.cases.length - 1)];
     m.slope = (s) => { const k = C(); return k.A * Math.sin(6.283 * k.f * s + k.ph) - k.A * Math.sin(k.ph); };
     m.tilt = () => m.h - m.slope(m.s);
     m.key = (code, down = true) => {

@@ -18,7 +18,7 @@ export default define({
     const lay = () => { const z = Array.from({ length: 6 }, () => ({ stuff: null, seen: true })); for (const k of shuffle(r, [0, 1, 2, 3, 4, 5]).slice(0, ri(r, 2, 3))) z[k].stuff = r() < 0.5 ? 'crate' : 'sled';
       for (const k of shuffle(r, [0, 1, 2, 3, 4, 5]).slice(0, ri(r, 2, 3))) { z[k].seen = false; if (r() < 0.55) z[k].stuff = z[k].stuff || 'crate'; } return z; };
     m.lanes = [lay(), lay()]; m.L = 0; m.pos = 0; m.go = null; m.busy = 0; m.field = 0; m.raising = false; m.rounds = 2; m.round = 1;
-    const Z = () => m.lanes[m.L];
+    const Z = () => m.lanes[Math.min(m.L, m.lanes.length - 1)];
     m.key = (code, down = true) => {
       if (m.state !== 'play') return false; const n = DIG(code);
       if (n) { if (down && n <= 6 && m.go == null && m.busy <= 0) { m.go = n - 1; m.busy = Math.abs(m.go - m.pos) * walk + 0.1; } return true; }

@@ -113,6 +113,10 @@ export async function checkFile(file, { others = [], seeds = 25 } = {}) {
       const b = mod.create(s, {}), rb = play(mod, b, 'bad'); if (rb.state !== 'fail') err(`seed ${s}: bad play must fail: ${JSON.stringify(rb)}`); else stats.bad++;
       const i = mod.create(s, {}), ri = play(mod, i, 'idle', 0.1, 300); if (ri.state !== 'fail' || ri.t > i.limit + 0.5) err(`seed ${s}: idle must end by itself (fail) within the limit: ${JSON.stringify(ri)}`); else stats.idle++;
     }
+    if (mod.host === 'console') for (const how of ['win', 'bad', 'idle']) {   // after the game ends, hint/key/tick/draw/buttons must still be safe to call (the console keeps drawing the last frame)
+      const g = mod.create(6, {}); play(mod, g, how, 0.1, 300); const ctx = mockCtx();
+      try { g.hint(); g.buttons(); g.key('Space', true); g.key('Enter', true); g.tick(1 / 30); g.draw(ctx, 400, 170, PAL); } catch (e) { err(`threw after the game ended (${how}): ` + (e.stack || e).toString().split('\n').slice(0, 2).join(' | ')); }
+    }
     const a = mod.create(9, {}), b = mod.create(9, {}); if (JSON.stringify(a.view()) !== JSON.stringify(b.view())) err('not deterministic: same seed, different view()');
     const views = new Set(Array.from({ length: 6 }, (_, i) => JSON.stringify(mod.create(100 + i, {}).view()))); if (views.size < 4) err(`view(): different seeds must give different content (${views.size}/6)`);
     if (mod.create(3, { calm: true }).limit !== Math.round(mod.create(3, {}).limit * 1.5 * 10) / 10) err('calm must give +50 % time');

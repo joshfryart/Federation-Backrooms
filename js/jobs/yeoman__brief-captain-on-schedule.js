@@ -33,7 +33,7 @@ export default define({
       return { t, subj: subs[k][0], who: whos[k][0], clash, other, ph: lst.filter((_, i) => i !== drop) };
     });
     m.rounds = 3; m.round = 1; m.k = 0; m.sel = new Set(); m.clock = 0;
-    const cur = () => m.items[m.k], total = () => [...m.sel].reduce((a, i) => a + cur().ph[i].n, 0);
+    const cur = () => m.items[Math.min(m.k, 2)], total = () => [...m.sel].reduce((a, i) => a + cur().ph[i].n, 0);
     const next = () => { m.k++; m.sel = new Set(); m.clock = 0; if (m.k >= 3) { if (m.state === 'play') m.win(); } else m.round = m.k + 1; };
     const deliver = () => {
       const it = cur(), ps = [...m.sel].map(i => it.ph[i]), has = (tag) => ps.filter(p => p.tag === tag).length;

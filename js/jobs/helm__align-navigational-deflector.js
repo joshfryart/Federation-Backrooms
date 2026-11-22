@@ -18,28 +18,29 @@ export default define({
     const m = machine(this, seed, opts), r = m.rnd, tol = m.calm ? 0.045 : 0.032, sp = m.calm ? 0.22 : 0.26, w = 0.16;
     m.rs = Array.from({ length: 3 }, () => ({ peak: rf(r, 0.2, 0.8), dens: ri(r, 0, 2) })); m.rounds = 3; m.round = 0;
     m.dial = ri(r, 0, 2); m.phase = 'sweep'; m.cur = 0;
-    const startAt = () => { const p = m.rs[m.cur].peak; m.k = p > 0.5 ? p - rf(r, 0.22, 0.32) : p + rf(r, 0.22, 0.32); };
+    const R = () => m.rs[Math.min(m.cur, 2)];
+    const startAt = () => { const p = R().peak; m.k = p > 0.5 ? p - rf(r, 0.22, 0.32) : p + rf(r, 0.22, 0.32); };
     startAt(); m.held = {};
-    m.hum = () => Math.exp(-(((m.k - m.rs[m.cur].peak) / w) ** 2));
+    m.hum = () => Math.exp(-(((m.k - R().peak) / w) ** 2));
     m.key = (code, down = true) => {
       if (m.state !== 'play') return false; const a = ARROW(code), d = DIG(code);
       if (a === 'L' || a === 'R') { m.held[a] = down; return true; }
-      if (SPACE(code)) { if (down && m.phase === 'sweep') { if (Math.abs(m.k - m.rs[m.cur].peak) > tol) m.fault('locked off crest'); else { m.phase = 'dial'; m.held = {}; } } return true; }
+      if (SPACE(code)) { if (down && m.phase === 'sweep') { if (Math.abs(m.k - R().peak) > tol) m.fault('locked off crest'); else { m.phase = 'dial'; m.held = {}; } } return true; }
       if (d >= 1 && d <= 3) {
         if (!down || m.phase !== 'dial') return true; m.dial = d - 1;
-        if (m.dial !== m.rs[m.cur].dens) { m.fault('wrong compensation'); return true; }
+        if (m.dial !== R().dens) { m.fault('wrong compensation'); return true; }
         m.cur++; m.round = m.cur; if (m.cur >= 3) { m.win(); return true; } m.phase = 'sweep'; startAt(); return true;
       }
       return false;
     };
     m.tick = (dt) => { if (!m.live(dt) || m.phase !== 'sweep') return; if (m.held.L) m.k -= sp * dt; if (m.held.R) m.k += sp * dt; m.k = Math.max(0, Math.min(1, m.k)); };
     m.hint = () => {
-      if (m.phase === 'dial') return [['Digit' + (m.rs[m.cur].dens + 1), true]];
-      const e = m.rs[m.cur].peak - m.k;
+      if (m.phase === 'dial') return [['Digit' + (R().dens + 1), true]];
+      const e = R().peak - m.k;
       if (Math.abs(e) <= tol * 0.5) return [['ArrowLeft', false], ['ArrowRight', false], ['Space', true]];
       return [[e > 0 ? 'ArrowRight' : 'ArrowLeft', true], [e > 0 ? 'ArrowLeft' : 'ArrowRight', false]];
     };
-    m.bad = () => (m.phase === 'sweep' ? 'Space' : 'Digit' + (((m.rs[m.cur].dens + 1) % 3) + 1));
+    m.bad = () => (m.phase === 'sweep' ? 'Space' : 'Digit' + (((R().dens + 1) % 3) + 1));
     m.view = () => ({ rs: m.rs.map(x => [+x.peak.toFixed(3), x.dens]) });
     m.buttons = () => [['ArrowLeft', '◀ knob'], ['ArrowRight', 'knob ▶'], ['Space', 'Lock'], ['Digit1', '1 light'], ['Digit2', '2 medium'], ['Digit3', '3 heavy']];
     m.draw = (c, W, H, P) => {
