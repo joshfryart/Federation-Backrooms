@@ -6,4 +6,5 @@ export function layout(ctx) {
   let i = Math.floor(rnd() * 3); for (const [x, y] of interior) if ((x + y) % 2 === 0 || interior.length === 1) { const k = PLANT[i++ % PLANT.length]; safePut(r, x, y, k, k === 'heatexch' || k === 'pumpskid' ? { rot: rnd() < 0.5 ? 0 : Math.PI } : {}); }
   if (interior.length > 1) ringPut(r, 'console', { door: true });   // plant operator console against the wall near the entrance
   if (interior.length > 4) ringPut(r, 'maint_stand', { free: true });   // clutter: a maintenance stand parked by a wall
+  if (interior.length > 1) ringPut(r, 'wastebin', { only: 'corner', corner: true, free: true });   // wear: a drip bucket in a corner under the leaking pipes
 }
