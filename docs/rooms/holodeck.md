@@ -22,7 +22,3 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 10. **Wear / storytelling**: None; or one stray holo-object left after a purge.
 
 Rules and the fast check: [README.md](README.md).
-
-## Done (holodeck pass)
-
-Slots 1-4, 6, 8, 10 touched: locker, two consoles, benches, stools, plant, lamp by the door, stray crate/stool after a purge, monitorB in the wall pool, greener grid light, kit fixture. Slots 5, 7, 9 need core work (floor markings, ceiling grid, door treatment).
