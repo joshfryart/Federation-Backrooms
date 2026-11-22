@@ -7,4 +7,6 @@ export function layout(ctx) {
   ringPut(r, 'locker', { free: true });
   // control console on a wall: the operator looks over it into the grid
   ringPut(r, 'console', { face: 'out', free: true });
+  // a bench along a wall for waiting participants
+  ringPut(r, 'bench', { along: true, free: true });
 }
