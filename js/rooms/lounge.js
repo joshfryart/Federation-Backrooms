@@ -11,6 +11,7 @@ export function layout(ctx) {
   if (r.big || interior.length >= 6) ringPut(r, 'replicator');                                      // drinks dispenser in the large lounge
   if (interior.length > 1) ringPut(r, 'wastebin', { corner: true });                                 // bin by the bar end
   if (interior.length >= 3) ringPut(r, 'lamp', { corner: true });                                    // standard lamp in a corner
+  if (interior.length >= 9) anyPut(r, interior, 'card_table', { min: [cx, cy, 2] });                // a second card game in the big rooms
   if (r.big || interior.length >= 6) { ringPut(r, 'planter', { corner: true }); ringPut(r, 'bench', { free: true }); }   // large lounge: planter and a second bench
 }
 // wall dressing: more pictures on the walls, same pool otherwise

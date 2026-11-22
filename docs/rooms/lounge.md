@@ -10,12 +10,12 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: Bar (SVC-3) on a wall, arcade, pool table centre (>= 3 interior tiles), card table, sofas / chairs on a checkerboard.
+1. [x] (second arcade, plant, bench, replicator, wastebin, second card table) **Layout variants by size**: Bar (SVC-3) on a wall, arcade, pool table centre (>= 3 interior tiles), card table, sofas / chairs on a checkerboard.
 2. **Focal centrepiece / facing**: Bar.
-3. **Wall-fixture pool / weights**: picture / shelf / fountain / mirror / monitorB.
-4. **Clutter**: Glasses, bottles on the bar.
+3. [x] (pictures weighted) **Wall-fixture pool / weights**: picture / shelf / fountain / mirror / monitorB.
+4. [x] (corner lamp, planter) **Clutter**: Glasses, bottles on the bar.
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: Warm, dim; bar back-light.
+6. [x] (warmer 0xffc488) **Light colour / fixtures / emergency**: Warm, dim; bar back-light.
 7. **Ceiling features**: (open)
 8. **Signage / placards**: (open)
 9. **Doorway treatment**: (open)
