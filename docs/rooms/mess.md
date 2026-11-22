@@ -11,7 +11,7 @@
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
 1. **Layout variants by size** (partly done: cold store `reachin_cooler` in the big hall): Small: range + servery + tables in a checkerboard. Big (tall 7x9): serving line along one wall, tables in rows, second cooking line.
-2. **Focal centrepiece / facing**: Servery in front of the range (SVC-1, SVC-2).
+2. **Focal centrepiece / facing** (also: `shelving` pantry rack in the big hall when a wall tile is left; the ring is nearly full, further wall props need core room): Servery in front of the range (SVC-1, SVC-2).
 3. **Wall-fixture pool / weights** (done: second `menu` in the pool via the dress hook): menu / shelf / fountain; SVC-12 recycler slot is still open.
 4. **Clutter** (scullery `sinkunit` added after the main fixtures): SVC-4 cook's kit; trays on tables; SVC-14 trolley.
 5. **Floor zones / markings**: Tile; a queue line in front of the servery.
