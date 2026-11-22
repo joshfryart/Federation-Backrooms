@@ -179,6 +179,21 @@ const stoolParts = (M, g, x, z) => {   // seat top 0.75 m, deck-bolted base plat
 };
 function buildStool() { const M = mats(), g = new THREE.Group(); stoolParts(M, g, 0, 0); return bake(g, { top: 0.75, seat: 0.75, box: [-0.22, 0.22, -0.22, 0.22], size: [0.44, 0.75, 0.44] }); }
 
+
+// holodeck props (bench / lamp / stool kinds placed by js/rooms/holodeck.js and lounge.js): simple bolted bench, work lamp on a weighted base, plain stool
+function buildBench() {
+  const M = mats(), g = new THREE.Group();
+  g.add(B(1.5, 0.06, 0.42, M.leather, 0, 0.42, 0, 0.006));
+  for (const x of [-0.62, 0.62]) { g.add(B(0.06, 0.42, 0.36, M.ss2, x, 0, 0, 0.004)); }
+  g.add(tube('x', 1.3, 0.02, M.chrome, 0, 0.14, 0, 8));
+  return bake(g, { top: 0.48, seat: 0.46, box: [-0.78, 0.78, -0.24, 0.24], size: [1.56, 0.48, 0.48] });
+}
+function buildWorkLamp() {
+  const M = mats(), g = new THREE.Group();
+  g.add(C(0.14, 0.16, 0.03, M.ss2, 0, 0, 0, 16)); g.add(C(0.02, 0.02, 1.0, M.chrome, 0, 0.03, 0, 8)); g.add(C(0.12, 0.05, 0.14, M.dark, 0, 1.0, 0, 14)); g.add(C(0.07, 0.07, 0.02, M.gAmber, 0, 0.99, 0, 12));
+  return bake(g, { top: 1.14, box: [-0.16, 0.16, -0.16, 0.16], size: [0.32, 1.14, 0.32] });
+}
+
 function buildBar(withStools) {
   const M = mats(), g = new THREE.Group();
   g.add(B(2.18, 0.08, 0.3, M.dark, 0, 0, -0.1, 0.004));                                    // recessed kick
@@ -265,6 +280,9 @@ export const kinds = {
   bar: () => buildBar(true),
   bar_plain: () => buildBar(false),
   barstool: () => buildStool(),
+  stool: () => buildStool(),
+  bench: () => buildBench(),
+  lamp: () => buildWorkLamp(),
   barback: () => buildBarBack(),
   wastebin: () => buildBin(),
   dishwasher: () => buildDishwasher(),
