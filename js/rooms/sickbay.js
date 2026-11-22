@@ -18,4 +18,4 @@ export function layout(ctx) {
 }
 
 // wall-fixture pool (backlog 3): a second medical cabinet and a monitor over the beds; the world.js default keeps its gas panels
-export const dress = { decor: (pool) => [...pool, 'monitorG', 'medcab'] };
+export const dress = { decor: (pool) => [...pool, 'monitorG', 'medcab'], fit: (fit) => [...fit, 'locker'] };   // fit: a staff locker joins the searchable fixtures
