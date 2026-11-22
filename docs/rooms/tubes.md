@@ -16,7 +16,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 5. **Floor zones / markings**: Grate floor (FLOOR_OF.jefferies).
 6. **Light colour / fixtures / emergency**: Amber guide strips + bend lamps.
 7. **Ceiling features**: ceilm.
-8. **Signage / placards**: Hatch labels at mouths.
+8. **Signage / placards**: Hatch labels at mouths; stencilled JT-<deck><letter> plate on the header above each mouth (HASH).
 9. **Doorway treatment**: Hatch frames at mouths.
 10. **Wear / storytelling**: Dust, dropped tools.
 

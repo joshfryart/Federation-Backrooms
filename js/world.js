@@ -785,6 +785,7 @@ export class World {
       const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2) });
       const grilleMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 0.95, 0.7) });   // the lit room glowing through a tube-wall vent
       const inst = (geo, mat, list) => { if (!list.length) return null; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([px, py, pz, ry], i) => { dummy.position.set(px, py, pz); dummy.rotation.set(0, ry || 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); im.castShadow = im.receiveShadow = true; g.add(im); return im; };
+      let tubeNo = 0;
       const headLo = [], headHi = [], base = [], side = [], sideTall = [], rib = [], strip = [], pipe = [], post = [], bar = [], rail = [], rung = [];
       const o = TS / 2 - TUBE_SIDE / 2, hw = TS / 2 - TUBE_SIDE, FULL = TUBE_UP + TUBE_H;   // side-wall offset, half width of the crawlway, shaft height
       for (const t of d.tubes) t.tiles.forEach(([x, y], i) => {
@@ -829,6 +830,10 @@ export class World {
         for (const yy of y0 ? [y0 + TUBE_H + 0.07, y0 - 0.07] : [TUBE_H + 0.07]) { const top = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.28, 0.14, 0.14), m.hazard); top.position.set(bx + sx, yy, bz + sz); top.rotation.y = ry; g.add(top); }
         if (!y0) { const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), amber); lamp.position.set(bx + sx * 3, TUBE_H + 0.24, bz + sz * 3); lamp.rotation.y = ry; g.add(lamp); }
         this.tubeMouths.push({ x: bx, z: bz, y: y0 });
+        { const nm = 'JT-' + (d.deck + 1) + String.fromCharCode(65 + (tubeNo++ % 26)), dr = hz ? Math.sign(sx) : Math.sign(sz);   // slot 8: a stencilled hatch plate on the header above each mouth, facing out into the room
+          const tex = canvasTex(128, (c, s) => { c.fillStyle = '#d8b030'; c.fillRect(0, 0, s, s); c.fillStyle = '#14181e'; c.fillRect(4, 4, s - 8, s - 8); c.fillStyle = '#d8b030'; c.translate(s / 2, s / 2); c.scale(1, 3.1); c.font = 'bold 34px Helvetica, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(nm, 0, 1, s - 16); });   // pre-stretched: the plate is 3.1x wider than tall
+          const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.16), new THREE.MeshBasicMaterial({ map: tex, color: 0xb0b0b0 }));
+          pl.position.set(bx + sx * 1.4, y0 + TUBE_H + 0.32, bz + sz * 1.4); pl.rotation.y = hz ? dr * Math.PI / 2 : (dr > 0 ? 0 : Math.PI); g.add(pl); }
         // sliding hatch leaf in the frame: slides up behind the header while anyone (player, crew, hostile) is within ~2.6 m (World.update, nearFn set by main.js); visual only, collision never blocks
         { const leaf = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.1, TUBE_H - 0.1, 0.05), new THREE.MeshStandardMaterial({ color: 0x59606a, metalness: 0.75, roughness: 0.45 }));
           leaf.position.set(bx + sx * 0.5, y0 + (TUBE_H - 0.1) / 2, bz + sz * 0.5); leaf.rotation.y = ry; leaf.castShadow = true;
