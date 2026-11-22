@@ -18,7 +18,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 6. **Light colour / fixtures / emergency**: Cool blue; consider a dimmer "night watch" ring and red-alert strip along the aft wall.
 7. **Ceiling features**: Central dome / skylight ring over the chair.
 8. **Signage / placards**: Command emblem plate (G-1) by the door.
-9. **Doorway treatment**: Two-leaf doors aft; a yeoman desk by the door (asset-gaps 11.8 bridge / desk, 9 entries).
+9. [x] **Doorway treatment**: Two-leaf doors aft; a yeoman desk by the door (asset-gaps 11.8 bridge / desk, 9 entries).
 10. **Wear / storytelling**: Coffee rings on the arm, a worn patch behind the helm.
 
 Rules and the fast check: [README.md](README.md).

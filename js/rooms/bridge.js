@@ -6,4 +6,5 @@ export function layout(ctx) {
   put(cx, cy, 'chair', { rot: 0 }); put(ix1, iy0, 'console', { rot: 0 }); put(ix0, iy0, 'helm', { rot: 0 }); put(cx, iy0, 'viewscreen', { rot: 0 });   // helm forward port (FLT-1), facing the viewscreen; the console comes first so crew.js hosts alert on it and helm on the helm
   safePut(r, ix1, cy, 'navstation', { rot: 0 });                                                            // FLT-4 behind the forward starboard console
   for (const k of ['opsstation', 'commsstation', 'sensorstation']) ringPut(r, k, { ok: (x, y) => y !== r.y });   // OPS-2, OPS-3, SCI-2 on the side and aft walls (the forward wall is the viewscreen's)
+  ringPut(r, 'desk', { door: true, ok: (x, y) => y !== r.y });                                               // yeoman desk by the door
 }
