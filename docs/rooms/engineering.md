@@ -10,9 +10,9 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: 5x5 and big 7x7 (tall, pillars + catwalks via _tall.js). Big layout places a CE desk and bench (asset-gaps 11.8).
+1. **Layout variants by size** (done: big room gets pump skid, heat exchanger, relay rack, knee mill, maint stand; scrubber in all): 5x5 and big 7x7 (tall, pillars + catwalks via _tall.js). Big layout places a CE desk and bench (asset-gaps 11.8).
 2. **Focal centrepiece / facing**: Warp core at centre; reactor station (ENG-3) beside it facing the core; field generators (ENG-6) away from it.
-3. **Wall-fixture pool / weights**: gauges / pipes / toolboard / breaker / panelopen / hosecab / dclocker; ENG-11 foam station belongs here too.
+3. **Wall-fixture pool / weights** (done: foamstation added, weighted x2): gauges / pipes / toolboard / breaker / panelopen / hosecab / dclocker; ENG-11 foam station belongs here too.
 4. **Clutter**: ENG-9 DC hand kit, ENG-12 spare light panels.
 5. **Floor zones / markings**: Grate floor; add a keep-out ring (G-3 keepout) round the core.
 6. **Light colour / fixtures / emergency**: Amber; core glow pulsing with reactor state.
