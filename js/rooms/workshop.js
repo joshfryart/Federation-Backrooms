@@ -10,4 +10,5 @@ export function layout(ctx) {
   ringPut(r, 'shelving');   // parts bins along the wall
   if (interior.length > 1) anyPut(r, interior, 'wastebin');   // swarf bin
   if (interior.length > 1) anyPut(r, interior, 'cart');   // parts cart
+  if (r.big) ringPut(r, 'maint_stand');   // tooling stand in big shops
 }
