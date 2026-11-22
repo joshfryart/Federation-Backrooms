@@ -13,4 +13,5 @@ export function layout(ctx) {
   if (r.big) ringPut(r, 'maint_stand');   // tooling stand in big shops
   if (r.big) ringPut(r, 'injector_crate', { only: 'corner', free: true });   // stock crate in a corner
   if (r.big) ringPut(r, 'workbench', { along: 'x' });   // second bench against the wall
+  if (r.big) anyPut(r, interior, 'folding_table');   // layout-out table
 }
