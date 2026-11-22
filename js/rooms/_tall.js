@@ -41,4 +41,6 @@ export function layout(ctx) {
   if (r.type === 'cargo') ringPut(r, 'shelving', { along: true });
   // a second crate in cargo halls, tucked beside the pillar nearest the centre (spilled stock between the columns)
   if (r.type === 'cargo') { const ps = ctx.props.filter(p => p.kind === 'pillar' && ctx.inRect(r, p.tx, p.ty)).sort((a, b) => Math.abs(a.tx - ctx.cx) + Math.abs(a.ty - ctx.cy) - Math.abs(b.tx - ctx.cx) - Math.abs(b.ty - ctx.cy)); if (ps[0]) anyPut(r, interior, 'crate', { near: [ps[0].tx, ps[0].ty] }); }
+  // a potted plant at the rim of tall arboretum halls, planted under the catwalks
+  if (r.type === 'arboretum') ringPut(r, 'plant', { free: true });
 }
