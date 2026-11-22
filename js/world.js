@@ -413,6 +413,10 @@ export function buildLift(accent, deckNo) {
   // call panel on the right-hand post, hazard kick plates, header lamp bar
   const haz = new THREE.MeshLambertMaterial({ color: 0xd8a818 }), dk = new THREE.MeshLambertMaterial({ color: 0x15181d });
   g.add(box(0.16, 0.26, 0.04, dk, 1.1, 1.15, 0.16)); const btn = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.02), new THREE.MeshBasicMaterial({ color: new THREE.Color(accent).multiplyScalar(1.6) })); btn.position.set(1.1, 1.3, 0.19); g.add(btn);
+  // worn call button: a scuffed plate around it and a pale thumb-polished pad (lift slot 10), plus a small amber call lamp under the panel (slot 6)
+  const scuff = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.2), new THREE.MeshBasicMaterial({ color: 0x050607, transparent: true, opacity: 0.55, depthWrite: false })); scuff.position.set(1.1, 1.3, 0.185); g.add(scuff);
+  const pad = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.05), new THREE.MeshBasicMaterial({ color: 0xcfd4da, transparent: true, opacity: 0.5, depthWrite: false })); pad.position.set(1.1, 1.3, 0.2); g.add(pad);
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.02), new THREE.MeshBasicMaterial({ color: 0xffb030 })); lamp.position.set(1.1, 1.06, 0.19); lamp.name = 'callLamp'; g.add(lamp);
   for (const sx of [-1.1, 1.1]) { g.add(box(0.27, 0.12, 0.32, haz, sx, 0, 0)); g.add(box(0.27, 0.06, 0.32, dk, sx, 0.12, 0)); }
   g.add(box(2.0, 0.05, 0.34, dk, 0, 2.5, 0));
   return g;
