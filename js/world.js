@@ -1249,6 +1249,7 @@ export class World {
     const [wx, wy, dx, dy] = w, [cx, cz] = this.center(wx + dx, wy + dy), m = kitMats(), grp = new THREE.Group();
     for (const [sx, sz, bw, bd] of [[0, -0.95, 1.9, 0.07], [0, 0.95, 1.9, 0.07], [-0.95, 0, 0.07, 1.9], [0.95, 0, 0.07, 1.9]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.012, bd), m.hazard); b.position.set(sx, 0.007, sz); grp.add(b); }
     grp.position.set(cx, 0, cz); g.add(grp);
+    const lamp = new THREE.PointLight(0xffb040, 2.2, 6, 1.6); lamp.position.set((wx + 0.5) * TS, 2.2, (wy + 0.5) * TS); g.add(lamp);   // shaft light above the ladder
   }
 
   // Visual density on top of the structural build: wall fixtures per room type, ribs, conduit, emergency lamps,
