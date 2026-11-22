@@ -14,7 +14,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 1. **Layout variants by size** (done, safePut diagonal grid): Pump skids / heat exchangers / scrubbers / tanks / consoles on a diagonal grid (bare put: boxes tiles in, see WARN).
 2. **Focal centrepiece / facing** (done, wall operator console by the door): None; consider a central manifold.
 3. **Wall-fixture pool / weights**: pipes / gauges / breaker / monitorO / hose / foamstation / hosecab / panelbox / dclocker.
-4. **Clutter**: (open)
+4. **Clutter** (done, maintenance stand on the ring): (open)
 5. **Floor zones / markings**: Grate; zones keepout / walkway.
 6. **Light colour / fixtures / emergency**: (open)
 7. **Ceiling features**: (open)
