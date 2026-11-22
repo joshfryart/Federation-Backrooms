@@ -10,6 +10,7 @@ export function layout(ctx) {
   if (interior.length >= 3) ringPut(r, 'bench', { free: true });                                   // a bench along a wall for spectators
   if (r.big || interior.length >= 6) ringPut(r, 'replicator');                                      // drinks dispenser in the large lounge
   if (interior.length > 1) ringPut(r, 'wastebin', { corner: true });                                 // bin by the bar end
+  if (interior.length >= 3) ringPut(r, 'lamp', { corner: true });                                    // standard lamp in a corner
 }
 // wall dressing: more pictures on the walls, same pool otherwise
 export const dress = { decor: (pool) => [...pool, 'picture', 'picture'], light: 0xffc488 };   // warmer, dimmer bar-lounge light
