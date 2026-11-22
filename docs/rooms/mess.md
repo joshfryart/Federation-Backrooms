@@ -15,7 +15,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights** (done: second `menu` in the pool via the dress hook): menu / shelf / fountain; SVC-12 recycler slot is still open.
 4. **Clutter** (scullery `sinkunit` added after the main fixtures): SVC-4 cook's kit; trays on tables; SVC-14 trolley.
 5. **Floor zones / markings**: Tile; a queue line in front of the servery.
-6. **Light colour / fixtures / emergency**: Warm; brighter over the line.
+6. **Light colour / fixtures / emergency** (done: warmer-brighter #ffdca8 via dress): Warm; brighter over the line.
 7. **Ceiling features**: Extraction hood ducts over the range.
 8. **Signage / placards**: Menu boards (menu fixture).
 9. **Doorway treatment**: Keep the queue lane from the door to the servery clear.
