@@ -783,6 +783,7 @@ export class World {
       const shell = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.8) });
       const inner = new THREE.MeshStandardMaterial({ color: 0x4a4f57, metalness: 0.7, roughness: 0.5, normalMap: T.d.deck.normal, normalScale: new THREE.Vector2(0.4, 0.4) });
       const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2) });
+      const red = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.7, 0.2, 0.12) });
       const grilleMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 0.95, 0.7) });   // the lit room glowing through a tube-wall vent
       const inst = (geo, mat, list) => { if (!list.length) return null; const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([px, py, pz, ry], i) => { dummy.position.set(px, py, pz); dummy.rotation.set(0, ry || 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); im.castShadow = im.receiveShadow = true; g.add(im); return im; };
       let tubeNo = 0;
@@ -798,7 +799,7 @@ export class World {
             const q = dx ? [cx + dx * TS / 4, cz + sg * (hw - 0.02)] : [cx + sg * (hw - 0.02), cz + dz * TS / 4];
             const sm = new THREE.Mesh(new THREE.BoxGeometry(dx ? TS / 2 : 0.05, 0.05, dx ? 0.05 : TS / 2), amber); sm.position.set(q[0], y0 + 0.025, q[1]); g.add(sm);
           }
-          const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.4), amber); lamp.position.set(cx, y0 + TUBE_H - 0.04, cz); g.add(lamp);
+          const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.4), d.tubeBend[x + y * W].length > 2 ? red : amber); lamp.position.set(cx, y0 + TUBE_H - 0.04, cz); g.add(lamp);   // slot 6: a T junction gets a red lamp so it reads apart from a plain bend
           return;
         }
         const ry = ax === 'x' ? Math.PI / 2 : 0, P = (along, across) => ax === 'x' ? [cx + along, cz + across] : [cx + across, cz + along];
