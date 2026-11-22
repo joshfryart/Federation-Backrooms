@@ -15,7 +15,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights** (done: dress.decor with pictures, comm, mirror): picture / shelf / monitorB / locker; a model-ship shelf (X-2 `frame`) fits.
 4. **Clutter**: Tea service on the table, a stack of PADDs.
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: (open)
+6. **Light colour / fixtures / emergency** (done: warmer lamplight): (open)
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Command emblem plate (G-1).
 9. **Doorway treatment**: (open)

@@ -7,4 +7,4 @@ export function layout(ctx) {
   ringPut(r, 'plant', { corner: true, free: true });    // one personal touch in a corner: a potted plant    // CMD-2 at the centre, the desk on a wall
 }
 // wall-fixture pool: more pictures and a comm panel; the captain's office is a quiet, warm room
-export const dress = { decor: () => ['picture', 'picture', 'shelf', 'monitorB', 'comm', 'mirror'] };
+export const dress = { decor: () => ['picture', 'picture', 'shelf', 'monitorB', 'comm', 'mirror'], light: 0xffcf94 };    // warmer lamplight
