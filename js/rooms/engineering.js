@@ -21,6 +21,7 @@ export function layout(ctx) {
   ringPut(r, 'injector_crate', { only: 'corner', free: true });                       // ENG-13 spare injector
   if (interior.length >= 15) { for (const k of ['desk', 'workbench']) { const t = freeIn().find(([x, y]) => Math.abs(x - cx) + Math.abs(y - cy) >= 2); if (t) safePut(r, t[0], t[1], k, { rot: faceOpen(t[0], t[1], cx - t[0], cy - t[1]) }); } }   // big layout: CE desk and a bench (asset-gaps 11.8)
   if (interior.length >= 15) { ringPut(r, 'pumpskid'); ringPut(r, 'heatexch'); }   // big engine room: a coolant pump skid and a heat exchanger (ENG-1 / ENG-4) on the walls
+  ringPut(r, 'scrubber');   // ENG-5 twin-bed air scrubber on a wall, every size
 }
 // Per-room dressing (js/world.js tables). Backlog slot 3: ENG-11 foam station joins the wall-fixture pool.
 export const dress = {
