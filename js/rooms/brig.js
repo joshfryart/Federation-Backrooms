@@ -7,3 +7,6 @@ export function layout(ctx) {
   if (r.w >= 4 && r.h >= 4) ringPut(r, 'drawers', { face: 'out', free: true });    // evidence drawers
   ringPut(r, 'wastebin', { free: true });    // clutter: a bin by the wall
 }
+
+// dressing: more cameras and badge readers on the walls, a colder light
+export const dress = { decor: (pool) => [...pool, 'camdome', 'badgereader'], light: 0xbcd0ff };
