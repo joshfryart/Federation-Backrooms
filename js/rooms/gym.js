@@ -6,4 +6,6 @@ export function layout(ctx) {
   const G = ['sparring_set', 'treadmill', 'exercise_bike', 'rower', 'weightbench', 'mat']; let i = 0;
   for (const [x, y] of interior) if ((x + y) % 2 === (cx + cy) % 2 && safePut(r, x, y, G[i % G.length], { rot: rnd() < 0.5 ? 0 : Math.PI })) i++;
   wallPut(r, interior, 'dumbbell_rack'); for (const k of ['treadmill', 'exercise_bike']) if (!has(r, k)) ringPut(r, k, { along: k === 'treadmill' }); ringPut(r, 'grapple_dummy', { only: 'corner', free: true });
+  // slot 4 clutter: a towel bin in a corner of the bigger rooms
+  if (interior.length > 1) ringPut(r, 'wastebin', { only: 'corner' });
 }
