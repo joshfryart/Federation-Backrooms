@@ -10,4 +10,7 @@ export function layout(ctx) {
   for (let i = 0; i < 2; i++) anyPut(r, interior, 'plant');
   // harvest totes by the beds
   for (let i = 0; i < 2; i++) anyPut(r, interior, 'crate');
+
 }
+// wall fixtures: a watering hose, a humidity gauge and a green sensor screen join the planters
+export const dress = { decor: (pool) => [...pool, 'hose', 'gauges', 'monitorG'] };
