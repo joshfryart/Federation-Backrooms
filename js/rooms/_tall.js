@@ -33,4 +33,6 @@ export function layout(ctx) {
   if (r.type === 'shuttlebay') ringPut(r, 'fuelbowser', { free: true, along: true });
   // a hover sled left in cargo and engineering halls, parked well away from the first catwalk
   if ((r.type === 'cargo' || r.type === 'engineering') && cws[0]) anyPut(r, interior, 'hoversled', { min: [cws[0].tx, cws[0].ty, 4] });
+  // a bench under the last catwalk of an atrium or mess hall: somewhere to sit out of the high-bay glare
+  if ((r.type === 'atrium' || r.type === 'mess') && cws.length) { const c = cws[cws.length - 1]; anyPut(r, interior, 'sofa', { near: [c.tx, c.ty] }); }
 }
