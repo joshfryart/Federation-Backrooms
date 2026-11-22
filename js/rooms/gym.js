@@ -9,5 +9,5 @@ export function layout(ctx) {
   // slot 4 clutter: a towel bin in a corner of the bigger rooms
   if (interior.length > 1) ringPut(r, 'wastebin', { only: 'corner' });
 }
-// slot 3 wall fixtures: motivational posters join the mirrors and fountain
-export const dress = { decor: (pool) => [...pool, 'picture'] };
+// slot 3 wall fixtures: motivational posters join the pool and mirrors are weighted double (gym wall of glass)
+export const dress = { decor: (pool) => [...pool, 'picture', 'mirror'] };
