@@ -26,5 +26,6 @@ export function layout(ctx) {
 }
 // Per-room dressing (js/world.js tables). Backlog slot 3: ENG-11 foam station joins the wall-fixture pool.
 export const dress = {
-  decor: (pool) => [...pool, 'foamstation'],
+  decor: (pool) => [...pool, 'foamstation', 'foamstation'],   // slot 3: foam stations weighted double
+  light: 0xffa850,   // slot 6: a touch warmer amber than the default
 };
