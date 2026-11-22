@@ -5,7 +5,7 @@
 - Module: `js/rooms/datacore.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs datacore`, look: `node tools/shot-room.mjs datacore <seed>`.
 - Size: 3-5 tiles; spawn weight 0 (zone weights only); department operations.
 - world.js today: wall pool ROOM_DECOR `monitorB, monitorO, comm, breaker, coil`; FIT `toolboard, locker`; floor `rubber`; ceiling `ceilg`; walls `wallp`; light #9cb8ff.
-- Legacy: this layout still uses bare put() on a pattern and can box a tile in (room-check WARN, fail with --strict). Fix by switching to safePut.
+- Layout now uses safePut throughout (0 walled-over tiles). Slots 1-4, 6-8, 10 done in this pass (checkerboard stacks, central core stack, console beside it, wall-backed stack, crate; dress: decor pool, floor grate, ceilm, light 0x8cb0ff).
 
 ## Backlog (10 slots)
 
