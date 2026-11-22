@@ -11,4 +11,4 @@ export function layout(ctx) {
   if (interior.length > 4) { anyPut(r, interior, 'cart', { near: [cx, cy] }); if (rnd() < 0.5) anyPut(r, interior, 'crate'); }   // clutter: sample trolley, specimen crate
 }
 // wall-fixture pool: gas panels, a sample kit and an extinguisher among the monitors and cabinets (glassware cabinet counts double)
-export const dress = { decor: () => ['monitorG', 'shelf', 'medcab', 'gas_panel', 'monitorB', 'locker', 'medcab', 'kit', 'gas_panel', 'extinguisher'], light: 0xdcecff };   // light: a touch cooler and bluer than the stock white
+export const dress = { decor: () => ['monitorG', 'shelf', 'medcab', 'gas_panel', 'monitorB', 'locker', 'medcab', 'kit', 'gas_panel', 'extinguisher'], light: 0xdcecff, floor: (cur, { fk }) => fk('hex', 'tile') };   // floor: hex lab tile (falls back to plain tile)   // light: a touch cooler and bluer than the stock white
