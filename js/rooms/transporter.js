@@ -8,4 +8,5 @@ export function layout(ctx) {
 }
 export const dress = {
   decor: (pool) => [...pool, 'panelbox', 'breaker'],   // slot 3: power conditioning around the emitters
+  fit: (f) => [...f, 'dclocker'],   // slot 4: damage-control locker as a searchable fixture
 };
