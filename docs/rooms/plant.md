@@ -16,7 +16,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights**: pipes / gauges / breaker / monitorO / hose / foamstation / hosecab / panelbox / dclocker.
 4. **Clutter** (done, maintenance stand on the ring): (open)
 5. **Floor zones / markings**: Grate; zones keepout / walkway.
-6. **Light colour / fixtures / emergency**: (open)
+6. **Light colour / fixtures / emergency** (done, amber 0xffb878; slot 3: extra gauges + toolboard in the wall pool)
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Hot / pressure / voltage placards.
 9. **Doorway treatment**: (open)
