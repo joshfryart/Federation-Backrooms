@@ -31,4 +31,6 @@ export function layout(ctx) {
   if ((r.type === 'cargo' || r.type === 'engineering') && cws[0]) anyPut(r, interior, r.type === 'cargo' ? 'pallet_loaded' : 'pallet', { near: [cws[0].tx, cws[0].ty], min: [cws[0].tx, cws[0].ty, 2] });
   // a fuel bowser parked against the rim of a shuttlebay, for the craft under the high-bay lights
   if (r.type === 'shuttlebay') ringPut(r, 'fuelbowser', { free: true, along: true });
+  // a hover sled left in cargo and engineering halls, parked well away from the first catwalk
+  if ((r.type === 'cargo' || r.type === 'engineering') && cws[0]) anyPut(r, interior, 'hoversled', { min: [cws[0].tx, cws[0].ty, 4] });
 }
