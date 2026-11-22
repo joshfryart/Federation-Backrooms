@@ -9,6 +9,7 @@ export function layout(ctx) {
   if (interior.length > 1) ringPut(r, 'wastebin', { only: 'corner', corner: true, free: true });   // wear: a drip bucket in a corner under the leaking pipes
   if (interior.length > 8) ringPut(r, 'buffertank', { door: false });   // layout variant: 5x5 plants get a buffer tank on the wall
   if (interior.length > 1) ringPut(r, 'drawers', { along: true });   // clutter: a spares drawer cabinet along a wall
+  if (interior.length > 8) anyPut(r, interior, 'workbench', { near: [cx, cy] });   // wear/story: a field-repair bench beside the pumps (5x5)
 }
 // Dressing (docs/rooms/plant.md slots 3 and 6): hotter amber light, and more pressure gear on the walls
 export const dress = { light: 0xffb878, decor: (pool) => [...pool, 'gauges', 'toolboard'] };

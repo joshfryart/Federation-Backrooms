@@ -20,6 +20,6 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Hot / pressure / voltage placards.
 9. **Doorway treatment**: (open)
-10. **Wear / storytelling** (done, corner drip bucket): Leaks, drip trays.
+10. **Wear / storytelling** (done, corner drip bucket, field-repair bench in 5x5): Leaks, drip trays.
 
 Rules and the fast check: [README.md](README.md).
