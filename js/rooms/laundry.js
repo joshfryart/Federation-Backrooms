@@ -7,4 +7,5 @@ export function layout(ctx) {
 
 export const dress = {
   decor: ['shelf', 'pipes', 'locker', 'hose', 'shelf', 'pipes'],   // slot 3: more linen shelving and steam pipes
+  light: 0xfff4e0,   // slot 6: warm steamy white
 };
