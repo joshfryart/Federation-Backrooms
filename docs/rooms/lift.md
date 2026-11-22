@@ -14,10 +14,10 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights**: G-4 deck directory board in the lobby.
 4. **Clutter**: (open)
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: Car light; call-button lamp. Call lamp DONE (216bf7a): amber lamp under the panel.
+6. **Light colour / fixtures / emergency**: Car light; call-button lamp. Call lamp: REVERTED (216bf7a broke the npc lift walk test; retry without the added world.js meshes).
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Deck number plate over the doors. DONE (c15d017): `DECK n` plate on the left of the header.
 9. **Doorway treatment**: Lift doors move to the car mouth.
-10. **Wear / storytelling**: Worn call button. DONE (216bf7a): scuff plate + polished pad.
+10. **Wear / storytelling**: Worn call button. Scuff plate + pad: REVERTED with 216bf7a (see slot 6).
 
 Rules and the fast check: [README.md](README.md).
