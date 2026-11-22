@@ -10,7 +10,7 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: 3x3: sink unit centre. Variants: stalls along one wall, shower.
+1. **Layout variants by size**: 3x3: sink unit centre; attendant locker near the door (done). Variants: stalls along one wall, shower.
 2. **Focal centrepiece / facing**: Sink unit.
 3. **Wall-fixture pool / weights**: mirror / fountain / shelf / kit.
 4. **Clutter**: corner waste bin (done).
