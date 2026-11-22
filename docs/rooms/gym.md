@@ -11,11 +11,11 @@
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
 1. **Layout variants by size**: Machines on a checkerboard (sparring set first), dumbbell rack on a wall, grapple dummy in a corner.
-2. **Focal centrepiece / facing**: Sparring mat (SVC-11).
-3. **Wall-fixture pool / weights**: mirror / fountain / shelf / extinguisher.
-4. **Clutter**: Towels, bottles, dumbbells (item).
+2. **Focal centrepiece / facing**: Sparring mat (SVC-11). DONE (mat guaranteed near centre).
+3. **Wall-fixture pool / weights**: mirror / fountain / shelf / extinguisher. DONE (posters, mirrors x2).
+4. **Clutter**: Towels, bottles, dumbbells (item). DONE (corner towel bin).
 5. **Floor zones / markings**: Rubber; mat outline.
-6. **Light colour / fixtures / emergency**: Bright white.
+6. **Light colour / fixtures / emergency**: Bright white. DONE (cooler light).
 7. **Ceiling features**: (open)
 8. **Signage / placards**: (open)
 9. **Doorway treatment**: (open)
