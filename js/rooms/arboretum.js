@@ -13,6 +13,8 @@ export function layout(ctx) {
 
   // a second dosing tank on the big hall
   if (r.big) anyPut(r, interior, 'nutrient_tanks');
+  // extra grow beds in the big hall's walkway rows
+  if (r.big) for (let i = 0; i < 3; i++) anyPut(r, interior, 'growbed');
 }
 // wall fixtures: a watering hose, a humidity gauge and a green sensor screen join the planters
 export const dress = { decor: (pool) => [...pool, 'hose', 'gauges', 'monitorG'], fit: (f) => [...f, 'kit'], light: 0xe2ffc4 };   // grow-light: a whiter green
