@@ -12,7 +12,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size**: 3x3 only: pad centre, pedestal (OPS-1) facing out over the pad, workbench, two buffer tanks (OPS-6) in corners.
 2. **Focal centrepiece / facing**: Pad; pedestal operator looks over it.
-3. **Wall-fixture pool / weights**: coil / monitorB / comm.
+3. **Wall-fixture pool / weights**: coil / monitorB / comm, plus panelbox / breaker. DONE
 4. **Clutter**: OPS-5 coil cartridge on the workbench.
 5. **Floor zones / markings**: Rubber; keep-off chevrons round the pad.
 6. **Light colour / fixtures / emergency**: Cool blue; pad glow while energising.
