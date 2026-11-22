@@ -8,6 +8,7 @@ export function layout(ctx) {
     for (const [x, y] of interior) if ((x !== cx || y !== cy) && (x + y) % 2 === 0) safePut(r, x, y, (x + y) % 4 === 0 ? 'console' : 'labbench', { rot: faceOpen(x, y, cx - x, cy - y) });   // checkerboard benches
   }
   for (const k of ['spectrometer', 'sensorstation', 'fumehood']) wallPut(r, interior, k); ringPut(r, 'samplefridge', { only: 'corner', free: true }); ringPut(r, 'specimen_tank');    // SCI-4, SCI-8, SCI-2, SCI-9, SCI-5 on the walls
+  if (interior.length > 4) { anyPut(r, interior, 'cart', { near: [cx, cy] }); if (rnd() < 0.5) anyPut(r, interior, 'crate'); }   // clutter: sample trolley, specimen crate
 }
 // wall-fixture pool: gas panels, a sample kit and an extinguisher among the monitors and cabinets (glassware cabinet counts double)
 export const dress = { decor: () => ['monitorG', 'shelf', 'medcab', 'gas_panel', 'monitorB', 'locker', 'medcab', 'kit', 'gas_panel', 'extinguisher'], light: 0xdcecff };   // light: a touch cooler and bluer than the stock white
