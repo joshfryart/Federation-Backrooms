@@ -11,6 +11,8 @@ export function layout(ctx) {
   ringPut(r, 'bench', { along: true, free: true });
   // programme-running lamp two tiles from the door
   ringPut(r, 'lamp', { door: true, free: true, only: 'corner' });
+  // a stool by the cube for a seated participant
+  anyPut(r, interior, 'stool', { near: [cx, cy] });
   // one stray programme prop left after a purge, away from the cube
   if (rnd() < 0.5) anyPut(r, interior, 'crate', { min: [cx, cy, 2] });
 }
