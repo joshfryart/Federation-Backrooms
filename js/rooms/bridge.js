@@ -7,4 +7,5 @@ export function layout(ctx) {
   safePut(r, ix1, cy, 'navstation', { rot: 0 });                                                            // FLT-4 behind the forward starboard console
   for (const k of ['opsstation', 'commsstation', 'sensorstation']) ringPut(r, k, { ok: (x, y) => y !== r.y });   // OPS-2, OPS-3, SCI-2 on the side and aft walls (the forward wall is the viewscreen's)
   ringPut(r, 'desk', { door: true, ok: (x, y) => y !== r.y });                                               // yeoman desk by the door
+  ringPut(r, 'wastebin', { corner: true, ok: (x, y) => y !== r.y });                                        // a bin tucked into an aft corner
 }
