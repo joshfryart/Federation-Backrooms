@@ -7,4 +7,5 @@ export function layout(ctx) {
   if (!props.some(p => p.kind === 'fabricator' && inRect(r, p.tx, p.ty))) { const wb = props.find(p => p.kind === 'workbench' && inRect(r, p.tx, p.ty)); if (wb) wb.kind = 'fabricator'; else ringPut(r, 'fabricator'); }   // at least one ENG-7 per shop
   wallPut(r, interior, 'drill_press');
   if (interior.length > 1 && !has(r, 'knee_mill')) anyPut(r, interior, 'knee_mill') || ringPut(r, 'knee_mill');   // safePut can drop the pattern's mill: keep one per shop
+  ringPut(r, 'shelving');   // parts bins along the wall
 }
