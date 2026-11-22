@@ -9,4 +9,5 @@ export function layout(ctx) {
   anyPut(r, interior, 'workpod'); anyPut(r, interior, 'maint_stand', { near: [cx, cy] });              // FLT-8 work pod, FLT-9 maintenance stand
   ringPut(r, 'fuelbowser', { along: true }); ringPut(r, 'hoversled', { door: true, along: true });     // FLT-5, SVC-9 parked against the walls
   if (r.big) ringPut(r, 'cargo_pad', { along: true });   // big bay: a staging pad for stores coming off the shuttle
+  if (r.big) ringPut(r, 'chargerack', { along: true });   // big bay: tool and suit charging by the wall (slot 4 clutter)
 }
