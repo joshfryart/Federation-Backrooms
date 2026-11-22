@@ -6,7 +6,7 @@ export function layout(ctx) {
     const sg = rnd() < 0.5 ? 1 : -1;
     for (const [dx, dy, k] of [[0, 0, 'biobed'], [-1, 0, 'biobed'], [1, 0, 'biobed'], [0, -1, 'nursestation'], [-1, -1, 'surgical_table'], [1, -1, 'exam_couch'], [-1, 1, 'steriliser'], [1, 1, 'med_dispenser']]) {
       const x = cx + dx, y = cy + dy * sg; if (grid[y][x] !== 0) continue;
-      put(x, y, k, k === 'nursestation' ? { rot: faceTo(0, sg) } : k === 'steriliser' || k === 'med_dispenser' ? { rot: faceTo(0, sg) } : k === 'surgical_table' || k === 'exam_couch' ? { rot: rnd() < 0.5 ? 0 : Math.PI } : {});
+      safePut(r, x, y, k, k === 'nursestation' ? { rot: faceTo(0, sg) } : k === 'steriliser' || k === 'med_dispenser' ? { rot: faceTo(0, sg) } : k === 'surgical_table' || k === 'exam_couch' ? { rot: rnd() < 0.5 ? 0 : Math.PI } : {});
     }
     ringPut(r, 'infusion_stand', { corner: true });
   } else {
