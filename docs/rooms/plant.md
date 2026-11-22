@@ -12,7 +12,7 @@
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
 1. **Layout variants by size** (done, safePut diagonal grid): Pump skids / heat exchangers / scrubbers / tanks / consoles on a diagonal grid (bare put: boxes tiles in, see WARN).
-2. **Focal centrepiece / facing**: None; consider a central manifold.
+2. **Focal centrepiece / facing** (done, wall operator console by the door): None; consider a central manifold.
 3. **Wall-fixture pool / weights**: pipes / gauges / breaker / monitorO / hose / foamstation / hosecab / panelbox / dclocker.
 4. **Clutter**: (open)
 5. **Floor zones / markings**: Grate; zones keepout / walkway.
