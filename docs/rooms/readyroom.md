@@ -12,7 +12,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 
 1. **Layout variants by size**: 3x3 only: one centrepiece (briefing table, CMD-2) + desk on a wall. A 3x5 variant could add a sofa and a window bench.
 2. **Focal centrepiece / facing**: Briefing table centred, long axis along the room.
-3. **Wall-fixture pool / weights**: picture / shelf / monitorB / locker; a model-ship shelf (X-2 `frame`) fits.
+3. **Wall-fixture pool / weights** (done: dress.decor with pictures, comm, mirror): picture / shelf / monitorB / locker; a model-ship shelf (X-2 `frame`) fits.
 4. **Clutter**: Tea service on the table, a stack of PADDs.
 5. **Floor zones / markings**: (open)
 6. **Light colour / fixtures / emergency**: (open)

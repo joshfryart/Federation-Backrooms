@@ -6,3 +6,5 @@ export function layout(ctx) {
   put(cx, cy, 'briefing_table', { rot: r.w >= r.h ? 0 : Math.PI / 2 }); ringPut(r, 'desk');
   ringPut(r, 'plant', { corner: true, free: true });    // one personal touch in a corner: a potted plant    // CMD-2 at the centre, the desk on a wall
 }
+// wall-fixture pool: more pictures and a comm panel; the captain's office is a quiet, warm room
+export const dress = { decor: () => ['picture', 'picture', 'shelf', 'monitorB', 'comm', 'mirror'] };
