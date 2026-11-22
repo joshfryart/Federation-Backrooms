@@ -5,4 +5,6 @@
 export const dress = {
   // slot 3: a few more service fixtures (framed picture, hose cabinet, gauge cluster) mixed into the pool; the old entries keep their weights
   decor: (pool) => [...pool, 'picture', 'hosecab', 'gauges'],
+  // slot 10: the guaranteed searchable fixtures also include a first-aid medcab (hosecab is not searchable, so it stays decor only)
+  fit: (list) => [...list, 'medcab'],
 };

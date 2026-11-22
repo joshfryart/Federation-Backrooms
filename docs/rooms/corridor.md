@@ -18,6 +18,6 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 7. **Ceiling features**: Hull-class ceiling (ceilt / ceilm / ceilg).
 8. **Signage / placards**: Random corridor signs; G-4 directory boards by the lift.
 9. **Doorway treatment**: (open)
-10. **Wear / storytelling**: SEC-4 cameras / badge readers.
+10. **Wear / storytelling** (DONE: medcab added to FIT.corridor): SEC-4 cameras / badge readers.
 
 Rules and the fast check: [README.md](README.md).
