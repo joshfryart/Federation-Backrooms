@@ -19,4 +19,6 @@ export function layout(ctx) {
 export const dress = {
   // programme listing screens beside the sparse comm panels
   decor: (pool) => [...pool, 'monitorB'],
+  // programme-running tint: a slightly greener grid yellow
+  light: 0xf4e468,
 };
