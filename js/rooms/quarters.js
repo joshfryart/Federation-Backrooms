@@ -8,3 +8,5 @@ export function layout(ctx) {
   ringPut(r, 'drawers', { corner: true });                                    // slot 4: a chest of drawers for personal kit
   ringPut(r, 'plant', { corner: true, free: true });                          // slot 4: a potted plant in another corner
 }
+// slot 3: more framed pictures and mirrors on the walls (personal frames, X-2)
+export const dress = { decor: () => ['locker', 'picture', 'mirror', 'shelf', 'picture', 'picture', 'mirror'] };
