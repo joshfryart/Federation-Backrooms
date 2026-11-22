@@ -9,4 +9,4 @@ export function layout(ctx) {
 }
 
 // dressing: more cameras and badge readers on the walls, a colder light
-export const dress = { decor: (pool) => [...pool, 'camdome', 'badgereader'], light: 0xbcd0ff };
+export const dress = { decor: (pool) => [...pool, 'camdome', 'badgereader'], light: 0xbcd0ff, floor: (cur, { fk }) => fk('grate', cur) };
