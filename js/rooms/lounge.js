@@ -9,4 +9,5 @@ export function layout(ctx) {
   if (interior.length > 1) ringPut(r, 'plant', { corner: true });                                   // a potted plant in a corner
   if (interior.length >= 3) ringPut(r, 'bench', { free: true });                                   // a bench along a wall for spectators
   if (r.big || interior.length >= 6) ringPut(r, 'replicator');                                      // drinks dispenser in the large lounge
+  if (interior.length > 1) ringPut(r, 'wastebin', { corner: true });                                 // bin by the bar end
 }
