@@ -14,4 +14,5 @@ export function layout(ctx) {
   if (r.big) ringPut(r, 'injector_crate', { only: 'corner', free: true });   // stock crate in a corner
   if (r.big) ringPut(r, 'workbench', { along: 'x' });   // second bench against the wall
   if (r.big) anyPut(r, interior, 'folding_table');   // layout-out table
+  if (interior.length > 4) anyPut(r, interior, 'wastebin');   // second swarf bin by the mills
 }
