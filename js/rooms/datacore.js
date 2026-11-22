@@ -6,6 +6,7 @@ export function layout(ctx) {
   if (interior.length > 1) safePut(r, cx, cy, 'servers');   // slot 2: a central core stack the rest stand around
   let n = 0; for (const [x, y] of interior) if ((x + y) % 2 === 0) safePut(r, x, y, (x + y) % 4 === 0 ? 'console' : n++ % 2 ? 'relayrack' : 'servers');   // OPS-4 relay racks among the stacks
   if (interior.length > 1) ringPut(r, 'servers', { face: 'out' });   // slot 10: a back-to-wall stack with its hot aisle behind it
+  if (interior.length > 1) anyPut(r, interior, 'console', { near: [cx, cy] });   // slot 1: an operator console beside the core
   if (interior.length > 1) ringPut(r, 'crate', { only: 'corner', free: true });   // slot 4: spare parts crate tucked in a corner
 }
 // slot 3: wall fixtures weighted toward screens and breakers; sysboard added to the pool
