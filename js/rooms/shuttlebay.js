@@ -14,6 +14,7 @@ export function layout(ctx) {
   ringPut(r, 'wastebin', { along: true });   // swept-up debris bin
   if (r.big) ringPut(r, 'shelving', { along: true });   // big bay: spares racking on a wall
   if (r.big) anyPut(r, interior, 'pallet', { min: [cx, cy, 2] });   // big bay: an empty pallet left in the open, clear of the cradle
+  anyPut(r, interior, 'cart', { near: [cx, cy] });   // service cart parked by the shuttle
 }
 // slot 3: wall fixtures: a breaker panel and comm panel join the hose / toolboard pool
 export const dress = { decor: (pool) => [...pool, "breaker", "comm"] };
