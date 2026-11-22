@@ -17,8 +17,14 @@ export function layout(ctx) {
   ringPut(r, 'plant', { only: 'corner', free: true });
   // second operator console opposite, for two-handed programme edits
   ringPut(r, 'console', { free: true });
+  // a second locker for costumes, across from the first
+  ringPut(r, 'locker', { free: true, face: 'out' });
+  // a second bench across the room, at the far side from the first
+  ringPut(r, 'bench', { along: true, free: true, door: true });
   // one stray programme prop left after a purge, away from the cube
   if (rnd() < 0.5) anyPut(r, interior, 'crate', { min: [cx, cy, 2] });
+  // a second, smaller leftover: a stool tipped away from the cube
+  if (rnd() < 0.4) anyPut(r, interior, 'stool', { min: [cx, cy, 2] });
 }
 
 // world.js dressing for this room (README: dress hook)
