@@ -27,4 +27,6 @@ export function layout(ctx) {
   if (r.type === 'cargo' && !ctx.has(r, 'cargo_pad')) anyPut(r, interior, 'cargo_pad', { near: [ctx.cx, ctx.cy] });
   // a wastebin on the rim of every atrium and mess hall, where crowds gather under the catwalks
   if (r.type === 'atrium' || r.type === 'mess') ringPut(r, 'wastebin', { free: true });
+  // a pallet of stock in the shadow of the first catwalk of a cargo or engineering hall
+  if ((r.type === 'cargo' || r.type === 'engineering') && cws[0]) anyPut(r, interior, r.type === 'cargo' ? 'pallet_loaded' : 'pallet', { near: [cws[0].tx, cws[0].ty], min: [cws[0].tx, cws[0].ty, 2] });
 }
