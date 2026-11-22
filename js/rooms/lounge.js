@@ -12,4 +12,4 @@ export function layout(ctx) {
   if (interior.length > 1) ringPut(r, 'wastebin', { corner: true });                                 // bin by the bar end
 }
 // wall dressing: more pictures on the walls, same pool otherwise
-export const dress = { decor: (pool) => [...pool, 'picture', 'picture'] };
+export const dress = { decor: (pool) => [...pool, 'picture', 'picture'], light: 0xffc488 };   // warmer, dimmer bar-lounge light
