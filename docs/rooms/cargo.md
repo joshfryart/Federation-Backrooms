@@ -11,15 +11,15 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: Crates / pallets random fill (65 %); big bay adds shelving racks along walls; tall variant pillars + catwalks.
-2. **Focal centrepiece / facing**: None; consider a central staging zone kept clear.
-3. **Wall-fixture pool / weights**: rack x3 / extinguisher / breaker.
+1. **Layout variants by size** (done, 1 safePut fill): Crates / pallets random fill (65 %); big bay adds shelving racks along walls; tall variant pillars + catwalks.
+2. **Focal centrepiece / facing** (done, 3x3 staging zone clear in big bays): None; consider a central staging zone kept clear.
+3. **Wall-fixture pool / weights** (done, dress adds toolboard, dclocker, hosecab): rack x3 / extinguisher / breaker.
 4. **Clutter**: SVC-7 straps, SVC-8 tag scanner.
 5. **Floor zones / markings**: Zones staging / walkway / keepout.
 6. **Light colour / fixtures / emergency**: Warm sodium-ish.
 7. **Ceiling features**: Overhead crane rail (tall).
 8. **Signage / placards**: Pressure / biological placards.
 9. **Doorway treatment**: Console + workbench by the door (asset-gaps 11.8 cargo).
-10. **Wear / storytelling**: A broken crate, spilled packing.
+10. **Wear / storytelling** (done, askew crate; also a parked cart): A broken crate, spilled packing.
 
 Rules and the fast check: [README.md](README.md).
