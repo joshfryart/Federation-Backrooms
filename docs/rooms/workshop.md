@@ -11,7 +11,7 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: Lathes / knee mills / fabricator / benches on a checkerboard (bare put: boxes tiles in, see WARN), drill press on a wall.
+1. **Layout variants by size** (DONE: safePut on the checkerboard, knee mill guaranteed): Lathes / knee mills / fabricator / benches on a checkerboard (bare put: boxes tiles in, see WARN), drill press on a wall.
 2. **Focal centrepiece / facing**: At least one fabricator (ENG-7).
 3. **Wall-fixture pool / weights**: toolboard / rack / pipes / breaker / hose / panelbox.
 4. **Clutter**: Swarf, parts bins.
