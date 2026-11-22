@@ -9,4 +9,4 @@ export function layout(ctx) {
 }
 
 // slot 3: more mirrors in the wall pool (weights by repetition)
-export const dress = { decor: (pool) => [...pool, "mirror", "mirror"] };
+export const dress = { decor: (pool) => [...pool, "mirror", "mirror"], light: 0xe4f6ff };

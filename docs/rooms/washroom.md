@@ -15,7 +15,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights**: mirror / fountain / shelf / kit; mirrors double-weighted (done).
 4. **Clutter**: corner waste bin (done).
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: Bright cool.
+6. **Light colour / fixtures / emergency**: Bright cool; slightly cooler tint 0xe4f6ff (done).
 7. **Ceiling features**: (open)
 8. **Signage / placards**: (open)
 9. **Doorway treatment**: (open)
