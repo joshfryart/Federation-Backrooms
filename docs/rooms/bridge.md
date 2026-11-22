@@ -15,7 +15,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. [x] **Wall-fixture pool / weights**: CMD-1 master systems board (`sysboard`, js/decorart-bridge.js) is not in the bridge pool yet: add via dress.decor.
 4. **Clutter**: OPS-7 headsets on consoles; PADDs on the chair arm.
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: Cool blue; consider a dimmer "night watch" ring and red-alert strip along the aft wall.
+6. [x] **Light colour / fixtures / emergency**: Cool blue; consider a dimmer "night watch" ring and red-alert strip along the aft wall.
 7. **Ceiling features**: Central dome / skylight ring over the chair.
 8. **Signage / placards**: Command emblem plate (G-1) by the door.
 9. [x] **Doorway treatment**: Two-leaf doors aft; a yeoman desk by the door (asset-gaps 11.8 bridge / desk, 9 entries).

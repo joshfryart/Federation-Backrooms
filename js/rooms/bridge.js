@@ -1,4 +1,4 @@
-export const dress = { decor: (pool) => [...pool, 'sysboard'] };   // CMD-1 master systems board joins the wall-fixture pool
+export const dress = { decor: (pool) => [...pool, 'sysboard'], light: 0xb0c8f8 };   // CMD-1 master systems board joins the wall-fixture pool
 // Room layout: bridge (moved from the js/gen.js room switch). Backlog and rules: docs/rooms/bridge.md, docs/rooms/README.md.
 // ctx: see js/rooms/index.js. Draw randomness only from ctx.rnd (this room's own stream); place blocking props through safePut / ringPut / anyPut / wallPut.
 export function layout(ctx) {
