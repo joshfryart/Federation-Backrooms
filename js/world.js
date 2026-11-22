@@ -3,6 +3,7 @@ import { SEARCHABLE, clutterFor } from './items.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { tubeStep, tubeBoxes } from './tube.js';
+import { dressTable } from './rooms/index.js';   // per-room dressing hook: a room module's optional `dress` export overrides its row in the tables below (docs/rooms/README.md)
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -418,9 +419,11 @@ export function buildLift(accent) {
 // which bulkhead / deck variant a room gets (see tools/build-textures.mjs for the generated sets)
 const WALL_OF = { quarters: 'wallq', holodeck: 'wallq', sickbay: 'wallp', mess: 'wallp', bridge: 'wallp', arboretum: 'wallp', engineering: 'wallg', cargo: 'wallg', shuttlebay: 'wallg', transporter: 'wallg',
   readyroom: 'wallq', lounge: 'wallq', gym: 'wallp', lab: 'wallp', datacore: 'wallp', laundry: 'wallp', morgue: 'wallp', washroom: 'wallp', brig: 'wallg', armory: 'wallg', workshop: 'wallg', plant: 'wallg', stores: 'wallg', airlock: 'wallg' };
+dressTable('wall', WALL_OF);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.wall` (a bulkhead texture set)
 const CORRIDOR_WALL = { cairn: 'wall', longhouse: 'wallp', tandem: 'wall', cruller: 'wallp', plough: 'wall' };
 export const ROOM_LIGHT = { bridge: 0xbcd6ff, engineering: 0xffb060, sickbay: 0xd2fff2, mess: 0xffd49a, transporter: 0x9cc2ff, shuttlebay: 0xfff0b4, cargo: 0xffc472, holodeck: 0xffe070, quarters: 0xffc48c, arboretum: 0xd6ffae,
   readyroom: 0xffd8a8, brig: 0xc8d4ff, armory: 0xffe8c0, gym: 0xf4fff0, lab: 0xe8f4ff, laundry: 0xf0f0e8, lounge: 0xffcf9a, workshop: 0xffe2a0, plant: 0xffd0a0, morgue: 0xcfe8ff, datacore: 0x9cb8ff, stores: 0xffe0b0, washroom: 0xf0fbff, airlock: 0xfff0c0 };
+dressTable('light', ROOM_LIGHT);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.light` (hex colour)
 let dressCache = null;
 function dressTex() {
   if (dressCache) return dressCache;
@@ -544,6 +547,7 @@ const ROOM_DECOR = {
   plant: ['pipes', 'gauges', 'pipes', 'breaker', 'monitorO', 'hose', 'foamstation', 'hosecab', 'panelbox', 'dclocker'], morgue: ['medcab', 'locker', 'monitorG', 'kit'], datacore: ['monitorB', 'monitorO', 'comm', 'breaker', 'coil'], stores: ['rack', 'rack', 'shelf', 'locker', 'extinguisher', 'dclocker', 'coldstore_door'],
   washroom: ['mirror', 'fountain', 'shelf', 'kit'], airlock: ['locker', 'hose', 'rack', 'extinguisher', 'comm', 'podhatch', 'podhatch'],
 };
+dressTable('decor', ROOM_DECOR);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.decor`
 const kitCache = {};
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
 function kitMats() { const m = mats(); if (!m.kit) { m.kit = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }); m.kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true }); } return m; }
@@ -725,6 +729,7 @@ export class World {
     const fk = (k, fb) => T.d[k] ? k : fb;
     const FLOOR_OF = { engineering: fk('grate', 'deck'), shuttlebay: 'deck', cargo: 'deck', transporter: fk('rubber', 'deck'), jefferies: fk('grate', 'deck'), sickbay: fk('hex', 'tile'), mess: 'tile', holodeck: 'holo', arboretum: fk('paver', 'carpet'),
       brig: 'deck', armory: 'deck', airlock: 'deck', workshop: 'deck', stores: 'deck', plant: fk('grate', 'deck'), gym: fk('rubber', 'deck'), datacore: fk('rubber', 'deck'), laundry: 'tile', morgue: 'tile', lab: 'tile', washroom: fk('hex', 'tile') };
+    dressTable('floor', FLOOR_OF, { fk, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.floor` (a FLOOR_MAT kind)
     const corridorFloor = fk({ longhouse: 'rubber', plough: 'rubber', cruller: 'tile' }[ship.hull] || 'carpet', 'carpet');
     const byKind = {};
     for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? FLOOR_OF[r] || 'carpet' : corridorFloor; (byKind[k] || (byKind[k] = [])).push(t); }
@@ -752,6 +757,7 @@ export class World {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
       const ck = (k) => T.d[k] ? k : 'ceil';
       const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg') };
+      dressTable('ceil', CEIL_OF, { ck, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.ceil`
       const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
       const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
       for (const [kind, list] of Object.entries(byC)) {
@@ -1282,6 +1288,7 @@ export class World {
       {
         const FIT = { sickbay: ['medcab', 'kit'], engineering: ['toolboard', 'locker'], shuttlebay: ['toolboard', 'hose', 'locker'], cargo: ['rack', 'locker'], mess: ['shelf', 'locker'], quarters: ['locker', 'shelf'], bridge: ['locker', 'kit'], transporter: ['locker', 'toolboard'], holodeck: ['locker'], arboretum: ['shelf', 'toolboard'], corridor: ['kit', 'locker'],
           readyroom: ['locker', 'shelf'], brig: ['locker'], armory: ['rack', 'locker'], gym: ['locker', 'shelf'], lab: ['medcab', 'shelf', 'locker'], laundry: ['shelf', 'locker'], lounge: ['shelf'], workshop: ['toolboard', 'rack', 'hose'], plant: ['toolboard', 'hose', 'locker'], morgue: ['medcab', 'kit', 'locker'], datacore: ['toolboard', 'locker'], stores: ['rack', 'shelf', 'locker'], washroom: ['kit', 'shelf'], airlock: ['locker', 'hose', 'rack'] };
+        dressTable('fit', FIT);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.fit`
         const free = {}; for (const f of faces) { if (f.deco || f.win || f.sign) continue; const r = f.room || 'corridor'; if (FIT[r] && (r !== 'corridor' || (f.tx + f.ty) % 3 === 0)) (free[r] || (free[r] = [])).push(f); }
         for (const [r, fl] of Object.entries(free)) { for (let i = fl.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [fl[i], fl[j]] = [fl[j], fl[i]]; }
           for (const f of fl.slice(0, 2)) { let k = FIT[r][Math.floor(rnd() * FIT[r].length)]; if (k === 'rack' && ceilOf(f) < WH) k = 'locker'; f.deco = true; (byKind[k] || (byKind[k] = [])).push(f); } }
