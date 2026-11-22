@@ -10,7 +10,7 @@
 
 Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a slot done with the commit hash.
 
-1. **Layout variants by size**: 3x3: weapon rack centre, issue counter (SEC-7) by the door, charge rack (SEC-3) in a corner, desk, workbench.
+1. [x] (second charge rack + locker when 4x4 or bigger) **Layout variants by size**: 3x3: weapon rack centre, issue counter (SEC-7) by the door, charge rack (SEC-3) in a corner, desk, workbench.
 2. **Focal centrepiece / facing**: Issue counter facing the door.
 3. [x] (camdome, badgereader added) **Wall-fixture pool / weights**: rack / locker / extinguisher / camdome.
 4. [x] (wastebin) **Clutter**: Battery cells on the charge rack.
