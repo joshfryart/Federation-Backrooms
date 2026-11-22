@@ -5,6 +5,7 @@ export function layout(ctx) {
   for (const [x, y] of interior) if ((x + y) % 2 === 0 && rnd() < 0.8) safePut(r, x, y, rnd() < 0.5 ? 'cellfield' : 'cell');   // SEC-2 field cells among the barred ones
   ringPut(r, 'secdesk', { door: true }); ringPut(r, 'scan_arch', { door: true, along: true });    // SEC-1 and the SEC-6 scanner arch by the entrance
   if (r.w >= 4 && r.h >= 4) ringPut(r, 'drawers', { face: 'out', free: true });    // evidence drawers
+  if (r.w >= 5 && r.h >= 5) ringPut(r, 'locker', { face: 'out', free: true });    // property locker for confiscated kit
   ringPut(r, 'wastebin', { free: true });    // clutter: a bin by the wall
 }
 
