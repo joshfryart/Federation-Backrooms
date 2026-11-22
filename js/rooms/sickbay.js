@@ -15,3 +15,6 @@ export function layout(ctx) {
     if (interior.length > 1) { ringPut(r, 'exam_couch'); ringPut(r, 'med_dispenser'); ringPut(r, 'infusion_stand', { only: 'corner', free: true }); }
   }
 }
+
+// wall-fixture pool (backlog 3): a second medical cabinet and a monitor over the beds; the world.js default keeps its gas panels
+export const dress = { decor: (pool) => [...pool, 'monitorG', 'medcab'] };
