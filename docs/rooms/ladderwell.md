@@ -13,7 +13,7 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 2. **Focal centrepiece / facing**: ship_ladder facing out.
 3. **Wall-fixture pool / weights**: (open)
 4. **Clutter**: (open)
-5. **Floor zones / markings**: Yellow hatch outline.
+5. **Floor zones / markings**: Yellow hatch outline. DONE (world.js _ladderWellDress).
 6. **Light colour / fixtures / emergency**: Shaft light above.
 7. **Ceiling features**: (open)
 8. **Signage / placards**: Deck up / down arrows.

@@ -1240,6 +1240,15 @@ export class World {
     // --- a beacon at the end of the hall
     const [ex, ey] = d.exit; const [cx, cz] = this.center(ex, ey);
     this.liftLight = new THREE.PointLight(0xff3030, 5, 11, 1.6); this.liftLight.position.set(cx, 2.3, cz); g.add(this.liftLight);
+    this._ladderWellDress(g);
+  }
+
+  // service ladder well dressing (deterministic, no random stream): a yellow hazard outline on the floor in front of the ladder
+  _ladderWellDress(g) {
+    const w = this.d.ladderWell; if (!w) return;
+    const [wx, wy, dx, dy] = w, [cx, cz] = this.center(wx + dx, wy + dy), m = kitMats(), grp = new THREE.Group();
+    for (const [sx, sz, bw, bd] of [[0, -0.95, 1.9, 0.07], [0, 0.95, 1.9, 0.07], [-0.95, 0, 0.07, 1.9], [0.95, 0, 0.07, 1.9]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.012, bd), m.hazard); b.position.set(sx, 0.007, sz); grp.add(b); }
+    grp.position.set(cx, 0, cz); g.add(grp);
   }
 
   // Visual density on top of the structural build: wall fixtures per room type, ribs, conduit, emergency lamps,
