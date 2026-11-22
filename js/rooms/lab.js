@@ -9,3 +9,5 @@ export function layout(ctx) {
   }
   for (const k of ['spectrometer', 'sensorstation', 'fumehood']) wallPut(r, interior, k); ringPut(r, 'samplefridge', { only: 'corner', free: true }); ringPut(r, 'specimen_tank');    // SCI-4, SCI-8, SCI-2, SCI-9, SCI-5 on the walls
 }
+// wall-fixture pool: gas panels, a sample kit and an extinguisher among the monitors and cabinets (glassware cabinet counts double)
+export const dress = { decor: () => ['monitorG', 'shelf', 'medcab', 'gas_panel', 'monitorB', 'locker', 'medcab', 'kit', 'gas_panel', 'extinguisher'] };
