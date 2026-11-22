@@ -812,6 +812,9 @@ export class World {
               for (let s2 = 0; s2 < 5; s2++) { const sl = new THREE.Mesh(new THREE.BoxGeometry(ax === 'x' ? 0.8 : 0.045, 0.02, ax === 'x' ? 0.045 : 0.8), shell); sl.position.set(gq[0] - (ax === 'x' ? 0 : sg * 0.01), y0 + 0.58 + s2 * 0.07, gq[1] - (ax === 'x' ? sg * 0.01 : 0)); g.add(sl); } } }
           if (kind !== 'lad') { q = P(0, sg * (hw - 0.07)); pipe.push([q[0], y0 + TUBE_H - 0.08, q[1], ry]); for (const al of [-TS / 4, TS / 4]) { q = P(al, sg * (hw - 0.03)); rib.push([q[0], y0 + TUBE_H / 2, q[1], ry]); } }
         }
+        { const hh = Math.sin((x * 12.9898 + y * 78.233 + d.deck * 4.1) * 1.7) * 43758.5453, th = hh - Math.floor(hh);   // slot 10: a dropped tool / scorch smudge on some lower-run floors (visual only, deterministic per tile)
+          if (kind === 'lo' && th < 0.2) { const q = P((th * 5 - 0.5) * 1.2, (th * 37 % 1 - 0.5) * 0.7), tm = th < 0.1 ? new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.05), m.pipe) : new THREE.Mesh(new THREE.CircleGeometry(0.3, 10), new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.45 }));
+            if (th < 0.1) { tm.position.set(q[0], 0.025, q[1]); tm.rotation.y = th * 60; } else { tm.rotation.x = -Math.PI / 2; tm.position.set(q[0], 0.012, q[1]); } tm.receiveShadow = true; g.add(tm); } }
         if (kind !== 'lad') for (const al of [-TS / 4, TS / 4]) { const q = P(al, 0); bar.push([q[0], y0 + TUBE_H - 0.03, q[1], ry]); }
         else {   // ladder on the face of the upper run's base block
           const nxt = t.tiles[i + 1], dir = ax === 'x' ? Math.sign(nxt[0] - x) : Math.sign(nxt[1] - y), al = dir * (TS / 2 - 0.07);
