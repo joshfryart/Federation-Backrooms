@@ -17,3 +17,5 @@ export function layout(ctx) {
   if (interior.length > 1) ringPut(r, 'sinkunit');                                 // scullery sink after the main fixtures, only if a wall tile is left
   if (interior.length > 1) ringPut(r, 'lonechair', { only: 'corner', free: true });   // chairs stacked in a corner at closing
 }
+// dressing (js/world.js tables): a second menu board in the wall-fixture pool, so the notice boards outnumber the fountains
+export const dress = { decor: (pool) => [...pool, 'menu'] };
