@@ -1,5 +1,6 @@
 // Headless render-cost probe (software GL, so only RELATIVE numbers mean anything): draw calls, triangles, lights, programs, scene object counts
 // and render ms per frame on High, over a few ships / spots.   node tools/perf.mjs
+// `lod` = people drawn at [full, LOD1, LOD2] detail in the last frame (js/humanlod.js).  A/B the person LOD:  EXP='g.lodCfg.on=false' node tools/perf.mjs
 import { createServer } from 'node:http'; import { readFile } from 'node:fs/promises'; import { createRequire } from 'node:module'; import { join, extname, dirname } from 'node:path'; import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url), ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'); const { chromium } = require('playwright');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.glb': 'model/gltf-binary', '.hdr': 'application/octet-stream', '.svg': 'image/svg+xml', '.wasm': 'application/wasm' };
@@ -21,11 +22,11 @@ const out = await page.evaluate(async (EXP) => {
       if (EXP) new Function('g', EXP)(g); g.renderOnce(); g.renderOnce(); const times = []; let info;
       for (let i = 0; i < 6; i++) { R.info.reset(); const a = performance.now(); g.renderOnce(); R.getContext().finish(); times.push(performance.now() - a); info = { calls: R.info.render.calls, tris: R.info.render.triangles }; }
       times.sort((a, b) => a - b);
-      res.push({ ship: G.ship.name, objs, meshes, instanced: inst, sceneLights: lights, ...info, programs: R.info.programs.length, geoms: R.info.memory.geometries, tex: R.info.memory.textures, renderMs: +times[3].toFixed(1), pix: [R.domElement.width, R.domElement.height] });
+      res.push({ ship: G.ship.name, lod: [...g.cullStats.lod], shown: g.cullStats.shown, objs, meshes, instanced: inst, sceneLights: lights, ...info, programs: R.info.programs.length, geoms: R.info.memory.geometries, tex: R.info.memory.textures, renderMs: +times[3].toFixed(1), pix: [R.domElement.width, R.domElement.height] });
     }
   }
   return res;
 }, EXP);
 for (const r of out) console.log(JSON.stringify(r)); const avg = (k) => +(out.reduce((a, r) => a + r[k], 0) / out.length).toFixed(1);
-console.log('AVG', JSON.stringify({ calls: avg('calls'), tris: avg('tris'), renderMs: avg('renderMs'), programs: avg('programs'), objs: avg('objs') }));
+console.log('AVG', JSON.stringify({ calls: avg('calls'), tris: avg('tris'), renderMs: avg('renderMs'), programs: avg('programs'), objs: avg('objs'), shown: avg('shown'), lod: [0, 1, 2].map(i => +(out.reduce((a, r) => a + r.lod[i], 0) / out.length).toFixed(1)) }));
 await browser.close(); server.close();

@@ -241,6 +241,20 @@ S('perf-governor', null, async () => {   // auto-quality ladder (js/perfgov.js):
   const ok = r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones;
   if (!ok) fail('perf-governor ' + JSON.stringify(r));
 });
+S('perf-lod', null, async () => {   // person LOD bookkeeping (js/lodcfg.js distances + hysteresis, governor rung multipliers); mesh-level checks are in the smoke section
+  const C = await imp('js/lodcfg.js'), { LEVELS, applyLevel } = await imp('js/perfgov.js'); const r = {}, L = C.levelFor;
+  C.lodCfg.on = true; C.lodCfg.scale = 1;
+  r.bands = [L(0, 1), L(0, C.LOD1_FAR * 0.9), L(0, C.LOD1_FAR * 1.2), L(0, C.LOD2_FAR * 0.9), L(0, C.LOD2_FAR * 1.2), L(0, 500)].join();            // 0,0,1,1,2,2
+  r.hyst = [L(0, C.LOD1_FAR * 1.05), L(1, C.LOD1_FAR * 1.05), L(1, C.LOD1_FAR * 0.95), L(1, C.LOD1_FAR * 0.8), L(2, C.LOD2_FAR * 0.95), L(2, C.LOD2_FAR * 0.8)].join();   // stays put inside the band, moves outside: 0,1,1,0,2,1
+  let walk = 0, cur = 0; for (let i = 0; i < 400; i++) { const d = C.LOD1_FAR + Math.sin(i * 0.37) * C.LOD1_FAR * 0.06, n = L(cur, d); if (n !== cur) walk++; cur = n; } r.flicker = walk;   // jitter within +-6 % of the threshold never flips after the first step
+  C.lodCfg.scale = 0.6; r.scaled = [L(0, C.LOD1_FAR * 0.7), L(0, C.LOD2_FAR * 0.7)].join();   // 0.6 x distances: 1,2
+  C.lodCfg.on = false; r.off = L(2, 999); C.lodCfg.on = true; C.lodCfg.scale = 1;
+  r.rungs = LEVELS.map(l => l.lod).join(); const ctx = { lodCfg: C.lodCfg }; r.applied = LEVELS.map((l, i) => { applyLevel(l, ctx); return C.lodCfg.scale; }).join(); applyLevel(LEVELS[0], ctx);
+  r.mono = LEVELS.every((l, i) => i === 0 || l.lod <= LEVELS[i - 1].lod) && LEVELS[0].lod === 1 && C.TARGETS[0] === 1 && C.TARGETS[1] > C.TARGETS[2] && C.LOD1_FAR < C.LOD2_FAR;
+  console.log('perf lod:', JSON.stringify(r));
+  const ok = r.bands === '0,0,1,1,2,2' && r.hyst === '0,1,1,0,2,1' && r.flicker <= 1 && r.scaled === '1,2' && r.off === 0 && r.applied === r.rungs && r.mono && C.lodCfg.scale === 1;
+  if (!ok) fail('perf-lod ' + JSON.stringify(r));
+});
 // ---- browser ----
 const { chromium } = require('playwright');
 const server = createServer(async (req, res) => {
@@ -897,11 +911,23 @@ const smoke = (ship, seed) => async (page) => {
     let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
     out.bodies = g.ents.filter(e => e.simmed).length;
     const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
-    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1); g.setQuality('low');   // one high-quality frame through the post chain
+    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1); out.lod = await (async () => {   // person LOD (js/humanlod.js): decimated meshes are well formed, counted, forced on, and never left on a mesh after the draw
+      const HM = await import('/js/humans.js'), LM = await import('/js/humanlod.js'), r = { ok: true, why: [] }, bad = (w) => { r.ok = false; r.why.push(w); };
+      const h = HM.makeHuman({ kind: 'crew_m', seed: 3 }), U = h?.userData.lod; if (!U || !U.items.length) { bad('no lod items'); return r; }
+      const tri = (gm) => (gm.index ? gm.index.count : gm.attributes.position.count) / 3; r.items = U.items.length;
+      for (const it of U.items) { const [a, b, c] = it.geo; if (!(tri(b) < tri(a) && tri(c) <= tri(b))) bad('tris ' + it.mesh.material.name + ' ' + [a, b, c].map(tri)); for (const gm of [b, c]) { const n = gm.attributes.position.count; if (Object.keys(a.attributes).sort().join() !== Object.keys(gm.attributes).sort().join()) bad('attrs ' + it.mesh.material.name); let mx = 0; for (const v of gm.index.array) if (v > mx) mx = v; if (mx >= n) bad('index range'); const si = gm.attributes.skinIndex, nb = it.mesh.skeleton.bones.length; for (let i = 0; i < si.count; i++) for (const k of [si.getX(i), si.getY(i), si.getZ(i), si.getW(i)]) if (k >= nb) { bad('skin index'); i = si.count; break; } } }
+      const t0 = LM.meshTris(h); LM.setLod(h, 1); const t1 = LM.meshTris(h); LM.setLod(h, 2); const t2 = LM.meshTris(h); const kitHid = U.small.filter(m => !m.visible).length; LM.setLod(h, 0); r.tris = [t0, t1, t2]; r.kitHid = kitHid;
+      if (!(t1 < t0 * 0.6 && t2 < t1 * 0.75 && LM.meshTris(h) === t0)) bad('person tris ' + r.tris); if (U.small.length && (kitHid !== U.small.length || U.small.some(m => !m.visible))) bad('kit hide/restore');
+      const lv = LM.levelFor; if (!(lv(0, 1) === 0 && lv(0, 500) === 2)) bad('levelFor');
+      const sc = LM.lodCfg.scale; LM.lodCfg.scale = 0.01; g.renderOnce(); const forced = { ...g.cullStats, lod: [...g.cullStats.lod] }; LM.lodCfg.scale = sc; g.renderOnce(); const nat = g.cullStats;
+      r.forced = forced.lod.join() + '/' + forced.shown; r.natural = nat.lod.join() + '/' + nat.shown;
+      if (forced.lod[0] + forced.lod[1] + forced.lod[2] !== forced.shown || forced.lod[2] !== forced.shown || nat.lod[0] + nat.lod[1] + nat.lod[2] !== nat.shown) bad('lod counts');
+      for (const e of g.ents) { const u = e.mesh?.userData.lod; if (u && (u.level !== 0 || u.items.some(it => it.mesh.geometry !== it.geo[0]) || u.small.some(m => m._lodHid))) bad('mesh left on a lod geometry'); }
+      return r; })(); if (!out.lod.ok) out.lodFail = out.lod.why.join('; '); g.setQuality('low');   // one high-quality frame through the post chain
     delete G.forceSeed; return out;
   }, { ship, seed });
   console.log('smoke:', JSON.stringify(r));
-  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.lod.ok)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
 S('touch', 'touch', (p) => touchBrowser(p, fail));   // js/touch.js on a phone profile (tools/test-touch.mjs)
 S('smoke', 'smoke', smoke(SHIP, null));
