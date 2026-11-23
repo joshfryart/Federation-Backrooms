@@ -1,4 +1,4 @@
-// Procedural animation clips for the crew rig (no shipped clip exists for these in the free UAL set): `shamble` (space-madness gait), `vault` (hop over a low obstacle),
+// Procedural animation clips for the crew rig (no shipped clip exists for these in the free UAL set): `shamble` (space-madness gait), `vault` (hop over a low obstacle), `grab` (crazed bite / grab lunge),
 // `climb` (hand-over-hand ladder / wall climb). Built once per body kind from the clips that do exist:
 //   * shamble: the Walk clip with a stooped spine, a lolling head, arms hanging forward, a dragging left leg (swing damped toward the mean), slowed down.
 //   * vault / climb: keyframed bone rotations as local-axis deltas on the first frame of Idle (the neutral pose); +x on a spine / neck bone bends forward, -x on a thigh
@@ -67,6 +67,19 @@ function climbClip(neutral, k) {
   ]);
 }
 
+function grabClip(neutral, k) {
+  // crazed bite / grab, one shot, 1.0 s: rear back (head cocked, hands curled up) -> lunge (pelvis drives forward, both arms reach, head snaps forward at the throat) -> clamp and shake -> recover.
+  const reach = (a, l, s = 0) => SIDE({ upperarm: [a, 0, 0.12 + s], lowerarm: [l, 0, 0] }, { upperarm: [a, 0, -0.12 - s], lowerarm: [l, 0, 0] });
+  return keyed('grab', neutral, k, 1.0, [
+    { t: 0.00, rot: { spine_01: [0.15, 0, 0], spine_02: [0.1, 0, 0], neck_01: [0.1, 0, 0.1], ...reach(-0.3, 0.6) } },
+    { t: 0.28, rot: { spine_01: [-0.15, 0, 0.05], spine_02: [-0.15, 0, 0], spine_03: [-0.1, 0, 0], neck_01: [-0.2, 0, 0.2], Head: [-0.15, 0, 0], ...reach(-0.7, 1.2, 0.2), ...SIDE({ thigh: [0.12, 0, 0] }, { thigh: [-0.08, 0, 0] }) }, pelvis: [0, -0.03, -0.1] },
+    { t: 0.45, rot: { spine_01: [0.3, 0, 0], spine_02: [0.25, 0, 0], spine_03: [0.1, 0, 0], neck_01: [0.4, 0, 0], Head: [0.35, 0, 0], ...reach(-0.8, 0.2), ...SIDE({ thigh: [0.4, 0, 0], calf: [0.2, 0, 0] }, { thigh: [-0.5, 0, 0], calf: [0.5, 0, 0] }) }, pelvis: [0, -0.05, 0.3] },
+    { t: 0.58, rot: { spine_01: [0.28, 0, 0.1], spine_02: [0.22, 0, -0.1], spine_03: [0.1, 0, 0.1], neck_01: [0.35, 0, -0.2], Head: [0.3, 0, 0.1], ...reach(-0.75, 0.4, -0.1), ...SIDE({ thigh: [0.35, 0, 0], calf: [0.2, 0, 0] }, { thigh: [-0.45, 0, 0], calf: [0.5, 0, 0] }) }, pelvis: [0, -0.05, 0.28] },
+    { t: 0.72, rot: { spine_01: [0.25, 0, -0.1], spine_02: [0.2, 0, 0.1], spine_03: [0.1, 0, -0.1], neck_01: [0.3, 0, 0.2], Head: [0.25, 0, -0.1], ...reach(-0.7, 0.45, -0.1), ...SIDE({ thigh: [0.3, 0, 0] }, { thigh: [-0.4, 0, 0], calf: [0.4, 0, 0] }) }, pelvis: [0, -0.04, 0.25] },
+    { t: 1.00, rot: { spine_01: [0.15, 0, 0], spine_02: [0.1, 0, 0], neck_01: [0.1, 0, 0], ...reach(-0.3, 0.6) } },
+  ]);
+}
+
 function shambleClip(clips, neutral) {
   const walk = clips.walk; if (!walk) return null;
   const c = walk.clone(); c.name = 'shamble';
@@ -88,7 +101,7 @@ function shambleClip(clips, neutral) {
 export function procClips(clips, k) {
   const neutral = neutralOf(clips), out = {};
   if (!Object.keys(neutral.q).length) return out;
-  out.vault = vaultClip(neutral, k); out.climb = climbClip(neutral, k);
+  out.vault = vaultClip(neutral, k); out.climb = climbClip(neutral, k); out.grab = grabClip(neutral, k);
   const s = shambleClip(clips, neutral); if (s) out.shamble = s;
   return out;
 }

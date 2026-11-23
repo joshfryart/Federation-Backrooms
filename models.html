@@ -35,7 +35,7 @@ if (set === 'crew') {
   add('Medical hologram', ...hum({ kind: 'crew_f2', material: holoMaterial(0x6ad8ff, 0.8), shadow: false }, clip || 'idle_talking'));
   { const [m, tk] = hum({ kind: 'crew_f', uniform: DIVISIONS[1], rank: 1, name: 'Roy' }); if (m) markImpostor(m); add('Impostor (disguised)', m, tk); }
   for (const pose of ['back', 'facedown', 'slumped']) add('Fallen: ' + pose, makeCorpse(Math.random, null, pose), null, pose === 'slumped' ? 1.4 : 2.2);
-} else if (set === 'moves') {   // ?set=moves&clip=vault|climb|shamble|walk: one figure per phase of the clip (posed, not playing) — a filmstrip for checking authored clips
+} else if (set === 'moves') {   // ?set=moves&clip=vault|climb|grab|shamble|walk: one figure per phase of the clip (posed, not playing) — a filmstrip for checking authored clips
   const cn = clip || 'vault'; for (let i = 0; i < 6; i++) { const mm = makeHuman({ kind: 'crew_m', uniform: DIVISIONS[i % 3], rank: 2 }); if (!mm) continue; const H = mm.userData.human; H.pose(cn, i / 5 * 0.999); H.mixer.update(0.001); mm.userData.moveIdx = i; add('Move ' + i, mm, null, 1.3); }
 } else if (set === 'styles') {   // ?set=styles: every uniform style on one division colour, then three builds
   for (const st of ['plain', 'duty', 'trim', 'yoke', 'trim-duty']) { const mm = makeHuman({ kind: 'crew_m', uniform: DIVISIONS[0], rank: 2, style: st, seed: 5 }); if (mm) { mm.userData.human.play('idle'); add('Style ' + st, mm, (dt) => mm.userData.human.update(dt), 1.3); } }
