@@ -1,55 +1,38 @@
-// Yeoman: draft the cargo status note for the captain. The cargo status board keeps moving: crates come aboard, the ETA slips, a delay is
-// posted. Copy each figure from the board into the note, and file the note while every line still agrees with the board. A line the board has
-// changed since you copied it turns amber (stale); filing a stale note is how the captain gets surprised by a delay that was already known.
-import { define, machine, ARROW, ENTER, ri, rf, pick, txt, box, COL } from './kit.js';
+// Yeoman: draft the cargo status note for the captain. The cargo board is read out to you line by line on the beat of the loading crane, and the
+// note is typed from the ticker as it scrolls: four lines (1 crates aboard, 2 ETA, 3 delays, 4 reserve) drop towards the line at the bottom. Press a
+// line's number as its marker crosses the line, not before and not after, so the note records each figure the instant it was true.
+import { define, machine, DIG, ri, txt, box, COL } from './kit.js';
 
-const FIELDS = ['Crates aboard', 'Crates to load', 'ETA at drop', 'Delay posted'];
-const DELAYS = ['none', 'lift 2 jammed', 'QM recount', 'sled recharge', 'deck crew short', 'hatch seal check'];
-
+const LINES = ['Crates aboard', 'ETA', 'Delays', 'Reserve'];
 export default define({
   job: { billet: 'yeoman', label: 'Draft cargo status note for captain', type: 'task:cargo_run' },
-  title: 'Status note filed while the board agrees', dept: 'command', host: 'console', tool: 'Cargo status board and note pad',
-  how: 'Pick a note line (↑ ↓) and copy its figure from the live board (→). The board keeps changing: a copied line it has since changed turns amber. File the note (Enter) only when no line is blank or amber.',
-  keys: ['↑ ↓ pick a line', '→ copy from the board', 'Enter file the note'], limit: 32, maxFaults: 3,
-  fingerprint: { verb: 'refresh and file', input: 'arrows+enter', win: 'three status notes sent to the captain each matching the moving cargo board at the instant of sending',
-    fail: 'sending a note with a blank line or a figure the board has already moved past',
-    rule: 'The board ticks over at random. Copy lines with →; any copied line the board later changes goes amber and must be copied again. Press Enter in a moment when all four lines are fresh.' },
+  title: 'Take the board down on the beat', dept: 'command', host: 'console', tool: 'Cargo ticker and note pad',
+  how: 'Board lines drop down four lanes. Press the lane\'s number (1-4) just as its marker crosses the line at the bottom. Ten lines go into the note.',
+  keys: ['1-4 take that lane as it crosses the line'], limit: 24, maxFaults: 3,
+  fingerprint: { verb: 'catch on beat', input: 'digits+rhythm',
+    win: 'ten cargo status lines each taken from their lane on the beat as the marker crossed the line',
+    fail: 'taking a line early or late, missing it entirely, or tapping a lane with no line crossing',
+    rule: 'Lines fall down lanes 1-4 at a steady beat. Press that lane\'s number within a fifth of a second of its marker reaching the line; stray presses and misses are faults.' },
   rush: 'Wrote "cargo on schedule" and dropped it in the tray.',
-  captions: { 'stale note': 'captain\'s comm chirps', 'blank line': 'tray rejects the note' },
+  captions: { missed: 'status line missed', 'off beat': 'figure noted off the beat' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd, k = m.calm ? 1.6 : 1;
-    let eta = ri(r, 30, 70); m.board = [ri(r, 8, 20), ri(r, 20, 40), eta, 'none']; m.next = FIELDS.map(() => rf(r, 1.2, 3.5) * k);
-    m.note = [null, null, null, null]; m.cur = 0; m.filed = 0; m.rounds = 3; m.round = 1;
-    const fmt = (i, v) => (i === 2 ? `+${v} min` : String(v));
-    const change = (i) => {
-      if (i === 0) { const n = ri(r, 1, 3); m.board[0] += n; m.board[1] = Math.max(0, m.board[1] - n); }
-      else if (i === 1) m.board[1] += ri(r, 1, 2); else if (i === 2) m.board[2] += pick(r, [-2, 3, 5, 8]); else m.board[3] = pick(r, DELAYS.filter(d => d !== m.board[3]));
-      m.next[i] = m.t + rf(r, 2.4, 4.6) * k;
-    };
-    const stale = (i) => m.note[i] !== null && m.note[i] !== m.board[i];
+    const m = machine(this, seed, opts), r = m.rnd, beat = m.calm ? 0.75 : 0.6, win = m.calm ? 0.28 : 0.2, fall = 1.8; m.t0 = 1.8; m.got = 0;
+    m.notes = Array.from({ length: 10 }, (_, i) => ({ lane: ri(r, 1, 4), hit: m.t0 + i * beat, done: false }));
     m.key = (code, down = true) => {
-      if (m.state !== 'play') return false; const a = ARROW(code);
-      if (a) { if (down) { if (a === 'U') m.cur = (m.cur + 3) % 4; if (a === 'D') m.cur = (m.cur + 1) % 4; if (a === 'R' || a === 'L') m.note[m.cur] = m.board[m.cur]; } return true; }
-      if (!ENTER(code)) return false; if (!down) return true;
-      if (m.note.some(v => v === null)) m.fault('blank line'); else if (m.note.some((_, i) => stale(i))) m.fault('stale note');
-      else { m.filed++; m.ev('filed'); if (m.filed >= 3) { m.win(); return true; } m.round = m.filed + 1; }
-      m.note = [null, null, null, null]; return true;
+      if (m.state !== 'play') return false; const d = DIG(code); if (d < 1 || d > 4) return false; if (!down) return true;
+      const n = m.notes.find(q => !q.done && q.lane === d && Math.abs(q.hit - m.t) <= win);
+      if (!n) { m.fault('off beat'); return true; } n.done = true; m.got++; if (m.got >= m.notes.length) m.win(); return true;
     };
-    m.tick = (dt) => { if (!m.live(dt)) return; for (let i = 0; i < 4; i++) if (m.t >= m.next[i]) change(i); };
-    m.hint = () => { const need = [0, 1, 2, 3].find(i => m.note[i] === null || stale(i)); if (need == null) return [['Enter', true]];
-      if (need !== m.cur) return [[((need - m.cur + 4) % 4) <= 2 ? 'ArrowDown' : 'ArrowUp', true]]; return [['ArrowRight', true]]; };
-    m.bad = () => 'Enter';
-    m.view = () => ({ board: m.board.slice(), next: m.next.map(v => +v.toFixed(2)) });
-    m.buttons = () => [['ArrowUp', '▲'], ['ArrowDown', '▼'], ['ArrowRight', 'Copy ▶'], ['Enter', 'File']];
+    m.tick = (dt) => { if (!m.live(dt)) return; for (const n of m.notes) if (!n.done && m.t > n.hit + win) { n.done = true; m.fault('missed'); } };
+    m.hint = () => { if (m.state !== 'play') return []; const n = m.notes.find(q => !q.done && m.t >= q.hit - 0.05); return n ? [['Digit' + n.lane, true]] : []; };
+    m.bad = () => 'Digit1';
+    m.view = () => ({ n: m.notes.map(n => n.lane) });
+    m.buttons = () => [['Digit1', '1'], ['Digit2', '2'], ['Digit3', '3'], ['Digit4', '4']];
     m.draw = (c, W, H, P) => {
-      box(c, 8, 8, 180, 128, 'rgba(255,255,255,.05)', COL.peri, 6); txt(c, 'CARGO STATUS BOARD (live)', 16, 24, { size: 9, col: COL.peri });
-      box(c, 204, 8, 188, 128, 'rgba(255,255,255,.05)', COL.lav, 6); txt(c, 'NOTE TO CAPTAIN', 212, 24, { size: 9, col: COL.lav });
-      FIELDS.forEach((f, i) => { const y = 46 + i * 24, st = stale(i), on = i === m.cur;
-        txt(c, f, 16, y, { size: 10, col: COL.dim }); txt(c, fmt(i, m.board[i]), 180, y, { size: 12, align: 'right', col: COL.gold });
-        box(c, 208, y - 13, 180, 19, on ? 'rgba(244,194,91,.18)' : null, on ? COL.gold : null, 4);
-        txt(c, m.note[i] === null ? '— blank —' : fmt(i, m.note[i]), 214, y, { size: 12, col: m.note[i] === null ? COL.dim : st ? COL.warn : P.good });
-        if (st) txt(c, '▲ stale', 384, y, { size: 9, align: 'right', col: COL.warn }); });
-      txt(c, `notes filed ${m.filed} / 3`, 8, H - 12, { size: 11, col: COL.pale });
+      for (let l = 1; l <= 4; l++) { const x = 40 + (l - 1) * 100; box(c, x, 6, 80, 148, 'rgba(255,255,255,.04)', COL.dim, 4); txt(c, `${l} ${LINES[l - 1]}`, x + 40, 20, { size: 9, align: 'center', col: COL.dim }); }
+      c.fillStyle = COL.gold; c.fillRect(34, 128, 332, 3);
+      for (const n of m.notes) { if (n.done) continue; const y = 128 - (n.hit - m.t) / fall * 110; if (y < 26 || y > 150) continue; box(c, 40 + (n.lane - 1) * 100 + 12, y - 8, 56, 16, '#3a3a6a', COL.pale, 3); txt(c, String(n.lane), 40 + (n.lane - 1) * 100 + 40, y + 4, { size: 10, align: 'center' }); }
+      txt(c, `noted ${m.got}/10`, 386, 164, { size: 10, align: 'right', col: COL.dim });
     };
     return m;
   },

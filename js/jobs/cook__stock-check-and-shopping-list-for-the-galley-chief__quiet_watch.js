@@ -1,36 +1,42 @@
-// Cook: stock check and shopping list. Four shelf lines each show days of stock left; one is already on the pending order slip. Build the list
-// by pressing each line's digit in order of how soon it runs out (fewest days first), skipping the one already on order.
-import { define, machine, DIG, ri, shuffle, txt, COL } from './kit.js';
-const NAMES = ['rice sacks', 'flour', 'tinned beans', 'tomato tins', 'oil', 'stock cubes', 'oats', 'salt', 'dried fruit', 'tea'];
+// Cook: stock check and shopping list for the Galley Chief. Four shelf lines run down by a day every second and a half. One courier carries the
+// orders, and he takes two and a half seconds per run and can carry only one line at a time: press a line's digit to send him for it (it comes
+// back as a week's stock). Keep every line above zero days until the galley chief takes the list. A line already on the pending slip is on its way.
+import { define, machine, DIG, ri, txt, box, bar, COL } from './kit.js';
 
+const NAMES = ['Flour', 'Protein paste', 'Coffee', 'Fresh greens'], DUR = 22;
 export default define({
   job: { billet: 'cook', label: 'Stock check and shopping list for the Galley Chief', type: 'task:quiet_watch' },
-  title: 'Shopping list by days left', dept: 'services', host: 'console', tool: 'Stock card and order slip',
-  how: 'Press each shelf line number in order of days left, fewest first. Do not add a line already on the pending order slip.',
-  keys: ['1-4 add that line to the list'], limit: 30, maxFaults: 3,
-  fingerprint: { verb: 'rank by urgency', input: 'digits', win: 'two shopping lists built soonest-to-run-out first without any line already on order',
-    fail: 'putting a less urgent line ahead of a sooner one, or ordering stock that is already pending',
-    rule: 'Four lines show days of stock left; one is marked PENDING. Press digits from the line with the fewest days to the most, skipping the pending one.' },
+  title: 'One courier, four emptying shelves', dept: 'services', host: 'console', tool: 'Stock card and courier slip',
+  how: 'Four shelves empty a day at a time. Press a line\'s number to send the courier for it (one run at a time, 2.5 s each). Keep every line above zero until the list is taken.',
+  keys: ['1-4 send the courier for that line'], limit: 34, maxFaults: 3,
+  fingerprint: { verb: 'dispatch courier', input: 'digits',
+    win: 'four draining shelf lines all kept above zero days for twenty-two seconds by dispatching the single courier in time',
+    fail: 'letting a shelf reach zero, or sending the courier while he is still out on a run',
+    rule: 'Days left drop one every 1.5 s on each line. A courier run takes 2.5 s and restocks one line to seven days; press a digit only when he is back, for the line that is closest to empty.' },
   rush: 'Wrote down whatever looked low and ordered the same bags twice.',
-  captions: { 'out of order': 'wrong-entry buzz', 'double order': 'duplicate order tone' },
+  captions: { 'ran out': 'shelf empty: the galley ran out', 'courier busy': 'courier is still out on a run' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd; m.rounds = 2; m.round = 0;
-    const deal = () => { const names = shuffle(r, NAMES).slice(0, 4), days = shuffle(r, [1, 2, 3, 4, 5, 6, 7, 8, 9]).slice(0, 4), pend = ri(r, 0, 3);
-      m.lines = names.map((n, i) => ({ n, d: days[i], pend: i === pend })); m.order = m.lines.map((l, i) => i).filter(i => !m.lines[i].pend).sort((a, b) => m.lines[a].d - m.lines[b].d); m.got = 0; m.said = []; };
-    deal();
+    const m = machine(this, seed, opts), r = m.rnd, day = m.calm ? 2 : 1.5, run = m.calm ? 3 : 2.5; m.cur = -1; m.cd = 0; m.ac = 0;
+    const start = [ri(r, 4, 5), ri(r, 6, 7), ri(r, 8, 9), ri(r, 10, 11)].sort(() => r() - 0.5);
+    m.l = start.map((d, i) => ({ n: NAMES[i], d, f: 0, z: false })); const pend = ri(r, 0, 3); m.cur = pend; m.cd = 1.2;
     m.key = (code, down = true) => {
-      const d = DIG(code); if (m.state !== 'play' || !down || d < 1 || d > 4) return false; const i = d - 1;
-      if (m.lines[i].pend) { m.fault('double order'); return true; } if (m.said.includes(i)) return true;
-      if (i !== m.order[m.got]) { m.fault('out of order'); return true; }
-      m.said.push(i); m.got++; if (m.got >= m.order.length) { m.round++; if (m.round >= m.rounds) m.win(); else deal(); } return true;
+      if (m.state !== 'play') return false; const d = DIG(code); if (d < 1 || d > 4) return false; if (!down) return true;
+      if (m.cur >= 0) { m.fault('courier busy'); return true; } m.cur = d - 1; m.cd = run; return true;
     };
-    m.hint = () => [['Digit' + (m.order[m.got] + 1), true]];
-    m.bad = () => 'Digit' + (m.lines.findIndex(l => l.pend) + 1);
-    m.view = () => ({ lines: m.lines.map(l => [l.n, l.d, l.pend]) });
-    m.buttons = () => [1, 2, 3, 4].map(i => ['Digit' + i, String(i)]);
-    m.draw = (c, W, H, P) => { m.lines.forEach((l, i) => { const y = 32 + i * 30; txt(c, `${i + 1}  ${l.n}`, 20, y, { size: 13, col: m.said.includes(i) ? COL.dim : COL.ink });
-      txt(c, `${l.d} days`, 200, y, { size: 13, col: COL.pale }); if (l.pend) txt(c, 'PENDING', 290, y, { size: 12, col: P.bad }); const k = m.said.indexOf(i); if (k >= 0) txt(c, `list #${k + 1}`, 340, y, { size: 12, col: P.good }); });
-      txt(c, `list ${m.round + 1} / ${m.rounds}`, 20, 14, { size: 11, col: COL.dim }); };
+    m.tick = (dt) => {
+      if (!m.live(dt)) return; m.ac += dt; if (m.cur >= 0) { m.cd -= dt; if (m.cd <= 0) { m.l[m.cur].d += 7; m.cur = -1; } }
+      for (const q of m.l) { q.f += dt; while (q.f >= day) { q.f -= day; q.d--; if (q.d <= 0 && !q.z) { q.z = true; m.fault('ran out'); q.d = 3; } } if (q.d > 0) q.z = false; }
+      if (m.state === 'play' && m.t >= DUR) m.win();
+    };
+    m.hint = () => { if (m.state !== 'play' || m.cur >= 0) return []; let w = 0; m.l.forEach((q, i) => { if (q.d - q.f / day < m.l[w].d - m.l[w].f / day) w = i; }); return m.l[w].d <= 6 ? [['Digit' + (w + 1), true]] : []; };
+    m.bad = () => 'Digit1';
+    m.view = () => ({ l: m.l.map(q => q.d), p: m.cur });
+    m.buttons = () => [['Digit1', '1'], ['Digit2', '2'], ['Digit3', '3'], ['Digit4', '4']];
+    m.draw = (c, W, H, P) => {
+      m.l.forEach((q, i) => { const y = 10 + i * 34; box(c, 8, y, 300, 30, COL.panel, m.cur === i ? COL.gold : null, 4); txt(c, `${i + 1} ${q.n}`, 16, y + 19, { size: 12 }); bar(c, 150, y + 9, 140, 12, q.d / 14, { col: q.d <= 2 ? P.bad : COL.peri }); txt(c, `${Math.max(0, q.d)}d`, 300, y + 20, { size: 11, align: 'right', col: q.d <= 2 ? P.bad : COL.ink }); });
+      box(c, 320, 10, 72, 56, '#14202a', COL.peri, 6); txt(c, 'COURIER', 356, 26, { size: 9, align: 'center', col: COL.dim }); txt(c, m.cur >= 0 ? `line ${m.cur + 1}` : 'in', 356, 44, { size: 11, align: 'center', col: m.cur >= 0 ? COL.gold : P.good }); if (m.cur >= 0) bar(c, 326, 52, 60, 6, 1 - m.cd / run, {});
+      txt(c, `list taken in ${Math.max(0, DUR - m.t).toFixed(0)} s`, 320, 158, { size: 10, col: COL.dim });
+    };
     return m;
   },
 });

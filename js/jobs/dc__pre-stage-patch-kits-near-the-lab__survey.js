@@ -1,49 +1,41 @@
-// Damage control: pre-stage patch kits near the lab. The carry case has numbered foam slots, each cut for one item and size. Items come off
-// the shelf one at a time: press the number of the empty slot that fits it. Sealant tubes carry an expiry stamp: one past today's date goes in
-// the reject bin (9). Packing an expired tube, forcing an item into the wrong slot or binning a good item are faults. The case is staged once
-// every slot is full.
-import { define, machine, DIG, ri, shuffle, txt, box, lamp, COL } from './kit.js';
+// Damage control: pre-stage patch kits near the lab. The carry case is a carousel: six foam slots round a ring, five cut for one kit and size each and
+// one marked REJECT. The loading arm is at the top of the ring. Left / Right turn the ring one slot; Space loads the item in your hand into the slot
+// under the arm. An item must go in the slot cut for its kind and size, and a sealant tube past its expiry stamp goes in REJECT, never in a kit slot.
+import { define, machine, ARROW, SPACE, ri, shuffle, txt, box, COL } from './kit.js';
 
-const SLOTS = [['Plate', 'L'], ['Plate', 'M'], ['Plate', 'S'], ['Clamp', 'M'], ['Clamp', 'S'], ['Tube', '']];
+const KITS = ['patch S', 'patch L', 'sealant S', 'sealant L', 'clamp M'];
 export default define({
   job: { billet: 'dc', label: 'Pre-stage patch kits near the lab', type: 'task:survey' },
-  title: 'Foam-slot case packing', dept: 'engineering', host: 'console', tool: 'Patch kit carry case',
-  how: 'Press the number of the empty foam slot cut for the item in hand (kind and size). Read each sealant tube\'s stamp: past today\'s date, press 9 for the reject bin.',
-  keys: ['1-6 foam slot', '9 reject bin'], limit: 34, maxFaults: 3,
-  fingerprint: { verb: 'pack by size', input: 'digits', win: 'every foam slot of the case filled with its own kind and size, and no expired sealant tube packed',
-    fail: 'leaving an expired sealant tube in the case where it gets grabbed in a hurry, or jamming kit into the wrong slot',
-    rule: 'Each foam slot is labelled with a kind and a size. Press the number of the empty slot that matches the item in hand. A tube whose EXP stamp is earlier than today goes to 9, the reject bin.' },
+  title: 'Turn the case carousel to the slot', dept: 'engineering', host: 'console', tool: 'Patch kit carousel case',
+  how: 'Left / Right turn the ring one slot at a time; Space loads the item in your hand into the slot under the arm. Match kind and size; the expired tube goes in REJECT.',
+  keys: ['Left / Right: turn the ring', 'Space: load under the arm'], limit: 32, maxFaults: 3,
+  fingerprint: { verb: 'turn and load', input: 'arrows+space',
+    win: 'six items each loaded by turning the carousel ring the short way to the slot cut for it, with the expired tube turned to REJECT',
+    fail: 'loading an item into a slot not cut for it, or an expired sealant tube into a kit slot',
+    rule: 'The arm is fixed at the top. Turn the ring so the slot cut for the item in hand is under it, then Space. The tube with a past EXP stamp belongs in the REJECT slot.' },
   rush: 'Tipped the shelf into the case and shut the lid.',
-  captions: { 'expired packed': 'case latch clicks', 'wrong slot': 'foam squeaks', 'good binned': 'bin clunks' },
+  captions: { 'wrong slot': 'item forced into the wrong slot', 'expired tube': 'expired tube packed' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd, today = ri(r, 140, 320);
-    m.today = today; m.slots = shuffle(r, SLOTS.concat([['Tube', '']])).map(([k, z]) => ({ k, z, full: false }));
-    const items = m.slots.map(s => ({ k: s.k, z: s.z, exp: s.k === 'Tube' ? today + ri(r, 2, 60) : 0 }));
-    for (let n = ri(r, 2, 3); n > 0; n--) items.push({ k: 'Tube', z: '', exp: today - ri(r, 1, 25) });
-    m.queue = shuffle(r, items); m.qi = 0; m.round = 0; m.rounds = m.slots.length; m.flash = '';
-    const cur = () => m.queue[m.qi], expired = (it) => it.k === 'Tube' && it.exp < m.today;
-    const fits = (it, s) => s && !s.full && s.k === it.k && s.z === it.z;
+    const m = machine(this, seed, opts), r = m.rnd, lock = m.calm ? 0.2 : 0.12; m.ring = shuffle(r, [...KITS, 'REJECT']); m.top = ri(r, 0, 5); m.lk = 0; m.loaded = new Set();
+    const exp = ri(r, 0, 1) ? 'sealant S' : 'sealant L'; m.items = shuffle(r, [...KITS.map(k => ({ k, dead: false })), { k: exp, dead: true }]); m.n = 0;
+    const want = () => { const it = m.items[m.n]; return it.dead ? m.ring.indexOf('REJECT') : m.ring.indexOf(it.k); };
     m.key = (code, down = true) => {
-      if (m.state !== 'play' || !down) return false; const d = DIG(code); if (!d) return false; const it = cur(); if (!it) return true;
-      if (d === 9) { if (!expired(it)) { m.fault('good binned'); m.flash = 'that tube is in date'; return true; } m.qi++; m.flash = 'rejected'; return true; }
-      const s = m.slots[d - 1]; if (!s) return true;
-      if (expired(it) && fits(it, s)) { m.fault('expired packed'); m.flash = `EXP ${it.exp} is before today`; m.qi++; return true; }
-      if (!fits(it, s)) { m.fault('wrong slot'); m.flash = 'does not fit that slot'; return true; }
-      s.full = true; m.qi++; m.round++; m.flash = ''; if (m.slots.every(x => x.full)) m.win(); return true;
+      if (m.state !== 'play') return false; const a = ARROW(code);
+      if (a === 'L' || a === 'R') { if (down && m.lk <= 0) { m.top = (m.top + (a === 'R' ? 1 : 5)) % 6; m.lk = lock; } return true; } if (a) return true; if (!SPACE(code)) return false; if (!down) return true; if (m.lk > 0) return true;
+      const it = m.items[m.n], slot = m.ring[m.top];
+      if (it.dead && slot !== 'REJECT') { m.fault('expired tube'); return true; } if (!it.dead && (slot !== it.k || m.loaded.has(m.top))) { m.fault('wrong slot'); return true; } if (it.dead && slot === 'REJECT' && m.loaded.has(m.top)) { m.fault('wrong slot'); return true; }
+      m.loaded.add(m.top); m.n++; if (m.n >= m.items.length) m.win(); return true;
     };
-    m.tick = (dt) => { m.live(dt); };
-    m.hint = () => { const it = cur(); if (!it) return []; if (expired(it)) return [['Digit9', true]]; const k = m.slots.findIndex(s => fits(it, s)); return [['Digit' + (k + 1), true]]; };
-    m.bad = () => { const it = cur(); if (!it) return null; if (expired(it)) { const k = m.slots.findIndex(s => fits(it, s)); return k >= 0 ? 'Digit' + (k + 1) : 'Digit1'; } return 'Digit9'; };
-    m.view = () => ({ s: m.slots.map(s => s.k + s.z), q: m.queue.map(i => i.k + i.z + i.exp) });
-    m.buttons = () => [...m.slots.map((_, k) => ['Digit' + (k + 1), String(k + 1)]), ['Digit9', '9 bin']];
+    m.tick = (dt) => { if (!m.live(dt)) return; if (m.lk > 0) m.lk -= dt; };
+    m.hint = () => { if (m.state !== 'play') return []; const w = want(); if (w === m.top) return [['Space', true]]; const d = (w - m.top + 6) % 6; return [[d <= 3 ? 'ArrowRight' : 'ArrowLeft', true]]; };
+    m.bad = () => 'Space';
+    m.view = () => ({ ring: m.ring, top: m.top, items: m.items.map(i => i.k + (i.dead ? '!' : '')) });
+    m.buttons = () => [['ArrowLeft', '◀ turn'], ['ArrowRight', 'turn ▶'], ['Space', 'Load']];
     m.draw = (c, W, H, P) => {
-      txt(c, `Today ${m.today}`, 14, 18, { size: 12, col: COL.pale });
-      const it = cur(); if (it) { box(c, 14, 28, 150, 54, COL.panel, COL.gold, 6); txt(c, `${it.k}${it.z ? ' · size ' + it.z : ''}`, 22, 50, { size: 14 });
-        if (it.k === 'Tube') txt(c, `EXP ${it.exp}`, 22, 72, { size: 13, col: it.exp < m.today ? P.bad : COL.ink }); }
-      m.slots.forEach((s, k) => { const x = 180 + (k % 4) * 54, y = 30 + Math.floor(k / 4) * 54; box(c, x, y, 48, 46, s.full ? 'rgba(79,208,106,.18)' : COL.dark, s.full ? P.good : COL.dim, 6);
-        txt(c, String(k + 1), x + 4, y + 13, { size: 10, col: COL.gold }); txt(c, s.k, x + 24, y + 28, { size: 10, align: 'center' }); txt(c, s.full ? '✓' : s.z, x + 24, y + 41, { size: 10, align: 'center', col: COL.dim }); });
-      lamp(c, 30, 110, 9, COL.warn, 'triangle'); txt(c, '9 reject bin', 46, 114, { size: 11, col: COL.dim });
-      if (m.flash) txt(c, m.flash, 14, 150, { size: 12, col: COL.warn });
+      const cx = 130, cy = 88; for (let i = 0; i < 6; i++) { const k = (i - m.top + 6) % 6, ang = -1.5708 + k * 1.0472, x = cx + Math.cos(ang) * 62, y = cy + Math.sin(ang) * 62; box(c, x - 30, y - 12, 60, 24, m.loaded.has(i) ? '#25402f' : m.ring[i] === 'REJECT' ? '#3a2020' : COL.panel, k === 0 ? COL.gold : COL.dim, 4); txt(c, m.loaded.has(i) ? '✓' : m.ring[i], x, y + 4, { size: 9, align: 'center', col: m.ring[i] === 'REJECT' ? P.bad : COL.ink }); }
+      txt(c, '▼ arm', cx, 14, { size: 9, align: 'center', col: COL.gold }); const it = m.items[Math.min(m.n, 5)];
+      box(c, 250, 40, 130, 70, '#201c10', it.dead ? P.bad : COL.pale, 6); txt(c, 'IN HAND', 315, 56, { size: 9, align: 'center', col: COL.dim }); txt(c, it.k, 315, 82, { size: 14, align: 'center' }); if (/sealant/.test(it.k)) txt(c, it.dead ? 'EXP past' : 'EXP ok', 315, 100, { size: 10, align: 'center', col: it.dead ? P.bad : P.good });
+      txt(c, `loaded ${m.n}/6`, 250, 150, { size: 10, col: COL.dim });
     };
     return m;
   },

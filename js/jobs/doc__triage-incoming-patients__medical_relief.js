@@ -1,38 +1,38 @@
-// Doc: triage incoming patients. Stretchers arrive one at a time with a description (loud or quiet) and an oximeter reading. The zone comes
-// from the oxygen, not from the noise: below 90 red (Left), 90 to 94 amber (Down), 95 and above green (Right). A quiet patient with low oxygen is the trap.
-import { define, machine, ARROW, ri, pick, txt, box, COL } from './kit.js';
+// Doc: triage incoming patients. Three casualties come in together and each one's oxygen saturation is sliding at its own rate. There is one
+// bag-valve mask: hold a patient's number (1-3) to bag them (their oxygen climbs while you hold it, and only one can be bagged at once).
+// Keep every patient above the red line until the transport crew arrives. A patient who is quiet is not a patient who is stable: read the figures.
+import { define, machine, DIG, rf, txt, box, bar, COL } from './kit.js';
 
+const RED = 88, DUR = 18;
 export default define({
   job: { billet: 'doc', label: 'Triage incoming patients', type: 'task:medical_relief' },
-  title: 'Oximeter zone triage', dept: 'medical', host: 'console', tool: 'Triage tags and zone markers',
-  how: 'Read the oximeter on each stretcher. Left puts the patient in red (below 90), Down in amber (90 to 94), Right in green (95 or more). Ignore how loud they are.',
-  keys: ['Left red zone', 'Down amber zone', 'Right green zone'], limit: 26, maxFaults: 2,
-  fingerprint: { verb: 'zone by oxygen', input: 'arrows', win: 'five arriving patients each sent to the red, amber or green zone their oxygen reading calls for',
-    fail: 'sending a patient to a lower zone than their reading, such as a silent low-oxygen patient left in green',
-    rule: 'Each stretcher shows a loudness note and an oxygen figure. Press Left for under 90, Down for 90 to 94, Right for 95 or over; the note does not matter.' },
-  rush: 'Tagged by who was shouting loudest and left the quiet ones to wait.',
-  captions: { undertriaged: 'monitor alarm', 'over-tagged': 'tag peels' },
+  title: 'One mask, three falling sats', dept: 'medical', host: 'console', tool: 'Bag-valve mask and sat monitors',
+  how: 'Three patients\' oxygen is falling. Hold 1, 2 or 3 to bag that patient (it rises while held, one at a time). Keep all above the red line until transport arrives.',
+  keys: ['hold 1-3: bag that patient'], limit: 28, maxFaults: 3,
+  fingerprint: { verb: 'bag the lowest', input: 'digits',
+    win: 'three patients held above the red oxygen line for eighteen seconds by sharing one mask between them',
+    fail: 'letting a patient\'s oxygen drop under the red line, three times, because the mask was on someone else',
+    rule: 'Each patient\'s sat falls at its own rate. Holding a number bags that patient and lifts their sat; only one mask. Whoever is closest to the red line needs it next.' },
+  rush: 'Tagged them by who was shouting loudest and left the quiet ones to wait.',
+  captions: { desat: 'sat alarm: patient under the red line' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd, notes = ['shouting', 'groaning', 'quiet', 'silent', 'talking'];
-    m.P = Array.from({ length: 5 }, (_, k) => { const o = k === 1 ? ri(r, 78, 89) : ri(r, 80, 99); return { o2: o, note: o < 90 && r() < 0.6 ? pick(r, ['quiet', 'silent']) : pick(r, notes) }; });
-    m.i = 0; m.rounds = 5; m.round = 0;
-    const zone = (o) => (o < 90 ? 'L' : o < 95 ? 'D' : 'R');
-    m.key = (code, down = true) => {
-      if (m.state !== 'play' || !down) return false; const a = ARROW(code); if (!a || a === 'U') return false;
-      const z = zone(m.P[m.i].o2); if (a !== z) { const rank = { L: 0, D: 1, R: 2 }; m.fault(rank[a] > rank[z] ? 'undertriaged' : 'over-tagged'); return true; }
-      m.i++; m.round++; if (m.i >= 5) m.win(); return true;
+    const m = machine(this, seed, opts), r = m.rnd, k = m.calm ? 0.75 : 1; m.bag = -1;
+    m.p = [0, 1, 2].map(() => ({ s: rf(r, 94, 98), d: rf(r, 0.55, 1.15) * k, low: false }));
+    m.key = (code, down = true) => { if (m.state !== 'play') return false; const d = DIG(code); if (d < 1 || d > 3) return false; if (down) m.bag = d - 1; else if (m.bag === d - 1) m.bag = -1; return true; };
+    m.tick = (dt) => {
+      if (!m.live(dt)) return;
+      m.p.forEach((p, i) => { p.s = Math.min(100, p.s + (i === m.bag ? 4 : -p.d) * dt); if (p.s < RED && !p.low) { p.low = true; m.fault('desat'); } else if (p.s >= RED + 2) p.low = false; });
+      if (m.state === 'play' && m.t >= DUR) m.win();
     };
-    m.tick = (dt) => { m.live(dt); };
-    m.hint = () => [[{ L: 'ArrowLeft', D: 'ArrowDown', R: 'ArrowRight' }[zone(m.P[Math.min(4, m.i)].o2)], true]];
-    m.bad = () => 'ArrowRight';
-    m.view = () => ({ P: m.P });
-    m.buttons = () => [['ArrowLeft', 'Red'], ['ArrowDown', 'Amber'], ['ArrowRight', 'Green']];
+    m.hint = () => { if (m.state !== 'play') return []; let w = 0; m.p.forEach((p, i) => { if (p.s < m.p[w].s) w = i; }); return m.bag === w ? [] : [['Digit' + (w + 1), true]]; };
+    m.bad = () => null;
+    m.view = () => ({ p: m.p.map(p => [+p.s.toFixed(1), +p.d.toFixed(2)]) });
+    m.buttons = () => [['Digit1', 'Bag 1'], ['Digit2', 'Bag 2'], ['Digit3', 'Bag 3']];
     m.draw = (c, W, H, P) => {
-      const p = m.P[Math.min(4, m.i)]; txt(c, `stretcher ${Math.min(5, m.i + 1)} of 5`, 20, 24, { size: 12, col: COL.dim });
-      txt(c, p.note, 20, 56, { size: 18, col: COL.pale }); txt(c, `SpO2 ${p.o2} %`, 20, 96, { size: 28, col: COL.ink });
-      [['RED', '<90', P.bad, 'L'], ['AMBER', '90-94', COL.warn, 'D'], ['GREEN', '95+', P.good, 'R']].forEach(([n, r2, col], k) => {
-        box(c, 190 + k * 70, 30, 62, 70, 'rgba(255,255,255,.06)', col, 6); txt(c, n, 221 + k * 70, 56, { size: 12, col, align: 'center' }); txt(c, r2, 221 + k * 70, 80, { size: 13, col: COL.ink, align: 'center' }); });
-      txt(c, 'Left        Down        Right', 215, 124, { size: 11, col: COL.dim });
+      m.p.forEach((p, i) => { const y = 14 + i * 46, on = m.bag === i; box(c, 10, y, 380, 40, COL.panel, on ? COL.gold : null);
+        txt(c, `${i + 1}  SpO2 ${p.s.toFixed(0)}`, 18, y + 16, { size: 13, col: p.s < RED ? P.bad : COL.ink }); txt(c, on ? 'BAGGING' : p.s < RED + 3 ? 'LOW' : '', 18, y + 33, { size: 10, col: COL.gold });
+        bar(c, 130, y + 14, 240, 14, (p.s - 70) / 30, { band: [(RED - 70) / 30, 1], mark: (RED - 70) / 30, col: p.s < RED ? P.bad : COL.peri }); });
+      txt(c, `transport in ${Math.max(0, DUR - m.t).toFixed(0)} s`, 296, 160, { size: 10, col: COL.dim });
     };
     return m;
   },

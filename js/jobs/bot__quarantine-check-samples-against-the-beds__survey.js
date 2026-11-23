@@ -1,54 +1,43 @@
-// Botanist, survey: quarantine-check samples against the beds. Each tube's site code points to a bed on the roster, and that bed has a species
-// card. The hand lens only shows one trait at a time (leaf shape, leaf edge, spore shape, colour): step the lens through every trait comparing
-// the sample with the card, then call it: all four agree = MATCH, exactly one differs = NEAR, two or more = NO MATCH (red tag, quarantine shelf).
-// Calling before every trait was under the lens is a snap call; clearing a no-match is a false clear that lets foreign spores into the beds.
-import { define, machine, ARROW, ENTER, ri, pick, shuffle, txt, box, COL } from './kit.js';
+// Botanist, survey: quarantine-check samples against the beds. The sample rack holds twelve tubes in a 4 by 3 grid; each tube carries a leaf
+// glyph. The bed's species card at the top shows the glyph that belongs in this bed. Move the lens over the rack with the arrow keys and press Space
+// on every tube whose glyph does not match the card: that tube is foreign and goes to the quarantine shelf. Tag nothing that matches. Enter closes
+// the check once every foreign tube is tagged.
+import { define, machine, ARROW, SPACE, ENTER, ri, shuffle, txt, box, lamp, COL } from './kit.js';
 
-const TRAITS = [['Leaf shape', ['lanceolate', 'ovate', 'cordate', 'palmate', 'linear']], ['Leaf edge', ['entire', 'serrate', 'lobed', 'crenate']],
-  ['Spore shape', ['globose', 'ellipsoid', 'reniform', 'fusiform']], ['Colour', ['deep green', 'blue-green', 'olive', 'red-veined']]];
-const BEDS = ['B-1 Tomatillo', 'B-2 Kale', 'B-3 Vulcan mint', 'B-4 Bajoran yam', 'B-5 Chard', 'B-6 Leola root'];
-const CALLS = ['MATCH', 'NEAR', 'NO MATCH'];
+const MARKS = ['circle', 'triangle', 'square', 'diamond'], COLS = 4, ROWS = 3;
 export default define({
   job: { billet: 'bot', label: 'Quarantine-check samples against the beds', type: 'task:survey' },
-  title: 'Trait-by-trait species comparison', dept: 'sciences', host: 'console', tool: 'Hand lens and species card',
-  how: 'Step the lens through all four traits with ↑ / ↓ and compare the sample with its bed’s card. ← / → picks MATCH, NEAR (one trait differs) or NO MATCH (two or more); Enter files it.',
-  keys: ['↑ / ↓ lens trait', '← / → verdict', 'Enter file'], limit: 38, maxFaults: 3,
-  fingerprint: { verb: 'compare traits', input: 'arrows+enter', win: 'three tubes graded match, near or no match after every trait was compared under the lens',
-    fail: 'clearing a foreign sample as a match or near, or filing a grade before all traits were viewed',
-    rule: 'Only one trait shows under the lens. View all four (ticks), count how many differ from the card: none = MATCH, one = NEAR, two or more = NO MATCH. Then Enter.' },
+  title: 'Tag the foreign tubes on the rack', dept: 'sciences', host: 'console', tool: 'Sample rack and hand lens',
+  how: 'The species card shows the bed\'s leaf glyph. Move the lens with the arrows over the 4 by 3 rack and press Space on every tube with a different glyph; Enter closes the check.',
+  keys: ['arrows: move the lens', 'Space: tag as foreign', 'Enter: close the check'], limit: 30, maxFaults: 3,
+  fingerprint: { verb: 'tag the foreign', input: 'arrows+space+enter',
+    win: 'every foreign tube on a twelve-tube rack tagged with the lens and the check closed with nothing else tagged',
+    fail: 'tagging a tube whose glyph matches the card, or closing the check while a foreign tube is untagged',
+    rule: 'Walk the lens over the rack with the arrows. A tube whose glyph is not the card\'s glyph gets Space (tag); matching tubes are left alone. Enter closes once every foreign tube is tagged.' },
   rush: 'Glanced at the tubes and waved them all through to the beds.',
-  captions: { 'false clear': 'quarantine klaxon', 'snap call': 'lens clicks: traits unviewed', 'wrong call': 'roster disagrees' },
+  captions: { 'good tube': 'tube tagged by mistake', 'missed tube': 'check closed with a foreign tube left in the rack' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd;
-    const kinds = shuffle(r, [0, 1, 2]).map(k => k === 0 ? 2 : k === 1 ? pick(r, [0, 1]) : pick(r, [1, 2]));
-    m.tubes = kinds.map(v => { const card = TRAITS.map(([, o]) => pick(r, o)), sample = card.slice(), nd = v === 0 ? 0 : v === 1 ? 1 : ri(r, 2, 3);
-      for (const t of shuffle(r, [0, 1, 2, 3]).slice(0, nd)) sample[t] = pick(r, TRAITS[t][1].filter(x => x !== card[t]));
-      return { code: `S-${ri(r, 100, 999)}`, bed: pick(r, BEDS), card, sample, ans: v, call: null }; });
-    m.k = 0; m.lens = 0; m.seen = [true, false, false, false]; m.sel = 0; m.rounds = 3; m.round = 0;
-    const T = () => m.tubes[m.k];
+    const m = machine(this, seed, opts), r = m.rnd; m.cx = 0; m.cy = 0; m.card = ri(r, 0, 3); const odd = new Set(shuffle(r, Array.from({ length: COLS * ROWS }, (_, i) => i)).slice(0, ri(r, 3, 5)));
+    m.rack = Array.from({ length: COLS * ROWS }, (_, i) => ({ g: odd.has(i) ? (m.card + ri(r, 1, 3)) % 4 : m.card, foreign: odd.has(i), tag: false }));
+    const at = () => m.cy * COLS + m.cx;
     m.key = (code, down = true) => {
-      if (m.state !== 'play' || !down) return false; const a = ARROW(code), t = T();
-      if (a === 'U' || a === 'D') { m.lens = (m.lens + (a === 'D' ? 1 : 3)) % 4; m.seen[m.lens] = true; return true; }
-      if (a === 'L' || a === 'R') { m.sel = (m.sel + (a === 'R' ? 1 : 2)) % 3; return true; }
-      if (ENTER(code)) {
-        if (m.seen.some(x => !x)) { m.fault('snap call'); return true; }
-        if (m.sel !== t.ans) { m.fault(t.ans === 2 ? 'false clear' : 'wrong call'); return true; }
-        t.call = m.sel; m.k++; m.round++; m.lens = 0; m.seen = [true, false, false, false]; m.sel = 0; if (m.k >= m.tubes.length) m.win(); return true; }
-      return false;
+      if (m.state !== 'play') return false; const a = ARROW(code);
+      if (a) { if (down) { if (a === 'L') m.cx = Math.max(0, m.cx - 1); if (a === 'R') m.cx = Math.min(COLS - 1, m.cx + 1); if (a === 'U') m.cy = Math.max(0, m.cy - 1); if (a === 'D') m.cy = Math.min(ROWS - 1, m.cy + 1); } return true; }
+      if (!down) return SPACE(code) || ENTER(code);
+      if (SPACE(code)) { const t = m.rack[at()]; if (!t.foreign) m.fault('good tube'); else t.tag = true; return true; }
+      if (ENTER(code)) { if (m.rack.every(t => !t.foreign || t.tag)) m.win(); else m.fault('missed tube'); return true; } return false;
     };
-    m.hint = () => { const t = T(); if (!t) return []; if (m.seen.some(x => !x)) return [['ArrowDown', true]]; return m.sel !== t.ans ? [['ArrowRight', true]] : [['Enter', true]]; };
-    m.bad = () => { const t = T(); if (!t) return null; if (m.seen.some(x => !x)) return 'Enter'; return m.sel === t.ans ? 'ArrowRight' : 'Enter'; };
-    m.view = () => ({ tubes: m.tubes.map(t => [t.code, t.bed, t.card, t.sample]) });
-    m.buttons = () => [['ArrowUp', 'Lens ▲'], ['ArrowDown', 'Lens ▼'], ['ArrowLeft', '◀ call'], ['ArrowRight', 'call ▶'], ['Enter', 'File']];
+    m.tick = (dt) => { m.live(dt); };
+    m.hint = () => {
+      if (m.state !== 'play') return []; let best = -1, bd = 99; m.rack.forEach((t, i) => { if (t.foreign && !t.tag) { const d = Math.abs(i % COLS - m.cx) + Math.abs(Math.floor(i / COLS) - m.cy); if (d < bd) { bd = d; best = i; } } });
+      if (best < 0) return [['Enter', true]]; const bx = best % COLS, by = Math.floor(best / COLS); if (bx !== m.cx) return [[bx > m.cx ? 'ArrowRight' : 'ArrowLeft', true]]; if (by !== m.cy) return [[by > m.cy ? 'ArrowDown' : 'ArrowUp', true]]; return [['Space', true]];
+    };
+    m.bad = () => (m.rack[at()].foreign ? 'ArrowRight' : 'Space');
+    m.view = () => ({ card: m.card, rack: m.rack.map(t => t.g) });
+    m.buttons = () => [['ArrowLeft', '◀'], ['ArrowUp', '▲'], ['ArrowDown', '▼'], ['ArrowRight', '▶'], ['Space', 'Tag'], ['Enter', 'Close']];
     m.draw = (c, W, H, P) => {
-      const t = T() || m.tubes[m.tubes.length - 1];
-      txt(c, `Tube ${t.code}  →  bed ${t.bed}`, 14, 20, { size: 12, col: COL.gold });
-      TRAITS.forEach(([name], i) => { const on = i === m.lens, y = 32 + i * 24; box(c, 14, y, 250, 20, on ? 'rgba(240,147,58,.22)' : 'rgba(255,255,255,.04)', on ? COL.orange : null, 6);
-        txt(c, `${m.seen[i] ? '✓' : '·'} ${name}`, 22, y + 14, { size: 11, col: m.seen[i] ? COL.ink : COL.dim });
-        if (on) { const same = t.sample[i] === t.card[i]; txt(c, `${t.sample[i]} | card: ${t.card[i]}`, 120, y + 14, { size: 10, col: same ? P.good : P.bad }); txt(c, same ? '=' : '≠', 256, y + 14, { size: 12, align: 'right', col: same ? P.good : P.bad }); } });
-      CALLS.forEach((s, i) => { box(c, 14 + i * 84, 134, 78, 24, i === m.sel ? 'rgba(125,151,232,.3)' : 'rgba(255,255,255,.04)', i === m.sel ? COL.peri : null, 8); txt(c, s, 53 + i * 84, 150, { size: 11, align: 'center' }); });
-      m.tubes.forEach((u, i) => txt(c, `${u.code} ${u.call != null ? CALLS[u.call] : i === m.k ? '◀' : ''}`, 282, 40 + i * 18, { size: 10, col: u.call != null ? (u.call === 2 ? P.bad : P.good) : COL.dim }));
-      txt(c, 'none differ = MATCH', 282, 110, { size: 9, col: COL.dim }); txt(c, 'one differs = NEAR', 282, 124, { size: 9, col: COL.dim }); txt(c, '2+ differ = NO MATCH', 282, 138, { size: 9, col: COL.dim });
+      box(c, 14, 8, 120, 40, COL.panel, COL.gold, 6); txt(c, 'BED CARD', 22, 22, { size: 9, col: COL.dim }); lamp(c, 100, 28, 12, COL.gold, MARKS[m.card]); txt(c, `${m.rack.filter(t => t.foreign && t.tag).length}/${m.rack.filter(t => t.foreign).length} tagged`, 22, 40, { size: 9, col: COL.dim });
+      m.rack.forEach((t, i) => { const x = 150 + (i % COLS) * 58, y = 12 + Math.floor(i / COLS) * 50, on = i === at(); box(c, x, y, 52, 44, t.tag ? '#4a2a2a' : COL.panel, on ? COL.gold : COL.dim, 5); lamp(c, x + 26, y + 22, 12, t.tag ? COL.warn : COL.peri, MARKS[t.g]); if (t.tag) txt(c, 'Q', x + 44, y + 12, { size: 10, col: COL.warn }); });
     };
     return m;
   },
