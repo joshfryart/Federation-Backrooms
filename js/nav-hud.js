@@ -3,7 +3,8 @@
 //   G   cycles: most urgent due duty/task -> next due ... -> nearest lift -> none   (auto-pins the most urgent when it comes due)
 //   M   big map: whole deck + deck column (every deck, unvisited ones from the ship plan), find-a-room-type strip, click a room to guide
 //       there (any deck: walk to the lift, ride, walk). While open the world is paused (G.menuPause) and keys/mouse go to the map;
-//       under pointer lock the mouse drives a virtual cursor, so the lock never has to be released.
+//       the map is a UI layer (js/ui-mode.js 'map'): the pointer lock is released on purpose, so the cursor is a real one and Esc pops it.
+//       The virtual cursor (mouse deltas under lock) stays only as a fallback when no UI hub exists (tests, embeds).
 //   Tab ship status: systems schematic (js/schematic.js) instead of the sentence list.
 // Inputs: G.duty (board), G.pin ({kind, id, room, deck}: set by the tasks agent for the guided first task), G.plan, G.shipDecks, world.
 // main.js calls frame(dt) every play frame (route recompute is internal at 0.12 s), renderStatus(el) from renderStatus().
@@ -15,6 +16,7 @@ import { schematicHTML, SCHEMATIC_CSS } from './schematic.js';
 import { mountBrief } from './briefmap.js';
 import { ROOMS } from './data.js';
 import { zoneOf } from './ships.js';
+import { UIHUB } from './ui-mode.js';
 
 const ZCOL = { Command: '#6ea8ff', Habitat: '#58c9b9', Services: '#c6d25e', Engineering: '#e8892b' };
 const OPEN = '#8fb8ff';   // an open task (due by end of shift: no countdown)
@@ -61,13 +63,15 @@ body.nominal #faults{top:316px}
 #nv-map .tools{position:absolute;left:8px;bottom:8px;display:flex;gap:8px;align-items:center;font:700 10px var(--f-m,monospace);color:#cfe1f3}
 #nv-map .leg{position:absolute;right:8px;bottom:8px;display:flex;gap:8px;align-items:center;padding:4px 8px;background:rgba(7,11,19,.8);border:1px solid rgba(150,180,210,.26);font:700 10px var(--f-m,monospace)}
 #nv-map .note{position:absolute;left:10px;top:44px;font:700 11px var(--f-m,monospace);color:#8fa0b6}
+@keyframes nvglow{50%{box-shadow:0 0 0 2px #ffd9a0,0 0 18px 4px rgba(255,217,160,.75)}}
+.nv-glow{outline:2px solid #ffd9a0;outline-offset:2px;animation:nvglow 1.2s ease-in-out infinite}body.lc-calm .nv-glow,body.reduce-motion .nv-glow{animation:none}@media (prefers-reduced-motion:reduce){.nv-glow{animation:none}}
 #nv-map .vc{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #fff;border-radius:50%;pointer-events:none;box-shadow:0 0 6px #000;display:none}
 @media (max-height:470px),(max-width:700px){body.nominal #minimap{width:128px;height:128px}#nv-card{top:146px;width:128px;padding:3px 5px}#nv-card .big{font-size:16px}#nv-card .stp{display:none}#nv-legend{display:none!important}#nv-compass{top:30px;width:52vw}body.nominal #faults{top:206px}#nv-map .col{width:96px}}
 ${SCHEMATIC_CSS}`;
 
 export class NavHUD {
   constructor(ctx) {
-    this.c = ctx; this.pins = new Pins(); this.t = 0; this.tickT = 0; this.drawT = 0; this.mapT = 0;
+    UIHUB.nav = this; this.c = ctx; this.pins = new Pins(); this.t = 0; this.tickT = 0; this.drawT = 0; this.mapT = 0;
     this.items = []; this.plan = null; this.route = null; this.dest = null; this.planKey = ''; this.markers = []; this.cardHTML = '';
     this.mapOpen = false; this.selDeck = 0; this.findType = null; this.hover = null; this.vc = null; this.layers = new Map(); this.beacons = {};
     if (typeof document === 'undefined') return;
@@ -77,7 +81,7 @@ export class NavHUD {
     this.cmpC = mk('canvas', 'nv-compass'); this.cmpC.width = 1040; this.cmpC.height = 124; this.compass = new Compass(this.cmpC);
     this.map = mk('div', 'nv-map', `<div class="col"><div class="h">DECKS</div><div class="decks"></div></div><div class="main"><canvas></canvas><div class="find"></div><div class="note"></div><div class="tip"></div><div class="vc"></div>
       <div class="tools"><span class="nv-k">M</span>${ico('x', 13)}<span class="nv-k">G</span>${ico('guide', 13)}<span class="nv-k">L</span>${ico('lift', 13)}<span class="nv-k">1-9</span>${ico('ship', 13)}<span class="nv-k">F</span>${ico('eye', 13)}</div><div class="leg">${legendHTML()}</div></div>`);
-    this.mapC = this.map.querySelector('canvas'); this.mapG = this.mapC.getContext('2d');
+    this.map.classList.add('ui-layer'); this.mapC = this.map.querySelector('canvas'); this.mapG = this.mapC.getContext('2d');
     this.map.querySelector('.decks').onclick = (e) => { const b = e.target.closest('.dk'); if (b) this.selectDeck(+b.dataset.d); };
     this.map.querySelector('.find').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) this.find(b.dataset.t); };
     this.mapC.addEventListener('mousemove', (e) => { if (!this.locked()) this.hoverAt(e.offsetX, e.offsetY); });
@@ -95,6 +99,31 @@ export class NavHUD {
   get pin() { return this.pins.pin; }
   /** the deck (0-based) the pinned destination needs a ride to, or null: the lift panel highlights it */
   rideTarget() { const l = this.plan?.legs?.find(l => l.kind === 'ride'); return l ? l.to : null; }
+
+  // ---- per-widget glow (first-run tour): ids of the HUD widgets to pulse for `ms`; Calm visuals / reduced motion: a steady outline
+  glow(ids = [], ms = 9000) {
+    if (typeof document === 'undefined') return;
+    for (const e of document.querySelectorAll('.nv-glow')) e.classList.remove('nv-glow');
+    clearTimeout(this._glowT); const els = ids.map(i => document.getElementById(i)).filter(Boolean); els.forEach(e => e.classList.add('nv-glow'));
+    if (els.length) this._glowT = setTimeout(() => els.forEach(e => e.classList.remove('nv-glow')), ms);
+    return els.map(e => e.id);
+  }
+  /** walk time to a duty item's room from here, cached ~1.5 s per room: { eta (s), m } or null (board rows: ETA notch) */
+  etaFor(it) {
+    if (!it?.room || it.room === 'any' || !this.world || !this.decks()) return null;
+    const c = (this._etaC = this._etaC || new Map()), k = it.room + '@' + (this.G.shipDeck ?? 0), h = c.get(k);
+    if (h && this.t - h.at < 1.5 && Math.hypot(h.fx - this.P.x, h.fz - this.P.z) < 3) return h.v;
+    const p = planRoute(this.G.plan, this.decks(), this.G.shipDeck ?? 0, this.from(), { type: it.room }, { world: this.world, TS: this.TS });
+    const v = p ? { eta: p.eta, m: Math.round(p.metres) } : null; c.set(k, { v, at: this.t, fx: this.P.x, fz: this.P.z }); return v;
+  }
+  /** board rows for js/hud-duty.js: the nav items with their walk ETA and whether each is the current pin */
+  rows() { return this.items.map(it => ({ ...it, nav: this.etaFor(it), pinned: !!this.pin && this.pin.kind === it.kind && this.pin.id === it.id })); }
+  /** pin a duty / task item by kind + id (board click); a second click on the pinned row unpins */
+  pinItem(kind, id) {
+    const it = this.items.find(i => i.kind === kind && i.id === id); if (!it) return null;
+    if (this.pin && this.pin.kind === kind && this.pin.id === id) return this.setPin(null);
+    return this.setPin({ kind: it.kind, id: it.id, room: it.room, label: it.label, icon: it.icon, auto: false });
+  }
 
   // ---- pins
   setPin(p, sayIt = true) { this.pins.set(p); this.pins.cleared = !p; this.planKey = ''; this.tick(); if (sayIt) this.G.say?.(p ? `Guide: ${short(p.label || label(p.room || p.type), 4)}` : 'Guide off', 'comp'); return p; }
@@ -197,9 +226,11 @@ export class NavHUD {
   }
 
   // ---- M big map
-  toggleMap(on = !this.mapOpen) {
-    if (on === this.mapOpen) return; const G = this.G; this.mapOpen = on; this.map.classList.toggle('on', on);
-    if (on) { this._pause = G.menuPause; G.menuPause = true; this._look = [this.P.yaw, this.P.pitch]; this.selDeck = G.shipDeck ?? 0; this.hover = null; this.vc = null; this.buildFind(); this.buildDecks(); this.drawMap();
+  toggleMap(on = !this.mapOpen, fromUI = false) {
+    if (on === this.mapOpen) return; const G = this.G; this.mapOpen = on; this.map.classList.toggle('on', on); const UI = UIHUB.ui; if (on) this._pause = G.menuPause;   // before the layer opens: UI.frozen may already set menuPause
+    if (on && UI) { this._layer = true; UI.open('map', { close: () => this.toggleMap(false, true), key: (e) => this.mapKey(e), toggle: 'KeyM' }); }
+    else if (!on && this._layer) { this._layer = false; if (!fromUI) UI.closed('map'); }
+    if (on) { G.menuPause = true; this._look = [this.P.yaw, this.P.pitch]; this.selDeck = G.shipDeck ?? 0; this.hover = null; this.vc = null; this.buildFind(); this.buildDecks(); this.drawMap();
       let last = 0; const loop = (now) => { if (!this.mapOpen) return; requestAnimationFrame(loop); if (now - last < 66) return; this.t += (now - (last || now)) / 1000; last = now; this.drawMap(); }; requestAnimationFrame(loop); }   // own 15 Hz loop: the world (and main's frame) may be paused
     else { G.menuPause = this._pause || false; if (this._look) [this.P.yaw, this.P.pitch] = this._look; this.map.querySelector('.tip').style.display = 'none'; this.map.querySelector('.vc').style.display = 'none'; }
   }
@@ -249,22 +280,23 @@ export class NavHUD {
   // ---- input (window capture: runs before main.js and the HUD modules)
   onKey(e) {
     if (!this.on() || this.G.phase !== 'play') return;
-    if (this.mapOpen) {
-      e.stopImmediatePropagation(); if (e.code !== 'Tab') e.preventDefault(); if (e.repeat) return;
-      const dg = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
-      if (e.code === 'KeyM' || e.code === 'Escape') this.toggleMap(false);
-      else if (dg) this.selectDeck(+dg[1] - 1);
-      else if (e.code === 'BracketLeft' || e.code === 'ArrowUp' || e.code === 'KeyW') this.selectDeck(this.selDeck - 1);
-      else if (e.code === 'BracketRight' || e.code === 'ArrowDown' || e.code === 'KeyS') this.selectDeck(this.selDeck + 1);
-      else if (e.code === 'KeyG') { this.cycle(); this.buildDecks(); }
-      else if (e.code === 'KeyL') { this.setPin({ kind: 'lift', id: 'lift', label: 'Nearest lift', icon: 'lift' }); this.toggleMap(false); }
-      else if (e.code === 'KeyF') { const L = this.findTypes || [], i = L.indexOf(this.findType); this.find(L[(i + 1) % Math.max(1, L.length)] || null); }
-      else if (e.code === 'Enter' && this.hover) { this.pinRoom(this.selDeck, this.hover); this.toggleMap(false); }
-      return;
-    }
+    if (this.mapOpen) { e.stopImmediatePropagation(); this.mapKey(e); return; }
     if (e.repeat || document.body.classList.contains('bd-menu-open')) return;
     if (e.code === 'KeyM') { e.stopImmediatePropagation(); this.toggleMap(true); }
     else if (e.code === 'KeyG' && !this.G.carry) { e.stopImmediatePropagation(); this.cycle(); }
+  }
+  mapKey(e) {
+    if (e.code !== 'Tab') e.preventDefault?.(); if (e.repeat) return true;
+    const dg = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
+    if (e.code === 'KeyM' || e.code === 'Escape') this.toggleMap(false);
+    else if (dg) this.selectDeck(+dg[1] - 1);
+    else if (e.code === 'BracketLeft' || e.code === 'ArrowUp' || e.code === 'KeyW') this.selectDeck(this.selDeck - 1);
+    else if (e.code === 'BracketRight' || e.code === 'ArrowDown' || e.code === 'KeyS') this.selectDeck(this.selDeck + 1);
+    else if (e.code === 'KeyG') { this.cycle(); this.buildDecks(); }
+    else if (e.code === 'KeyL') { this.setPin({ kind: 'lift', id: 'lift', label: 'Nearest lift', icon: 'lift' }); this.toggleMap(false); }
+    else if (e.code === 'KeyF') { const L = this.findTypes || [], i = L.indexOf(this.findType); this.find(L[(i + 1) % Math.max(1, L.length)] || null); }
+    else if (e.code === 'Enter' && this.hover) { this.pinRoom(this.selDeck, this.hover); this.toggleMap(false); }
+    return true;
   }
   onMouse(e) {
     if (!this.mapOpen || !this.locked()) return; e.stopImmediatePropagation();
@@ -289,9 +321,13 @@ export class NavHUD {
   brief(card) {
     const G = this.G, decks = this.decks(), w = this.world; if (!decks || !w || !G.duty) return null;
     const cur = G.shipDeck ?? 0, lt = liftTile(w.d), types = [...new Set([...G.duty.loops.map(l => l.room), ...G.duty.tasks.map(t => t.room)].filter(r => r && r !== 'any'))];
-    const stations = [], away = [];
-    for (const type of types) { const p = planRoute(G.plan, decks, cur, { x: lt[0] + 0.5, y: lt[1] + 0.5 }, { type }, { TS: this.TS }); if (!p) continue; if (p.dest.deck === cur) stations.push({ type, tx: p.dest.tx, ty: p.dest.ty }); else away.push({ type, deck: p.dest.deck }); }
-    return (this.briefView = mountBrief(card, { d: w.d, stations, away, deckNo: cur + 1 }));
+    const by = new Map();   // deck index -> stations [{type, tx, ty}] (destination tiles on that deck)
+    for (const type of types) { const p = planRoute(G.plan, decks, cur, { x: lt[0] + 0.5, y: lt[1] + 0.5 }, { type }, { TS: this.TS }); if (!p) continue; const dk = p.dest.deck; if (!by.has(dk)) by.set(dk, []); by.get(dk).push({ type, tx: p.dest.tx, ty: p.dest.ty }); }
+    // sequence: this deck first (the live world), then the other decks with stations in ship order
+    const order = [...by.keys()].sort((a, b) => (a === cur ? -1 : b === cur ? 1 : a - b));
+    if (!order.length) order.push(cur);
+    const sequence = order.map(dk => ({ d: dk === cur ? w.d : (decks[dk] || w.d), deckNo: dk + 1, stations: by.get(dk) || [], here: dk === cur }));
+    return (this.briefView = mountBrief(card, { sequence }));
   }
 
   // ---- Tab: systems schematic

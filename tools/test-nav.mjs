@@ -86,18 +86,23 @@ export async function navBrowser(page, fail) {
     const mm = document.getElementById('minimap'), px = mm.getContext('2d').getImageData(0, 0, mm.width, mm.height).data; let lit = 0; for (let i = 0; i < px.length; i += 4) if (px[i] + px[i + 1] + px[i + 2] > 150) lit++;
     out.mini = { w: mm.width, lit };
     // M opens the big map and pauses the world; M closes
-    key('KeyM'); out.mapOpen = N.mapOpen && document.getElementById('nv-map').classList.contains('on'); out.paused = G.menuPause === true;
+    key('KeyM'); out.mapOpen = N.mapOpen && document.getElementById('nv-map').classList.contains('on'); out.paused = G.menuPause === true; out.layer = !!G.ui?.has('map');
     N.drawMap(); const mc = document.querySelector('#nv-map canvas'), mp = mc.getContext('2d').getImageData(0, 0, mc.width, mc.height).data; let ml = 0; for (let i = 0; i < mp.length; i += 16) if (mp[i] + mp[i + 1] + mp[i + 2] > 120) ml++; out.mapLit = ml;
     out.decks = document.querySelectorAll('#nv-map .dk').length === G.ship.decks;
-    key('KeyM'); out.mapClosed = !N.mapOpen && !G.menuPause;
+    key('KeyM'); out.mapClosed = !N.mapOpen && !G.menuPause && !G.ui?.has('map');
+    // Esc through the UI stack pops the map layer
+    key('KeyM'); const ml0 = N.mapOpen; G.ui?.escape(); out.escPops = ml0 && !N.mapOpen && !G.ui.has('map');
+    // duty board rows: nav rows, click-to-pin, glow
+    const rows = N.rows(); out.rows = rows.length; N.setPin(null, false); const it0 = rows.find(r => r.room && r.room !== 'any'); out.pinItem = !!it0 && N.pinItem(it0.kind, it0.id)?.id === it0.id && N.rows().some(r => r.pinned); N.pinItem(it0.kind, it0.id); out.unpin = !N.pin;
+    out.glow = N.glow(['minimap', 'nv-compass', 'nv-card', 'nope'], 50).join() === 'minimap,nv-compass,nv-card' && document.querySelectorAll('.nv-glow').length === 3; N.glow([]); out.glowOff = document.querySelectorAll('.nv-glow').length === 0;
     // Tab schematic, briefing flythrough
     const el = document.getElementById('shipstatus'); N.renderStatus(el); out.schematic = el.querySelectorAll('.nv-node').length;
-    const card = document.createElement('div'); document.body.appendChild(card); const bv = N.brief(card); out.brief = !!bv?.canvas; card.remove();
+    const card = document.createElement('div'); document.body.appendChild(card); const bv = N.brief(card); out.brief = !!bv?.canvas; out.briefScenes = bv?.scenes?.map(x => x.deckNo + ':' + x.n).join(','); bv?.drawAt(1000); bv?.drawAt(17000); bv?.stop(); card.remove();
     return out;
   });
   console.log('nav hud:', JSON.stringify(r));
   const ok = r.liftRoute > 2 && r.chevrons > 0 && r.beacon && r.card && r.crossLegs === 'walk,ride,walk' && r.auto && r.auto.startsWith('duty:') && /lift/.test(r.seq) && r.seq.includes('-') && r.seq.split(',').some(s => s === 'duty')
-    && r.mini.w === 416 && r.mini.lit > 400 && r.mapOpen && r.paused && r.mapLit > 200 && r.decks && r.mapClosed && r.schematic >= 20 && r.brief;
+    && r.mini.w === 416 && r.mini.lit > 400 && r.mapOpen && r.paused && r.mapLit > 200 && r.decks && r.mapClosed && r.schematic >= 20 && r.brief && r.layer && r.escPops && r.rows > 0 && r.pinItem && r.unpin && r.glow && r.glowOff && /^\d+:\d+/.test(r.briefScenes || '');
   if (!ok) fail('nav hud');
 }
 

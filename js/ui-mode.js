@@ -91,7 +91,7 @@ export function createUIMode(fx = {}) {
 
 // Shared hub so HUD modules built elsewhere (DutyHUD in main.js, CommsHUD in shipcomms.js, the nav agent's map) reach
 // the one UI stack, the portrait cache and the menus glue without new constructor plumbing. Set by js/menus.js.
-export const UIHUB = { ui: null, portraits: null, menus: null };
+export const UIHUB = { ui: null, portraits: null, menus: null, nav: null };
 
 // ---- DOM glue: the "Click to resume" chip + body classes (ui-free = cursor is ours, ui-menu = a layer is open).
 const CHIP_CSS = `#ui-resume{position:fixed;left:50%;top:42%;transform:translateX(-50%);z-index:30;display:none;background:rgba(5,8,14,.92);border:1px solid var(--lc1,#f2a03d);padding:10px 22px;font:700 13px var(--f-d,Arial);letter-spacing:.16em;text-transform:uppercase;color:var(--lc4,#ffd9a0);cursor:pointer}
