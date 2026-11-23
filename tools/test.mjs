@@ -232,8 +232,13 @@ S('perf-governor', null, async () => {   // auto-quality ladder (js/perfgov.js):
   g = new Governor(); r.paused = [...Array(2000)].map(() => g.tick(100, false)).filter(x => x >= 0).length;   // not judged outside the world
   g.setManual('low'); r.pinned = [...Array(3000)].map(() => g.tick(10)).filter(x => x >= 0).length + '/' + g.level; g.setManual('high'); r.manualHigh = g.level + '/' + g.auto;
   g = new Governor(); const seq = []; for (let k = 0; k < 6; k++) { seq.push(...run(g, 40, 14), ...run(g, 12, 40)); } r.flaps = g.changes.filter(c => c[0] === 'down').length; r.upMul = g.upMul;   // load oscillating around the thresholds: recoveries back off, so downs stay few
+  // render-level passes on the ladder (js/fx.js AO, js/main.js area lights): AO only on rung 0, area lights fade at rung 3, both off in Performance; applyLevel drives them (and never AO under TEST)
+  const { applyLevel } = await imp('js/perfgov.js'), post = { setScale() { }, setAO(v) { this.ao = v; } }, light = {};
+  r.ao = LEVELS.map(l => { applyLevel(l, { post, light }); return +post.ao; }).join(''); r.area = LEVELS.map(l => { applyLevel(l, { post, light }); return +light.area; }).join('');
+  applyLevel(LEVELS[0], { post, light, TEST: true }); r.aoTest = post.ao;
   console.log('perf governor:', JSON.stringify(r));
-  const ok = r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones;
+  const ok = r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones
+    && r.ao === '10000' && r.area === '11100' && r.aoTest === false;
   if (!ok) fail('perf-governor ' + JSON.stringify(r));
 });
 S('perf-lod', null, async () => {   // person LOD bookkeeping (js/lodcfg.js distances + hysteresis, governor rung multipliers); mesh-level checks are in the smoke section
@@ -249,6 +254,25 @@ S('perf-lod', null, async () => {   // person LOD bookkeeping (js/lodcfg.js dist
   console.log('perf lod:', JSON.stringify(r));
   const ok = r.bands === '0,0,1,1,2,2' && r.hyst === '0,1,1,0,2,1' && r.flicker <= 1 && r.scaled === '1,2' && r.off === 0 && r.applied === r.rungs && r.mono && C.lodCfg.scale === 1;
   if (!ok) fail('perf-lod ' + JSON.stringify(r));
+});
+S('grade-unit', null, async () => {   // final colour grade per room mood (js/grade.js): corridor = the old fixed grade, moods differ subtly, blackout / alert overlays, easing, Calm visuals, pooled-light pick
+  const { MOODS, ROOM_MOOD, moodFor, gradeTarget, GradeState, nearest } = await imp('js/grade.js'), { ROOMS } = await imp('js/data.js'), r = {};
+  const c = gradeTarget(null), near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
+  r.corridorOld = c.sh.join() === '0.9,0.98,1.1' && c.hi.join() === '1.07,1.02,0.9' && c.wb.join() === '1,1,1' && c.expo === 1 && c.sat === 1 && c.con === 1;   // corridors keep the pre-existing split-tone
+  r.unknownRooms = Object.keys(ROOM_MOOD).filter(k => !ROOMS[k]).join();   // every mapped room type exists
+  r.moodsKnown = Object.values(ROOM_MOOD).every(m => MOODS[m]);
+  r.subtle = Object.values(MOODS).every(m => [...m.wb, ...m.sh, ...m.hi].every(v => v > 0.8 && v < 1.2) && m.sat > 0.7 && m.sat < 1.2 && m.con > 0.9 && m.con < 1.15 && m.expo > 0.9 && m.expo < 1.1);
+  const eng = gradeTarget('engineering'), sb = gradeTarget('sickbay'); r.distinct = eng.wb[0] > eng.wb[2] && sb.wb[2] > sb.wb[0] && eng.fogD > 1;   // industrial warm + hazy, clinical cool
+  const bo = gradeTarget('engineering', 0), half = gradeTarget('engineering', 0.5); r.blackout = bo.sat < 0.6 && bo.fog.every(v => v < 0.2) && bo.bloomT < eng.bloomT && bo.bloomS > eng.bloomS && near(half.sat, (eng.sat + bo.sat) / 2);
+  const al = gradeTarget(null, 1, 1, { t: 0 }), alc = gradeTarget(null, 1, 1, { calm: true, t: 0 }), alc2 = gradeTarget(null, 1, 1, { calm: true, t: 0.26 }), al2 = gradeTarget(null, 1, 1, { t: 0.26 });
+  r.alert = al.wb[0] > 1 && al.wb[2] < 1 && alc.wb[0] < al.wb[0] && near(alc.wb[0], alc2.wb[0]) && !near(al.wb[0], al2.wb[0]);   // red push; under Calm visuals weaker and not beating
+  const g = new GradeState(); g.snap(null); let steps = 0; while (Math.abs(g.p.wb[0] - eng.wb[0]) > 0.002 && steps < 600) { g.update(1 / 60, 'engineering'); steps++; } r.easeFrames = steps;
+  const gc = new GradeState(); gc.snap(null); let sc = 0; while (Math.abs(gc.p.wb[0] - eng.wb[0]) > 0.002 && sc < 900) { gc.update(1 / 60, 'engineering', 1, 0, { calm: true }); sc++; } r.calmFrames = sc;
+  r.moodFor = moodFor('nope') === MOODS.corridor && moodFor('morgue') === MOODS.cold;
+  const pts = [{ x: 5, z: 0 }, { x: 1, z: 0 }, { x: 3, z: 0 }, { x: 0, z: 9, off: 1 }]; r.nearest = nearest(pts, 0, 0, 2).map(e => e[1].x).join() + '|' + nearest(pts, 0, 0, 9, p => !p.off).length + '|' + nearest(undefined, 0, 0, 3).length;
+  console.log('grade:', JSON.stringify(r));
+  const ok = r.corridorOld && r.unknownRooms === '' && r.moodsKnown && r.subtle && r.distinct && r.blackout && r.alert && r.easeFrames > 20 && r.easeFrames < 120 && r.calmFrames > r.easeFrames * 2 && r.moodFor && r.nearest === '1,3|3|0';
+  if (!ok) fail('grade-unit ' + JSON.stringify(r));
 });
 // ---- browser ----
 const { chromium } = require('playwright');

@@ -33,7 +33,7 @@ jobs:
       # Every [node] section from `node tools/test.mjs --list`: unit suites, generator, ship decks,
       # inventory rooms, director cascade, crew voices, pace presets. Browser sections need Chromium and are not run in CI.
       - name: Generator and unit tests (node-only sections)
-        run: node tools/test.mjs --only comms,sim,walk-unit,duty,social,gait,movement,equipment-unit,repair-unit,handhelds-unit,nav-unit,ui-unit,talk-unit,combat-unit,wiring-unit,jobgames-unit,room-props,generator,ship-decks,inventory-rooms,director-cascade,voices,pace-presets,role
+        run: node tools/test.mjs --only comms,sim,walk-unit,duty,social,gait,movement,equipment-unit,repair-unit,handhelds-unit,nav-unit,ui-unit,talk-unit,combat-unit,wiring-unit,jobgames-unit,room-props,generator,ship-decks,inventory-rooms,director-cascade,voices,pace-presets,grade-unit,perf-governor,perf-lod,role
 
       - name: Validate all job modules
         run: node tools/check-jobs.mjs --all --quiet

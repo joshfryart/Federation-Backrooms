@@ -15,6 +15,8 @@ import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, su
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { GradeState, nearest as nearestPts } from './grade.js';   // final colour grade / haze / bloom per room mood + blackout / alert
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js';
@@ -104,24 +106,48 @@ const SMOKE_COL = new THREE.Color(0x2a2724);
 const decals = new Decals(scene);
 const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
+// Pooled lights (constant count: three.js recompiles every lit material when the number of lights changes, see TODO "Talk close-up stall"):
+// 3 point lights follow the nearest working ceiling panels; in a blackout (panels dark) the same 3 move to the nearest emergency lamps and glow red,
+// so the lamps now cast real light.  2 RectAreaLights (High only: Performance mode drops them in the same setQuality step that already recompiles for
+// the torch shadow) give the nearest two panels a soft area term (or, in a blackout, the nearest two emergency lamps a wall wash); the matching point
+// light gives up part of its intensity so the total stays about the same.  `lightState.area` is the governor rung (js/perfgov.js `area`).
+RectAreaLightUniformsLib.init();
 const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d0, 0, 10, 1.5); scene.add(l); return l; });
-let panelSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
+const areaLights = [0, 1].map(() => { const l = new THREE.RectAreaLight(0xfff0d0, 0, 1.5, 0.6); l.visible = !TEST_MODE; scene.add(l); return l; });
+const lightState = { area: true, areaK: 1, emerg: 0 };
+let panelSel = [], emergSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010), EMERG_RED = new THREE.Color(1, 0.1, 0.06);
+const grade = new GradeState(), fogBase = new THREE.Color(), fogTmp = new THREE.Color(); let fogD0 = 0.03;
+const PANEL_I = 7.5, AREA_I = 16, AREA_SHARE = 0.5, EMERG_I = 3.2, EMERG_AREA_I = 70;
 function updatePanelLights(dt) {
   panelT -= dt;
-  if (panelT <= 0 && world) {
-    panelT = 0.2; const arr = [];
-    for (const p of world.panels) { const dx = p.x - P.x, dz = p.z - P.z; arr.push([dx * dx + dz * dz, p]); }
-    arr.sort((a, b) => a[0] - b[0]); panelSel = arr.slice(0, 3);
-  }
-  const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0;
+  if (panelT <= 0 && world) { panelT = 0.2; panelSel = nearestPts(world.panels, P.x, P.z, 3); emergSel = nearestPts(world.emerg, P.x, P.z, 3); }
+  const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0, off = 1 - pa, t = elapsed;
   scene.environmentIntensity = 0.3 * (0.04 + 0.96 * pa);
+  const hi = CFG.quality === 'high', aw = hi && lightState.area ? 1 : 0; lightState.areaK += (aw - lightState.areaK) * Math.min(1, dt * 3);
+  const ak = lightState.areaK, em = lightState.emerg = pa < 0.5 && emergSel.length ? 1 : 0;   // emergency mode: the pool follows the red lamps
+  const eK = Math.max(off * 0.85, al * (0.35 + 0.9 * (0.5 + 0.5 * Math.sin(t * 6 + 1.5))) * off);   // same beat as world.emergMat, only while the power is (partly) out
   panelLights.forEach((l, i) => {
+    if (em) { const e = emergSel[i]; if (!e) { l.intensity = 0; return; } const q = e[1]; l.position.set(q.x + (q.nx || 0) * 0.15, q.y - 0.1, q.z + (q.nz || 0) * 0.15); l.color.copy(EMERG_RED); l.distance = 7; l.decay = 2; l.intensity = EMERG_I * eK * (i < 2 ? 1 - ak * AREA_SHARE : 1); return; }
     const e = panelSel[i];
     if (!e) { l.intensity = 0; return; }
-    l.position.set(e[1].x, e[1].y, e[1].z);
+    l.position.set(e[1].x, e[1].y, e[1].z); l.distance = 10; l.decay = 1.5;
     l.color.set(ship.light); if (e[1].col) l.color.multiply(e[1].col); l.color.lerp(ALERT_RED, al * 0.7);
-    l.intensity = 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3);
+    l.intensity = PANEL_I * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3) * (i < 2 ? 1 - ak * AREA_SHARE : 1);
   });
+  areaLights.forEach((l, i) => {
+    const e = (em ? emergSel : panelSel)[i]; if (!e || ak < 0.01) { l.intensity = 0; return; }
+    const q = e[1];
+    if (em) { l.width = 0.5; l.height = 0.22; l.position.set(q.x - (q.nx || 0) * 0.18, q.y, q.z - (q.nz || 0) * 0.18); l.lookAt(q.x + (q.nx || 0) * 2, q.y - 0.8, q.z + (q.nz || 0) * 2); l.color.copy(EMERG_RED); l.intensity = EMERG_AREA_I * eK * ak; return; }
+    l.width = 1.5; l.height = 0.6; l.position.set(q.x, q.y + 0.26, q.z); l.rotation.set(-Math.PI / 2, 0, 0);
+    l.color.set(ship.light); if (q.col) l.color.multiply(q.col); l.color.lerp(ALERT_RED, al * 0.7);
+    l.intensity = AREA_I * pa * (q.flick ? world.flickerF : 1) * (1 - al * 0.3) * ak;
+  });
+  // final grade, haze and bloom for the room the player stands in (js/grade.js); fog colour follows the lights (dark red in a blackout)
+  if (world) {
+    const [tx, ty] = world.tile(P.x, P.z), gp = grade.update(dt, world.d.room[ty]?.[tx] || null, pa, al, { calm: !!CFG.calm, t });
+    post.setGrade(gp);
+    if (scene.fog) { fogTmp.setRGB(gp.fog[0], gp.fog[1], gp.fog[2]).multiply(fogBase); scene.fog.color.copy(fogTmp); scene.fog.density = fogD0 * gp.fogD; if (scene.background?.isColor) scene.background.copy(fogTmp); }
+  }
   // fluorescent buzz, loudest right under a working panel
   if (panelSel[0]) { const d = Math.sqrt(panelSel[0][0]); sound.setBuzz(Math.max(0, 1 - d / 7) * pa * (panelSel[0][1].flick ? world.flickerF : 1)); }
 }
@@ -147,10 +173,10 @@ const CFG = SAVE.cfg();
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { SAVE.setCfg(CFG); }
 const gov = new Governor(); let perfWorld = null;
-const applyPerf = () => { perfWorld = world; applyLevel(gov.cfg, { post, torch, world, lodCfg: lodCfgRef }); };
+const applyPerf = () => { perfWorld = world; applyLevel(gov.cfg, { post, torch, world, lodCfg: lodCfgRef, light: lightState, TEST: TEST_MODE }); };
 function setQuality(q, auto = false) {   // auto: the governor (js/perfgov.js) moved it: not saved, so the next session starts on High again
   if (!auto) gov.setManual(q);
-  CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); if (!auto) saveCfg(); applyPerf();
+  CFG.quality = q; torch.castShadow = q === 'high'; for (const l of areaLights) l.visible = q === 'high' && !TEST_MODE;   /* light set changes only here, with the shadow change that already recompiles */ world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); if (!auto) saveCfg(); applyPerf();
   const el = $('qsel'); if (el) el.value = q;
 }
 
@@ -248,7 +274,7 @@ function loadDeck(n) {
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
   G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
-  scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
+  scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog); fogBase.set(ship.fog); fogD0 = ship.fogD; grade.snap(null);   // updatePanelLights grades both per room / power (snap: no fade from the last deck's mood)
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
 
@@ -1044,6 +1070,7 @@ async function startRun() {
     Loading.set(0.5, 'Compiling shaders…'); await paint();
     try { world && renderer.compile(scene, camera); } catch (e) { console.warn('compile', e.message); }
     if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } }   // depth-of-field pass for the conversation close-up
+    if (!TEST_MODE && CFG.quality === 'high') { try { post.warm(); } catch (e) { console.warn('ao warm', e.message); } }   // GTAO programs (normal pre-pass per material kind, AO, denoise), so the first High frame does not stall
     if (NOM() && G.menus && !TEST_MODE) {
       const list = G.menus.portraitOrder(), n = list.length;
       for (let i = 0; i < n; i++) { Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i + 1} / ${n}`); const p = list[i], url = G.portraits.renderNow(p); if (url) Loading.crew(url, p.short || p.full, p.title); await paint(); }   // the face being rendered right now fades in over the last one
