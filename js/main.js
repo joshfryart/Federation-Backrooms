@@ -16,7 +16,7 @@ import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuma
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
-import { GradeState, nearest as nearestPts } from './grade.js';   // final colour grade / haze / bloom per room mood + blackout / alert
+import { GradeState, PoolFade, nearest as nearestPts } from './grade.js';   // final colour grade / haze / bloom per room mood + blackout / alert
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js';
@@ -116,7 +116,7 @@ const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d
 const areaLights = [0, 1].map(() => { const l = new THREE.RectAreaLight(0xfff0d0, 0, 1.5, 0.6); l.visible = !TEST_MODE; scene.add(l); return l; });
 const lightState = { area: true, areaK: 1, emerg: 0 };
 let panelSel = [], emergSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010), EMERG_RED = new THREE.Color(1, 0.1, 0.06);
-const grade = new GradeState(), fogBase = new THREE.Color(), fogTmp = new THREE.Color(); let fogD0 = 0.03;
+const poolFade = new PoolFade(), grade = new GradeState(), fogBase = new THREE.Color(), fogTmp = new THREE.Color(); let fogD0 = 0.03;
 const PANEL_I = 7.5, AREA_I = 16, AREA_SHARE = 0.5, EMERG_I = 3.2, EMERG_AREA_I = 70;
 function updatePanelLights(dt) {
   panelT -= dt;
@@ -124,23 +124,24 @@ function updatePanelLights(dt) {
   const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0, off = 1 - pa, t = elapsed;
   scene.environmentIntensity = 0.3 * (0.04 + 0.96 * pa);
   const hi = CFG.quality === 'high', aw = hi && lightState.area ? 1 : 0; lightState.areaK += (aw - lightState.areaK) * Math.min(1, dt * 3);
-  const ak = lightState.areaK, em = lightState.emerg = pa < 0.5 && emergSel.length ? 1 : 0;   // emergency mode: the pool follows the red lamps
+  // emergency mode: the pool follows the red lamps. The switch at half power fades the pool out, swaps, fades it in (PoolFade): no pop
+  const ak = lightState.areaK, pf = poolFade.update(dt, emergSel.length ? poolFade.want(pa) : 0), em = lightState.emerg = pf.em && emergSel.length ? 1 : 0, pk = pf.k;
   const eK = Math.max(off * 0.85, al * (0.35 + 0.9 * (0.5 + 0.5 * Math.sin(t * 6 + 1.5))) * off);   // same beat as world.emergMat, only while the power is (partly) out
   panelLights.forEach((l, i) => {
-    if (em) { const e = emergSel[i]; if (!e) { l.intensity = 0; return; } const q = e[1]; l.position.set(q.x + (q.nx || 0) * 0.15, q.y - 0.1, q.z + (q.nz || 0) * 0.15); l.color.copy(EMERG_RED); l.distance = 7; l.decay = 2; l.intensity = EMERG_I * eK * (i < 2 ? 1 - ak * AREA_SHARE : 1); return; }
+    if (em) { const e = emergSel[i]; if (!e) { l.intensity = 0; return; } const q = e[1]; l.position.set(q.x + (q.nx || 0) * 0.15, q.y - 0.1, q.z + (q.nz || 0) * 0.15); l.color.copy(EMERG_RED); l.distance = 7; l.decay = 2; l.intensity = EMERG_I * eK * pk * (i < 2 ? 1 - ak * AREA_SHARE : 1); return; }
     const e = panelSel[i];
     if (!e) { l.intensity = 0; return; }
     l.position.set(e[1].x, e[1].y, e[1].z); l.distance = 10; l.decay = 1.5;
     l.color.set(ship.light); if (e[1].col) l.color.multiply(e[1].col); l.color.lerp(ALERT_RED, al * 0.7);
-    l.intensity = PANEL_I * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3) * (i < 2 ? 1 - ak * AREA_SHARE : 1);
+    l.intensity = PANEL_I * pa * pk * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3) * (i < 2 ? 1 - ak * AREA_SHARE : 1);
   });
   areaLights.forEach((l, i) => {
     const e = (em ? emergSel : panelSel)[i]; if (!e || ak < 0.01) { l.intensity = 0; return; }
     const q = e[1];
-    if (em) { l.width = 0.5; l.height = 0.22; l.position.set(q.x - (q.nx || 0) * 0.18, q.y, q.z - (q.nz || 0) * 0.18); l.lookAt(q.x + (q.nx || 0) * 2, q.y - 0.8, q.z + (q.nz || 0) * 2); l.color.copy(EMERG_RED); l.intensity = EMERG_AREA_I * eK * ak; return; }
+    if (em) { l.width = 0.5; l.height = 0.22; l.position.set(q.x - (q.nx || 0) * 0.18, q.y, q.z - (q.nz || 0) * 0.18); l.lookAt(q.x + (q.nx || 0) * 2, q.y - 0.8, q.z + (q.nz || 0) * 2); l.color.copy(EMERG_RED); l.intensity = EMERG_AREA_I * eK * ak * pk; return; }
     l.width = 1.5; l.height = 0.6; l.position.set(q.x, q.y + 0.26, q.z); l.rotation.set(-Math.PI / 2, 0, 0);
     l.color.set(ship.light); if (q.col) l.color.multiply(q.col); l.color.lerp(ALERT_RED, al * 0.7);
-    l.intensity = AREA_I * pa * (q.flick ? world.flickerF : 1) * (1 - al * 0.3) * ak;
+    l.intensity = AREA_I * pa * pk * (q.flick ? world.flickerF : 1) * (1 - al * 0.3) * ak;
   });
   // final grade, haze and bloom for the room the player stands in (js/grade.js); fog colour follows the lights (dark red in a blackout)
   if (world) {
