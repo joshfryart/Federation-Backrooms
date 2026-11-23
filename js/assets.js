@@ -65,16 +65,19 @@ export class Anim {
 // PBR texture sets: CC0 scans (ambientCG) and the project's own generated sets (tools/build-textures.mjs), see CREDITS.md.
 // Missing files just leave the procedural fallback in place.
 const pbrSets = {};
-export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil', 'wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime'];
+export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil', 'wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime', 'wallr', 'walll', 'deckp', 'ceilc', 'doorp'];
 // generated sets pack ambient occlusion / roughness / metalness into the R / G / B channels of <name>_r.webp
-export const ORM_SETS = new Set(['wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime']);
+export const ORM_SETS = new Set(['wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime', 'wallr', 'walll', 'deckp', 'ceilc', 'doorp']);
 export function loadTextures(names = PBR_SETS, onEach = null) {   // onEach(name): called as each set finishes
   const tl = new THREE.TextureLoader();
   const one = (url, srgb) => new Promise(res => tl.load(url, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, () => res(null)));
   return Promise.all(names.map(async n => {
     const [c, nm, r] = await Promise.all([one(`./assets/textures/${n}_c.webp`, true), one(`./assets/textures/${n}_n.webp`), one(`./assets/textures/${n}_r.webp`)]);
-    if (c && nm && r) pbrSets[n] = { c, n: nm, r, orm: ORM_SETS.has(n) };
+    if (c && nm && r) { c.userData.grey = true; pbrSets[n] = { c, n: nm, r, orm: ORM_SETS.has(n) }; }   // grey: js/surface.js greyOf() may swap in an R8 copy
     onEach?.(n);
   }));
 }
 export const pbr = (n) => pbrSets[n];
+// anisotropic filtering for every loaded set (call once with the renderer's limit, before the first deck renders: textures upload lazily,
+// so nothing is re-uploaded). Grazing-angle floors and long corridor walls are where it shows.
+export function setAnisotropy(a) { for (const p of Object.values(pbrSets)) for (const t of [p.c, p.n, p.r]) t.anisotropy = a; }

@@ -6,6 +6,7 @@ import { ROOMS, mulberry32 } from './data.js';
 import { tubeStep, tubeBoxes } from './tube.js';
 import { dressTable } from './rooms/index.js';   // per-room dressing hook: a room module's optional `dress` export overrides its row in the tables below (docs/rooms/README.md)
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
+import { surfaceFX, surfaceUniforms, deckDirt, shipWear } from './surface.js';   // wear / grime / tiling-break layer on walls, floors, ceilings, trim, doors
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildPropArt, PROP_ART, PROP_ART_KINDS, PROP_ART_FIXTURES } from './propart.js';   // art batches (js/propart-*.js), docs/propart-integration.md
@@ -434,10 +435,11 @@ export function buildLift(accent, deckNo) {
 // Set dressing: room light colours, grime textures and merged, vertex-coloured wall fixtures (instanced per kind)
 // ------------------------------------------------------------------
 // which bulkhead / deck variant a room gets (see tools/build-textures.mjs for the generated sets)
-const WALL_OF = { quarters: 'wallq', holodeck: 'wallq', sickbay: 'wallp', mess: 'wallp', bridge: 'wallp', arboretum: 'wallp', engineering: 'wallg', cargo: 'wallg', shuttlebay: 'wallg', transporter: 'wallg',
-  readyroom: 'wallq', lounge: 'wallq', gym: 'wallp', lab: 'wallp', datacore: 'wallp', laundry: 'wallp', morgue: 'wallp', washroom: 'wallp', brig: 'wallg', armory: 'wallg', workshop: 'wallg', plant: 'wallg', stores: 'wallg', airlock: 'wallg' };
+// (wallp painted panel, wallq padded, wallg grille, wallr ribbed bulkhead, walll laminate clean-room panel; a missing set falls back to the corridor wall)
+const WALL_OF = { quarters: 'wallq', holodeck: 'wallq', sickbay: 'walll', mess: 'wallp', bridge: 'wallp', arboretum: 'wallp', engineering: 'wallg', cargo: 'wallr', shuttlebay: 'wallr', transporter: 'wallg',
+  readyroom: 'wallq', lounge: 'wallq', gym: 'wallp', lab: 'walll', datacore: 'wallp', laundry: 'walll', morgue: 'walll', washroom: 'walll', brig: 'wallr', armory: 'wallg', workshop: 'wallr', plant: 'wallg', stores: 'wallr', airlock: 'wallr' };
 dressTable('wall', WALL_OF);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.wall` (a bulkhead texture set)
-const CORRIDOR_WALL = { cairn: 'wall', longhouse: 'wallp', tandem: 'wall', cruller: 'wallp', plough: 'wall' };
+const CORRIDOR_WALL = { cairn: 'wall', longhouse: 'wallp', tandem: 'wallr', cruller: 'walll', plough: 'wallr' };   // per hull class (floors / ceilings: corridorFloor / corridorCeil in _build)
 export const ROOM_LIGHT = { bridge: 0xbcd6ff, engineering: 0xffb060, sickbay: 0xd2fff2, mess: 0xffd49a, transporter: 0x9cc2ff, shuttlebay: 0xfff0b4, cargo: 0xffc472, holodeck: 0xffe070, quarters: 0xffc48c, arboretum: 0xd6ffae,
   readyroom: 0xffd8a8, brig: 0xc8d4ff, armory: 0xffe8c0, gym: 0xf4fff0, lab: 0xe8f4ff, laundry: 0xf0f0e8, lounge: 0xffcf9a, workshop: 0xffe2a0, plant: 0xffd0a0, morgue: 0xcfe8ff, datacore: 0x9cb8ff, stores: 0xffe0b0, washroom: 0xf0fbff, airlock: 0xfff0c0 };
 dressTable('light', ROOM_LIGHT);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.light` (hex colour)
@@ -739,15 +741,18 @@ export class World {
         if (near) walls.push([x, y]);
       }
     }
+    // surface detail layer (js/surface.js): one dirt map per deck + uniforms shared by every architectural material below
+    { const dirt = deckDirt(this.grid, d.room, d.rooms, d.deck, TS); this.own.push(dirt); this.sfU = surfaceUniforms(dirt, W, H, TS, Math.min(0.85, shipWear(ship) + (d.deck || 0) * 0.015)); }
+    const sfU = this.sfU;
     // floors
     // per-room floor material; corridors follow the ship's hull class. Generated sets (ORM-packed) fall back to the scans if missing.
     const FLOOR_MAT = { deck: { metalness: 0.55, roughness: 0.9, ns: 1.3 }, tile: { metalness: 0.0, roughness: 0.55, ns: 0.8 }, carpet: { metalness: 0, roughness: 1, ns: T.real ? 1.6 : 0.9 }, holo: { metalness: 0, roughness: 0.3, ns: 0.9 },
-      grate: { ns: 1.2, gain: 1.15 }, rubber: { ns: 1.0, gain: 1.1 }, hex: { ns: 0.8, white: 0.4 }, paver: { ns: 1.3, gain: 1.15 } };
+      grate: { ns: 1.2, gain: 1.15 }, rubber: { ns: 1.0, gain: 1.1 }, hex: { ns: 0.8, white: 0.4 }, paver: { ns: 1.3, gain: 1.15 }, deckp: { ns: 1.0, gain: 1.15 } };
     const fk = (k, fb) => T.d[k] ? k : fb;
     const FLOOR_OF = { engineering: fk('grate', 'deck'), shuttlebay: 'deck', cargo: 'deck', transporter: fk('rubber', 'deck'), jefferies: fk('grate', 'deck'), sickbay: fk('hex', 'tile'), mess: 'tile', holodeck: 'holo', arboretum: fk('paver', 'carpet'),
-      brig: 'deck', armory: 'deck', airlock: 'deck', workshop: 'deck', stores: 'deck', plant: fk('grate', 'deck'), gym: fk('rubber', 'deck'), datacore: fk('rubber', 'deck'), laundry: 'tile', morgue: 'tile', lab: 'tile', washroom: fk('hex', 'tile') };
+      brig: fk('deckp', 'deck'), armory: fk('deckp', 'deck'), airlock: fk('deckp', 'deck'), workshop: fk('deckp', 'deck'), stores: fk('deckp', 'deck'), plant: fk('grate', 'deck'), gym: fk('rubber', 'deck'), datacore: fk('rubber', 'deck'), laundry: 'tile', morgue: 'tile', lab: 'tile', washroom: fk('hex', 'tile') };
     dressTable('floor', FLOOR_OF, { fk, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.floor` (a FLOOR_MAT kind)
-    const corridorFloor = fk({ longhouse: 'rubber', plough: 'rubber', cruller: 'tile' }[ship.hull] || 'carpet', 'carpet');
+    const corridorFloor = fk({ longhouse: 'rubber', plough: 'rubber', cruller: 'tile', tandem: 'deckp' }[ship.hull] || 'carpet', 'carpet');
     const byKind = {};
     for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? FLOOR_OF[r] || 'carpet' : corridorFloor; (byKind[k] || (byKind[k] = [])).push(t); }
     const dummy = new THREE.Object3D();
@@ -757,6 +762,7 @@ export class World {
       const fm = FLOOR_MAT[kind], dm = T.d[kind];
       const fmat = new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(fm.ns, fm.ns), roughnessMap: dm.rough, roughness: dm.orm ? 1 : fm.roughness, metalness: dm.orm ? 1 : fm.metalness });
       if (dm.orm) { fmat.aoMap = dm.rough; fmat.metalnessMap = dm.rough; }
+      if (kind !== 'holo') surfaceFX(fmat, 'floor', sfU);
       const im = new THREE.InstancedMesh(geo, fmat, list.length);
       list.forEach(([x, y], i) => {
         dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.rotation.y = kind === 'holo' ? 0 : Math.floor(rndv() * 4) * Math.PI / 2; dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
@@ -773,13 +779,15 @@ export class World {
     {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
       const ck = (k) => T.d[k] ? k : 'ceil';
-      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg') };
+      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg'),
+        bridge: ck('ceilc'), readyroom: ck('ceilc'), lounge: ck('ceilc'), quarters: ck('ceilc'), mess: ck('ceilc') };
       dressTable('ceil', CEIL_OF, { ck, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.ceil`
       const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
       const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
       for (const [kind, list] of Object.entries(byC)) {
         const dm = T.d[kind]; if (!dm) continue;
         const cm = new THREE.MeshStandardMaterial(dm.orm ? { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, aoMap: dm.rough, metalnessMap: dm.rough, roughness: 1, metalness: 1 } : { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, roughness: 1, metalness: 0 });
+        surfaceFX(cm, 'ceil', sfU);
         const im = new THREE.InstancedMesh(geo, cm, list.length);
         list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(kind === 'ceilt' ? 1.0 : 0.85)); });
         g.add(im);
@@ -913,7 +921,11 @@ export class World {
         const dm = T.d[kind], ns = kind === 'wall' ? (T.real ? 0.55 : 1) : 0.9;
         const mat = new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(ns, ns), roughnessMap: dm.rough, roughness: dm.orm ? 1 : T.real ? 0.8 : 1, metalness: dm.orm ? 1 : T.real ? 0.3 : 0.05 });
         if (dm.orm) { mat.aoMap = dm.rough; mat.metalnessMap = dm.rough; }
-        const im = new THREE.InstancedMesh(geo, mat, list.length), base = kind === 'wallq' ? wallCol.clone().lerp(new THREE.Color(ship.accent), 0.14) : kind === 'wallg' ? wallCol.clone().multiplyScalar(0.92) : wallCol;
+        surfaceFX(mat, 'wall', sfU);
+        // painted / padded / laminate sets on a dark-hulled ship (Alberta, Newfoundland) keep a minimum lightness so the panel detail reads
+        const lit = (c, minL) => { const hsl = {}; c.getHSL(hsl); if (hsl.l < minL) c.setHSL(hsl.h, hsl.s, minL); return c; };
+        const base = kind === 'wallq' ? lit(wallCol.clone().lerp(new THREE.Color(ship.accent), 0.14), 0.4) : kind === 'wallg' ? wallCol.clone().multiplyScalar(0.92) : kind === 'walll' ? lit(wallCol.clone().lerp(new THREE.Color(0xf2f4f6), 0.4), 0.62) : kind === 'wallr' ? wallCol.clone().multiplyScalar(0.95) : kind === 'wallp' ? lit(wallCol.clone(), 0.42) : wallCol;
+        const im = new THREE.InstancedMesh(geo, mat, list.length);
         list.forEach(([x, y], i) => {
           dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
           im.setColorAt(i, base.clone().multiplyScalar(0.82 + rndv() * 0.22));
@@ -1114,7 +1126,7 @@ export class World {
     }
     this.doorFrames = frames;
     if (frames.length) {
-      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), T.d.trim ? new THREE.MeshStandardMaterial({ map: T.trim, normalMap: T.d.trim.normal, roughnessMap: T.d.trim.rough, metalnessMap: T.d.trim.rough, aoMap: T.d.trim.rough, roughness: 1, metalness: 1, color: 0xffffff }) : new THREE.MeshLambertMaterial({ color: 0xffffff }), frames.length * 3);
+      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), T.d.trim ? surfaceFX(new THREE.MeshStandardMaterial({ map: T.trim, normalMap: T.d.trim.normal, roughnessMap: T.d.trim.rough, metalnessMap: T.d.trim.rough, aoMap: T.d.trim.rough, roughness: 1, metalness: 1, color: 0xffffff }), 'trim', this.sfU, { box: 1 }) : new THREE.MeshLambertMaterial({ color: 0xffffff }), frames.length * 3);
       let i = 0; const c = accent.clone().multiplyScalar(0.55), c2 = new THREE.Color(0x30343c);
       for (const f of frames) {
         const lat = TS / 2 - 0.12;
@@ -1372,7 +1384,7 @@ export class World {
       const lamp = inst(new Kit().box(0.02, 0.05, 1.3, 0, 0, 0xffffff, -0.65).done().solid, m.kitGlow, fr.flatMap(f => [-1, 1].map(s => ({ f, s }))), ({ f, s }, o) => { o.position.set(f.x + (f.ax ? s * 0.16 : 0), WH - 0.13, f.z + (f.ax ? 0 : s * 0.16)); o.rotation.y = f.ax ? 0 : Math.PI / 2; return new THREE.Color(ROOM_LIGHT[f.room] || 0xffffff).multiplyScalar(1.7); });
       if (lamp) lamp.receiveShadow = false;
       // sliding door leaves: two panels per doorway that part when someone walks up (World.slideDoors, driven by main.js)
-      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.roughness = 1; dm.metalness = 1; dm.color.set(0xb0b8c4); } }
+      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('doorp') || pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.aoMap = hp.r; dm.roughness = 1; dm.metalness = 1; dm.color.set(0xb0b8c4); if (pbr('doorp')) dm.color.copy(new THREE.Color(ship.wall).lerp(new THREE.Color(0xc4cad2), 0.55)); surfaceFX(dm, 'door', this.sfU); } }
         const hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
         this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false }; }); }
     }
@@ -1380,7 +1392,7 @@ export class World {
     {
       const wins = this.wallFaces.filter(f => f.win);
       kit('winframe', K => { const y = 1.7, W2 = 0.85, H2 = 0.5, c = 0x3a3f48; K.box(1.86, 0.1, 0.12, 0, y + H2 + 0.03, c).box(1.92, 0.08, 0.16, 0, y - H2 - 0.03, 0x4a4f58).box(0.1, 1.06, 0.12, -W2 - 0.03, y, c).box(0.1, 1.06, 0.12, W2 + 0.03, y, c).box(0.03, 1.0, 0.05, 0, y, c).box(0.3, 0.04, 0.006, 0.6, y - H2 - 0.03, 0xe0d8c0, 0.16); for (const sx of [-0.9, 0.9]) for (const sy of [-0.52, 0.52]) K.cyl(0.018, 0.02, sx, y + sy, MT, 0.12, 'z', false, 6); }, wins);
-      const gl = inst(new THREE.PlaneGeometry(1.7, 1.0), new THREE.MeshStandardMaterial({ color: 0x9fc8ff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.16, depthWrite: false }), wins, (f, o) => onFace(f, o, 1.7, 0.035));
+      const gl = inst(new THREE.PlaneGeometry(1.7, 1.0), new THREE.MeshStandardMaterial({ color: 0x9fc8ff, roughness: pbr('glass') ? 1 : 0.04, metalness: 0, transparent: true, opacity: 0.16, depthWrite: false, ...(pbr('glass') ? { normalMap: pbr('glass').n, roughnessMap: pbr('glass').r, envMapIntensity: 1.5 } : {}) }), wins, (f, o) => onFace(f, o, 1.7, 0.035));
     }
     // --- grime: drips under the ceiling line, scuffs at the kick plate, burnt panels, floor and ceiling stains
     {
@@ -1446,7 +1458,7 @@ export class World {
     }
   }
 
-  setFancy(on) { this.cones.visible = on; }
+  setFancy(on) { this.cones.visible = on; if (this.sfU) this.sfU.uSfOn.value = on ? 1 : 0; }   // Performance rung: no light cones, no surface detail layer (a uniform: no recompile)
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
   setDoorLock(on, why = 'power') { if (this.doorLock === on) { if (on) this.lockWhy = why; return; } this.doorLock = on; this.lockWhy = on ? why : null; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }

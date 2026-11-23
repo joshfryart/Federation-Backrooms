@@ -9,7 +9,7 @@ import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { tubeStep } from './tube.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
-import { loadModels, loadEnv, loadTextures, has as hasModel, instance, MODEL_FILES, PBR_SETS } from './assets.js';
+import { loadModels, loadEnv, loadTextures, setAnisotropy, has as hasModel, instance, MODEL_FILES, PBR_SETS } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, makeRiggedArms, dressCrew, prewarmOutfits } from './actors.js';
 import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
@@ -2097,6 +2097,7 @@ const ready = (async () => {
   const envP = loadEnv(renderer, 'lobby').then((e) => { bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
   const tex = loadTextures(undefined, () => bump(1, 'Loading textures…'));
   const [, , env] = await Promise.all([small, models, envP, tex]);
+  setAnisotropy(Math.min(16, renderer.capabilities.getMaxAnisotropy() || 1));   // PBR sets: max hardware anisotropy (capped at 16)
   if (env) scene.environment = env; buildViewmodel();
   warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true, onStep: (i, n) => Loading.set((bootDone + BOOT_W.warm * i / n) / BOOT_TOTAL, `Tailoring uniforms ${i} / ${n}`) });
   if (!TEST_MODE) await warmed;   // tests await __game.warmed themselves

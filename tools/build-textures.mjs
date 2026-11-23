@@ -182,12 +182,76 @@ const SETS = {
     });
   } },
 
+  // ribbed bulkhead (industrial hull classes, cargo, shuttlebay): I-beam posts, corrugated upper sheet with a
+  // stiffener bar, flat lower plate with a screwed access hatch; paint worn off the rib crests
+  wallr: { N: 1024, wrapY: false, mean: 0.7, contrast: 0.95, nStrength: 3.4, aoK: 8, outR: 512, draw(ctx) {
+    const chip = fbm(ctx.N, 48, 4, 177, 0.55);
+    wallCommon(ctx, 57, (o, x, y, u, i, n1, n2) => {
+      const U = fract(u * 2) * (WALL_W / 2), du = Math.min(U, WALL_W / 2 - U), left = u < 0.5;
+      if (du < 0.065) {   // I-beam post: flanges either side of a web, bolt column
+        const fl = du > 0.045 ? 0.62 - 0.1 * sstep(0.05, 0.065, du) : 0.7; o.h = fl; o.a = 0.6 + (n2[i] - 0.5) * 0.1; o.r = 0.48; o.m = 0.35;
+        const by = fract(y / 0.32) * 0.32 - 0.16, rr = Math.hypot(du - 0.022, by); if (rr < 0.012) { o.h = 0.78 - rr * 4; o.a = 0.5; o.r = 0.4; o.m = 0.9; }
+        return;
+      }
+      if (y < 2.03) {
+        const e = Math.min(du - 0.065, y - 0.19, 2.0 - y); if (e < 0) { o.h = 0.32; o.a = 0.34; o.r = 0.7; o.m = 0.6; return; }
+        const rib = 0.5 + 0.5 * Math.cos((U / 0.1) * Math.PI * 2), crest = sstep(0.82, 0.98, rib);
+        o.h = 0.42 + 0.14 * Math.pow(rib, 0.6) * sstep(0, 0.03, e); o.a = 0.72 + (n1[i] - 0.5) * 0.08; o.r = 0.52 + (n2[i] - 0.5) * 0.14; o.m = 0.1;
+        if (Math.abs(y - 1.1) < 0.035) { o.h = 0.66 - 0.05 * sstep(0.025, 0.035, Math.abs(y - 1.1)); o.a = 0.6; o.r = 0.45; o.m = 0.4; }   // stiffener bar
+        const c = sstep(0.66, 0.7, chip[i] + crest * 0.12 + 0.08 * (1 - sstep(0, 0.03, e)) - 0.1);
+        if (c > 0) { o.a = mix(o.a, 0.5 + (n2[i] - 0.5) * 0.12, c); o.r = mix(o.r, 0.4, c); o.m = mix(o.m, 0.7, c); o.h -= 0.01 * c; }
+      } else {
+        const e = Math.min(du - 0.065, y - 2.3, 2.93 - y); if (e < 0) { o.h = 0.32; o.a = 0.34; o.r = 0.7; o.m = 0.6; return; }
+        o.h = 0.52 + (n2[i] - 0.5) * 0.012; o.a = 0.66 + (n1[i] - 0.5) * 0.08; o.r = 0.55; o.m = 0.1;
+        if (left) {   // access hatch: inset seam and four screws
+          const hx = Math.min(U - 0.2, 1.05 - U), hy = Math.min(y - 2.42, 2.82 - y), hd = Math.min(hx, hy);
+          if (hd > -0.006 && hd < 0) { o.h = 0.36; o.a = 0.36; o.r = 0.75; }
+          for (const sx of [0.23, 1.02]) for (const sy of [2.45, 2.79]) { const rr = Math.hypot(U - sx, y - sy); if (rr < 0.012) { o.h = 0.58 - (Math.abs((U - sx) - (y - sy)) < 0.0025 ? 0.08 : 0); o.a = 0.5; o.r = 0.35; o.m = 1; } }
+        }
+        const c = sstep(0.68, 0.72, chip[i] + 0.12 * (1 - sstep(0, 0.04, e)) + 0.08 * sstep(2.5, 2.93, y) - 0.06);
+        if (c > 0) { o.a = mix(o.a, 0.5, c); o.r = mix(o.r, 0.42, c); o.m = mix(o.m, 0.7, c); }
+      }
+    });
+  } },
+  // laminate clean-room panel (sickbay, labs, washrooms, cruller corridors): large rounded panels on a shadow gap,
+  // satin finish with a faint orange-peel, a recessed rail groove in the lower field
+  walll: { N: 1024, wrapY: false, mean: 0.8, contrast: 0.7, nStrength: 2.6, aoK: 6, aoBake: 0.6, outR: 512, draw(ctx) {
+    const peel = vnoise(ctx.N, 384, 191, 384), mottle = fbm(ctx.N, 6, 4, 193);
+    wallCommon(ctx, 69, (o, x, y, u, i, n1, n2) => {
+      const U = fract(u * 2) * (WALL_W / 2), upper = y < 2.03, top = upper ? 0.19 : 2.3, bot = upper ? 2.0 : 2.93;
+      const hw = WALL_W / 4 - 0.008, hh = (bot - top) / 2, cx = U - WALL_W / 4, cy = y - (top + bot) / 2, rad = 0.07;   // rounded-box distance (negative inside)
+      const qx = Math.abs(cx) - (hw - rad), qy = Math.abs(cy) - (hh - rad), sd = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rad, d = -sd;
+      if (d < 0) { o.h = 0.3; o.a = 0.3; o.r = 0.8; o.m = 0.2; return; }   // shadow gap
+      o.h = 0.5 + 0.12 * sstep(0, 0.018, d) + (peel[i] - 0.5) * 0.008; o.a = (upper ? 0.86 : 0.78) + (mottle[i] - 0.5) * 0.05; o.r = 0.3 + (n2[i] - 0.5) * 0.1 + (peel[i] - 0.5) * 0.05; o.m = 0;
+      if (!upper && Math.abs(y - 2.6) < 0.022) { o.h -= 0.06 * sstep(0.022, 0.012, Math.abs(y - 2.6)); o.a -= 0.1; o.r = 0.45; }   // rail groove
+      o.r = clamp(o.r + sstep(0.6, 0.85, n1[i]) * 0.12);   // handled patches go satin
+    });
+  } },
+
   // -------------------------------------------------------------------------------------------------------
   // FLOORS — one image is a 2.5 m deck module. Tiles are laid at random quarter turns, so every variant has a
-  // joint strip on its border and only rotation-safe detail near the edge.
+  // joint strip on its border and only rotation-safe detail near the edge. 1024 px per module ≈ 410 px / m,
+  // the same texel density as the walls' horizontal axis.
   // -------------------------------------------------------------------------------------------------------
+  // diamond tread plate: four welded plates per module, raised lozenges polished bright by boots, bolts at the corners
+  deckp: { N: 1024, mean: 0.6, contrast: 1.0, nStrength: 6, aoK: 6, aoBake: 0.7, outR: 512, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 8, 5, 201), wear = fbm(N, 5, 4, 203), oil = fbm(N, 12, 4, 205), bead = vnoise(N, 512, 207, 512), G = 64;
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v), seam = Math.min(Math.abs(u - 0.5), Math.abs(v - 0.5));
+      const gx = u * G, gy = v * G, cx = Math.floor(gx), cy = Math.floor(gy), fx = gx - cx - 0.5, fy = gy - cy - 0.5, s = ((cx + cy) & 1) ? 1 : -1;
+      const ax = (fx + s * fy) * 0.7071, ay = (fx - s * fy) * 0.7071, lz = Math.hypot(ax / 0.42, ay / 0.11), lo = sstep(1, 0.6, lz);   // lozenge, alternating ±45°
+      const w = sstep(0.35, 0.75, wear[i]);
+      let h = 0.45 + 0.13 * lo + (n[i] - 0.5) * 0.02, a = 0.55 + (n[i] - 0.5) * 0.12 + lo * (0.05 + 0.16 * w), r = 0.55 - lo * (0.1 + 0.2 * w) + (n[i] - 0.5) * 0.1, m = 0.85;
+      const ol = sstep(0.62, 0.78, oil[i]); a *= 1 - ol * 0.35; r = mix(r, 0.2, ol * 0.6);   // oil / water stains: dark and glossy
+      if (seam < 0.006) { h = 0.55 + (bead[i] - 0.5) * 0.12 + 0.08 * Math.cos(seam / 0.006 * Math.PI / 2); a = 0.42 + (bead[i] - 0.5) * 0.1; r = 0.6; m = 0.7; }   // weld bead
+      const pu = fract(u * 2), pv = fract(v * 2), bc = Math.hypot(Math.min(pu, 1 - pu) - 0.03, Math.min(pv, 1 - pv) - 0.03);
+      if (bc < 0.008) { h = 0.62 - bc * 6; a = 0.5; r = 0.35; m = 1; }
+      if (e < 0.004) { h = 0.25; a = 0.2; r = 0.9; m = 0.2; }
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
   // bar grating in a welded frame
-  grate: { N: 512, mean: 0.58, contrast: 1.0, nStrength: 4, aoK: 6, aoBake: 0.6, outR: 256, draw({ N, H, A, R, M }) {
+  grate: { N: 1024, mean: 0.58, contrast: 1.0, nStrength: 8, aoK: 6, aoBake: 0.6, outR: 512, draw({ N, H, A, R, M }) {
     const n = fbm(N, 32, 3, 3), rust = fbm(N, 10, 4, 8);
     for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
       const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v);
@@ -204,7 +268,7 @@ const SETS = {
     }
   } },
   // coin-stud rubber flooring
-  rubber: { N: 512, mean: 0.6, contrast: 0.9, nStrength: 3.2, aoK: 6, outR: 256, draw({ N, H, A, R, M }) {
+  rubber: { N: 1024, mean: 0.6, contrast: 0.9, nStrength: 6.4, aoK: 6, outR: 512, draw({ N, H, A, R, M }) {
     const n = fbm(N, 8, 5, 12), sc = vnoise(N, 200, 14, 12), sc2 = vnoise(N, 12, 15, 200);
     for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
       const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v);
@@ -216,7 +280,7 @@ const SETS = {
     }
   } },
   // small hexagonal ceramic tiles with a stainless joint strip
-  hex: { N: 512, mean: 0.78, contrast: 0.9, nStrength: 2.6, aoK: 7, outR: 256, draw({ N, H, A, R, M }) {
+  hex: { N: 1024, mean: 0.78, contrast: 0.9, nStrength: 5.2, aoK: 7, outR: 512, draw({ N, H, A, R, M }) {
     const n = fbm(N, 6, 4, 31), s = [1, 1.7320508], cols = 10, rows = 6;   // rows of hex pairs: 6 × √3 ≈ 10.39, stretched a little to tile
     for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
       const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v), p = [u * cols, v * rows * s[1]];
@@ -231,7 +295,7 @@ const SETS = {
     }
   } },
   // garden pavers: irregular stone with mossy joints
-  paver: { N: 512, mean: 0.66, contrast: 1.0, nStrength: 3.4, aoK: 8, outR: 256, draw({ N, H, A, R, M }) {
+  paver: { N: 1024, mean: 0.66, contrast: 1.0, nStrength: 6.8, aoK: 8, outR: 512, draw({ N, H, A, R, M }) {
     const vo = voronoi(N, 7, 91, 0.8), n = fbm(N, 12, 5, 93), n2 = fbm(N, 80, 2, 95);
     for (let i = 0; i < N * N; i++) {
       const ed = vo.edge[i], st = sstep(0.03, 0.11, ed);
@@ -283,8 +347,45 @@ const SETS = {
       H[i] = h; A[i] = a; R[i] = r; M[i] = m;
     }
   } },
+  // coffered ceiling (bridge, ready room, lounges, quarters, galley): a two-step recessed coffer per tile, satin paint,
+  // a faint water stain drifting across some tiles
+  ceilc: { N: 512, mean: 0.8, contrast: 0.9, nStrength: 3.0, aoK: 8, aoBake: 0.8, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 6, 4, 211), st = fbm(N, 3, 4, 213), peel = vnoise(N, 128, 215, 128);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v);
+      let h, a = 0.84 + (n[i] - 0.5) * 0.05, r = 0.62 + (peel[i] - 0.5) * 0.06, m = 0;
+      if (e < 0.018) { h = 0.85; a = 0.7; r = 0.4; m = 0.6; }                        // grid rib
+      else if (e < 0.07) h = 0.8 - 0.25 * sstep(0.018, 0.07, e);                       // first step
+      else if (e < 0.1) { h = 0.55; a += 0.02; }                                       // ledge
+      else if (e < 0.15) h = 0.55 - 0.25 * sstep(0.1, 0.15, e);                        // second step
+      else { h = 0.3 + (peel[i] - 0.5) * 0.01; a -= 0.03; }                            // coffer field
+      const s = sstep(0.64, 0.8, st[i]); a -= s * 0.12 * (1 - sstep(0.75, 0.82, st[i]) * 0.5); r += s * 0.1;
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
+  // sliding door leaf: one image covers a leaf face (≈ 1 m wide × 2.42 m tall). Bevelled edge, dark viewport, accent
+  // channel, two grooves, a ribbed kick plate; paint chipped where hands and carts hit it
+  doorp: { N: 1024, wrapY: false, mean: 0.66, contrast: 1.0, nStrength: 3.6, aoK: 8, outR: 512, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 6, 4, 221), n2 = fbm(N, 48, 3, 223), chip = fbm(N, 40, 4, 225, 0.55), DW = 0.99, DH = 2.42;
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, x = px / N * DW, y = py / N * DH, e = Math.min(x, DW - x, y, DH - y);
+      let h = 0.55 + (n2[i] - 0.5) * 0.01, a = 0.74 + (n[i] - 0.5) * 0.06, r = 0.45 + (n2[i] - 0.5) * 0.12, m = 0.15;
+      if (e < 0.035) { h = 0.55 - 0.15 * sstep(0.035, 0, e); a = 0.6; r = 0.4; m = 0.6; }   // bevelled edge, bare metal
+      else if (y > 2.16) { const rib = Math.sin((y - 2.16) / 0.03 * Math.PI * 2); h = 0.5 + rib * 0.04; a = 0.42 + (n2[i] - 0.5) * 0.1; r = 0.7; m = 0.6; }   // kick plate
+      else {
+        const vx = Math.min(x - 0.22, DW - 0.22 - x), vy = Math.min(y - 0.38, 0.92 - y), vd = Math.min(vx, vy);   // viewport
+        if (vd > 0) { h = 0.25; a = 0.12 + (n[i] - 0.5) * 0.04; r = 0.12; m = 0; }
+        else if (vd > -0.03) { h = 0.4 + 0.15 * sstep(0, -0.03, vd); a = 0.55; r = 0.4; m = 0.7; }
+        if (Math.abs(y - 1.22) < 0.05) { h = 0.42 + 0.05 * sstep(0.05, 0.035, Math.abs(y - 1.22)); a = 0.82; r = 0.35; }   // accent channel (the leaf tint shows brightest here)
+        for (const gx of [0.18, DW - 0.18]) if (y > 1.3 && y < 2.1 && Math.abs(x - gx) < 0.008) { h = 0.42; a = 0.45; }
+        const c = sstep(0.68, 0.72, chip[i] + 0.15 * (1 - sstep(0.035, 0.12, e)) + 0.1 * sstep(1.6, 2.16, y) + 0.08 * (1 - sstep(0, 0.2, Math.abs(y - 1.0))) - 0.11);
+        if (c > 0 && !(vd > 0)) { a = mix(a, 0.55 + (n2[i] - 0.5) * 0.1, c); r = mix(r, 0.35, c); m = mix(m, 0.85, c); h -= 0.012 * c; }
+      }
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
   // door frames / lift surround: brushed steel, kick scuffs, bolt row
-  trim: { N: 256, mean: 0.6, contrast: 1.0, nStrength: 2.4, aoK: 4, outR: 128, draw({ N, H, A, R, M }) {
+  trim: { N: 512, mean: 0.6, contrast: 1.0, nStrength: 4.8, aoK: 4, outR: 256, draw({ N, H, A, R, M }) {
     const br = vnoise(N, 2, 91, 200), n = fbm(N, 6, 3, 93);
     for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
       const i = py * N + px, u = px / N, v = py / N, bolt = Math.hypot(fract(u * 4 + 0.5) - 0.5, fract(v * 4 + 0.5) - 0.5);
