@@ -20,6 +20,7 @@ import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
 import { hash01, hash } from './clock.js';
+import { SEVERE as SEVERE_ALERT } from './profiles.js';
 import { gameFor, rushNote, learnedStore } from './jobgames.js';   // job mini-games (chosen by what the job is) + first-use instruction cards (js/jobgame-ui.js)
 import { JobGameUI } from './jobgame-ui.js';
 import { jobFor, siteRushNote } from './worksites.js';   // physical jobs: work sites in the room (beds, shelves, grime patches, straps…) with the item in hand
@@ -406,13 +407,14 @@ function evacuationStep(dt) {
 const onOrder = (p) => G.sim?.overrideAt(p, 2)?.activity === 'ordered' && !!G.duty?.jobs.some(j => j.person === p);
 function alertStations(dt) {
   const S = G.sim, A = G.comms?.alerts; if (!S || !A || !G.roster) return; G.stationT = (G.stationT || 0) - dt; if (G.stationT > 0) return; G.stationT = 1;
-  const on = A.has('red') && !(G.phases?.index >= 4), St = G.stations;
-  if (!on) { if (St) { for (const p of St.sent) if (S.overrideAt(p, 3)?.activity === 'stations') S.release(p, 3); G.stations = null; } return; }
-  const st = St || (G.stations = { t0: G.time, sent: new Set() });
+  const on = A.active().some(a => a.def.severity >= SEVERE_ALERT) && !(G.phases?.index >= 4), St = G.stations;   // severe alerts (red, fire, breach, ...): each billet's own alert_responses (js/profiles.js)
+  if (!on) { if (St) { for (const p of St.sent.keys()) if (S.overrideAt(p, 3)?.activity === 'stations') S.release(p, 3); G.stations = null; } return; }
+  const st = St || (G.stations = { t0: G.time, sent: new Map() });   // person -> the alert id they were sent for (a new top alert re-sends)
   for (const p of G.roster.people) {
-    if (p.isPlayer || st.sent.has(p) || ['dead', 'crazed', 'evacuated', 'corpse'].includes(p.status) || !S.st.has(p.id) || (S.overrideOf(p)?.prio ?? 0) >= 3 || onOrder(p)) continue;
-    const day = S.data?.billets?.[p.billet]?.day, b = day?.[0]; if (!b || !G.plan?.[b[2]]?.length) continue;
-    if (G.time - st.t0 < hash01('station', G.runSeed, p.id) * 8) continue; st.sent.add(p); S.redirect(p, b[2], b[3], undefined, 'stations', { prio: 3 });
+    if (p.isPlayer || ['dead', 'crazed', 'evacuated', 'corpse'].includes(p.status) || !S.st.has(p.id) || onOrder(p)) continue;
+    const r = S.alertResponse(p), day = S.data?.billets?.[p.billet]?.day, b = r && G.plan?.[r.room]?.length ? [0, 0, r.room, r.spot] : day?.[0], id = r?.id || 'red';
+    if (!b || !G.plan?.[b[2]]?.length || st.sent.get(p) === id || (!st.sent.has(p) && (S.overrideOf(p)?.prio ?? 0) >= 3)) continue;
+    if (G.time - st.t0 < hash01('station', G.runSeed, p.id) * 8 + ((r?.prio || 1) - 1) * 0.5) continue; st.sent.set(p, id); S.redirect(p, b[2], b[3], undefined, 'stations', { prio: 3 });
   }
 }
 
@@ -979,7 +981,7 @@ function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
-  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.holdBody = simHold; G.sim.on('depart', simDepart); }
+  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.setWorld(() => ({ phase: G.phases?.index || 0, alerts: G.comms?.alerts?.active() || [] })); G.sim.holdBody = simHold; G.sim.on('depart', simDepart); }
   G.social = G.sim ? generateSocial(G.roster, { seed: G.runSeed, plan: G.plan, data: commsData(), clock: G.comms.clock, ship: G.ship }) : null; if (G.social) G.sim.setSocial(G.social);   // js/social.js: groups, friendships, rivalries (before setupDuty: seeds trust)
   setupDuty();
   hideScreens(); fade(0);

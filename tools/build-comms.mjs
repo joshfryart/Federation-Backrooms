@@ -29,6 +29,8 @@ const ALERT_RULES = [
   [/mass casualt|casualt|collapse|crashes|crew injury|seriously injured|patient arrives with serious/i, 'medical_emergency'],
   [/blackout|power fail|offline power|containment failing/i, 'power_failure'], [/gravity (fail|loss|lost)/i, 'gravity_failure'],
 ];
+// phase_behaviour.routine_change that says the person digs in at the post (js/profiles.js stayChance)
+const STAY_RE = /skip|eats? at|at (the|their|his|her) (console|post|station)|stays|no breaks?|never leave|won't leave|works? through|doesn't leave|does not leave/i;
 const first = (rules, s) => { for (const [re, v] of rules) if (re.test(s)) return v; return null; };
 const START = /run start|start of (the )?(watch|shift|run)|watch start|ready to receive mission|pads ready|start of shift|shift start|all green/i;
 const CHECKIN = /routine|status interval|complete|finished|\bclean\b|all[- ]clear|patrol|sweep|walk-?round|committed|drill|report ready|bay is clear|preflight|secured|task complete|course leg|ready for launch|survey scan complete/i;
@@ -49,16 +51,17 @@ export function build() {
   for (const f of readdirSync(SRC).filter(f => f.endsWith('.json')).sort()) {
     const d = JSON.parse(readFileSync(join(SRC, f), 'utf8')), key = d.billet;
     if (f !== key + '.json') problems.push(`${f}: billet "${key}" does not match the file name`);
-    const bc = d.bridge_comms || {}, al = {}, ph = {};
+    const bc = d.bridge_comms || {}, al = {}, ph = {}, pb = {};
     for (const a of ALERT_KEYS) { const r = d.alert_responses?.[a]; if (!r || !r.comm_line) problems.push(`${key}: no alert_responses.${a}.comm_line`); else al[a] = { a: r.action, r: r.room, s: r.spot, p: r.priority, l: r.comm_line }; }
-    for (const p of PHASES) { const r = d.phase_behaviour?.[p]; if (!r?.lines?.length) problems.push(`${key}: no phase_behaviour.${p}.lines`); else ph[p] = r.lines; }
+    for (const p of PHASES) { const r = d.phase_behaviour?.[p]; if (!r?.lines?.length) problems.push(`${key}: no phase_behaviour.${p}.lines`); else { ph[p] = r.lines; pb[p] = [r.mood || '', STAY_RE.test(r.routine_change || '') ? 1 : 0, r.leaves_post_if ? 1 : 0]; } }
     if (!bc.calls_to_bridge?.length) problems.push(`${key}: no calls_to_bridge`);
     if (!bc.calls_from_bridge?.length) problems.push(`${key}: no calls_from_bridge`);
     if (!d.daily_template?.length) problems.push(`${key}: no daily_template`);
     out.billets[key] = {
       to: (bc.calls_to_bridge || []).map(classify),
       from: (bc.calls_from_bridge || []).map(c => ({ o: c.order, r: c.response_line, min: c.time_to_comply_min, no: c.refuses_if || undefined })),
-      al, ph,
+      al, ph, pb,
+      act: (d.activities || []).filter(a => a.id && a.rooms?.length).map(a => [a.id, a.rooms, a.spot || 'table', a.anim || 'idle', a.minutes?.[0] ?? 20, a.minutes?.[1] ?? a.minutes?.[0] ?? 40, a.weight ?? 1, a.social || 'solo', a.when || 'off_duty', ['fatigue', 'hunger', 'stress'].map(k => a.needs?.[k] ?? 0)]),   // js/profiles.js: free-time picks
       day: (d.daily_template || []).map(b => [b.from, b.to, b.room, b.spot, b.activity]),
       bark: { alert: d.barks?.alert || [], greet: d.barks?.greeting_player || [], greetHi: d.barks?.greeting_player_higher_rank || [], greetLo: d.barks?.greeting_player_lower_rank || [] },
       rel: (d.relationships || []).filter(r => r.with_billet && r.kind).map(r => [r.with_billet, r.kind]),   // billet-to-billet attitudes, read by js/social.js
@@ -76,6 +79,9 @@ export function validate(data) {
     for (const a of ALERT_KEYS) if (!b.al?.[a]?.l) bad.push(`${k}: alert ${a}`);
     for (const p of PHASES) if (!b.ph?.[p]?.length) bad.push(`${k}: phase ${p}`);
     if (!b.to?.length || !b.from?.length) bad.push(`${k}: calls`);
+    for (const a of b.act || []) if (a[1].length < 1 || a[9].length !== 3) bad.push(`${k}: bad activity ${a[0]}`);
+    if ((b.act || []).length < 3) bad.push(`${k}: fewer than 3 activities`);
+    for (const p of PHASES) if (!b.pb?.[p]) bad.push(`${k}: phase behaviour ${p}`);
     const day = b.day || []; if (!day.length || day[0][0] !== 0 || day[day.length - 1][1] !== 24) bad.push(`${k}: daily template does not cover 0..24`);
     for (let i = 1; i < day.length; i++) if (Math.abs(day[i][0] - day[i - 1][1]) > 1e-6) bad.push(`${k}: daily template gap at ${day[i][0]}`);
     for (const c of b.to || []) if (!c.m || !'rue'.includes(c.p) || !['start', 'checkin', 'fault', 'emergency'].includes(c.k)) bad.push(`${k}: bad call ${c.t}`);
