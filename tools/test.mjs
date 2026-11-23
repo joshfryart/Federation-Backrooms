@@ -256,7 +256,7 @@ S('perf-lod', null, async () => {   // person LOD bookkeeping (js/lodcfg.js dist
   if (!ok) fail('perf-lod ' + JSON.stringify(r));
 });
 S('grade-unit', null, async () => {   // final colour grade per room mood (js/grade.js): corridor = the old fixed grade, moods differ subtly, blackout / alert overlays, easing, Calm visuals, pooled-light pick
-  const { MOODS, ROOM_MOOD, moodFor, gradeTarget, GradeState, nearest } = await imp('js/grade.js'), { ROOMS } = await imp('js/data.js'), r = {};
+  const { MOODS, ROOM_MOOD, moodFor, gradeTarget, GradeState, nearest, PoolFade } = await imp('js/grade.js'), { ROOMS } = await imp('js/data.js'), r = {};
   const c = gradeTarget(null), near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
   r.corridorOld = c.sh.join() === '0.9,0.98,1.1' && c.hi.join() === '1.07,1.02,0.9' && c.wb.join() === '1,1,1' && c.expo === 1 && c.sat === 1 && c.con === 1;   // corridors keep the pre-existing split-tone
   r.unknownRooms = Object.keys(ROOM_MOOD).filter(k => !ROOMS[k]).join();   // every mapped room type exists
@@ -270,8 +270,12 @@ S('grade-unit', null, async () => {   // final colour grade per room mood (js/gr
   const gc = new GradeState(); gc.snap(null); let sc = 0; while (Math.abs(gc.p.wb[0] - eng.wb[0]) > 0.002 && sc < 900) { gc.update(1 / 60, 'engineering', 1, 0, { calm: true }); sc++; } r.calmFrames = sc;
   r.moodFor = moodFor('nope') === MOODS.corridor && moodFor('morgue') === MOODS.cold;
   const pts = [{ x: 5, z: 0 }, { x: 1, z: 0 }, { x: 3, z: 0 }, { x: 0, z: 9, off: 1 }]; r.nearest = nearest(pts, 0, 0, 2).map(e => e[1].x).join() + '|' + nearest(pts, 0, 0, 9, p => !p.off).length + '|' + nearest(undefined, 0, 0, 3).length;
+  // power-half switch of the pooled lights: a power sweep 1 -> 0 -> 1 at 60 fps never changes the pool's multiplier by more than 1/12 a frame, and the mode only flips while it is dark
+  { const pf = new PoolFade(); let last = 1, maxStep = 0, flipsLit = 0, flips = 0, prevEm = 0;
+    for (let i = 0; i < 360; i++) { const pa = i < 180 ? 1 - i / 179 : (i - 180) / 179; pf.update(1 / 60, pf.want(pa)); maxStep = Math.max(maxStep, Math.abs(pf.k - last)); last = pf.k; if (pf.em !== prevEm) { flips++; if (pf.k > 0) flipsLit++; prevEm = pf.em; } }
+    r.poolFade = { maxStep: +maxStep.toFixed(3), flips, flipsLit, end: pf.em + '/' + pf.k }; }
   console.log('grade:', JSON.stringify(r));
-  const ok = r.corridorOld && r.unknownRooms === '' && r.moodsKnown && r.subtle && r.distinct && r.blackout && r.alert && r.easeFrames > 20 && r.easeFrames < 120 && r.calmFrames > r.easeFrames * 2 && r.moodFor && r.nearest === '1,3|3|0';
+  const ok = r.corridorOld && r.unknownRooms === '' && r.moodsKnown && r.subtle && r.distinct && r.blackout && r.alert && r.easeFrames > 20 && r.easeFrames < 120 && r.calmFrames > r.easeFrames * 2 && r.moodFor && r.nearest === '1,3|3|0' && r.poolFade.maxStep <= 1 / 12 + 1e-6 && r.poolFade.flips === 2 && r.poolFade.flipsLit === 0 && r.poolFade.end === '0/1';
   if (!ok) fail('grade-unit ' + JSON.stringify(r));
 });
 // ---- browser ----
@@ -570,6 +574,16 @@ const lw = await page.evaluate(async () => {
   return out;
 });
 console.log('ladder well:', JSON.stringify(lw));
+// scene light count must not depend on the deck (three.js recompiles every lit material when it changes): the same count on a deck with and without a ladder well, and on the live scene across a deck change
+const lc = await page.evaluate(async () => {
+  const g = __game, G = g.G, { World } = await import('./js/world.js'), count = (root) => { let n = 0; root.traverse(o => { if (o.isLight) n++; }); return n; };
+  const d = g.world.d, ship = g.world.ship, out = { expect: (await import('./js/world.js')).LIGHT_COUNT_WORLD };
+  const w1 = new World(Object.assign({}, d, { ladderWell: d.ladderWell || [0, 0, 1, 0] }), ship), w2 = new World(Object.assign({}, d, { ladderWell: null }), ship);
+  out.withWell = count(w1.group); out.noWell = count(w2.group); out.ladderLampOff = w2.ladderLight?.intensity === 0 && w1.ladderLight?.intensity > 0; w1.dispose?.(); w2.dispose?.();
+  out.sceneA = count(g.world.group.parent || g.world.group); out.wellA = !!g.world.d.ladderWell; return out;
+});
+console.log('ladder-well lights:', JSON.stringify(lc));
+if (!(lc.withWell === lc.noWell && lc.withWell === lc.expect && lc.ladderLampOff)) fail('light count differs with / without a ladder well ' + JSON.stringify(lc));
 if (!(lw.well && lw.kind === 'ship_ladder' && lw.climbed && lw.down === lw.start + 1 && lw.phase === 'play' && lw.well1 && lw.atWell && lw.up && lw.back === lw.start)) fail('ladder well ' + JSON.stringify(lw));
 });
 S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach

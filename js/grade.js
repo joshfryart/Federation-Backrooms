@@ -64,3 +64,16 @@ export function nearest(list, x, z, n, filter = null) {
   for (const p of list || []) { if (filter && !filter(p)) continue; const dx = p.x - x, dz = p.z - z; arr.push([dx * dx + dz * dz, p]); }
   arr.sort((a, b) => a[0] - b[0]); return arr.slice(0, n);
 }
+
+// the pooled lights' mode switch (panels <-> emergency lamps at half power): never a jump.  `want` is the mode the power level asks for (0 panels, 1 lamps);
+// the pool fades to nothing in `fade` s, switches position / colour / range while it is dark, and fades back up.  k multiplies every pooled light's intensity.
+// Hysteresis keeps the power flicker of a restore (js/world.js restoreT) from chattering the mode: enter lamps below 0.5, leave above 0.55.
+export class PoolFade {
+  constructor() { this.em = 0; this.k = 1; }
+  want(pa) { return pa < 0.5 ? 1 : pa > 0.55 ? 0 : this.em; }
+  update(dt, want, fade = 0.2) {
+    if (want !== this.em) { this.k -= dt / fade; if (this.k <= 0) { this.k = 0; this.em = want; } }
+    else this.k = Math.min(1, this.k + dt / fade);
+    return this;
+  }
+}
