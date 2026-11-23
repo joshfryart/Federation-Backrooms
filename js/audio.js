@@ -167,6 +167,7 @@ export class Sound {
   ding() { this.tone(1046, 0.8, 'sine', 0.2); this.tone(784, 1.0, 'sine', 0.15, 0, 0.25); }
   denied() { this.tone(200, 0.25, 'sawtooth', 0.12); this.tone(160, 0.3, 'sawtooth', 0.12, 0, 0.2); }
   purr() { this.tone(70, 0.5, 'sawtooth', 0.05); this.noise(0.5, 0.04, 200, 1, 'lowpass'); }
+  purrSoft(v = 0.5) { this.tone(48 + Math.random() * 6, 1.1, 'triangle', 0.045 * v); this.noise(1.0, 0.018 * v, 140, 0.8, 'lowpass'); }   // quiet looping-by-retrigger furble purr (main.js, within 5 m)
   hit() { this.noise(0.4, 0.5, 200, 0.5, 'lowpass'); this.tone(90, 0.5, 'sawtooth', 0.3, -50); }
   stunned() { this.tone(400, 0.5, 'sawtooth', 0.1, -300); }
   roar(vol = 0.25) {

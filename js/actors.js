@@ -382,8 +382,23 @@ export function makeTribble() {
   fur.scale.set(1, 0.85, 1.15); fur.position.y = 0.2;
   const blob = new THREE.Mesh(new THREE.CircleGeometry(0.26, 12), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2; blob.position.y = 0.015; g.add(blob);
-  g.userData.body = fur;
+  // face: two small glossy eyes and a nose nub on the +z side, half-sunk in the fur so the furble has a front (and a head turn reads when it nuzzles)
+  const eyeM = new THREE.MeshStandardMaterial({ color: 0x0a0806, roughness: 0.25 }), face = new THREE.Group();
+  for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), eyeM); e.position.set(sx * 0.07, 0.04, 0.265); face.add(e); }
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 5), new THREE.MeshStandardMaterial({ color: 0x4a2a2a, roughness: 0.6 })); nose.position.set(0, 0.005, 0.285); face.add(nose);
+  fur.add(face);
+  g.userData.body = fur; g.userData.base = fur.scale.clone(); g.userData.ph = Math.random() * 6.28;
+  g.userData.purr = (t, k = 1) => tribblePurr(g, t, k);
   return g;
+}
+// idle breathing plus a purr: a fast low-amplitude shiver (~24 Hz) on top of the slow breath, gated by k (0 = asleep and quiet, 1 = purring as when the player is close).
+// Also a small side-to-side nuzzle sway. Cheap: three scale writes and one rotation per call.
+export function tribblePurr(g, t, k = 1) {
+  const u = g.userData, b = u.body, s0 = u.base; if (!b || !s0) return;
+  const ph = t + u.ph, breath = Math.sin(ph * 2.2) * 0.035, sh = Math.sin(ph * 150) * 0.012 * k * (0.6 + 0.4 * Math.sin(ph * 5.5));   // the purr swells and ebbs
+  b.scale.set(s0.x * (1 - breath * 0.4 + sh), s0.y * (1 + breath + sh * 0.6), s0.z * (1 - breath * 0.4 + sh));
+  b.rotation.y = Math.sin(ph * 0.7) * 0.5 * (0.3 + 0.7 * k);
+  g.position.y = Math.abs(Math.sin(ph * 1.6)) * 0.03 * (1 - k * 0.7);
 }
 
 // =====================================================================

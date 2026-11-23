@@ -1436,7 +1436,8 @@ function step(dt, t) {
       e.mesh.rotation.y += dt * 1.5; e.mesh.position.y = 0.8 + Math.sin(e.t * 2) * 0.06;
       if (d < 1.0 && G.hp < G.maxHp) { const h = G.fx.medkit; G.hp = Math.min(G.maxHp, G.hp + h); remove(e); sound.heal(); G.say(`Medkit (+${h} health)${h < 35 ? ' — sickbay supplies are failing' : ''}`, 'good'); updateHUD(); }
     } else if (e.kind === 'tribble') {
-      const b = e.mesh.userData.body; b.scale.y = 0.85 + Math.sin(e.t * 4) * 0.04; e.mesh.position.y = Math.abs(Math.sin(e.t * 1.6)) * 0.03;
+      const near = d < 5, k = near ? 1 - d / 5 : 0; e.mesh.userData.purr(e.t, 0.25 + k * 0.75);
+      if (near && d >= 0.9 && (e.pT = (e.pT ?? Math.random()) - dt) <= 0) { e.pT = 1.1 + Math.random() * 0.5; sound.purrSoft?.(0.2 + k * 0.8); }   // soft purr audio while a furble is within earshot
       if (d < 0.9) { G.tribbles++; G.hp = Math.min(G.maxHp, G.hp + 3); remove(e); sound.purr(); G.say(['Coo-coo… a furble!', 'It purrs. Your stress level drops.', 'Furble acquired. Do NOT feed it.'][G.tribbles % 3], 'npc'); updateHUD(); }
     } else if (e.kind === 'crew' || e.kind === 'emh') {
       const a = Math.atan2(P.x - e.x, P.z - e.z); let da = a - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
