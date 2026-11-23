@@ -361,9 +361,35 @@ const SETS = {
 
 };
 
+// ---- packed detail masks (one lossless RGB image, read raw by a shader; no albedo / normal pair) ----
+// propwear_m.webp: the triplanar wear layer every prop / fixture material samples (js/propsurf.js), tiled at 0.5 m (R, B) and 1.6 m (G):
+//   R = micro height (dents, brushed grain, scratches; 0.5 = flat) · G = grime / dirt (low frequency) · B = paint-chip field (thresholded with edge curvature in the shader)
+const MASKS = {
+  propwear: { N: 512, draw(N) {
+    const R = new Float32Array(N * N), G = new Float32Array(N * N), B = new Float32Array(N * N), r = rng(171);
+    const dent = fbm(N, 6, 4, 173), grain = vnoise(N, 256, 175, 6), pits = vnoise(N, 96, 177, 96), dirt = fbm(N, 3, 6, 179), smear = vnoise(N, 24, 181, 3), chips = fbm(N, 10, 5, 183, 0.6), spots = vnoise(N, 40, 185, 40);
+    for (let i = 0; i < N * N; i++) {
+      R[i] = 0.5 + (dent[i] - 0.5) * 0.5 + (grain[i] - 0.5) * 0.12 - sstep(0.82, 0.95, pits[i]) * 0.18;
+      G[i] = clamp(sstep(0.35, 0.85, dirt[i]) * 0.8 + sstep(0.6, 0.9, smear[i]) * 0.35 * dirt[i]);
+      B[i] = clamp(chips[i] * 0.85 + sstep(0.75, 0.95, spots[i]) * 0.3);
+    }
+    for (let s = 0; s < 260; s++) {   // scratches: short straight gouges, wrapped, a dip in R and a bump in B
+      let x = r() * N, y = r() * N; const a = r() * Math.PI, len = 8 + r() * 70, dx = Math.cos(a), dy = Math.sin(a), d = 0.05 + r() * 0.12;
+      for (let t = 0; t < len; t++) { const i = (Math.floor(y + dy * t + N * 4) % N) * N + (Math.floor(x + dx * t + N * 4) % N); R[i] = clamp(R[i] - d); B[i] = clamp(B[i] + d * 1.2); }
+    }
+    const out = Buffer.alloc(N * N * 3); for (let i = 0; i < N * N; i++) { out[i * 3] = Math.round(clamp(R[i]) * 255); out[i * 3 + 1] = Math.round(clamp(G[i]) * 255); out[i * 3 + 2] = Math.round(clamp(B[i]) * 255); }
+    return out;
+  } },
+};
+async function emitMask(name, set, OUT) {
+  const N = set.N; await sharp(set.draw(N), { raw: { width: N, height: N, channels: 3 } }).webp({ lossless: true, effort: 6 }).toFile(`${OUT}/${name}_m.webp`);
+  console.log('mask', name, `${N}px`);
+}
+
 async function procedural(OUT = 'assets/textures', only = []) {
   await mkdir(OUT, { recursive: true });
   for (const [name, set] of Object.entries(SETS)) if (!only.length || only.includes(name)) await emit(name, set, OUT);
+  for (const [name, set] of Object.entries(MASKS)) if (!only.length || only.includes(name)) await emitMask(name, set, OUT);
 }
 
 // ---- ambientCG conversion (albedo neutralised to grey, fixed mean, because the game tints surfaces) ----

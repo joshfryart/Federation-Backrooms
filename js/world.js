@@ -10,6 +10,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildPropArt, PROP_ART, PROP_ART_KINDS, PROP_ART_FIXTURES } from './propart.js';   // art batches (js/propart-*.js), docs/propart-integration.md
 import { buildChair } from './propart-stations1.js';
+import { surfaceProp, wearMaterial, decalMaterial, screenMaterial, setPropDetail } from './propsurf.js';   // texture pass 4: shared wear layer, emissive screens, decal atlas (docs/propart-integration.md "Texture pass 4")
 import { DECOR_ENG } from './decorart-eng.js';
 import { DECOR_BRIDGE } from './decorart-bridge.js';     // batch 7: sysboard, sysboard_half (CMD-1)
 import { DECOR_SEC } from './decorart-security.js';      // batch 8: dclocker, emitterpost, camdome, badgereader
@@ -169,7 +170,7 @@ export { generate, genShip, shipPlan } from './gen.js';
 // ------------------------------------------------------------------
 const M = {};
 // wall label display: dark glass, a tinted coloured bar, glyph-like text rows, a status chip and scanlines (tinted per instance; white = lit)
-let _label;
+let _label, LABEL_MAT;
 function labelTex() {
   if (_label) return _label;
   return _label = canvasTex(256, (g, s) => {
@@ -229,9 +230,9 @@ function mats() {
   M.pipe = std({ color: 0x70757d, metalness: 0.9, roughness: 0.35 });
   return M;
 }
-const geoCache = {};
+const geoCache = {}, CACHED = new WeakSet();
 function rbox(w, h, d, mat, x = 0, y = 0, z = 0, r = 0.04) {
-  const k = `${w},${h},${d},${r}`; const geo = geoCache[k] || (geoCache[k] = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.01, h / 2.01, d / 2.01)));
+  const k = `${w},${h},${d},${r}`; let geo = geoCache[k]; if (!geo) { geo = geoCache[k] = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.01, h / 2.01, d / 2.01)); CACHED.add(geo); }
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y + h / 2, z); return m;
 }
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
@@ -242,6 +243,24 @@ function cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 16) { const m = new THRE
 function model(name, height, x = 0, z = 0, ry = 0, y = 0) {
   if (!hasModel(name)) return null; const i = instance(name, { height }); i.root.position.set(x, y, z); i.root.rotation.y = ry;
   i.root.traverse(o => { if (o.isMesh) { o.frustumCulled = true; o.material.envMapIntensity = 0.6; } }); return i.root;
+}
+// the hand-built props below are many small meshes: merge the plain ones per material (named parts, sub-groups and scanned models stay),
+// so a console is ~6 draws instead of ~12 and the decal mesh surfaceProp adds is paid for
+function mergeStatic(g) {
+  const by = new Map();
+  for (const o of g.children) {
+    if (!o.isMesh || o.isInstancedMesh || o.name || o.children.length || Array.isArray(o.material) || Object.keys(o.userData).length) continue;
+    const geo = o.geometry, k = o.material.uuid + '|' + Object.keys(geo.attributes).sort().join(',') + '|' + !!geo.index;
+    (by.get(k) || by.set(k, []).get(k)).push(o);
+  }
+  for (const list of by.values()) {
+    if (list.length < 2) continue;
+    const parts = list.map(o => { o.updateMatrix(); return o.geometry.clone().applyMatrix4(o.matrix); }), geo = mergeGeometries(parts, false);
+    for (const p of parts) p.dispose(); if (!geo) continue;
+    for (const o of list) { g.remove(o); if (!CACHED.has(o.geometry)) o.geometry.dispose(); }
+    g.add(new THREE.Mesh(geo, list[0].material));
+  }
+  return g;
 }
 export function buildProp(kind) {
   const m = mats(); const g = new THREE.Group(); const R = Math.random;
@@ -391,9 +410,9 @@ export function buildProp(kind) {
     case 'replicator':
       g.add(rbox(1.5, 2.1, 0.42, m.panel, 0, 0, 0.4, 0.05)); g.add(rbox(0.9, 0.62, 0.3, m.dark, 0, 0.85, 0.3, 0.06)); g.add(box(0.8, 0.5, 0.02, m.glowO, 0, 0.9, 0.42)).material = m.screenO;
       g.add(cyl(0.3, 0.3, 0.02, m.glowO, 0, 0.86, 0.26, 20)); g.add(rbox(0.3, 0.22, 0.03, m.dark, 0.5, 1.6, 0.18, 0.02)); g.add(box(0.25, 0.17, 0.01, m.screenB, 0.5, 1.625, 0.163)); g.add(box(1.3, 0.03, 0.02, m.glowB, 0, 1.95, 0.185)); break;
-    default: { const a = buildPropArt(kind, m, { rbox, box, cyl }); if (a) return a; g.add(rbox(0.8, 0.8, 0.8, m.metal)); }
+    default: { const a = buildPropArt(kind, m, { rbox, box, cyl }); if (a) return surfaceProp(a, kind, { batch: a.userData.propArt }); g.add(rbox(0.8, 0.8, 0.8, m.metal)); }
   }
-  return g;
+  return surfaceProp(mergeStatic(g), kind);
 }
 
 export function buildLift(accent, deckNo) {
@@ -567,7 +586,7 @@ const ROOM_DECOR = {
 dressTable('decor', ROOM_DECOR);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.decor`
 const kitCache = {};
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
-function kitMats() { const m = mats(); if (!m.kit) { m.kit = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }); m.kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true }); } return m; }
+function kitMats() { const m = mats(); if (!m.kit) { m.kit = wearMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 })); m.kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true }); } return m; }
 export const DECOR_KINDS = Object.keys(DECOR);
 // one wall fixture as a stand-alone group (model viewer)
 export function buildDecor(kind) { const m = kitMats(), geo = kitGeo(kind, DECOR[kind]), g = new THREE.Group(); if (geo.solid) g.add(new THREE.Mesh(geo.solid, m.kit)); if (geo.glow) g.add(new THREE.Mesh(geo.glow, m.kitGlow)); return g; }
@@ -973,7 +992,7 @@ export class World {
       const pal = [ship.accent, 0xcc99cc, 0x9999ff, 0xff9966, 0xffcc99].map(c => new THREE.Color(c).multiplyScalar(0.8));
       const items = []; lcars.forEach(l => { for (let k = 0; k < l.n; k++) items.push({ ...l, k }); });
       const lg = new THREE.PlaneGeometry(0.42, 0.26);
-      const lm = new THREE.InstancedMesh(lg, new THREE.MeshBasicMaterial({ color: 0xffffff, map: labelTex() }), items.length || 1);
+      const lm = new THREE.InstancedMesh(lg, screenMaterial(LABEL_MAT || (LABEL_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff, map: labelTex() }))), items.length || 1);   // emissive glass, tinted per instance (js/propsurf.js)
       items.forEach((l, i) => {
         const off = (l.k - (l.n - 1) / 2) * 0.55;
         const cx = Math.cos(l.ry), sx = Math.sin(l.ry);
@@ -1016,6 +1035,13 @@ export class World {
         if (b[0] < -H - 0.01 || b[1] > H + 0.01 || b[2] < -H - 0.01 || b[3] > H + 0.01) this.propExt[p.tx + p.ty * this.W] = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[1] - b[0]) / 2, (b[3] - b[2]) / 2];   // [offset x, offset z, half x, half z]
       }
       m.traverse(o => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
+    }
+    {   // every prop's decal mesh (js/propsurf.js, one shared atlas material) merged into one draw for the deck; props never move
+      const parts = []; g.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), mtx = new THREE.Matrix4();
+      g.traverse(o => { if (o.name === 'decals' && o.isMesh) parts.push(o); });
+      if (parts.length) { const geos = parts.map(o => o.geometry.clone().applyMatrix4(mtx.multiplyMatrices(inv, o.matrixWorld)));
+        for (const o of parts) o.parent.remove(o);
+        const dm = new THREE.Mesh(mergeGeometries(geos, false), decalMaterial()); for (const x of geos) x.dispose(); dm.name = 'propDecals'; dm.receiveShadow = true; dm.castShadow = false; dm.matrixAutoUpdate = false; g.add(dm); this.propDecals = dm; }
     }
     // loose clutter from the ship inventory: small things on the floor near walls and on tables (look at one for its name; see nearestClutter in js/main.js)
     this.clutter = [];
@@ -1446,7 +1472,7 @@ export class World {
     }
   }
 
-  setFancy(on) { this.cones.visible = on; }
+  setFancy(on) { this.cones.visible = on; setPropDetail(on); }   // prop wear layer (js/propsurf.js) on High only
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
   setDoorLock(on, why = 'power') { if (this.doorLock === on) { if (on) this.lockWhy = why; return; } this.doorLock = on; this.lockWhy = on ? why : null; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }
