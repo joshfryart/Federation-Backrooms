@@ -31,7 +31,7 @@ fonttools (no design changes, so no Reserved Font Name issue). Used for HUD and 
 
 **Poly Haven** (https://polyhaven.com) — CC0: `old_military_crate`, `barrel_03`, `potted_plant_01`, `utility_box_01`,
 `modern_arm_chair_01`, `steel_frame_shelves_01`, `steel_frame_shelves_02`, `steel_frame_shelves_03` (stores shelving),
-`metal_tool_chest` (lab bench field kit). Re-packed by `tools/build-props.mjs` (512 px WebP textures, simplified, meshopt).
+`metal_tool_chest` (lab bench field kit), `korean_fire_extinguisher_01` (wall extinguisher cylinder), `Barrel_02` (steel drum, cargo clusters), `metal_toolbox` (workbench). Re-packed by `tools/build-props.mjs` (512 px WebP textures, simplified, meshopt).
 
 ## Surface textures (`assets/textures/`)
 
