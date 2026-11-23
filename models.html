@@ -35,7 +35,7 @@ if (set === 'crew') {
   add('Cowering survivor', ...hum({ kind: 'crew_f', uniform: DIVISIONS[2] }, clip || 'crouch_idle')); add('Sitting', ...hum({ kind: 'crew_f2', uniform: DIVISIONS[1] }, clip || 'sitting_idle'));
   add('Medical hologram', ...hum({ kind: 'crew_f2', material: holoMaterial(0x6ad8ff, 0.8), shadow: false }, clip || 'idle_talking'));
   { const [m, tk] = hum({ kind: 'crew_f', uniform: DIVISIONS[1], rank: 1, name: 'Roy' }); if (m) markImpostor(m); add('Impostor (disguised)', m, tk); }
-  for (const pose of ['back', 'facedown', 'slumped']) add('Fallen: ' + pose, makeCorpse(Math.random, null, pose), null, pose === 'slumped' ? 1.4 : 2.2);
+  for (const pose of ['back', 'facedown', 'slumped']) add('Fallen: ' + pose, makeCorpse(Math.random, null, pose, true), null, pose === 'slumped' ? 1.4 : 2.2);
 } else if (set === 'moves') {   // ?set=moves&clip=vault|climb|grab|shamble|walk: one figure per phase of the clip (posed, not playing) — a filmstrip for checking authored clips
   const cn = clip || 'vault'; for (let i = 0; i < 6; i++) { const mm = makeHuman({ kind: 'crew_m', uniform: DIVISIONS[i % 3], rank: 2 }); if (!mm) continue; const H = mm.userData.human; H.pose(cn, i / 5 * 0.999); H.mixer.update(0.001); mm.userData.moveIdx = i; add('Move ' + i, mm, null, 1.3); }
 } else if (set === 'styles') {   // ?set=styles: every uniform style on one division colour, then three builds
@@ -55,7 +55,7 @@ if (set === 'crew') {
     add('Gronk stalking', ...enemy('gronk', 1.2, {}, (t) => ({ look: Math.sin(t * 0.6) * 0.8, lookPitch: 0.25 })), 2.4); }
   add('Space-madness (run)', ...enemy('crazed', 4.6)); add('Space-madness (attack)', ...enemy('crazed', 0, { attacking: true }));
   add('Compliance Drone', ...enemy('drone', 1.7)); add('Mr. Grinsworth', ...enemy('phantom', 1)); add('Grinsworth (watched)', ...enemy('phantom', 0, { frozen: true }));
-  add('Slimeling impostor', ...enemy('slimeling', 4.2)); add('Clingon Crawler', ...enemy('clinger', 0)); add('Crawler (running)', ...enemy('clinger', 4));
+  add('Slimeling impostor', ...enemy('slimeling', 4.2)); add('Drone (stunned, adapted)', ...enemy('drone', 0, { stunned: true, adapted: true })); add('Clingon Crawler', ...enemy('clinger', 0)); add('Crawler (running)', ...enemy('clinger', 4));
   { const m1 = MODELS.clinger(); m1.mesh.rotation.x = Math.PI; add('Crawler (ceiling hang)', m1.mesh, (dt) => m1.tick(dt, 0, { lurk: true }), 2.0); }
   add('Crawler (dropping)', ...enemy('clinger', 0, { drop: true })); add('Crawler (latched, tearing loose)', ...enemy('clinger', 0, { latched: true, fr: 0.2 }));
 } else if (set === 'misc') {

@@ -110,16 +110,21 @@ function droneKit(mesh, H) {
   // adaptive shield: only shows once it has learned the zapper's frequency
   const shM = new THREE.MeshBasicMaterial({ color: 0xffa030, wireframe: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
   const shield = new THREE.Mesh(droneGeo.shell || (droneGeo.shell = new THREE.IcosahedronGeometry(1, 2)), shM); shield.scale.set(0.62, 1.12, 0.62); shield.position.y = 1.05; shield.castShadow = false; shield.visible = false; mesh.add(shield);
-  H.drone = { glow, beamM, sweep, shield, shM, flash: 0, was: false };
+  // a loose conductor at the nape that arcs now and then (one tiny mesh; flashes harder while stunned)
+  const sparkM = new THREE.MeshBasicMaterial({ color: 0xcfffe0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }), spark = new THREE.Mesh(droneGeo.spark || (droneGeo.spark = new THREE.OctahedronGeometry(0.03, 0)), sparkM);
+  spark.position.set(nape.x - sR * 0.05, nape.y + 0.02, nape.z - 0.09); spark.castShadow = false; spark.frustumCulled = false; pinToBone(H.inner, 'Head', spark);
+  H.drone = { spark, sparkM, sparkT: 1, glow, beamM, sweep, shield, shM, flash: 0, was: false };
 }
 const droneGeo = {};
-const GREEN = new THREE.Color(0x50ff70), AMBER = new THREE.Color(1.0, 0.55, 0.12);
+const WHITE = new THREE.Color(1, 1, 1), GREEN = new THREE.Color(0x50ff70), AMBER = new THREE.Color(1.0, 0.55, 0.12);
 function droneTick(mesh, H, t, f) {
   const d = H.drone; if (!d) return; const ad = !!f.adapted, col = ad ? AMBER : GREEN;
   d.glow.color.copy(col).multiplyScalar(f.stunned && !ad ? (Math.sin(t * 50) > 0 ? 0.9 : 0.1) : 0.85 + 0.15 * Math.sin(t * 6)); d.beamM.color.copy(col);
   d.sweep.visible = !(f.stunned && !ad); d.sweep.rotation.y = Math.sin(t * (ad ? 1.7 : 0.9)) * 0.6; d.sweep.rotation.x = 0.14 + Math.sin(t * 0.37) * 0.06; d.beamM.opacity = 0.085 + 0.025 * Math.sin(t * 23);
   if (ad && f.stunned && !d.was) d.flash = 1;   // a zap just splashed off the shield
   d.was = !!f.stunned; d.flash = Math.max(0, d.flash - 0.03);
+  d.sparkT -= 1 / 60; if (d.sparkT <= 0) { d.sparkT = (f.stunned ? 0.05 : 0.9) + Math.random() * (f.stunned ? 0.15 : 2.2); d.sparkM.opacity = 0.9; d.spark.rotation.set(Math.random() * 3, Math.random() * 3, 0); d.spark.scale.setScalar(0.6 + Math.random()); }
+  d.sparkM.opacity *= 0.7; d.sparkM.color.copy(col).lerp(WHITE, 0.6);
   d.shield.visible = ad; if (ad) { d.shM.opacity = 0.035 + 0.02 * Math.sin(t * 3) + d.flash * 0.5; d.shield.rotation.y = t * 0.4; }
 }
 
@@ -135,14 +140,33 @@ function slimeKit(mesh, H) {
   const hang = (bone, dx, dy, dz, len) => { const b = H.bones[bone]; if (!b) return; const p = b.getWorldPosition(new THREE.Vector3()), g = new THREE.Group(); g.position.set(p.x + dx * u, p.y + dy * u, p.z + dz * u); const m = new THREE.Mesh(slimeGeo.drip, slimeM), bead = new THREE.Mesh(slimeGeo.bead, slimeM); m.castShadow = bead.castShadow = false; g.add(m, bead); pinToBone(H.inner, bone, g); drips.push({ g, m, bead, len: len * u, ph: R() * 6 }); };
   hang('hand_l', 0, -0.08, 0, 0.6); hang('hand_r', 0, -0.08, 0, 0.45); hang('Head', 0, 0.02, 0.1, 0.3); hang('lowerarm_l', 0, -0.03, 0, 0.35);
   H.inner.traverse(o => { if (o.isMesh && (o.material.name || '').startsWith('garment')) { o.material.roughness = 0.38; o.material.color.lerp(new THREE.Color(0x2f6a34), 0.3); } });
-  H.slime = { inv: 1 / H.inner.scale.z, blobs, drips, skin: H.mats.body ? H.mats.body.color.clone() : null, from: new THREE.Color(0xc99a78), sy: H.inner.scale.y };
+  // falling droplets: one InstancedMesh (1 draw call), shed from the head / hands / torso, flung outward during the reveal
+  const N = 16, dm = new THREE.InstancedMesh(slimeGeo.bead, slimeM, N); dm.frustumCulled = false; dm.castShadow = false; mesh.add(dm);
+  const em = ['Head', 'spine_03', 'hand_l', 'hand_r', 'pelvis', 'upperarm_l', 'upperarm_r'].filter(n => H.bones[n]);
+  const parts = Array.from({ length: N }, (_, i) => ({ x: 0, y: -9, z: 0, vx: 0, vy: 0, vz: 0, on: false, sz: 1, i }));
+  H.slime = { dm, parts, em, lt: 0, inv: 1 / H.inner.scale.z, blobs, drips, skin: H.mats.body ? H.mats.body.color.clone() : null, from: new THREE.Color(0xc99a78), sy: H.inner.scale.y };
 }
-const _q = new THREE.Quaternion();
+const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _o = new THREE.Object3D();
+function slimeDroplets(mesh, H, S, t, dt, r) {
+  const burst = r < 1;   // reveal: a spray of beads flung off the body
+  for (const p of S.parts) {
+    if (!p.on) {
+      if (Math.random() > (burst ? 0.5 : 0.35 * dt * 3)) continue;
+      const b = H.bones[S.em[Math.floor(Math.random() * S.em.length)]]; b.getWorldPosition(_v); mesh.worldToLocal(_v);
+      p.x = _v.x; p.y = _v.y; p.z = _v.z; const a = Math.random() * 6.28, sp = burst ? 1.2 + Math.random() * 1.6 : Math.random() * 0.15;
+      p.vx = Math.cos(a) * sp; p.vz = Math.sin(a) * sp; p.vy = burst ? 0.8 + Math.random() * 1.6 : 0; p.sz = 0.7 + Math.random() * 0.9; p.on = true;
+    }
+    p.vy -= 9.8 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.y < 0.01) p.on = false;
+  }
+  for (const p of S.parts) { _o.position.set(p.x, p.on ? p.y : -9, p.z); _o.scale.set(p.sz, p.sz * (1 + Math.min(1.5, Math.abs(p.vy) * 0.25)), p.sz); _o.updateMatrix(); S.dm.setMatrixAt(p.i, _o.matrix); }
+  S.dm.instanceMatrix.needsUpdate = true;
+}
 function slimeTick(mesh, H, t) {
   const S = H.slime; H.inner.scale.x = H.inner.scale.z * (1 + Math.sin(t * 9) * 0.03); if (!S) return;
   const r = Math.min(1, t / 1.1), k = r < 1 ? 1 + 2.2 * (r - 1) ** 3 + 1.2 * (r - 1) ** 2 : 1;   // the reveal: skin greens over, growths burst out with a little overshoot
   H.inner.scale.y = S.sy * (1 - Math.sin(t * 24) * 0.09 * (1 - r) + Math.sin(t * 2.1) * 0.012);
   if (S.skin && r < 1) H.mats.body.color.copy(S.from).lerp(S.skin, r); else if (S.skin && !S.done) { H.mats.body.color.copy(S.skin); S.done = true; }
+  const dt = Math.min(0.1, Math.max(0, t - S.lt)); S.lt = t; if (dt > 0) slimeDroplets(mesh, H, S, t, dt, r);
   S.blobs.forEach((b, i) => { const w = 1 + Math.sin(t * 3.1 + i * 1.7) * 0.12, s = b.userData.s; b.scale.set(s[0] * k * w * S.inv, s[1] * k / w * S.inv, s[2] * k * w * S.inv); });
   for (const d of S.drips) {   // strands always hang straight down, stretch, snap and start again
     d.g.parent.getWorldQuaternion(_q); d.g.quaternion.copy(_q.invert());
@@ -178,6 +202,24 @@ function hostKit(mesh, H) {
       for (const k of [0, 1]) if (n[k]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.0085 * u, 8, 6), em); e.position.copy(c[k].multiplyScalar(1 / n[k])); e.position.z += 0.008 * u; e.castShadow = false; pinToBone(inner, 'Head', e); } } }
 }
 let hostEye = null;
+
+// Grinsworth's glitch-teleport: a column of magenta shards and scanline slivers that tears off the old spot and the new one (one InstancedMesh each, ~0.6 s, removed when done)
+let shardGeo = null, shardMat = null;
+function glitchBurst(scene, x, z, h = 1.8) {
+  shardGeo = shardGeo || new THREE.BoxGeometry(0.04, 0.012, 0.3); shardMat = shardMat || new THREE.MeshBasicMaterial({ color: 0xff3fd0, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const N = 22, im = new THREE.InstancedMesh(shardGeo, shardMat, N), seed = Array.from({ length: N }, () => ({ a: Math.random() * 6.28, r: 0.1 + Math.random() * 0.45, y: Math.random() * h, vy: (Math.random() - 0.3) * 1.6, s: 0.5 + Math.random() * 2.2 }));
+  im.position.set(x, 0, z); im.frustumCulled = false; im.castShadow = false; scene.add(im); return { im, seed, t: 0, N };
+}
+const _go = new THREE.Object3D();
+function tickBursts(list, scene, dt) {
+  for (let i = list.length - 1; i >= 0; i--) {
+    const b = list[i]; b.t += dt; const k = b.t / 0.6;
+    if (k >= 1) { scene.remove(b.im); b.im.dispose?.(); list.splice(i, 1); continue; }
+    for (let j = 0; j < b.N; j++) { const q = b.seed[j], jit = Math.sin(b.t * 70 + j * 3.3) > 0.2 ? 1 : 0.15;
+      _go.position.set(Math.cos(q.a) * q.r * (1 + k), q.y + q.vy * b.t, Math.sin(q.a) * q.r * (1 + k)); _go.rotation.set(0, q.a + b.t * 4, 0); _go.scale.set(1, 1 + (j % 3), q.s * jit * (1 - k)); _go.updateMatrix(); b.im.setMatrixAt(j, _go.matrix); }
+    b.im.instanceMatrix.needsUpdate = true;
+  }
+}
 
 // ------------------------------------------------------------------
 // Base class
@@ -375,7 +417,7 @@ export class Drone extends Enemy {
     this.adapted = true; this.state = S.STUNNED; this.stun = sec; this.sound.stunned(); return 'first';
   }
   update(dt, p, noiseR, crouch, game) {
-    this.t += dt;
+    this.t += dt; tickBursts(this.bursts, this.scene, dt);
     if (this.state === S.DORMANT) { this.delay -= dt; if (this.delay <= 0) { this.state = S.CHASE; this.mesh.visible = true; game.say('Compliance Drone online. Resistance is… mildly discouraged.', 'warn'); this.sound.whir(0.2); } return; }
     this.attackCd -= dt; this.attacking -= dt;
     const dx = p.x - this.x, dz = p.z - this.z, dist = Math.hypot(dx, dz);
@@ -403,14 +445,14 @@ export class Phantom extends Enemy {
     super(world, spawnTile, deck, delay, scene, sound, MODELS.phantom());
     this.kind = 'phantom'; this.name = 'Mr. Grinsworth (rogue hologram)'; this.hitY = 1.3; this.hitR = 0.8;
     this.seen = false; this.unseenT = 0; this.mesh.userData.floatY = 0.06; this.giggleT = 3;
-    this.glow = new THREE.PointLight(0xff3fd0, 3, 8, 2); this.glow.position.set(0, 1.2, 0); this.mesh.add(this.glow);
+    this.bursts = []; this.glow = new THREE.PointLight(0xff3fd0, 3, 8, 2); this.glow.position.set(0, 1.2, 0); this.mesh.add(this.glow);
   }
   stunFor(sec) { // banished back into the projector for a while
-    this.sound.zap(); this.state = S.DORMANT; this.delay = 12 + sec; this.mesh.visible = false; this.glow.intensity = 0; this.unseenT = 0;
+    this.sound.zap(); if (this.mesh.visible) this.bursts.push(glitchBurst(this.scene, this.x, this.z)); this.state = S.DORMANT; this.delay = 12 + sec; this.mesh.visible = false; this.glow.intensity = 0; this.unseenT = 0;
     const open = this.w.d.openTiles.filter(([x, y]) => this.w.grid[y][x] === 0); const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]); this.x = c[0]; this.z = c[1];
   }
   update(dt, p, noiseR, crouch, game) {
-    this.t += dt;
+    this.t += dt; tickBursts(this.bursts, this.scene, dt);
     if (this.state === S.DORMANT) { this.delay -= dt; if (this.delay <= 0) { this.state = S.CHASE; this.mesh.visible = true; this.glow.intensity = 3; this.relocate(p, 12, 18); game.say('A cheerful voice: "Welcome, valued guest! Please do not look away."', 'warn'); this.sound.giggle(0.2); } return; }
     this.attackCd -= dt; this.attacking -= dt;
     const dx = p.x - this.x, dz = p.z - this.z, dist = Math.hypot(dx, dz);
@@ -440,7 +482,9 @@ export class Phantom extends Enemy {
   }
   relocate(p, rmin, rmax) {
     const open = this.w.d.openTiles.filter(([x, y]) => { if (this.w.grid[y][x] !== 0) return false; const [cx, cz] = this.w.center(x, y); const d = Math.hypot(cx - p.x, cz - p.z); return d > rmin && d < rmax && !this.w.los(cx, cz, p.x, p.z); });
-    if (!open.length) return; const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]); this.x = c[0]; this.z = c[1]; this.glitchT = 0.7;
+    if (!open.length) return; const t = open[Math.floor(Math.random() * open.length)]; const c = this.w.center(t[0], t[1]);
+    if (this.mesh.visible) this.bursts.push(glitchBurst(this.scene, this.x, this.z));   // tears off the old spot ...
+    this.x = c[0]; this.z = c[1]; this.glitchT = 0.7; this.bursts.push(glitchBurst(this.scene, this.x, this.z)); this.sound.glitch?.(0.25);   // ... and re-forms at the new one
   }
 }
 
