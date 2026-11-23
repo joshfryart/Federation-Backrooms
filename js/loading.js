@@ -9,12 +9,12 @@
 //   paint()                        resolves after the browser has had a chance to paint (rAF + a timeout fallback so a hidden tab cannot stall it)
 const $ = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 export const paint = () => new Promise((res) => { let done = false; const go = () => { if (!done) { done = true; res(); } }; if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(go, 0)); setTimeout(go, 80); });
-let high = 0, slot = 0;
+let high = 0, slot = 0, shown = false;   // shown: the opaque overlay is up (main.js skips drawing the scene behind it)
 export const Loading = {
   show(title = 'Loading', sub = '') {
     const el = $('boot'); if (!el) return; high = 0;
     $('boot-title').textContent = title; $('boot-sub').textContent = sub; $('boot-fill').style.transform = 'scaleX(0)'; $('boot-pct').textContent = '0%'; $('boot-status').textContent = '';
-    $('boot-go').style.display = 'none'; Loading.crew(null); el.classList.remove('instant'); el.classList.add('show');
+    $('boot-go').style.display = 'none'; Loading.crew(null); el.classList.remove('instant'); el.classList.add('show'); shown = true;
   },
   set(frac, status) {
     const el = $('boot'); if (!el) return; high = Math.max(high, Math.max(0, Math.min(1, frac)));
@@ -32,6 +32,6 @@ export const Loading = {
     Loading.crew(null); Loading.set(1, 'Ready'); b.textContent = label; b.style.display = 'inline-block'; b.focus?.();
     b.onclick = (e) => { e.stopPropagation(); b.onclick = null; Loading.hide(); onGo?.(); };
   },
-  hide(instant = false) { const el = $('boot'); if (!el) return; if (instant) el.classList.add('instant'); el.classList.remove('show'); },
-  get visible() { return !!$('boot')?.classList.contains('show'); },
+  hide(instant = false) { const el = $('boot'); if (!el) return; if (instant) el.classList.add('instant'); el.classList.remove('show'); shown = false; },
+  get visible() { return shown; },
 };

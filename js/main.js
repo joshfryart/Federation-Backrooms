@@ -81,6 +81,9 @@ const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder a
 const canvas = $('view');
 // ?test=1 (tools/test.mjs pages): cheap renderer (no antialias, pixel ratio 1, no shadow maps). The gate's one high-quality smoke render loads without it.
 const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
+const mark = (n) => { try { performance.mark('fb:' + n); } catch { } };   // load-path milestones (tools/perf-load.mjs reads them)
+mark('modules');   // every imported module is fetched, parsed and evaluated by now
+let firstFrame = false;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !TEST_MODE, powerPreference: 'high-performance' });
 renderer.setPixelRatio(TEST_MODE ? 1 : Math.min(window.devicePixelRatio, 1.5));
 const scene = new THREE.Scene();
@@ -1088,18 +1091,20 @@ async function startRun() {
   if (runLoading || G.phase === 'loading') return; runLoading = true;
   try {
     document.exitPointerLock?.(); Loading.show('Boarding', NOM() ? 'Generating the ship, its crew and their schedules' : 'Generating the ship'); Loading.set(0.03, 'Preparing…'); await paint();
+    /* job modules load per billet (preloadJobs) */   // started at boot, normally done by now (js/jobs/index.js)
     Loading.set(0.08, 'Generating the ship, crew and first deck…'); await paint();
-    const enter = newRun({ hold: true });   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
+    mark('board-start'); const enter = newRun({ hold: true }); mark('board-built');   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
     Loading.set(0.5, 'Compiling shaders…'); await paint();
     try { world && renderer.compile(scene, camera); } catch (e) { console.warn('compile', e.message); }
     if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } }   // depth-of-field pass for the conversation close-up
     if (!TEST_MODE && CFG.quality === 'high') { try { post.warm(); } catch (e) { console.warn('ao warm', e.message); } }   // GTAO programs (normal pre-pass per material kind, AO, denoise), so the first High frame does not stall
+    mark('board-compiled');
     if (NOM() && G.menus && !TEST_MODE) {
       const list = G.menus.portraitOrder(), n = list.length;
-      for (let i = 0; i < n; i++) { Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i + 1} / ${n}`); const p = list[i], url = G.portraits.renderNow(p); if (url) Loading.crew(url, p.short || p.full, p.title); await paint(); }   // the face being rendered right now fades in over the last one
+      for (let i = 0; i < n; i += 8) { const part = list.slice(i, i + 8); Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${Math.min(n, i + part.length)} / ${n}`); const urls = G.portraits.renderMany(part), j = urls.findIndex(Boolean), p = part[j]; if (p) Loading.crew(urls[j], p.short || p.full, p.title); await paint(); }   // 8 heads per GPU readback (js/portraits.js); the card shows the first face of each batch, fading in over the last one
     }
-    Loading.set(0.99, 'Almost ready…'); await paint();
-    Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);
+    mark('board-portraits'); Loading.set(0.99, 'Almost ready…'); await paint();
+    mark('board-ready'); Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);
   } catch (e) { console.error('startRun failed', e); Loading.hide(true); G.phase = 'title'; showScreen('title'); }
   finally { runLoading = false; }
 }
@@ -2111,7 +2116,7 @@ function frame() {
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
   { const lv = gov.tick(raw, G.phase === 'play'); if (lv >= 0) { const L = LEVELS[lv]; if (L.quality !== CFG.quality) { setQuality(L.quality, true); if (L.quality === 'low') G.say('Performance mode enabled (change in pause menu)', 'comp'); } else applyPerf(); } }   // js/perfgov.js: steps down / recovers with hysteresis
-  if (G.phase !== 'loading') render(dt, elapsed);   // the loading overlay is opaque: do not spend the GPU drawing behind it
+  if (G.phase !== 'loading' && !Loading.visible) { render(dt, elapsed); if (!firstFrame && G.phase === 'play') { firstFrame = true; mark('first-frame'); } }   // the loading overlay is opaque: do not spend the GPU drawing behind it
 }
 function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
   if (G.phase === 'play' && world) step(dt, t);
@@ -2151,12 +2156,13 @@ const ready = (async () => {
   const models = loadModels(undefined, () => bump(1, 'Loading models…'));
   const envP = loadEnv(renderer, 'lobby').then((e) => { bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
   const tex = loadTextures(undefined, () => bump(1, 'Loading textures…'));
-  const [, , env] = await Promise.all([small, models, envP, tex, jobsP]);
+  small.then(() => mark('boot-small')); models.then(() => mark('boot-models')); envP.then(() => mark('boot-env')); tex.then(() => mark('boot-tex'));
+  const [, , env] = await Promise.all([small, models, envP, tex, jobsP]); mark('boot-loaded');
   setAnisotropy(Math.min(16, renderer.capabilities.getMaxAnisotropy() || 1));   // PBR sets: max hardware anisotropy (capped at 16)
   if (env) scene.environment = env; buildViewmodel();
   warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true, onStep: (i, n) => Loading.set((bootDone + BOOT_W.warm * i / n) / BOOT_TOTAL, `Tailoring uniforms ${i} / ${n}`) });
   if (!TEST_MODE) await warmed;   // tests await __game.warmed themselves
-  bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
+  mark('boot-done'); bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
   Loading.hide(TEST_MODE);
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
