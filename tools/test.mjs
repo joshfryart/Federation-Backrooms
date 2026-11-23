@@ -984,7 +984,7 @@ for (const sec of pick) {
   const game = page && sec.page !== 'voices';
   try { if (game) { const sd = strSeed(sec.name); await page.evaluate(([s, n, pinShip]) => { window.__seedRandom(s); const G = __game.G; G.forceSeed = s % 1000000; if (pinShip) G.forceShip = s % n; }, [sd, SHIPSM.SHIPS.length, SHIP == null && sec.page !== 'nominal3' && sec.page !== 'smoke']); ctx = await snap(page); } await sec.fn(page); } catch (e) { threw = e; }
   if (game) ctx = await snap(page).catch(() => ctx);
-  if (threw) { fail(`${sec.name} threw: ${String(threw.message || threw).split('\n')[0]}`); if (page) await page.close().catch(() => { }); page = null; pageKind = null; }   // a crashed / wedged page: the next section opens a fresh one
+  if (threw) { fail(`${sec.name} threw: ${String(threw.message || threw).split('\n')[0]}`); if (process.env.TEST_STACK) console.log(String(threw.stack || '')); if (page) await page.close().catch(() => { }); page = null; pageKind = null; }   // a crashed / wedged page: the next section opens a fresh one
   if (secFails && curPage) { console.log(where()); if (page && process.env.TEST_SHOTS) { mkdirSync(join(ROOT, 'results'), { recursive: true }); await page.screenshot({ path: join(ROOT, 'results', `fail-${sec.name}.png`) }).catch(() => { }); } }
   if (errors.length > e0) console.log(`  page errors in ${sec.name}: ${[...new Set(errors.slice(e0))].slice(0, 3).join(' | ').slice(0, 400)}`);
   const ms = Date.now() - t0; times.push([sec.name, ms]);

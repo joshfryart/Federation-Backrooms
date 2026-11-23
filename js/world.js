@@ -1391,13 +1391,13 @@ export class World {
       // every sickbay keeps one stretcher bracket (MED-3, the stretcher can be taken: see below) on a wall face the passes above left free, when it has one
       for (const r of d.rooms) { if (r.type !== 'sickbay' || (byKind.stretcher_rack || []).some(f => f.room === 'sickbay' && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h)) continue;
         const f = faces.find(f => !f.deco && !f.win && !f.sign && f.room === 'sickbay' && ceilOf(f) >= WH - 0.01 && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h); if (f) { f.deco = true; (byKind.stretcher_rack || (byKind.stretcher_rack = [])).push(f); } }
-      for (const [k, list] of Object.entries(byKind)) if (DECOR[k]) kit(k, DECOR[k], list);
       if (byKind.extinguisher?.length && hasModel(EXT_MODEL.name)) {   // scanned cylinders: one model instance per wall face, merged per material so a deck pays 3 draws, not 3 per extinguisher
         const by = new Map(), sh = new Map();
         for (const f of byKind.extinguisher) { const p = extModel(f); p.updateMatrixWorld(true);
           p.traverse(o => { if (!o.isMesh) return; const key = o.material.name || o.name; if (!sh.has(key)) sh.set(key, o.material); (by.get(key) || by.set(key, []).get(key)).push(o.geometry.clone().applyMatrix4(o.matrixWorld)); }); }
         for (const [key, l] of by) { const geo = mergeGeometries(l, false); for (const x of l) x.dispose(); if (!geo) continue; const mesh = new THREE.Mesh(geo, sh.get(key)); mesh.castShadow = false; mesh.receiveShadow = true; g.add(mesh); }
       }
+      for (const [k, list] of Object.entries(byKind)) if (DECOR[k]) kit(k, DECOR[k], list);
         else if (PROP_ART_FIXTURES.has(k)) for (const f of list) { const p = buildPropArt(k, m); p.position.set(f.px, 0, f.pz); p.rotation.y = f.ry; p.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(p);
           if (p.userData.item === 'stretcher') {   // MED-3: the folded stretcher can be taken off its bracket ([E] Take, like loose clutter: js/main.js nearestClutter / takeClutter); its parts sit at z 0.13
             const parts = p.children.filter(o => (Math.abs(o.position.z - 0.13) < 0.01 && o.position.y > 0.55 && o.position.y < 1.85) || (Math.abs(o.position.z - 0.17) < 0.004 && o.position.y > 0.9 && o.position.y < 1.55));   // bed, poles, handles, straps, buckles
