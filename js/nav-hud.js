@@ -199,24 +199,31 @@ export class NavHUD {
     this.drawT -= dt;
     if (this.drawT <= 0) {
       this.drawT = 1 / 30; const mm = document.getElementById('minimap');
-      if (mm) { if (mm.width !== 416) { mm.width = mm.height = 416; } this.drawMini(mm, f, ld); }
+      if (mm) { if (mm.width !== 416) { mm.width = mm.height = 416; this._miniKey = null; } this.drawMini(mm, f, ld); }   // resizing clears the canvas
       const car = w.car || { tx: w.d.exit[0], ty: w.d.exit[1] };
       const cm = [{ x: car.tx + 0.5, y: car.ty + 0.5, icon: 'lift', color: '#cfe1f3' }, ...this.markers.filter(m => !m.dest && m.item?.due).map(m => ({ x: m.x, y: m.y, icon: m.icon, color: m.color, frac: m.frac }))];
       if (ld) cm.push({ x: ld.x, y: ld.y, icon: ld.icon, color: ROUTE, main: true, txt: Math.round(this.route ? this.route.len * this.TS : 0) + 'm' });
       this.compass.draw({ yaw: this.P.yaw, px: f.x, py: f.y, markers: cm });
-      this.legend.classList.toggle('on', (G.time || 0) < 150); if (this.legend.classList.contains('on')) { const r = this.card.getBoundingClientRect(); this.legend.style.top = (r.bottom + 4) + 'px'; }
+      this.legend.classList.toggle('on', (G.time || 0) < 150); if (this.legend.classList.contains('on')) { const lk = `${this.cardHTML}|${innerWidth}x${innerHeight}`; if (lk !== this._legK || (this._legT -= this.drawT) <= 0) { this._legK = lk; this._legT = 0.5; const r = this.card.getBoundingClientRect(); this.legend.style.top = (r.bottom + 4) + 'px'; } } else this._legK = null;   // a rect read forces a layout: only when the card or viewport changed (and every 0.5 s in case the HUD skin moved it)
     }
     w.setGuide?.(this.route, this.t, ld ? { tx: ld.tx, ty: ld.ty, key: ld.icon, canvas: this.beacon(ld.icon) } : null);
   }
   layerFor(d, explored, sc, dim) {
-    let n = 0; if (explored) for (let i = 0; i < explored.length; i++) n += explored[i];
+    let n = 0; if (explored) for (let i = 0; i < explored.length; i++) n += explored[i]; this._exN = n;
     const k = `${d.deck}:${sc.toFixed(2)}:${dim ? 1 : 0}`, c = this.layers.get(k);
     if (c && (c.n === n || this.t - c.at < 0.5)) return c.cv;
+    this._bakes = (this._bakes || 0) + 1;   // a re-bake may reuse the same canvas: drawMini's unchanged-frame check keys on this count
     const cv = bakeDeck(d, explored, sc, { dim, canvas: c?.cv }); this.layers.set(k, { cv, n, at: this.t }); return cv;
   }
   drawMini(mm, f, ld) {
     const w = this.world, sc = mm.width / 26, G = this.G, car = w.car || { tx: w.d.exit[0], ty: w.d.exit[1] };
-    drawLocal(mm.getContext('2d'), { d: w.d, layer: this.layerFor(w.d, w.explored, sc), explored: w.explored, sc, px: f.x, py: f.y, yaw: this.P.yaw, rot: this.P.yaw, route: this.route, dest: ld, markers: this.markers, t: this.t, lift: { x: car.tx + 0.5, y: car.ty + 0.5 }, liftOk: !G.fx?.liftLocked });
+    // nothing animated (no route ribbon, destination ping or pulsing ring) and nothing moved: the last frame is still exact, skip the redraw
+    const layer = this.layerFor(w.d, w.explored, sc), liftOk = !G.fx?.liftLocked;
+    if (!this.route && !ld && !this.markers.some(m => m.pulse)) {
+      let k = `${this._bakes}|${mm.width}|${w.d.deck}|${f.x}|${f.y}|${this.P.yaw}|${car.tx},${car.ty}|${liftOk}|${this._exN}`; for (const m of this.markers) k += `|${m.x},${m.y},${m.type},${m.frac},${m.color},${m.pinned}`;
+      if (k === this._miniKey && layer === this._miniLayer) return; this._miniKey = k; this._miniLayer = layer;
+    } else this._miniKey = null;
+    drawLocal(mm.getContext('2d'), { d: w.d, layer, explored: w.explored, sc, px: f.x, py: f.y, yaw: this.P.yaw, rot: this.P.yaw, route: this.route, dest: ld, markers: this.markers, t: this.t, lift: { x: car.tx + 0.5, y: car.ty + 0.5 }, liftOk });
   }
   beacon(icon) {
     if (this.beacons[icon]) return this.beacons[icon];

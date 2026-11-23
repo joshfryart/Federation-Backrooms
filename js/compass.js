@@ -12,6 +12,8 @@ export class Compass {
   /** s = {yaw, px, py, markers:[{x, y, icon, color, frac?, main?, txt?}]} (tile units) */
   draw(s) {
     const c = this.c, g = this.g, w = c.width, h = c.height, span = Math.PI * 1.1, head = -s.yaw;
+    let key = `${w}|${h}|${s.yaw}|${s.px}|${s.py}`; for (const m of s.markers || []) key += `|${m.x},${m.y},${m.icon},${m.color},${m.frac},${m.main},${m.txt}`;
+    if (key === this._key) return; this._key = key;   // same input as the last draw (standing still): the strip on the canvas is already exact
     const X = (a) => { const d = relAngle(a, head); return { x: w / 2 + d / span * w, d }; };
     g.clearRect(0, 0, w, h);
     g.fillStyle = 'rgba(7,11,19,.62)'; g.beginPath(); g.moveTo(0, 0); g.lineTo(w, 0); g.lineTo(w - 18, h * 0.52); g.lineTo(18, h * 0.52); g.closePath(); g.fill(); g.strokeStyle = 'rgba(150,180,210,.3)'; g.lineWidth = 2; g.stroke();

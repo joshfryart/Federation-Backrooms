@@ -695,8 +695,8 @@ export class World {
   los(ax, az, bx, bz) {
     const dx = bx - ax, dz = bz - az, dist = Math.hypot(dx, dz);
     const n = Math.ceil(dist / 0.4);
-    const inTube = this.isTube(...this.tile(ax, az)) || this.isTube(...this.tile(bx, bz));
-    for (let i = 1; i < n; i++) { const x = ax + dx * i / n, z = az + dz * i / n, [tx, ty] = this.tile(x, z); if ((this.solid(tx, ty) && !this.under[tx + ty * this.W]) || (!inTube && this.isTube(tx, ty))) return false; }   // catwalk decks are walk-under: sight passes below them
+    const inTube = this.isTube(Math.floor(ax / TS), Math.floor(az / TS)) || this.isTube(Math.floor(bx / TS), Math.floor(bz / TS));   // = this.tile(): inlined, no array per sample (hot: AI sight, name tags, prompts)
+    for (let i = 1; i < n; i++) { const x = ax + dx * i / n, z = az + dz * i / n, tx = Math.floor(x / TS), ty = Math.floor(z / TS); if ((this.solid(tx, ty) && !this.under[tx + ty * this.W]) || (!inTube && this.isTube(tx, ty))) return false; }   // catwalk decks are walk-under: sight passes below them
     return true;
   }
 
