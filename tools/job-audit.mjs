@@ -15,6 +15,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'), argv = process
 const W = await import(pathToFileURL(join(ROOT, 'js/worksites.js')).href), J = await import(pathToFileURL(join(ROOT, 'js/jobgames.js')).href);
 const B = opt('before') ? await import(pathToFileURL(resolve(opt('before'), 'js/worksites.js')).href) : null;
 const duties = JSON.parse(readFileSync(join(ROOT, 'assets/data/duties.json'), 'utf8'));
+await (await import(pathToFileURL(join(ROOT, 'js/jobs/index.js')).href)).loadAll(duties);   // job modules load on demand: jobFor only sees loaded ones
 const REVIEW = JSON.parse(readFileSync(join(ROOT, 'tools/job-review.json'), 'utf8'));
 const DEPTS = ['command', 'flight', 'operations', 'engineering', 'security', 'sciences', 'medical', 'services'];
 const DNAME = { command: 'Command', flight: 'Flight Control', operations: 'Operations', engineering: 'Engineering', security: 'Security', sciences: 'Sciences', medical: 'Medical', services: 'Support Services' };

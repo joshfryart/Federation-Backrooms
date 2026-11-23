@@ -6,6 +6,10 @@ failure mode, modelled on what a person in that job really does. Reskinning an e
 Each job is a small ES module in `js/jobs/<billet>__<slug>.js` built on a shared helper kit (`js/jobs/kit.js`). A generated registry
 (`js/jobs/index.js`) maps the job's id to its module; `jobFor()` in `js/worksites.js` uses the module when one exists and otherwise falls back
 to the old shared mechanics, so jobs can be authored in batches and merged safely.
+Modules are not part of the page's static import graph: the registry lists only job ids, and a module is fetched by dynamic import
+(`loadModule`) when the player's duty is set up (`js/main.js` `preloadJobs`: the player's own billet, ~17 files). Automation
+(`navigator.webdriver`, or `?alljobs=1`) loads all of them before `__game.ready`; node tools call `loadAll(duties)` first. `jobFor()` only
+sees loaded modules, and `startJob` waits ("Pulling up the procedure…") instead of playing the fallback while a module is still in flight.
 
 Status: all **701 of 701** jobs have a module. `node tools/check-jobs.mjs --report` prints
 the current count.

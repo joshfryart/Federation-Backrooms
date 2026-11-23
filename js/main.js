@@ -27,7 +27,8 @@ import { hash01, hash } from './clock.js';
 import { SEVERE as SEVERE_ALERT } from './profiles.js';
 import { gameFor, rushNote, learnedStore } from './jobgames.js';   // job mini-games (chosen by what the job is) + first-use instruction cards (js/jobgame-ui.js)
 import { JobGameUI } from './jobgame-ui.js';
-import { jobFor, siteRushNote } from './worksites.js';   // physical jobs: work sites in the room (beds, shelves, grime patches, straps…) with the item in hand
+import { jobFor, siteRushNote } from './worksites.js';
+import { loadModule as loadJobModule, loadAll as loadAllJobs, pendingFor as jobPending } from './jobs/index.js';   // job modules load on demand: the player's billet at setupDuty / switchPlayer (preloadJobs)   // physical jobs: work sites in the room (beds, shelves, grime patches, straps…) with the item in hand
 import { WorkSites } from './worksite-ui.js';
 import { liftLine, loadPersonas, bark as voiceBark, habitCue, TAG_EFFECTS } from './voice.js';
 import { speak, cue as voiceCue, attach as attachSpeech, getMode as voiceMode, setMode as setVoiceMode, MODES as VOICE_MODES } from './speech.js';
@@ -263,7 +264,21 @@ function loopStep() {
   if (run.ax === 'x') P.z = cz; else P.x = cx; L.count++; L.walked = 0;
   if (L.count === 1) G.say('This corridor was shorter a moment ago.', 'warn'); caption('the lights flicker'); flash('#000', 0.5);
 }
+// GPU memory across deck changes: every deck uploads its own mix of the global texture sets (PBR sets, grey R8 copies, cloned normal /
+// roughness maps, prop and crew textures) and nothing freed them, so the GPU held every set any visited deck had used (headless probe,
+// tools/perf-memory.mjs: 73 -> 546 textures, 45 -> 326 MB over 8 deck changes). loadDeck frees the GPU copy of each texture the old deck's
+// scene used that the new one does not; the image stays in memory and three.js uploads it again on its next use (a later deck, a returning prop).
+function sceneTextures() {
+  const out = new Set(), add = (v) => { if (v && v.isTexture) out.add(v); };
+  scene.traverse(o => { for (const m of (Array.isArray(o.material) ? o.material : o.material ? [o.material] : [])) { for (const k in m) add(m[k]); for (const u of Object.values(m.uniforms || {})) add(u?.value); } });
+  return out;
+}
+function freeTextures(before) {
+  const now = sceneTextures();
+  for (const t of before) if (!now.has(t) && !t.isRenderTargetTexture && !t.isVideoTexture && !t.isFramebufferTexture && !t.isDepthTexture && (t.image || t.source?.data)) t.dispose();
+}
 function loadDeck(n) {
+  const texBefore = sceneTextures();
   saveDeckState(); releaseCling();
   clearLevel(); decals.clear(); blood.clear(); sparks.clear(); steam.clear(); smoke.clear(); clearSplats();
   resetMover(P); rope.visible = hook.visible = false;
@@ -341,6 +356,7 @@ function loadDeck(n) {
   if (NM) { G.say(`${ship.name} ${ship.reg} — Deck ${n}, ${zoneOf(G.shipDeck / Math.max(1, ship.decks - 1)).label}. All systems nominal.`, 'good'); if (!G.hinted) { G.hinted = 1; later(() => { if (G.phase === 'play') G.say('Step into any tubelift and pick a deck (E calls the panel). Tab: ship status.', 'comp'); }, 5000); } }
   else G.say(`${ship.name} ${ship.reg} — find ${data.chips.length} logic chips`, 'good');
   if (n === 1 && !NM) later(() => { if (G.phase === 'play' && G.deck === 1) G.say('Space: jump / climb crates · C while sprinting: slide · Q: grapple line', ''); }, 4500);
+  freeTextures(texBefore);
 }
 
 function spawnThreats(data, n, rnd) {
@@ -688,6 +704,7 @@ function startJob(it, opts = {}) {
   const D = G.duty; if (!D) return { ok: false, why: 'no duty' };
   const run = (q, o) => it.task ? D.doTask(it.id, q) : D.perform(it.id, q, o), label = it.label || it.task;
   const job = jobFor({ ...it, label }), c = D.check(it.id); if (!c.ok) return c;
+  if (jobPending(it.billet, label, it.jtype) && !opts.console) { loadJobModule(it.billet, label, it.jtype); return { ok: false, why: `Pulling up the procedure for ${label.toLowerCase()} — a moment` }; }   // its module has not arrived yet (js/jobs/index.js): wait, never play the fallback mechanic instead
   if (G.sites?.active) return { ok: false, why: `Finish ${G.sites.run.def.name.toLowerCase()} first ([J] stop working)` };
   if (job?.type === 'job' && !opts.console && G.ui) {   // the job's own mechanic (js/jobs/<billet>__<slug>.js): in the room (work-site host) or on the console overlay
     const mod = job.mod, seed = hash('job', G.runSeed || 1, it.id, G.jobSeq++);
@@ -850,13 +867,15 @@ function introHint(dt) {
 }
 
 // ---- the player's billet: duty loops, orders, delegation, reports, mission task board (js/duty.js, js/hud-duty.js)
+// the duty's own job modules (js/jobs/<billet>__<slug>.js): fetched now, long before the first loop falls due (pace firstDue >= 30 s)
+function preloadJobs(D) { for (const it of [...(D?.loops || []), ...(D?.tasks || [])]) loadJobModule(it.billet, it.label || it.task, it.jtype); }
 function setupDuty() {
   G.hud2?.destroy(); G.hud2 = null; G.duty = null; G.saboteur = null; if (!NOM()) return;
   const say = (m) => { if (m.kind === 'report') G.comms?.sim?.say?.({ from: commParty(m.from), to: BRIDGE_PARTY, text: m.text, priority: 'routine', channel: 'comm', kind: 'report' }); };
   // pace (js/pace.js): one scalar T, applied once each: clock rate, ShipState cascades, Duty constructor, Phases constructor (docs/pacing.md)
   G.pace = G.pace || readPace(location.search, localStorage, navigator.webdriver); G.comms.clock.setPace(G.pace.T); G.shipState.paceT = G.pace.T;
   G.duty = new Duty({ player: G.player, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say, seed: G.runSeed, mission: G.mission, pace: G.pace });
-  G.duty.atJob = orderAt;   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
+  G.duty.atJob = orderAt; preloadJobs(G.duty);   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
   G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1', pace: G.pace });
   setupRepair(); G.pin = null; G.jobGo = null; G.sites?.cancel('new run'); G.intro = null; G.introDone = false; G.attn = {}; G.barkAt = G.nodAt = undefined;
   G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel${ev.deck ? ', deck ' + ev.deck : ''}.`, 'warn'); });
@@ -952,7 +971,7 @@ function toMenu() { if (G.phase === 'nomdead' && G.duty && !G.recorded) { G.reco
 function switchPlayer(p) {
   const at = G.sim.where(p), old = G.player; old.isPlayer = false; p.isPlayer = true; G.player = p; G.sim.setPlayer(p); G.comms?.sim.setPlayer(p);
   const nd = new Duty({ player: p, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say: G.duty.say, seed: G.runSeed, mission: G.mission, pace: G.pace }).inherit(G.duty); if (G.repair) { G.repair.duty = nd; G.repair.player = p; }
-  G.duty = nd; G.phases.duty = nd; G.hud2.attach(nd); G.hp = G.maxHp; G.stamina = 100; G.hud2.hideEnd(); hideScreens(); fade(0);
+  G.duty = nd; preloadJobs(nd); G.phases.duty = nd; G.hud2.attach(nd); G.hp = G.maxHp; G.stamina = 100; G.hud2.hideEnd(); hideScreens(); fade(0);
   loadDeck(Math.min(G.ship.decks, Math.max(1, at?.deckNo ?? 1))); G.phase = 'play'; requestLock(); G.say(`You are now ${p.full || p.short}, ${p.title}.`, 'good');
 }
 
@@ -2121,10 +2140,12 @@ const bump = (n, label) => { bootDone += n; Loading.set(bootDone / BOOT_TOTAL, l
 const ready = (async () => {
   Loading.show('Powering up', "The ship's systems are coming online"); Loading.set(0.01, 'Starting…');
   const small = Promise.all([loadPersonas(), loadItems(), loadCommsData(), loadDuties()]).then(() => bump(BOOT_W.small, 'Crew files read'));
+  // every job module up front only for automation (tests / bots drive any billet's jobs right after newRun); ?alljobs=1 / 0 overrides
+  const allJobs = (new URLSearchParams(location.search).get('alljobs') ?? (navigator.webdriver ? '1' : '0')) === '1', jobsP = allJobs ? small.then(() => loadAllJobs(DUTIES)) : null;
   const models = loadModels(undefined, () => bump(1, 'Loading models…'));
   const envP = loadEnv(renderer, 'lobby').then((e) => { bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
   const tex = loadTextures(undefined, () => bump(1, 'Loading textures…'));
-  const [, , env] = await Promise.all([small, models, envP, tex]);
+  const [, , env] = await Promise.all([small, models, envP, tex, jobsP]);
   setAnisotropy(Math.min(16, renderer.capabilities.getMaxAnisotropy() || 1));   // PBR sets: max hardware anisotropy (capped at 16)
   if (env) scene.environment = env; buildViewmodel();
   warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true, onStep: (i, n) => Loading.set((bootDone + BOOT_W.warm * i / n) / BOOT_TOTAL, `Tailoring uniforms ${i} / ${n}`) });

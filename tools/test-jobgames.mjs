@@ -122,6 +122,7 @@ export async function jobgameTests(fail) {
   { let v = null; const s = J.learnedStore(() => v, (x) => { v = x; }); ck(!s.has('console'), 'nothing learned at first'); s.mark('console'); ck(s.has('console') && !s.has('junction') && v.console === 1, 'mark persists through set()'); s.reset(); ck(!s.has('console'), 'reset'); }
   // ---- work sites (js/worksites.js): physical jobs done in the room. Every job resolves (sites or console), no kind over the cap, every site
   //      definition has an interactive act, every act wins on hinted play and faults on bad play, nothing waits forever
+  await (await imp('js/jobs/index.js')).loadAll(duties);   // job modules load on demand (js/jobs/index.js); jobFor only sees loaded ones
   const W = await imp('js/worksites.js'), all = W.coverageAll(duties), rows = Object.entries(all.kinds).sort((a, b) => b[1] - a[1]);
   out.sites = { total: all.total, sites: all.sites, games: all.games, share: +all.share.toFixed(3) };
   console.log(`job coverage incl. work sites (${all.total} jobs: ${all.sites} work-site jobs, ${all.games} console games; max share ${(all.share * 100).toFixed(1)} %):\n` + rows.map(([k, n]) => `${k.padEnd(16)} ${String(n).padStart(4)}  ${(100 * n / all.total).toFixed(1).padStart(5)} %`).join('\n'));

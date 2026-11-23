@@ -41,6 +41,9 @@ jobs:
       - name: Check job registry is up to date
         run: node tools/merge-jobs.mjs --check
 
+      - name: Check index.html module preload list is up to date
+        run: node tools/build-preload.mjs --check
+
   # Browser sections (Playwright 1.49.1 + Chromium on software GL / SwiftShader, see tools/test.mjs).
   # `node tools/test.mjs --list` prints every section with its page kind; `--page <kind>` runs the browser sections of one kind.
   # The smoke job runs first as a gate; the page-kind shards then run two at a time (software GL is memory and CPU hungry).
