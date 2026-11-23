@@ -39,6 +39,7 @@ import { perkTests } from './test-perks.mjs';   // perk synergies + career miles
 import { walkTests, walkBrowser } from './test-walk.mjs';   // NPC walking between schedule blocks: sim.bodies, lift, sealed doors, friends (tools/test-walk.mjs)
 import { dutyTests } from './test-duty.mjs';
 import { socialTests } from './test-social.mjs';   // social tracker + sim/duty hooks (tools/test-social.mjs)
+import { profileTests } from './test-profiles.mjs';   // crew profiles drive free time / phases / alerts (tools/test-profiles.mjs)
 import { gaitTests } from './test-gait.mjs';
 import { movementTests } from './test-movement.mjs';
 import { equipmentTests } from './test-equipment.mjs';   // equipment motions / carry items (tools/test-equipment.mjs)
@@ -61,6 +62,8 @@ for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', wal
   ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests], ['director-soak', directorTests]]) S(n, null, () => f(fail));
   ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['perks-unit', perkTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
   ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests], ['saboteur-unit', saboteurTests]]) S(n, null, () => f(fail));
+for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['profiles', profileTests], ['gait', gaitTests], ['movement', movementTests],
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {

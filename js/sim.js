@@ -15,8 +15,13 @@
 //   Pace (js/pace.js): schedule blocks follow ShipClock.localHour, so the clock's pace rate stretches the schedule; transits stay real seconds.
 //   sim.setSocial(graph)    js/social.js: free-time blocks follow friends and groups (same room instance, same spot, group gatherings),
 //                           spouses share quarters. Deterministic; without a graph the sim behaves exactly as before.
+//   sim.setWorld(fn)        js/profiles.js: fn() -> { phase: 0..4, alerts: [AlertState records] } switches the crew profiles on: free-time blocks pick from each
+//                           billet's `activities` weighted by needs; `phase_behaviour` makes crew dig in at the post as the ship degrades; a mild alert
+//                           (yellow, gravity, medical) puts free-time crew at their `alert_responses` room. sim.alertResponse(p) = the severe-alert
+//                           order (js/main.js alertStations sends them at priority 3). Without setWorld the sim follows the plain template as before.
 import { hash, hash01 } from './clock.js';
 import { freeBlock } from './social.js';
+import { pickActivity, stayChance, alertResponse } from './profiles.js';
 
 const DEAD = new Set(['dead', 'corpse', 'crazed', 'evacuated']);
 export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5, WALK_MAX = 75, TILE_S = 2.5 / 1.0, HOLD_MAX = 60, LADDER_T = 6, LADDER_QUEUE = 3;   // a ladder takes one person at a time: when 3 are already on their way to this deck's ladder, the next goes by lift   // real seconds in transit; a walk on one deck takes about as long as the body needs (tiles * 2.5 m at ~1 m/s, the measured body pace), 3..75 s
@@ -27,19 +32,24 @@ export const LIFT_BASE = 3.5, LIFT_PER_DECK = 1.4, WALK_TIME = 5, WALK_MAX = 75,
 export class CrewSim {
   constructor({ roster, clock, plan, data, seed = 1, decks = 8, lifts = null, ladders = null }) {
     Object.assign(this, { roster, clock, plan: plan || {}, data, seed, decks, lifts, ladders }); this.holdBody = null;
-    this.t = 0; this.over = new Map(); this.st = new Map(); this.handlers = {}; this.player = null; this.acc = 0; this.log = [];
+    this.world = null; this._pc = new Map(); this.t = 0; this.over = new Map(); this.st = new Map(); this.handlers = {}; this.player = null; this.acc = 0; this.log = [];
     for (const p of roster.people) this._init(p);
   }
   on(ev, fn) { (this.handlers[ev] ||= []).push(fn); return this; }
   _emit(ev, a) { for (const f of this.handlers[ev] || []) f(a); }
   setPlayer(p) { this.player = p; if (p) this.st.delete(p.id); }
+  setWorld(fn) { this.world = fn || null; this._pc = new Map(); return this; }
+  _ctx() { const w = this.world?.() || {}, al = w.alerts || [], idx = w.phase || 0; return { phase: idx, alerts: al, sev: al.reduce((m, a) => Math.max(m, a.def?.severity ?? 0), 0) }; }
+  // the severe-alert order for this person now (or null): room, spot, priority, action, comm line (their profile's `alert_responses`)
+  alertResponse(p, severe = true) { const w = this._ctx(), st = this.st.get(p.id); return alertResponse(this.data?.billets?.[p.billet], w.alerts, { deckNo: st?.deckNo ?? null, severe }); }
   setSocial(graph) { this.social = graph || null; for (const s of [...this.st.values()]) if (!s.transit) this._init(s.person); return this; }
 
   // The scheduled block for a person right now: { room, spot, activity } or null
   block(p) {
     const ov = this.overrideOf(p); if (ov) return { room: ov.room, spot: ov.spot || 'door', activity: ov.activity || 'evacuating', site: ov.site || null, prio: ov.prio };
     const b = this._day(p); if (!b) return null;
-    const out = { room: b[2], spot: b[3], activity: b[4] }, S = this.social;
+    let out = { room: b[2], spot: b[3], activity: b[4] }, S = this.social;
+    if (this.world && freeBlock(b)) { const o = this._profileBlock(p, b); if (o) { out = o; if (o.work || o.alert) return o; } }   // js/profiles.js: needs-weighted activity / dig in / mild alert
     if (!S || !freeBlock(b) || !S.isFree(p, this.clock.hour)) return out;
     // free time (js/social.js): drop in on a group gathering; else, most of the time, go where your free-time lead goes; else at least
     // stand at the same furniture as your closest same-watch friend when you are in the same room anyway
@@ -50,6 +60,21 @@ export class CrewSim {
     const c = S.companionOf(p), cp = c != null ? this.roster.people[c] : null;
     if (live(cp) && cp.id === c) { const cb = this._day(cp); if (cb && cb[2] === out.room && cb[3] !== out.spot && freeBlock(cb)) out.spot = cb[3]; }
     return out;
+  }
+  // profile overlay for a free-time block (js/profiles.js). Cached per person and 20-minute slot; null = the template block stands.
+  _profileBlock(p, b) {
+    const prof = this.data?.billets?.[p.billet]; if (!prof?.act?.length) return null;
+    const c = this._ctx(), h = this.clock.localHour(p), slot = Math.floor((h - b[0]) * 3), key = `${b[0]}|${slot}|${c.phase}|${c.alerts.map(a => a.id).join()}`, hit = this._pc.get(p.id);
+    if (hit && hit.key === key) return hit.val ? { ...hit.val } : null;
+    const has = (r) => !!this.plan[r]?.length; let val = null;
+    const mild = alertResponse(prof, c.alerts, { deckNo: this.st.get(p.id)?.deckNo ?? null, severe: false });
+    if (mild && has(mild.room)) val = { room: mild.room, spot: mild.spot, activity: 'alert_' + mild.id, alert: mild.id };   // yellow alert: stay near the post, as the profile says
+    else if (c.phase > 0 && hash01('stay', this.seed, p.id, Math.floor(h * 3)) < stayChance(prof, c.phase)) {   // phase_behaviour: dig in at the post rather than take the break
+      const w = (this.data.billets[p.billet].day || []).find(x => x[0] < 8 && !/sleep|handover|walk_to|pre_watch|pre_duty|prep_for|watch_brief|get_ready|wake|meal|coffee|break|tea|breakfast/.test(x[4]) && has(x[2]));
+      if (w) val = { room: w[2], spot: w[3], activity: w[4], work: true };
+    }
+    if (!val) { const a = pickActivity(prof, p, { from: b[0], h, ctx: { ...c, prof }, seed: this.seed, has, tmpl: true }); if (a) val = { room: a.room, spot: a.spot, activity: a.activity, free: true }; }
+    this._pc.set(p.id, { key, val }); return val ? { ...val } : null;
   }
   _day(p) { const day = this.data?.billets?.[p.billet]?.day; if (!day?.length) return null; const h = this.clock.localHour(p); return day.find(x => h >= x[0] && h < x[1]) || day[day.length - 1]; }
   // Which instance of a room type this person uses. Quarters are personal; others prefer the person's own deck, then the nearest.
