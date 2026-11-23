@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Starfarers: The Backdecks</title>
+<link rel="preload" href="assets/fonts/Antonio-var.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  /* Antonio (SIL OFL 1.1, assets/licenses/OFL-Antonio.txt): bundled condensed face for HUD / LCARS labels; --f-d falls back to system condensed faces */
+  @font-face { font-family:"Antonio"; src:url(assets/fonts/Antonio-var.woff2) format("woff2"); font-weight:100 700; font-style:normal; font-display:swap; }
   /* Fleet maintenance console: chamfered panels, segmented meters, amber/teal on navy, condensed caps + monospace readouts. */
   /* loading overlay (js/loading.js): static markup + CSS-only motion so it shows and animates before any script runs */
   #boot { position:fixed; inset:0; z-index:9999; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:radial-gradient(ellipse at 50% 42%,#14213a 0%,#070b14 55%,#02040a 100%); color:var(--ink,#e8eef6); text-align:center; padding:20px; opacity:1; transition:opacity .45s ease; }
@@ -29,7 +32,7 @@
   body.cb #hpbar { background:linear-gradient(90deg,#a65f00,#ffd24a); } body.cb #toast.warn { color:#ffc447; } body.cb #toast.good { color:#7ec0ff; } body.cb .bar > i { filter:hue-rotate(0deg); }
   body.cb { --red:#ffb000; --lc2:#4aa3ff; } body.cb .good, body.cb .say.good { color:#4aa3ff !important; } body.cb .warn, body.cb .say.warn { color:#ffb000 !important; } body.cb #faults .offline { color:#ff9a00; } body.cb #faults .degraded { color:#ffe14a; }
   :root { --lc1:#f2a03d; --lc2:#58c9b9; --lc3:#6f8fb8; --lc4:#ffd9a0; --bg:#05070c; --ink:#e8eef6; --dim:#8fa0b6; --line:rgba(150,180,210,.26); --pan:rgba(7,11,19,.62); --red:#ff5a4a;
-    --f-d:"Avenir Next Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif; --f-m:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace; }
+    --f-d:"Antonio","Avenir Next Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif; --f-m:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace; }
   * { box-sizing: border-box; }
   html,body { margin:0; height:100%; background:#000; overflow:hidden; font-family:'Helvetica Neue',Arial,sans-serif; color:#fff; user-select:none; }
   canvas#view { position:fixed; inset:0; width:100%; height:100%; display:block; }
@@ -283,7 +286,7 @@
     <div id="best"></div>
   </div>
 </div>
-<div class="screen" id="credits"><div class="in"><div class="eyebrow">Acknowledgements · all third-party assets CC0</div><h2>Credits</h2><p>
+<div class="screen" id="credits"><div class="in"><div class="eyebrow">Acknowledgements · all third-party assets CC0 except the Antonio font (SIL OFL 1.1)</div><h2>Credits</h2><p>
 <b>Characters (CC0):</b> <b>MakeHuman</b> base mesh, hair and clothes, assembled by <b>dramatis3d</b> (Tonio Loewald); spacesuit by Tonio Loewald (AI-assisted, CC0).<br>
 <b>Animation (CC0):</b> <b>Quaternius</b> — Universal Animation Library (quaternius.com).<br>
 <b>Props &amp; HDRI (CC0):</b> <b>Poly Haven</b> — crate, barrel, plant, utility box, armchair, "Lobby" HDRI (polyhaven.com).<br>

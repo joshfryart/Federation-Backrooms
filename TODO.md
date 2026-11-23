@@ -97,7 +97,7 @@ Done in this pass: rigged crew/corpses/crazed/slimeling/drone/holograms, hologra
 - [x] **Viewmodel:** recoil + yaw jitter + reload flick on cell pickup done (`makeViewmodel.tick`). Still open: optional rigged arms (the crew rig has fingers).
 - [ ] **Props:** sci-fi pieces (console, warp core, biobed, shuttle, pad, replicator) are still procedural. Candidates: more Poly Haven scans (shelves, lockers, lab equipment) — files can be fetched from GitHub mirrors (search `filename:<asset>_1k.gltf`), see `tools/build-props.mjs`.
 - [x] **Textures (walls/floors):** three generated wall variants and four floor variants with per-room selection (see handoff). Still open: props/crew/enemy textures, ceilings/trim/glass/emissives, final grade, KTX2. polyhaven.com / ambientcg.com are blocked in the sandbox; GitHub mirrors work (`raw.githubusercontent.com`, `git clone`).
-- [x] **UI art:** original fleet-console HUD, icons, title background, death/win/perk screens. Still open: a bundled web font, accessibility options, touch layout, schematic on the pause screen.
+- [x] **UI art:** original fleet-console HUD, icons, title background, death/win/perk screens. Bundled web font done (Antonio, OFL, `assets/fonts/`). Still open: accessibility options, touch layout, schematic on the pause screen.
 
 ## 2. ENVIRONMENT
 - [x] Wall/ceiling variety: ribbed bulkheads, window frames, hanging cables, conduit, hazard thresholds, burnt panels, dropped ceiling tiles. Still open: vents with fans, ceiling texture variants.

@@ -20,6 +20,13 @@ tone comes from the Monk Skin Tone Scale (Dr. Ellis Monk / Google, CC BY 4.0); t
 The models were re-packed (textures resized to WebP, unused face morphs removed, meshopt compression, garment textures
 neutralised so uniforms can be tinted) by `tools/build-characters.mjs`.
 
+## Fonts (`assets/fonts/`)
+
+**Antonio** (Vernon Adams / Google Fonts, https://github.com/googlefonts/antonioFont) — **SIL Open Font License 1.1**, not CC0:
+`Antonio-var.woff2` is the variable-weight font subset to Latin / Latin-1 / Latin Extended-A and converted to woff2 with
+fonttools (no design changes, so no Reserved Font Name issue). Used for HUD and LCARS button labels (`--f-d` in
+`index.html`, with system condensed fallbacks). Licence text: `assets/licenses/OFL-Antonio.txt`.
+
 ## Props (`assets/models/ph_*.glb`)
 
 **Poly Haven** (https://polyhaven.com) — CC0: `old_military_crate`, `barrel_03`, `potted_plant_01`, `utility_box_01`,
