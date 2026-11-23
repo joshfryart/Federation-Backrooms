@@ -281,6 +281,7 @@ export function wearOutfit(human, id, opts = {}) {
   const e = wornParts(human, `outfit:${id}:${JSON.stringify(opts)}`, (A) => { if (id !== 'suit' && !A.src.garment && id !== 'gloves') return null; const B = new Build(A); BUILD[id](B, A, opts); return B; });
   if (!e) return null; const meshes = attachParts(human, e), hidden = [];
   if (!opts.keepGarment && ['coverall', 'scrubs', 'whites'].includes(id)) { const gm = garmentOf(human.userData.human.inner); if (gm) { gm.visible = false; hidden.push(gm); } }
+  if (!opts.keepGarment && ['coverall', 'scrubs', 'whites'].includes(id)) for (const m of human.userData.cutParts || []) { m.visible = false; hidden.push(m); }   // jumpsuit / tunic pieces from makeHuman go with the casual clothes
   let helmet = null; if (id === 'suit') { helmet = meshes.find(m => m.material === MAT.glass()) || null; if (helmet) helmet.visible = !!opts.helmetShown; }
   const w = { id, meshes, hidden, tris: e.tris, helmet,
     setVisible(v) { for (const m of meshes) if (m !== helmet) m.visible = v; for (const m of hidden) m.visible = !v; },
@@ -293,8 +294,10 @@ export function wearHeadgear(human, id, opts = {}) {
   if (!head[id]) return null;
   const e = wornParts(human, `head:${id}:${JSON.stringify(opts)}`, (A) => { const B = new Build(A); head[id](B, A, opts); return B; }); if (!e) return null;
   const meshes = attachParts(human, e);
-  const w = { id, meshes, hidden: [], tris: e.tris, setVisible(v) { for (const m of meshes) m.visible = v; }, showHelmet() { },
-    remove() { detachParts(meshes); const l = human.userData.worn, i = l ? l.indexOf(w) : -1; if (i >= 0) l.splice(i, 1); } };
+  const hidden = ['hood', 'cap'].includes(id) ? (human.userData.hairParts || []).filter(m => m.visible) : [];   // bun / ponytail pieces would poke through a hood or cap
+  for (const m of hidden) m.visible = false;
+  const w = { id, meshes, hidden, tris: e.tris, setVisible(v) { for (const m of meshes) m.visible = v; for (const m of hidden) m.visible = !v; }, showHelmet() { },
+    remove() { detachParts(meshes); for (const m of hidden) m.visible = true; const l = human.userData.worn, i = l ? l.indexOf(w) : -1; if (i >= 0) l.splice(i, 1); } };
   (human.userData.worn || (human.userData.worn = [])).push(w); return w;
 }
 // ---- cache: a garment is built ONCE per body kind and outfit (+ opts). The geometry is stored in the space of the human's `inner` group (the GLB scene, before the per-person

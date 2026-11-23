@@ -47,7 +47,27 @@ function info(kind) {
     for (let i = 0; i < n; i++) { let l = 0, c = 0, y = 0, tot = 0; for (let k = 0; k < 4; k++) { const wk = sw.getComponent(i, k), b = si.getComponent(i, k); tot += wk; if (isLeg[b]) l += wk; if (isCuff[b]) c += wk; if (isYoke[b]) y += wk; } tot = tot || 1; z[i * 3] = l / tot; z[i * 3 + 1] = c / tot; z[i * 3 + 2] = y / tot; }
     g.setAttribute('zone', new THREE.BufferAttribute(z, 3));
   });
-  return meta[kind] = { height: box.max.y - box.min.y, clips };
+  // head box (bind-pose mesh space, native units): the skin vertices owned by the Head bone, plus eye height and whether the stock hair is long. Skin features and hair pieces are placed from it.
+  let head = null;
+  if (kind !== 'suit') {
+    src.scene.updateMatrixWorld(true);
+    let bodyM = null, eyesM = null, hairM = null;
+    src.scene.traverse(o => { if (!o.isSkinnedMesh) return; const n = o.material.name || ''; if (n === 'body') bodyM = o; else if (n.startsWith('eyes')) eyesM = o; else if (n === 'hair') hairM = o; });
+    const hi = bodyM ? bodyM.skeleton.bones.findIndex(b => b.name === 'Head') : -1, v = new THREE.Vector3(), V = () => new THREE.Vector3(1e9, 1e9, 1e9), mn = V(), mx = V().negate(), wmn = V(), wmx = V().negate();
+    if (hi >= 0) {
+      bodyM.skeleton.update(); const g = bodyM.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, pos = g.attributes.position;
+      for (let i = 0; i < pos.count; i++) { let w = 0; for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === hi) w += sw.getComponent(i, k); if (w < 0.6) continue;
+        v.fromBufferAttribute(pos, i); mn.min(v); mx.max(v); bodyM.getVertexPosition(i, v).applyMatrix4(bodyM.matrixWorld); wmn.min(v); wmx.max(v); }
+      if (mx.y > mn.y) {
+        // two boxes: mn / mx in the body's attribute space (what the skin shader sees as `position`), wmn / wmx in the model's space (where hair pieces are placed); the y mapping between them is linear
+        const yOf = (wy) => mn.y + (wy - wmn.y) / (wmx.y - wmn.y) * (mx.y - mn.y);
+        let eyeY = mn.y + 0.55 * (mx.y - mn.y); if (eyesM) { eyesM.skeleton.update(); const p = eyesM.geometry.attributes.position; let t = 0; for (let i = 0; i < p.count; i++) t += eyesM.getVertexPosition(i, v).applyMatrix4(eyesM.matrixWorld).y; eyeY = yOf(t / p.count); }
+        let hairLow = Infinity; if (hairM) { hairM.skeleton.update(); const p = hairM.geometry.attributes.position; for (let i = 0; i < p.count; i += 3) hairLow = Math.min(hairLow, hairM.getVertexPosition(i, v).applyMatrix4(hairM.matrixWorld).y); }
+        head = { mn, mx, wmn, wmx, eyeY, long: hairLow < wmn.y + 0.25 * (wmx.y - wmn.y) };
+      }
+    }
+  }
+  return meta[kind] = { height: box.max.y - box.min.y, clips, head };
 }
 
 
@@ -135,6 +155,29 @@ function fitKit(kind, inner, height) {
       const cap = paint(new THREE.CylinderGeometry(0.022 * u, 0.022 * u, 0.018 * u, 8), 0.2, 1.3, 1.7); cap.translate(0, 0.016 * u, 0); cap.applyMatrix4(at(-sgnL * 2.1, 0.02 * u));
       out.belt = fin([band, buckle, pouch, flap, can, cap]);
     } }
+  // garment cut pieces (procedural stand-ins for authored jumpsuit / tunic meshes): rigid parts glued to a bone, each a few dozen triangles. cloth = uniform-coloured, gear = zip / pads.
+  // outermost-surface radius round a vertical axis at height y (null when nothing is hit)
+  const rad = (cx, cz, y, N) => { const r = []; for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, dx = Math.sin(a), dz = Math.cos(a), h = cast(cx + dx * 0.7, y, cz + dz * 0.7, -dx, 0, -dz).find(q => q.front && q.t < 0.69); r.push(h ? 0.7 - h.t : null); } const ok = r.filter(v => v !== null); if (ok.length < N * 0.6) return null; const avg = ok.reduce((a, b) => a + b, 0) / ok.length; return r.map(v => v ?? avg); };
+  const tube = (cx, cz, y0, y1, R0, R1, col) => { const N = R0.length, pos = [], nor = [], uv = [], q = (a, r, y) => [cx + Math.sin(a) * r, y, cz + Math.cos(a) * r];
+    for (let i = 0; i < N; i++) { const j = (i + 1) % N, a0 = i / N * Math.PI * 2, a1 = (i + 1) / N * Math.PI * 2, A = q(a0, R0[i], y0), B = q(a1, R0[j], y0), C = q(a1, R1[j], y1), D = q(a0, R1[i], y1);
+      for (const [P, a] of [[A, a0], [B, a1], [C, a1], [A, a0], [C, a1], [D, a0]]) { pos.push(...P); nor.push(Math.sin(a), 0, Math.cos(a)); uv.push(0, 0); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); return paint(g, ...col); };
+  const parts = [], at = (h, lift = 0.002, hint) => basisAt(h.p, h.n.clone().lerp(new THREE.Vector3(0, 0, 1), 0.25), hint, lift * u), box = (w, hh, d, col, m) => paint(new THREE.BoxGeometry(w * u, hh * u, d * u), ...col).applyMatrix4(m);
+  const W1 = [1, 1, 1], GRY = [0.5, 0.52, 0.56], DRK = [0.03, 0.03, 0.035];
+  { const R0 = rad(np.x, np.z, np.y - 0.03 * u, 14), R1 = rad(np.x, np.z, np.y + 0.01 * u, 14);   // collar: stand-up band round the neck, a little loose
+    if (R0 && R1) parts.push({ cut: 'collar', bone: 'spine_03', mat: 'cloth', g: fin([tube(np.x, np.z, np.y - 0.045 * u, np.y + 0.02 * u, R0.map(r => Math.min(r, 0.058 * u) + 0.008 * u), R1.map(r => Math.min(r, 0.052 * u) + 0.012 * u), W1)]) }); }
+  { const zs = [], yTop = np.y - 0.05 * u, yBot = pel.y + 0.07 * u; for (let k = 0; k < 4; k++) { const y = yTop + (yBot - yTop) * (k + 0.5) / 4, h = first(np.x, y, np.z + 1, 0, 0, -1); if (h) zs.push(box(0.008, (yTop - yBot) / 4 / u * 0.96, 0.006, GRY, at(h, 0.002, new THREE.Vector3(0, 1, 0)))); }
+    if (zs.length) parts.push({ cut: 'jumpsuit', bone: 'spine_03', mat: 'gear', g: fin(zs) }); }   // front zip
+  { const ps = []; for (const sg of [1, -1]) { const h = first(np.x + sg * half * 0.55, np.y - 0.3 * u, np.z + 1, 0, 0, -1); if (!h) continue; const m = at(h, 0.006); ps.push(box(0.06, 0.055, 0.016, W1, m), box(0.064, 0.018, 0.02, W1, m.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.024 * u, 0)))); }
+    if (ps.length) parts.push({ cut: 'jumpsuit', bone: 'spine_03', mat: 'cloth', g: fin(ps) }); }   // chest pockets with flaps
+  for (const [side, sg] of [['l', sgnL], ['r', -sgnL]]) {
+    const th = W('thigh_' + side), ca = W('calf_' + side);
+    { const h = first(th.x + sg * 0.7, th.y - 0.12 * u, th.z, -sg, 0, 0); if (h) { const m = at(h, 0.004, new THREE.Vector3(0, 1, 0)); parts.push({ cut: 'jumpsuit', bone: 'thigh_' + side, mat: 'cloth', g: fin([box(0.07, 0.085, 0.034, W1, m), box(0.074, 0.02, 0.038, W1, m.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.03 * u, 0)))]) }); } }   // cargo pocket
+    { const h = first(ca.x, ca.y + 0.02 * u, ca.z + 1, 0, 0, -1); if (h) parts.push({ cut: 'jumpsuit', bone: 'thigh_' + side, mat: 'gear', g: fin([box(0.07, 0.075, 0.024, DRK, at(h, 0.005))]) }); }   // knee pad
+  }
+  { const yb0 = pel.y + 0.05 * u, yb1 = pel.y - 0.04 * u, R0 = rad(pel.x, pel.z, yb0, 16), R1 = rad(pel.x, pel.z, yb1 + 0.02 * u, 16);   // tunic skirt: short flared peplum under the belt, contrast hem
+    if (R0 && R1) parts.push({ cut: 'tunic', bone: 'pelvis', mat: 'cloth', g: fin([tube(pel.x, pel.z, yb1, yb0, R1.map(r => r * 1.07 + 0.016 * u), R0.map(r => r + 0.009 * u), W1), tube(pel.x, pel.z, yb1 - 0.011 * u, yb1, R1.map(r => r * 1.07 + 0.017 * u), R1.map(r => r * 1.07 + 0.016 * u), [2.2, 1.7, 0.5])]) }); }
+  out.parts = parts; 
   return kitGeo[kind] = out;
 }
 function plateMat(name) {
@@ -147,12 +190,15 @@ function plateMat(name) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return kitMat.plate[key] = new THREE.MeshStandardMaterial({ map: t, roughness: 0.45, metalness: 0.3, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.12 });
 }
-function addKit(kind, inner, height, uniform, name) {
+function addKit(kind, inner, height, uniform, name, cut = 'suit') {
   const geo = fitKit(kind, inner, height); if (!pipMats) pipSetup();
   kitMat.belt = kitMat.belt || new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35, side: THREE.DoubleSide });
   const ck = uniform.getHex(), board = kitMat.board[ck] || (kitMat.board[ck] = new THREE.MeshStandardMaterial({ vertexColors: true, color: uniform.clone().lerp(new THREE.Color(0x101014), 0.55), roughness: 0.7, metalness: 0.2 }));
   const put = (g, mat, bone) => { if (!g) return; const m = new THREE.Mesh(g, mat); m.castShadow = false; m.frustumCulled = false; inner.add(m); inner.updateMatrixWorld(true); inner.getObjectByName(bone)?.attach(m); };
   put(geo.gold, pipMats.gold, 'spine_03'); put(geo.plate, plateMat(name), 'spine_03'); put(geo.boards, board, 'spine_03'); put(geo.belt, kitMat.belt, 'pelvis');
+  const made = [];   // jumpsuit / tunic pieces (hidden again when a work outfit replaces the casual clothes, see wearOutfit)
+  for (const p of geo.parts || []) if (cut === p.cut || (p.cut === 'collar' && cut !== 'suit')) { const m = new THREE.Mesh(p.g, p.mat === 'gear' ? kitMat.belt : board); m.castShadow = false; m.frustumCulled = false; inner.add(m); inner.updateMatrixWorld(true); inner.getObjectByName(p.bone)?.attach(m); made.push(m); }
+  return made;
 }
 
 // ---- rank pips: solid = gold disc, hollow = dark disc with a gold rim; pinned to the collar (wearer's right) ----
@@ -236,25 +282,40 @@ function bloodyMap(tex, amount) {
 
 // ---- skin detail without UVs: bind-pose object-space noise on the `body` material (pores, mottle, flush, veins, bruising/wounds, derivative bump) ----
 const SKIN_GLSL = `
+float sq(float x){ return x * x; }
 float sh_h(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float sh_n(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(sh_h(i), sh_h(i + vec3(1,0,0)), f.x), mix(sh_h(i + vec3(0,1,0)), sh_h(i + vec3(1,1,0)), f.x), f.y),
              mix(mix(sh_h(i + vec3(0,0,1)), sh_h(i + vec3(1,0,1)), f.x), mix(sh_h(i + vec3(0,1,1)), sh_h(i + vec3(1,1,1)), f.x), f.y), f.z); }
 float sh_f(vec3 p){ return 0.5 * sh_n(p) + 0.25 * sh_n(p * 2.03 + 7.1) + 0.125 * sh_n(p * 4.1 + 3.7) + 0.0625 * sh_n(p * 8.3 + 1.3); }
 `;
-export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
-  const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale } };
+// per-person skin: freck (freckle strength, 1 = the old look), ruddy (cheek flush), age (forehead lines, eye bags), mole, stub (stubble on the jaw); head = info().head (places the face features)
+export function skinShader(m, { wound = 0, seed = 0, pale = 0, freck = 1, ruddy = 0, age = 0, mole = 0, stub = 0, head = null } = {}) {
+  const hd = head ? new THREE.Vector4((head.mn.x + head.mx.x) / 2, (head.mn.z + head.mx.z) / 2, head.mn.y, head.mx.y - head.mn.y) : new THREE.Vector4(0, 0, -1e3, 1);
+  const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale }, uSk: { value: new THREE.Vector4(freck, ruddy, head ? age : 0, mole) }, uHd: { value: hd },
+    uHe: { value: new THREE.Vector3(head ? (head.mx.x - head.mn.x) / 2 : 1, head ? head.eyeY : 0, head ? stub : 0) } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale; uniform vec4 uSk, uHd; uniform vec3 uHe;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0, gAge = 0.0;')
       .replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 q = vObj * 9.0 + uSeed;
-        float mot = sh_f(q * 0.5), pore = sh_n(vObj * 260.0 + uSeed), freck = smoothstep(0.72, 0.8, sh_n(vObj * 70.0 + uSeed * 1.7));
+        float mot = sh_f(q * 0.5), pore = sh_n(vObj * 260.0 + uSeed), freck = smoothstep(0.72 - 0.03 * (uSk.x - 1.0), 0.8 - 0.03 * (uSk.x - 1.0), sh_n(vObj * 70.0 + uSeed * 1.7));
         float vein = smoothstep(0.47, 0.5, sh_f(vObj * 14.0 + uSeed)) * smoothstep(0.53, 0.5, sh_f(vObj * 14.0 + uSeed));
         diffuseColor.rgb *= 0.9 + 0.2 * mot;
         diffuseColor.rgb *= vec3(1.0, 1.0 - 0.06 * (mot - 0.5), 1.0 - 0.12 * (mot - 0.5));     // blotchy flush
-        diffuseColor.rgb *= 1.0 - 0.1 * pore - 0.18 * freck;
+        diffuseColor.rgb *= 1.0 - 0.1 * pore - 0.18 * freck * uSk.x;
+        { float hy = (vObj.y - uHd.z) / uHd.w, ey = (uHe.y - uHd.z) / uHd.w, hf = hy - ey, fr = smoothstep(-0.02, 0.07, vObj.z - uHd.y) * step(0.0, hy) * step(hy, 1.05), ax = abs(vObj.x - uHd.x) / uHe.x;
+          float cheek = exp(-sq((hy - ey + 0.06) / 0.14) - sq((ax - 0.55) / 0.3)) * fr;                       // cheek flush
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 0.78, 0.78), clamp(uSk.y * cheek, 0.0, 1.0));
+          float jaw = fr * smoothstep(0.02, 0.1, hy) * (1.0 - smoothstep(0.34, 0.46, hy)) * (1.0 - 0.7 * smoothstep(0.1, 0.0, ax));   // stubble: jaw and upper lip
+          diffuseColor.rgb *= 1.0 - uHe.z * jaw * (0.12 + 0.4 * smoothstep(0.35, 0.6, sh_n(vObj * 620.0 + uSeed)));
+          float lines = smoothstep(0.55, 0.8, abs(sin(hy * 95.0 + 1.3 * sh_n(vObj * 12.0)))) * smoothstep(0.1, 0.16, hf) * (1.0 - smoothstep(0.3, 0.38, hf)) * fr;   // forehead lines
+          float bag = exp(-sq((hf + 0.075) / 0.035)) * smoothstep(0.12, 0.3, ax) * (1.0 - smoothstep(0.55, 0.75, ax)) * fr;            // eye bags
+          diffuseColor.rgb *= 1.0 - uSk.z * (0.14 * lines);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.84, 0.76, 0.84), clamp(uSk.z * bag, 0.0, 1.0));
+          diffuseColor.rgb *= 1.0 - uSk.w * 0.6 * smoothstep(0.93, 0.96, sh_n(vObj * 38.0 + uSeed * 2.3));   // moles
+          gAge = uSk.z * lines; }
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.86, 1.05), vein * (0.25 + uPale * 0.6));
         float w = sh_f(vObj * 6.5 + uSeed * 3.1); gWound = uWound * smoothstep(0.6, 0.68, w);
         { vec3 sp = vObj * 5.2 + uSeed;   // claw slashes: three parallel gashes in a patch, only on well-wounded bodies
@@ -263,7 +324,7 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
         float bruise = uWound * smoothstep(0.52, 0.64, sh_f(vObj * 4.0 + uSeed * 5.3 + 11.0));
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.6, 0.38, 0.5), bruise * 0.6);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.17, 0.015, 0.02), gWound);
-        gH = 0.45 * pore + 0.5 * mot - 1.1 * gWound; }`)
+        gH = 0.45 * pore + 0.5 * mot - 1.1 * gWound - 0.35 * gAge; }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor * (0.92 + 0.2 * pore_r()), 0.12, gWound);')
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       { vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition); float hx = dFdx(gH), hy = dFdy(gH);
@@ -271,9 +332,51 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
         vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad * 0.0012); }`)
       .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0');
   };
-  m.customProgramCacheKey = () => 'skin1';
+  m.customProgramCacheKey = () => 'skin2';
   m.needsUpdate = true;
   return u;
+}
+
+// ---- hair variety. Stock hair is one mesh per body kind (grey strand map); per person we add greying streaks and dyed tips in the shader, and for some a procedural style:
+// bun / ponytail / braid pieces (a few dozen triangles) glued to the Head bone, or the stock hair hidden for a shaved head (buzz = a thin scalp cap, bald = none). ----
+const HAIR_STYLES = { short: ['native', 'native', 'native', 'bun', 'ponytail', 'braid', 'buzz', 'bald'], long: ['native', 'native', 'native', 'native', 'buzz'] };
+const DYES = [[0.15, 1.3, 1.45], [1.7, 0.3, 0.8], [0.55, 0.4, 1.6], [1.8, 0.55, 0.2], [0.25, 1.5, 0.45]];
+function hairShader(m, { grey = 0, dye = null, seed = 0, head, base }) {
+  const gm = new THREE.Vector3(...[0, 1, 2].map(i => Math.min(7, 1.35 / Math.max(0.08, base[i])))), dm = dye ? new THREE.Vector3(...[0, 1, 2].map(i => Math.min(8, dye[i] / Math.max(0.08, base[i])))) : new THREE.Vector3(1, 1, 1);
+  const u = { uHA: { value: new THREE.Vector2(head.mn.y, head.mx.y - head.mn.y) }, uHC: { value: new THREE.Vector3(grey, dye ? 1 : 0, seed) }, uGM: { value: gm }, uDM: { value: dm } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform vec2 uHA; uniform vec3 uHC, uGM, uDM;\n' + SKIN_GLSL)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+      { float hh = (vObj.y - uHA.x) / uHA.y;
+        float gr = uHC.x * smoothstep(0.45, 0.62, sh_f(vObj * vec3(16.0, 5.0, 16.0) + uHC.z)) + 0.5 * uHC.x * smoothstep(0.4, 0.2, abs(vObj.x) * 7.0);
+        diffuseColor.rgb *= mix(vec3(1.0), uGM, clamp(gr, 0.0, 1.0));
+        float tip = uHC.y * (1.0 - smoothstep(-0.55, 0.3, hh)); diffuseColor.rgb *= mix(vec3(1.0), uDM, tip); }`);
+  };
+  m.customProgramCacheKey = () => 'hair1'; m.needsUpdate = true;
+}
+const hairGeo = {};
+function hairPieces(style, head) {   // geometry in bind-pose mesh space for this body kind (cached), as [{ g, k }]
+  const key = style + head.wmx.y.toFixed(3); if (hairGeo[key]) return hairGeo[key];
+  const hh = head.wmx.y - head.wmn.y, w = head.wmx.x - head.wmn.x, d = head.wmx.z - head.wmn.z, cx = (head.wmn.x + head.wmx.x) / 2, cz = (head.wmn.z + head.wmx.z) / 2, Y = new THREE.Vector3(0, 1, 0), out = [];
+  const place = (g, pos, quat, sc) => { g.applyMatrix4(new THREE.Matrix4().compose(pos, quat || new THREE.Quaternion(), sc || new THREE.Vector3(1, 1, 1))); return g; };
+  if (style === 'bun') out.push(place(new THREE.SphereGeometry(1, 8, 6), new THREE.Vector3(cx, head.wmn.y + 0.92 * hh, head.wmn.z - 0.015 * d), null, new THREE.Vector3(0.19 * hh, 0.16 * hh, 0.19 * hh)));
+  else if (style === 'ponytail' || style === 'braid') {
+    const dir = new THREE.Vector3(0, -Math.cos(0.4), -Math.sin(0.4)), start = new THREE.Vector3(cx, head.wmn.y + 0.8 * hh, head.wmn.z - 0.01 * d);
+    if (style === 'ponytail') { const c = new THREE.CylinderGeometry(0.09 * hh, 0.025 * hh, 0.95 * hh, 6, 1, true); c.translate(0, -0.475 * hh, 0); out.push(place(c, start, new THREE.Quaternion().setFromUnitVectors(Y.clone().negate(), dir))); }
+    else for (let i = 0; i < 4; i++) { const r = (0.085 - i * 0.013) * hh; out.push(place(new THREE.SphereGeometry(1, 6, 4), start.clone().addScaledVector(dir, (0.12 + i * 0.2) * hh), null, new THREE.Vector3(r, 0.12 * hh, r))); }
+    out.push(place(new THREE.TorusGeometry(0.075 * hh, 0.018 * hh, 4, 8), start.clone().addScaledVector(dir, 0.03 * hh), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir)));
+  } else if (style === 'buzz') {
+    const ry = 0.52 * hh, g = new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.4); out.push(place(g, new THREE.Vector3(cx, head.wmx.y - ry * 1.02, cz - 0.02 * d), new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.2, 0, 0)), new THREE.Vector3(0.56 * w, ry * 1.1, 0.56 * d)));
+  }
+  return hairGeo[key] = out.map(g => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return g; });
+}
+function addHairStyle(inner, head, style, col) {
+  const made = []; if (!head || !['bun', 'ponytail', 'braid', 'buzz'].includes(style)) return made;
+  const mat = new THREE.MeshStandardMaterial({ color: col, roughness: style === 'buzz' ? 1 : 0.7, envMapIntensity: style === 'buzz' ? 0.35 : 1, side: THREE.DoubleSide });
+  for (const g of hairPieces(style, head)) { const m = new THREE.Mesh(g, mat); m.castShadow = false; m.frustumCulled = false; inner.add(m); inner.updateMatrixWorld(true); inner.getObjectByName('Head')?.attach(m); made.push(m); }
+  return made;
 }
 
 /**
@@ -309,7 +412,13 @@ export function makeHuman(opts = {}) {
   const skin = new THREE.Color(opts.skin ?? pickOf(SKINS, rnd)); if (opts.pale) skin.lerp(new THREE.Color(0xb9b3a4), opts.pale);
   const hair = opts.hair || pickOf(HAIRS, rnd); const uniform = new THREE.Color(opts.uniform ?? pickOf(DIVISIONS, rnd));
   const style = opts.style ?? pickOf(['plain', 'plain', 'duty', 'duty', 'trim', 'yoke', 'trim-duty'], rnd);   // uniform variants (see styleGarment)
-  const faces = []; const mats = {};
+  // per-person extras from an independent stream, so the older draws (and every roster member's existing look) do not shift
+  const r2 = mulberry32(((seed ?? Math.floor(Math.random() * 4294967296)) ^ 0x5bd1e995) >>> 0), head = kind === 'suit' || opts.material ? null : inf.head;
+  const rk = opts.rank ?? per?.rank ?? 0, greying = r2() < 0.07 + rk * 0.06 ? 0.35 + r2() * 0.65 : 0, dye = r2() < 0.07 ? pickOf(DYES, r2) : null;
+  const male = kind === 'crew_m' || kind === 'crew_heavy', hairStyle = opts.hairStyle ?? (head ? pickOf(HAIR_STYLES[head.long ? 'long' : 'short'].filter(x => !(male && x === 'braid')), r2) : 'native');
+  const cut = opts.cut ?? pickOf(['suit', 'suit', 'jumpsuit', 'jumpsuit', 'tunic'], r2);   // garment cut: casual (stock mesh only), jumpsuit (zip, pockets, knee pads, collar) or tunic (collar, short skirt)
+  const skinOpt = { freck: r2() < 0.3 ? 1.05 + r2() * 0.35 : 0.3 + r2() * 0.6, ruddy: r2() < 0.5 ? r2() * 0.9 : 0, age: greying ? 0.3 + r2() * 0.7 : (r2() < 0.15 ? 0.3 : 0), mole: r2() < 0.4 ? 0.4 + r2() * 0.6 : 0, stub: male && r2() < 0.5 ? 0.4 + r2() * 0.6 : 0, head };
+  const faces = []; const mats = {}; const hairParts = [];
   inner.traverse(o => {
     if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = !opts.material;
     if (o.morphTargetDictionary) faces.push(o);
@@ -317,9 +426,10 @@ export function makeHuman(opts = {}) {
     if (opts.material) { o.material = opts.material; if (name === 'eyelashes' || name === 'tongue') o.visible = false; return; }
     const m = o.material = o.material.clone(); mats[name.split('_')[0]] = m;
     if (name === 'body' && kind !== 'suit') { m.color.copy(skin); m.roughness = 0.58; m.emissive = skin.clone().multiply(new THREE.Color(0.9, 0.35, 0.25)); m.emissiveIntensity = 0.07;   // cheap subsurface warmth
-      if (!opts.slime && !opts.material) mats.skinU = skinShader(m, { wound: Math.min(1, (opts.bloody || 0) * 0.9), seed: rnd() * 40, pale: opts.pale || 0 });
+      if (!opts.slime && !opts.material) mats.skinU = skinShader(m, { wound: Math.min(1, (opts.bloody || 0) * 0.9), seed: rnd() * 40, pale: opts.pale || 0, ...skinOpt });
       if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
-    else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.75; }
+    else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.75;
+      if (hairStyle === 'buzz' || hairStyle === 'bald') o.visible = false; else if (head && !opts.slime && (greying || dye)) hairShader(m, { grey: greying, dye, seed: r2() * 40, head, base: hair }); }
     else if (name === 'brows') { m.color.setRGB(hair[0] * 0.6, hair[1] * 0.6, hair[2] * 0.6); m.alphaTest = 0.02; m.transparent = true; m.depthWrite = false; m.roughness = 0.8; o.castShadow = false; }
     else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); if (o.geometry.attributes.zone) styleGarment(m, style, uniform); }
     else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; }
@@ -327,7 +437,9 @@ export function makeHuman(opts = {}) {
     else if (name === 'teeth') { m.alphaTest = 0.5; }
     if (opts.tint) m.color.multiply(new THREE.Color(opts.tint));
   });
-  if (!opts.material && kind !== 'suit' && opts.kit !== false) addKit(kind, inner, height, uniform, opts.name ?? per?.family ?? '');
+  if (!opts.material && kind !== 'suit' && opts.kit !== false) g.userData.cutParts = addKit(kind, inner, height, uniform, opts.name ?? per?.family ?? '', cut);
+  if (head && !opts.slime) { const hc = new THREE.Color(hair[0], hair[1], hair[2]); if (greying > 0.5) hc.lerp(new THREE.Color(1.3, 1.3, 1.35), 0.6); hc.multiplyScalar(hairStyle === 'buzz' ? 0.15 : 0.3); hairParts.push(...addHairStyle(inner, head, hairStyle, hc)); }
+  g.userData.hairParts = hairParts; g.userData.look = { hairStyle, cut, greying, dye: !!dye, ...skinOpt, head: undefined };
   if (opts.rank !== undefined && !opts.material && kind !== 'suit') { addPips(inner, opts.rank); g.userData.rank = RANKS[opts.rank][0]; }
   if (kind !== 'suit' && !opts.height) {   // build: lean / average / stocky, a little taller or shorter, so a crowd of four meshes does not read as four people
     const BUILD = [[0.92, 0.95, 1.02], [1, 1, 1], [1, 1, 1], [1.1, 1.08, 0.98], [1.04, 1.02, 1.0], [0.96, 0.97, 1.05]], [wx, wz, hy] = pickOf(BUILD, rnd), b = 0.97 + rnd() * 0.07;
