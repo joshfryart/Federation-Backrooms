@@ -52,6 +52,26 @@ export const PERKS = [
   { id: 'tough',    name: 'Face Guard',           desc: 'Each E press tears a clinger off faster.', max: 2 },
 ];
 
+// Perk synergies (madness mode): while every perk in `needs` is owned at the given level, the synergy is active and its `fx` applies.
+// Pure data; js/perks.js evaluates it (node-testable). Numbers are guesses, untuned by hand.
+export const SYNERGIES = [
+  { id: 'ghost_protocol', name: 'Ghost Protocol',   needs: { boots: 2, ghost: 1 },      desc: 'Footstep noise x0.6 on top of the boots.',        fx: { stepNoise: 0.6 } },
+  { id: 'overclock',      name: 'Overclocked Coil', needs: { cell: 2, overload: 2 },    desc: 'Zapper stun lasts a further +2 s.',               fx: { stunBonus: 2 } },
+  { id: 'deep_scan',      name: 'Deep Scan',        needs: { tricorder: 2, scan: 1 },   desc: 'Lifeform scanner range 18 m becomes 26 m.',       fx: { lifeScanR: 26 } },
+  { id: 'second_wind',    name: 'Second Wind',      needs: { legs: 2, hypo: 2 },        desc: 'Stamina regenerates 25% faster.',                 fx: { staminaRegen: 1.25 } },
+  { id: 'bulwark',        name: 'Bulwark',          needs: { shield: 1, dampener: 1 },  desc: 'Knockback from hostile lunges is halved again.',  fx: { knockMul: 0.5 } },
+  { id: 'iron_grip',      name: 'Iron Grip',        needs: { tough: 2, dampener: 1 },   desc: 'Each E press tears a clinger off +0.5 faster.',   fx: { tearBonus: 0.5 } },
+  { id: 'decoy_ghost',    name: 'Phantom Decoy',    needs: { noisemaker: 2, ghost: 1 }, desc: 'Thrown tools lure hunters from 20% further.',     fx: { lureMul: 1.2 } },
+];
+
+// Career milestones (fb_meta counter `key` reaching `need` grants starting perk `perk` in the next madness run); shown on the title-screen career panel
+export const META_UNLOCKS = [
+  { perk: 'boots', why: 'Reached deck 3',               key: 'bestDeck', need: 3 },
+  { perk: 'cell',  why: '8 hostiles stunned or downed', key: 'kills',    need: 8 },
+  { perk: 'legs',  why: 'Escaped a ship',               key: 'wins',     need: 1 },
+  { perk: 'hypo',  why: '5 shifts survived or not',     key: 'runs',     need: 5 },
+];
+
 export const REDSHIRT_LINES = [
   'Ensign: "It came through the cargo bay. It was... green. Please, keep moving."',
   'Crewman: "It hunts by sound! Walk quietly, hold C to creep."',
