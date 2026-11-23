@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SEARCHABLE, clutterFor } from './items.js';
+import { HIDE_SITE_KINDS } from './hiding.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { tubeStep, tubeBoxes } from './tube.js';
@@ -1340,6 +1341,7 @@ export class World {
       for (const r of d.rooms) if (r.type === 'sickbay') { let n = 0; for (let ty = r.y; ty < r.y + r.h && n < 4; ty++) for (let tx = r.x; tx < r.x + r.w && n < 4; tx++) if (this.grid[ty][tx] === 0 && this.ceilAt(tx, ty) >= WH - 0.01 && (tx + ty) % 2 === 0) { const p = buildPropArt('holo_emitter', m), [cx, cz] = this.center(tx, ty); p.position.set(cx, WH - 3.2, cz); g.add(p); n++; } }
       // searchable fixtures (see js/items.js): a spot just in front of the wall face, facing back at it
       this.searchSites = []; for (const [k, list] of Object.entries(byKind)) if (SEARCHABLE.has(k)) for (const f of list) this.searchSites.push({ x: f.px + f.dx * 0.35, z: f.pz + f.dy * 0.35, nx: f.dx, nz: f.dy, kind: k, room: f.room || 'corridor', used: false });
+      this.hideSites = []; for (const k of HIDE_SITE_KINDS) for (const f of byKind[k] || []) this.hideSites.push({ x: f.px + f.dx * 0.35, z: f.pz + f.dy * 0.35, nx: f.dx, nz: f.dy, kind: k, room: f.room || 'corridor' });   // wall lockers / vents you can crouch into (js/hiding.js)
       this.decorCount = Object.values(byKind).reduce((a, l) => a + l.length, 0);
     }
     // --- ribbed bulkheads and conduit runs along corridor walls

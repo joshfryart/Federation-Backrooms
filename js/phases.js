@@ -31,7 +31,7 @@ export class Phases {
     Object.assign(this, { shipState, alerts, roster, duty, seed, say, enabled, pace });
     this.phaseAt = pace.phaseAt || PHASE_AT; this.runLength = RUN_LENGTH * (pace.T || 1); this.collapseAt = null; this.weak = {};
     this.t = 0; this.index = 0; this.mode = null; this.severity = 0; this.pulseT = 0; this.listeners = []; this.ended = false; this.log = [];
-    this.saboteur = null; this.breachDeck = null; this.stress = 0; this.fixed = 0;
+    this.saboteur = null; this.saboteurExposed = false; this.saboteurCaught = null; this.physical = false; this.breachDeck = null; this.stress = 0; this.fixed = 0;
   }
   on(fn) { this.listeners.push(fn); return this; }
   emit(ev) { this.log.push(ev); if (this.log.length > 60) this.log.shift(); for (const f of this.listeners) f(ev); }
@@ -65,13 +65,14 @@ export class Phases {
     if (to >= 3 && this.alerts && this.modeDef) this.alerts.raise(this.modeDef.alert, { source: 'auto', reason: this.modeDef.label });
     if (to >= 4 && this.alerts) { this.alerts.raise('red', { source: 'auto', reason: 'Collapse' }); }
   }
-  pickSaboteur() { const pool = this.roster.people.filter(p => !p.isPlayer && !['dead', 'crazed'].includes(p.status) && p.rank <= 3); this.saboteur = pool[hash('sab', this.seed) % Math.max(1, pool.length)] || null; }
+  pickSaboteur() { const pool = this.roster.people.filter(p => !p.isPlayer && !['dead', 'crazed'].includes(p.status) && p.rank <= 3); this.saboteur = pool[hash('sab', this.seed) % Math.max(1, pool.length)] || null; this.saboteurExposed = false; }
   pulse(def) {
     const sys = def.systems[Math.floor(hash01('pulse', this.seed, Math.floor(this.t)) * def.systems.length)];
     this.severity = Math.min(1, this.severity + def.rate * (0.6 + this.index * 0.35));
     const amt = (0.12 + this.index * 0.08 + this.severity * 0.1) * ((this.weak[sys] || 0) > this.t ? 1.5 : 1);   // a crew patch (onRepair npc) is weak for a while
     if (this.index >= 1 && this.shipState.sys[sys] && this.shipState.status(sys) !== 'offline') { const ev = this.shipState.damage(sys, amt); this.emit({ type: 'pulse', sys, status: ev.status, name: ev.name, part: ev.part }); }
-    if (this.mode === 'sabotage' && this.saboteur && this.index >= 2 && this.severity > 0.2) { this.emit({ type: 'sabotage', who: this.saboteur.short, sys }); }
+    if (this.mode === 'sabotage' && this.saboteur && !this.physical && this.index >= 2 && this.severity > 0.2) {   // with js/saboteur.js attached (physical) the badge log follows a real tamper instead
+      this.emit({ type: 'sabotage', who: this.saboteur.short, sys }); }
     if (this.mode === 'psychological') { this.stress += 1; this.duty?.roster?.people?.forEach?.(p => { if (!p.isPlayer && this.duty) this.duty._bump(p, -0.02); }); if (this.index >= 2) this.say(['“Did you hear that?” — a crewman nervously checks the corridor.', 'Someone in the mess is crying quietly.', 'Two crew argue over a replicator order and neither will back down.'][this.stress % 3], 'warn'); }
   }
   // called when any ship system is repaired. { npc: true } = a crew patch (js/repair.js): only 40% of the relief (the hidden failure

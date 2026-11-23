@@ -106,7 +106,7 @@ export class RepairCrew {
     if (!LIVE(p) || p.isPlayer || p === this.player || p.status === 'crazed') return null;
     if (this.busy.has(p.id) && this.busy.get(p.id) !== j.sys) return null;   // one job per person
     const w = this.sim.where(p); if (!w) return null;
-    const ov = this.sim.overrideOf?.(p); if (ov && ov.prio > PRIO.repair && !(ov.activity === 'repairing')) return null;
+    const ov = this.sim.overrideOf?.(p); if (ov && ov.activity === 'tampering') return null; if (ov && ov.prio > PRIO.repair && !(ov.activity === 'repairing')) return null;
     const urgent = this.isUrgent(j.sys), sk = skillOf(p, j.sys, this.duties, { social: this.social, with: this._crew(j).map(a => a.person) });
     if (sk < 0.5 && !any && !(urgent && !NEVER_GENERALIST.has(j.sys))) return null;
     const lh = this.clock.localHour(p), onWatch = lh < 8, head = this.head(j.dept) === p, asleep = (this.sim._day?.(p)?.[4] || '') === 'sleep';

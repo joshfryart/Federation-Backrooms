@@ -199,7 +199,7 @@ export function applyConsequence(fx, sys = {}) {
   const { duty, phases, alerts, roster } = sys; let n = 0;
   if (duty) { const byId = new Map((roster?.people || duty.roster?.people || []).map(p => [p.id, p])); for (const [id, d] of fx.bumps) { const p = byId.get(id); if (p && !p.isPlayer) { duty._bump(p, d); n++; } } for (const c of fx.chain) duty.chain.push(c); if (fx.record?.kind === 'assault') duty.stats.assaults = (duty.stats.assaults || 0) + 1; }
   if (fx.alert && alerts) alerts.raise(fx.alert.id, { scope: 'deck', deck: sys.deckNo ?? null, source: 'security', reason: fx.alert.reason });
-  if (fx.sabotage === 'clear' && phases) { phases.saboteur = null; phases.severity = +(phases.severity * 0.4).toFixed(3); phases.emit?.({ type: 'sabotage_stopped' }); if (alerts?.get?.('intruder')?.source === 'auto') alerts.clear('intruder'); }
+  if (fx.sabotage === 'clear' && phases) { phases.saboteurCaught = phases.saboteur; phases.saboteurExposed = false; if (duty) duty.stats.saboteurs = (duty.stats.saboteurs || 0) + 1; phases.saboteur = null; phases.severity = +(phases.severity * 0.4).toFixed(3); phases.emit?.({ type: 'sabotage_stopped' }); if (alerts?.get?.('intruder')?.source === 'auto') alerts.clear('intruder'); }
   return n;
 }
 
