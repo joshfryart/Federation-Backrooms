@@ -53,9 +53,10 @@ import { padBrowser } from './test-gamepad.mjs';   // gamepad: mocked navigator.
 import { jobgameTests, jobgameBrowser, jobsiteBrowser, jobmoduleBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
 import { saveTests, saveBrowser } from './test-save.mjs';   // versioned save, boards, export/import/reset (tools/test-save.mjs)
 import { touchTests, touchBrowser } from './test-touch.mjs';   // touch / mobile controls: stick, look drag, buttons, mini-game + room job by touch (tools/test-touch.mjs)
+import { directorTests } from './test-director.mjs';   // director intensity cycle, hostile mix plan, hull-breach numbers, headless soak (tools/test-director.mjs, tools/soak-director.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
-  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests], ['director-soak', directorTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { iconSvg } from './icons.js';
+import { threatPlan, HOSTILES, BREACH, breachDps } from './threats.js';
 import { setMapPalette } from './minimap.js';
 import { Loading, paint } from './loading.js';
 import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
@@ -310,18 +311,15 @@ function loadDeck(n) {
 }
 
 function spawnThreats(data, n, rnd) {
-  const pool = shuffle(['gronk', 'drone', 'phantom']);
-  const chosen = n === 1 ? [] :   // deck 1 is only the madness: a redshirt who loses it in front of you
-    pool.slice(0, n < 3 ? 1 : n < 6 ? 2 : 3);
+  const plan = threatPlan(n, rnd, shuffle(HOSTILES.slice()));
   G.threats = ['crazed'];
   const far = (f) => data.pickTile(([x, y]) => data.dist[x + y * data.W] >= data.maxD * f) || data.gornSpawn;
-  chosen.forEach((type, i) => {
-    const delay = Math.max(14, 30 - n * 2) + i * (n >= 6 ? 30 : 22) + 15;   // deeper decks: hostiles arrive further apart (a 3-hostile deck was brutal)
-    gorns.push(makeEnemy(type, world, i === 0 ? data.gornSpawn : far(0.4), n, delay, scene, sound));
+  plan.types.forEach((type, i) => {
+    gorns.push(makeEnemy(type, world, i === 0 ? data.gornSpawn : far(0.4), n, plan.delays[i], scene, sound));
     G.threats.push(type);
   });
-  const nc = n >= 2 ? Math.min(n >= 6 ? 2 : 3, 1 + Math.floor(rnd() * (1 + n / 3))) : 0; let made = 0;   // clingers capped (2 on deck 6+: the pool already holds three other hostiles)
-  for (let i = 0; i < nc; i++) { const t = data.pickTile(([x, y]) => !data.room[y][x] && data.dist[x + y * data.W] > data.maxD * 0.15); if (t) { gorns.push(makeEnemy('clinger', world, t, n, 0, scene, sound)); made++; } }
+  let made = 0;
+  for (let i = 0; i < plan.clingers; i++) { const t = data.pickTile(([x, y]) => !data.room[y][x] && data.dist[x + y * data.W] > data.maxD * 0.15); if (t) { gorns.push(makeEnemy('clinger', world, t, n, 0, scene, sound)); made++; } }
   if (made) G.threats.push('clinger');
   if (n >= 2 && ents.some(e => e.fake)) G.threats.push('slimeling');
   // tutorial beyond deck 1: the first deck a threat appears on, one plain line about how to deal with it (once per run, a few seconds in)
@@ -1532,10 +1530,10 @@ function step(dt, t) {
     else {
       if (!G.breach || G.breach.deck !== G.deck) { const t = world.d.pickTile(([x, y]) => !world.d.room[y][x] && world.d.dist[x + y * world.W] > world.d.maxD * 0.3) || world.d.start; const [bx, bz] = world.center(t[0], t[1]); G.breach = { deck: G.deck, x: bx, z: bz }; G.say('HULL BREACH on this deck — air is venting. Get away from the roar.', 'warn'); caption('air venting', bx, bz); }
       const B = G.breach, dx = B.x - P.x, dz = B.z - P.z, d = Math.hypot(dx, dz);
-      if (!B.sealed && d < 3.2 && keys.KeyE) { B.t = (B.t || 0) + dt * (G.carry?.item === 'patch_plate' ? 2 : 1); if (Math.random() < dt * 4) sound.clang?.(0.12); if (B.t >= 8) { B.sealed = true; G.say('Breach sealed. The roar dies away.', 'good'); caption('air stops venting'); } else if (!B.hinted2) { B.hinted2 = 1; } }
+      if (!B.sealed && d < BREACH.reach && keys.KeyE) { B.t = (B.t || 0) + dt * (G.carry?.item === 'patch_plate' ? BREACH.patchSpeed : 1); if (Math.random() < dt * 4) sound.clang?.(0.12); if (B.t >= BREACH.seal) { B.sealed = true; G.say('Breach sealed. The roar dies away.', 'good'); caption('air stops venting'); } else if (!B.hinted2) { B.hinted2 = 1; } }
       else if (!keys.KeyE && B.t && !B.sealed) B.t = Math.max(0, B.t - dt);   // let go and the patch slips
       if (!B.sealed && !B.hinted && d < 12) { B.hinted = 1; G.say('Hold E at the breach to patch it (a hull patch plate in hand halves the time).', ''); }
-      if (!B.sealed && d < 14 && world.los(P.x, P.z, B.x, B.z)) { const pull = (1 - d / 14) * 4.5; P.kbx += dx / (d || 1) * pull * dt * 6; P.kbz += dz / (d || 1) * pull * dt * 6; if (Math.random() < dt * 8) steam.add(B.x, 0.3 + Math.random() * 1.8, B.z, (Math.random() - 0.5) * 3, 0.4, (Math.random() - 0.5) * 3, STEAM, 1.2); if (d < 3) { G.hp -= (G.carry?.item === 'breather' ? 3 : 7) * dt; P.shake = Math.max(P.shake, 0.2); if (G.hp <= 0) { NOM() ? nomDie('decompression at the hull breach') : G.hp = 1; } } }
+      if (!B.sealed && d < BREACH.range && world.los(P.x, P.z, B.x, B.z)) { const pull = (1 - d / BREACH.range) * BREACH.pull; P.kbx += dx / (d || 1) * pull * dt * 6; P.kbz += dz / (d || 1) * pull * dt * 6; if (Math.random() < dt * 8) steam.add(B.x, 0.3 + Math.random() * 1.8, B.z, (Math.random() - 0.5) * 3, 0.4, (Math.random() - 0.5) * 3, STEAM, 1.2); if (d < BREACH.hurt) { G.hp -= breachDps(G.carry?.item) * dt; P.shake = Math.max(P.shake, 0.2); if (G.hp <= 0) { NOM() ? nomDie('decompression at the hull breach') : G.hp = 1; } } }
     } }
   for (const st of world.steamers) {
     st.t -= dt;

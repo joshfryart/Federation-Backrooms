@@ -4,15 +4,18 @@
 //   intensity  0..1  rises with nearby hostiles, damage, screams and faults; decays when nothing is happening
 //   build      pressure allowed: every `gap` seconds, if intensity is under the deck's target, pick a pressure action
 //   peak       hold for a few seconds once intensity crosses 0.8 — nothing new is added
-//   relax      forced breather: no new faults, madness and nudges wait; ends when it has calmed down
+//   relax      forced breather: no new faults, madness and nudges wait; ends when it has calmed down (or RELAX_OVERRUN s after its timer)
 export const ACTIONS = ['fault', 'blackout', 'nudge', 'wake', 'madness'];
+// Tuned by tools/soak-director.mjs (a model, not real play): with a hostile that keeps coming back, intensity never fell under 0.4 and a relax lasted the whole
+// deck (about 450 s of 480 s on deck 3+, so no pressure and no madness). RELAX_OVERRUN caps how long past its timer a relax may wait for the calm-down.
+export const RELAX_OVERRUN = 25;
 export class Director {
   constructor(rnd = Math.random) { this.rnd = rnd; this.reset(1); }
   reset(deck) { this.deck = deck; this.intensity = 0; this.phase = 'build'; this.t = 0; this.gap = 20; this.phaseT = 0; this.log = []; this.bumps = 0; }
   get target() { return Math.min(0.75, 0.45 + this.deck * 0.04); }
   bump(amount, why = '') { this.intensity = Math.min(1, this.intensity + amount); this.bumps++; if (why) this.note(`+${amount.toFixed(2)} ${why}`); }
   note(s) { this.log.push(`${this.phase.padEnd(5)} ${this.intensity.toFixed(2)} ${s}`); if (this.log.length > 8) this.log.shift(); }
-  get relaxing() { return this.phase === 'relax'; }
+  get relaxing() { return this.phase === 'relax' && this.phaseT > 0; }   // the guaranteed breather (js/main.js holds the next madness turn back while it lasts)
   // ctx: { tension 0..1 (hostile proximity), deckTime, faults (open count), dormant (hostiles not yet awake), active (awake hostiles), madPending (seconds until next madness or Infinity) }
   update(dt, ctx) {
     this.t += dt;
@@ -35,7 +38,7 @@ export class Director {
     }
     this.phaseT -= dt;
     if (this.phase === 'peak' && this.phaseT <= 0) { this.phase = 'relax'; this.phaseT = 22 + this.rnd() * 18; this.note('relax'); }
-    else if (this.phase === 'relax' && this.phaseT <= 0 && this.intensity < 0.4) { this.phase = 'build'; this.gap = 8 + this.rnd() * 8; this.note('build'); }
+    else if (this.phase === 'relax' && this.phaseT <= 0 && (this.intensity < 0.4 || this.phaseT <= -RELAX_OVERRUN)) { this.phase = 'build'; this.gap = 8 + this.rnd() * 8; this.note('build'); }
     return null;
   }
 }
