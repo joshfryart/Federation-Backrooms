@@ -1,0 +1,3 @@
+{"_schema":"tools/bot-report.mjs per-mission file: array of task records at <resultsDir>/<role>/<mission>.json",
+ "task":{"id":"engineer.power.0","jtype":"fetch","label":"Restore power","room":"R-101","host":"crew-a","module":"ops/power","status":"pass|fail|error|timeout|skip","quality":0.8,"faults":0,"timeMul":1,"gameSec":120,"wallMs":1500,"started":true,"routed":true,"layerClosed":true,"dutyState":"active","shots":["shots/a-start.png","shots/a-end.png"],"notes":"","replay":"replays/x.json","category":"optional","flaky":false,"slow":false},
+ "summary":{"headline":"","counts":{},"clusters":[{"title":"","category":"","items":[""],"fix":""}],"topFixes":[{"rank":1,"title":"","detail":"","suspectFile":""}],"flaky":[],"slow":[],"notes":""}}

@@ -19,7 +19,7 @@ export default define({
     const offs = shuffle(r, [rf(r, 0.6, 1.4), rf(r, 0.6, 1.2), rf(r, 0, 0.4), rf(r, 0, 0.45), rf(r, 0.55, 1.0)]);
     m.lines = LINES.map(([name, st, u], i) => { const order = name === 'Throttle' ? ri(r, 40, 90) : name === 'Waypoint ETA' ? ri(r, 12, 58) : +rf(r, 0, 359).toFixed(1); return { name, st, u, order, said: +(order + (r() < 0.5 ? -1 : 1) * offs[i]).toFixed(1), fixed: false }; });
     m.i = 0; m.wait = rf(r, 0.5, 1.0); m.rounds = 5; m.round = 1;
-    const L = () => m.lines[m.i], bad = (l) => Math.abs(l.said - l.order) > 0.5 + 1e-9;
+    const L = () => m.lines[Math.min(m.i, m.lines.length - 1)], bad = (l) => Math.abs(l.said - l.order) > 0.5 + 1e-9;
     m.key = (code, down = true) => {
       if (m.state !== 'play' || !down || !(SPACE(code) || ENTER(code))) return false; const l = L();
       if (m.wait > 0) { m.fault('unconfirmed'); return true; }

@@ -18,7 +18,7 @@ export default define({
     const m = machine(this, seed, opts), r = m.rnd, tol = pick(r, [1.5, 2, 2.5]), win = m.calm ? 6 : 4; m.rounds = 4; m.round = 0;
     m.cs = [0, 1, 2, 3].map(k => { const plan = +rf(r, 12, 40).toFixed(1), out = r() < 0.5, d = out ? rf(r, tol + 0.3, tol + 2) : rf(r, 0, tol - 0.3); return { no: `CAL-${ri(r, 10, 99)}`, plan, act: +(plan + (r() < 0.5 ? -1 : 1) * d).toFixed(1), out, fly: rf(r, 1.4, 2.4) }; });
     m.k = 0; m.ft = 0; m.lw = 0;
-    const cur = () => m.cs[m.k], stopped = () => m.ft >= cur().fly;
+    const cur = () => m.cs[Math.min(m.k, m.cs.length - 1)], stopped = () => m.ft >= cur().fly;
     const next = () => { m.k++; m.ft = 0; m.lw = 0; m.round++; if (m.k >= 4 && m.state === 'play') m.win(); };
     m.key = (code, down = true) => {
       if (m.state !== 'play' || !down) return false; const d = DIG(code); if (d !== 1 && d !== 2) return false;

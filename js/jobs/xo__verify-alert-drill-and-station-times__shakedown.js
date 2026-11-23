@@ -26,7 +26,7 @@ export default define({
       s.judged = d; m.row++; if (m.row >= 4) m.win(); return true;
     };
     m.tick = (dt) => { if (!m.live(dt)) return; if (m.phase === 0) for (const s of m.st) if (s.meas == null && m.t > s.at + win) { m.fault('missed lamp'); stop(s, s.at - 1.5 + win + 0.6); } };
-    m.hint = () => { if (m.phase === 0) { const i = m.st.findIndex(s => s.meas == null && m.t >= s.at + 0.1); return i >= 0 ? [['Digit' + (i + 1), true]] : []; } return [[m.st[m.row].off ? 'Digit2' : 'Digit1', true]]; };
+    m.hint = () => { if (m.row >= 4) return []; if (m.phase === 0) { const i = m.st.findIndex(s => s.meas == null && m.t >= s.at + 0.1); return i >= 0 ? [['Digit' + (i + 1), true]] : []; } return [[m.st[m.row].off ? 'Digit2' : 'Digit1', true]]; };
     m.bad = () => { if (m.phase === 0) { const i = m.st.findIndex(s => s.meas == null && m.t < s.at); return i >= 0 ? 'Digit' + (i + 1) : null; } return m.st[m.row].off ? 'Digit1' : 'Digit2'; };
     m.view = () => ({ st: m.st.map(s => [s.at.toFixed(2)]), offs: [...offs] });
     m.buttons = () => m.phase === 0 ? ST.map((n, i) => ['Digit' + (i + 1), `${i + 1} ${n}`]) : [['Digit1', '1 Fair'], ['Digit2', '2 Query']];

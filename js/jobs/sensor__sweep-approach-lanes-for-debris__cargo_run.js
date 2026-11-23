@@ -25,7 +25,7 @@ export default define({
       if (m.state !== 'play') return false; const a = ARROW(code), d = DIG(code); if (a) { m.hd[a] = down; return true; }
       if (!down) return !!(d || SPACE(code));
       if (SPACE(code)) { const hit = m.deb.find(x => live(x) && !x.tag && under(x)); if (hit) { hit.tag = ++m.tags; m.round = m.tags; } else if (m.stars.some(under)) m.fault('tagged a star'); return true; }
-      if (d >= 1 && d <= ND) { if (m.deb.some(x => !x.tag && !x.gone)) return true; const close = m.deb.filter(x => x.tag).reduce((a, b) => (b.rng < a.rng ? b : a));
+      if (d >= 1 && d <= ND) { if (m.deb.some(x => !x.tag && !x.gone)) return true; if (!m.deb.some(x => x.tag)) return true; const close = m.deb.filter(x => x.tag).reduce((a, b) => (b.rng < a.rng ? b : a));
         if (close.tag === d) m.win(); else m.fault('far return sent'); return true; }
       return false;
     };
@@ -39,7 +39,7 @@ export default define({
     const rel = (keep) => ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].filter(k => k !== keep).map(k => [k, false]);
     m.hint = () => {
       const tgt = m.deb.find(d => live(d) && !d.tag);
-      if (!tgt) { if (m.deb.some(d => !d.tag && !d.gone)) return rel(); const close = m.deb.filter(x => x.tag).reduce((a, b) => (b.rng < a.rng ? b : a)); return [...rel(), ['Digit' + close.tag, true]]; }
+      if (!tgt) { if (m.deb.some(d => !d.tag && !d.gone)) return rel(); if (!m.deb.some(x => x.tag)) return rel(); const close = m.deb.filter(x => x.tag).reduce((a, b) => (b.rng < a.rng ? b : a)); return [...rel(), ['Digit' + close.tag, true]]; }
       const dx = tgt.x + 3 - m.rx, dy = tgt.y - m.ry; if (Math.hypot(tgt.x - m.rx, dy) < RAD * 0.6) return [...rel(), ['Space', true]];
       const k = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'ArrowRight' : 'ArrowLeft') : (dy > 0 ? 'ArrowDown' : 'ArrowUp'); return [...rel(k), [k, true]];
     };

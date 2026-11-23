@@ -20,7 +20,7 @@ export default define({
     const d0 = Math.floor(r() * DEST.length);
     m.goals = [0, 1].map(k => ({ n: DEST[(d0 + k) % DEST.length], f: +(rf(r, 300, 480)).toFixed(1) }));
     m.k = 0; m.f = m.goals[0].f + (r() < 0.5 ? -1 : 1) * rf(r, 1.6, 2.6); m.v = 0; m.steady = 0; m.rounds = 2; m.round = 0;
-    const G = () => m.goals[m.k], err = () => G().f - m.f;
+    const G = () => m.goals[Math.min(m.k, m.goals.length - 1)], err = () => G().f - m.f;
     const near = () => { const e = Math.abs(err()); return Math.abs(e - 0.4) < 0.08 ? 'flicker' : e < win && Math.abs(m.v) < 0.12 ? 'lock' : null; };
     m.key = (code, down = true) => {
       if (m.state !== 'play') return false; const a = ARROW(code);

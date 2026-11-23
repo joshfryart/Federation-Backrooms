@@ -19,17 +19,18 @@ export default define({
     m.runs = [0, 1].map(i => ({ dir: i ? pick(r, ['L', 'R']) : pick(r, ['L', 'R']), d: rf(r, 0.6, 0.9), v: rf(r, 0.45, 0.55), amb: r() < 0.6 ? rf(r, 0.4, 0.9) : null }));
     if (m.runs.every(x => x.amb == null)) m.runs[1].amb = 0.6;
     m.n = 0; m.rounds = 2; m.round = 0; m.held = {};
-    const load = () => { const u = m.runs[m.n]; m.phase = 'turn'; m.rate = 0; m.d = u.d; m.v = u.v; m.st = 0; m.logged = false; }; load();
-    const amber = () => { const u = m.runs[m.n]; return m.phase === 'stop' && u.amb != null && m.st >= u.amb && m.st < u.amb + 0.6; };
+    const U = () => m.runs[Math.min(m.n, 1)];
+    const load = () => { const u = U(); m.phase = 'turn'; m.rate = 0; m.d = u.d; m.v = u.v; m.st = 0; m.logged = false; }; load();
+    const amber = () => { const u = U(); return m.phase === 'stop' && u.amb != null && m.st >= u.amb && m.st < u.amb + 0.6; };
     m.key = (code, down = true) => {
       if (m.state !== 'play') return false; const a = ARROW(code);
-      if (a === 'L' || a === 'R') { m.held[a] = down; if (!down && m.phase === 'turn' && a === m.runs[m.n].dir && m.rate > 0) { if (m.rate < 0.8) { m.fault('turn short'); m.rate = 0; } else m.phase = 'stop'; } return true; }
+      if (a === 'L' || a === 'R') { m.held[a] = down; if (!down && m.phase === 'turn' && a === U().dir && m.rate > 0) { if (m.rate < 0.8) { m.fault('turn short'); m.rate = 0; } else m.phase = 'stop'; } return true; }
       if (SPACE(code)) { m.held.S = down; return true; }
       if (ENTER(code)) { if (down) { if (amber()) m.logged = true; else m.fault('false damper'); } return true; }
       return false;
     };
     m.tick = (dt) => {
-      if (!m.live(dt)) return; const u = m.runs[m.n];
+      if (!m.live(dt)) return; const u = U();
       if (m.phase === 'turn') { if (m.held[u.dir]) { m.rate += 0.6 * dt; if (m.rate > 1) { m.fault('over-rate'); m.rate = 0; m.held[u.dir] = false; } } return; }
       m.st += dt; if (u.amb != null && !m.logged && m.st >= u.amb + 0.6) { m.fault('damper missed'); m.logged = true; }
       m.v = Math.max(0, m.v - (m.held.S ? A : 0) * dt); m.d -= m.v * dt;
@@ -37,11 +38,11 @@ export default define({
       if (m.v === 0) { if (m.d > tol) { m.fault('stopped short'); load(); return; } if (u.amb != null && !m.logged) return; m.n++; m.round = m.n; m.held.S = false; if (m.n >= 2) m.win(); else load(); }
     };
     m.hint = () => {
-      const u = m.runs[m.n]; if (!u) return [];
+      const u = U(); if (!u) return [];
       if (m.phase === 'turn') return [['Arrow' + (u.dir === 'L' ? 'Left' : 'Right'), m.rate < 0.86]];
       const out = [['Space', m.v * m.v / (2 * A) >= m.d - 0.004]]; if (amber() && !m.logged) out.push(['Enter', true]); return out;
     };
-    m.bad = () => (m.phase === 'turn' ? ['Arrow' + (m.runs[m.n].dir === 'L' ? 'Left' : 'Right'), true] : ['Space', true]);
+    m.bad = () => (m.phase === 'turn' ? ['Arrow' + (U().dir === 'L' ? 'Left' : 'Right'), true] : ['Space', true]);
     m.view = () => ({ runs: m.runs.map(u => [u.dir, +u.d.toFixed(3), u.amb == null ? -1 : +u.amb.toFixed(2)]) });
     m.buttons = () => [['ArrowLeft', '◀ yaw'], ['ArrowRight', 'yaw ▶'], ['Space', 'Brake (hold)'], ['Enter', 'Log damper']];
     m.draw = (c, W, H, P) => {

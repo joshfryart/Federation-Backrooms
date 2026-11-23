@@ -17,7 +17,7 @@ export default define({
     const m = machine(this, seed, opts), r = m.rnd, lag = m.calm ? 0.6 : 0.8;
     const mk = (name) => { const costs = Array.from({ length: 10 }, () => rf(r, 4, 11)), h0 = rf(r, 70, 85), margin = rf(r, 18, 26), head = (n) => h0 - costs.slice(0, n).reduce((a, b) => a + b, 0); let best = 0; while (best < 10 && head(best + 1) >= margin) best++; return { name, head, margin, best, trip: margin - 12 }; };
     m.subs = [mk('Sensor power'), mk('Bandwidth')]; m.k = 0; m.notch = 0; m.shown = m.subs[0].head(0); m.since = 9; m.rounds = 2; m.round = 0;
-    const S = () => m.subs[m.k];
+    const S = () => m.subs[Math.min(m.k, 1)];
     m.key = (code, down = true) => {
       if (m.state !== 'play' || !down) return false; const a = ARROW(code);
       if (a === 'U' || a === 'D') { m.notch = Math.max(0, Math.min(10, m.notch + (a === 'U' ? 1 : -1))); m.since = 0; return true; }
