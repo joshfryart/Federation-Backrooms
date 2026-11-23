@@ -100,6 +100,31 @@ export async function touchBrowser(page, fail, { shots = null } = {}) {
   await tapBtn('back'); ck(!(await ev(() => !!__game.G.nav?.mapOpen)), 'Back closes the map');
   await tapBtn('wheel'); const wh = await ev(() => ({ pinned: !!__game.ui.wheel?.pinned, view: !!__game.menus.view.W })); ck(wh.pinned && wh.view, 'Wheel button opens the pinned quick wheel ' + JSON.stringify(wh));
   await tapBtn('back'); await step(1); ck(!(await ev(() => __game.ui.frozen)), 'Back closes the wheel');
+  // the quick wheel's flick: hold Wheel, the held wheel opens, drag toward the bottom sector (Inspect), lift -> its default (Deck map) runs
+  { const wb = await btn('wheel'); await td.down(7, wb[0], wb[1]); await page.waitForTimeout(340); await step(2);
+    const op = await ev(() => ({ held: !!__game.menus.view.W?.held, mode: __touch.mode, held2: __touch.state().held }));
+    await td.move(7, wb[0], wb[1] + 20); await td.move(7, wb[0], wb[1] + 60); await step(1);
+    const sel = await ev(() => __game.menus.view.W?.sel);
+    await td.up(7); await step(2); const fl = await ev(() => ({ map: !!__game.G.nav?.mapOpen, wheel: !!__game.ui.wheel, held: __touch.state().held }));
+    ck(op.held && op.mode === 'menu' && op.held2.includes('wheel'), 'holding Wheel opens the held quick wheel and keeps the finger ' + JSON.stringify(op));
+    ck(sel === 4 && fl.map && !fl.wheel && !fl.held.length, `flick down + lift runs Inspect's default (sector ${sel}) ` + JSON.stringify(fl));
+    await tapBtn('back'); await step(1); ck(!(await ev(() => !!__game.G.nav?.mapOpen)), 'Back closes the map after the flick'); }
+  // a short press of Wheel is still the pinned wheel (checked above); a hold with no drag then lift cancels
+  { const wb = await btn('wheel'); await td.down(7, wb[0], wb[1]); await page.waitForTimeout(340); await step(2); await td.up(7); await step(2);
+    const c = await ev(() => ({ wheel: !!__game.ui.wheel, frozen: __game.ui.frozen, map: !!__game.G.nav?.mapOpen })); ck(!c.wheel && !c.frozen && !c.map, 'hold without a drag, lift = cancel ' + JSON.stringify(c)); }
+  // the talk wheel by touch: E on a crew member, tap a sector, tap Back to leave
+  { const tk = await ev(async () => {
+      const g = __game, G = g.G, P = g.P; G.phase = 'play'; const e = g.ents.find(x => x.kind === 'crew' && x.simmed && x.mesh?.userData.human && !x.fake); if (!e) return { err: 'no crew' };
+      P.x = e.x + Math.sin(e.mesh.rotation.y) * 1.3; P.z = e.z + Math.cos(e.mesh.rotation.y) * 1.3; const ok = g.talk.begin(e); let t = window.__tt; for (let i = 0; i < 40; i++) { t += 1 / 30; g.talk.step(1 / 30, t); g.menus.frame(1 / 30); } window.__tt = t; __touch.sync();
+      return { ok, phase: G.phase, mode: __touch.mode, back: getComputedStyle(document.getElementById('tc-back')).display, inputOk: g.talk.M.inputOk, n: g.talk.W?.sectors.length };
+    });
+    if (ck(!tk.err && tk.ok && tk.phase === 'talk' && tk.mode === 'menu' && tk.back === 'block' && tk.inputOk, 'a conversation opens; the touch overlay shows Back only ' + JSON.stringify(tk))) {
+      const pt = await ev(async () => { const WH = await import('/js/wheel.js'), svg = document.querySelector('#tk .wbox svg'), r = svg.getBoundingClientRect(), sc = 440 / Math.min(r.width, r.height), a = WH.sectorAngle(1, __game.talk.W.sectors.length) * Math.PI / 180, rr = 106;
+        return [r.left + r.width / 2 + Math.cos(a) * rr / sc, r.top + r.height / 2 + Math.sin(a) * rr / sc]; });
+      await td.tap(pt[0], pt[1]); await ev(() => { const g = __game; let t = window.__tt; for (let i = 0; i < 6; i++) { t += 1 / 30; g.talk.step(1 / 30, t); } window.__tt = t; });
+      const sl = await ev(() => ({ sel: __game.talk.W?.sel, phase: __game.G.phase, rings: document.querySelectorAll('#tk .wseg').length })); ck(sl.sel === 1 && sl.phase === 'talk', 'tapping a talk-wheel sector selects it ' + JSON.stringify(sl));
+      await tapBtn('back'); await ev(() => { const g = __game; let t = window.__tt; for (let i = 0; i < 40 && g.G.phase === 'talk'; i++) { t += 1 / 30; g.talk.step(1 / 30, t); g.menus.frame(1 / 30); } window.__tt = t; __touch.sync(); });
+      const lv = await ev(() => ({ phase: __game.G.phase, mode: __touch.mode })); ck(lv.phase === 'play' && lv.mode === 'play', 'Back leaves the conversation ' + JSON.stringify(lv)); } }
   await tapBtn('radio'); ck(await ev(() => __game.commsHud?.panel === 'radio'), 'Radio button opens the radio cards'); await tapBtn('back');
   await tapBtn('more'); const mr = await ev(() => getComputedStyle(document.getElementById('tc-more')).display); ck(mr === 'flex', 'More opens the drawer');
   const torch0 = await ev(() => !!__game.P.torch); await tapBtn('torch'); const torch1 = await ev(() => ({ t: !!__game.P.torch, more: __touch.state().more }));

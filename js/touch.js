@@ -6,7 +6,7 @@
 //   rest of the screen        drag to look (P.yaw / P.pitch, CFG.sens), also while a room job wants a swing / sweep with E held
 //   action cluster            Use (E, held while pressed), Jump (Space), Crouch / slide (C), Strike (left click = __game.fire()),
 //                             Grab (right click = combat.secondary) / Grapple in madness (Q), Sprint (Shift, a latch)
-//   top strip                 Pause, Wheel (Q tap = pinned wheel), Duty (J), Radio (H), Map (M), Ship status (Tab, held), More
+//   top strip                 Pause, Wheel (tap = pinned wheel; hold + drag toward a sector + lift = the quick wheel's flick: lifting runs the sector's default), Duty (J), Radio (H), Map (M), Ship status (Tab, held), More
 //   More drawer               Torch F, Tool V, Use tool X, Throw T, Drop G, Cart R, Alert K, Log L, HUD B
 //   Back                      Esc: shown whenever a menu / wheel / map / lift panel / conversation is up
 // Menus, the duty board, the LCARS panels, the lift panel and the pause screen are ordinary DOM: a tap is a native click / compatibility
@@ -14,6 +14,8 @@
 // hold buttons work (the compatibility mouse events come only after the finger lifts).
 // Calm visuals (CFG.calm) and prefers-reduced-motion: no press animation, no transitions. Safe-area insets: env(safe-area-inset-*).
 //   window.__touch = { on, mode, press(id, down), state() }   (tests: tools/test-touch.mjs)
+
+import { moveTo, clampCursor } from './wheel.js';
 
 /** should touch controls be on? q: the ?touch= value; coarse: pointer is coarse (or the device has touch and no hover) */
 export function touchWanted(q, coarse) { if (q === '0') return false; if (q === '1') return true; return !!coarse; }
@@ -24,6 +26,7 @@ export function stickVec(dx, dy, R = 56, dead = 0.14) {
 }
 /** which control surface a new touch at (x, y) belongs to on a w x h screen: 'stick' on the left 42 % below the top strip, else 'look' */
 export function zoneOf(x, y, w, h) { return x < w * 0.42 && y > h * 0.18 ? 'stick' : 'look'; }
+export const FLICK_K = 2.2;   // wheel cursor units (a 680-unit wheel view) per CSS px of finger travel while the Wheel button is held; a guess, not tuned on a phone
 export const LOOK_K = 0.0052;   // radians per CSS px at sensitivity 1 (mouse is 0.0022 per count; a thumb travels far less)
 
 const BTN_NOM = [
@@ -35,7 +38,7 @@ const BTN_MAD = [
   ['use', 'Use', 'KeyE', 'hold', 'E'], ['jump', 'Jump', 'Space', 'hold', '␣'], ['crouch', 'Slide', 'KeyC', 'hold', 'C'],
   ['strike', 'Fire', 'fire', 'act', '◉'], ['grab', 'Grapple', 'KeyQ', 'tap', 'Q'], ['sprint', 'Sprint', 'ShiftLeft', 'latch', '⇧'],
 ];
-const TOP_NOM = [['pause', 'Pause', 'pause', 'act'], ['wheel', 'Wheel', 'KeyQ', 'tap'], ['duty', 'Duty', 'KeyJ', 'tap'], ['radio', 'Radio', 'KeyH', 'tap'], ['map', 'Map', 'KeyM', 'tap'], ['status', 'Ship', 'Tab', 'hold'], ['more', '•••', 'more', 'act']];
+const TOP_NOM = [['pause', 'Pause', 'pause', 'act'], ['wheel', 'Wheel', 'KeyQ', 'wheelhold'], ['duty', 'Duty', 'KeyJ', 'tap'], ['radio', 'Radio', 'KeyH', 'tap'], ['map', 'Map', 'KeyM', 'tap'], ['status', 'Ship', 'Tab', 'hold'], ['more', '•••', 'more', 'act']];
 const TOP_MAD = [['pause', 'Pause', 'pause', 'act'], ['map', 'Map', 'KeyM', 'tap'], ['status', 'Ship', 'Tab', 'hold'], ['torch', 'Torch', 'KeyF', 'tap']];
 const MORE = [['torch', 'Torch', 'KeyF', 'tap'], ['tool', 'Tool', 'KeyV', 'tap'], ['usetool', 'Use tool', 'KeyX', 'tap'], ['throw', 'Throw', 'KeyT', 'tap'], ['drop', 'Drop', 'KeyG', 'tap'], ['cart', 'Cart', 'KeyR', 'tap'], ['alert', 'Alert', 'KeyK', 'tap'], ['log', 'Log', 'KeyL', 'tap'], ['hud', 'HUD', 'KeyB', 'tap']];
 
@@ -124,7 +127,7 @@ export function initTouch() {
   /** press / release one control by id (also the test hook) */
   T.press = (id, down = true) => {
     const d = T.defs[id]; if (!d) return false; const [, , what, kind] = d; note(`${id} ${down ? 'down' : 'up'}`);
-    if (kind === 'hold') key(down ? 'keydown' : 'keyup', what);
+    if (kind === 'hold' || kind === 'wheelhold') key(down ? 'keydown' : 'keyup', what);   // wheelhold: Q held opens the held wheel after 220 ms (js/menus.js), a short press is the pinned wheel
     else if (kind === 'tap') { if (down) tapKey(what); }
     else if (kind === 'latch') { if (down) setSprint(!T.sprint); }
     else if (kind === 'act') { if (what === 'grab') ACT.grab(down); else if (down) ACT[what]?.(); }
@@ -140,6 +143,9 @@ export function initTouch() {
     const k = LOOK_K * (CFG().sens || 1); p.yaw -= dx * k; p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch - dy * k));
   };
   T.lookBy = lookBy;
+  /** the Wheel button is held and the wheel is open: steer its cursor by the finger's travel from where it touched down (lifting commits, js/menus.js keyup) */
+  const flick = (dx, dy) => { const m = G()?.menus, W = m?.view?.W; if (!W?.held) return; const [x, y] = clampCursor(dx * FLICK_K, dy * FLICK_K); if (moveTo(W, x, y)) m.view.render(); };
+  T.flick = flick;
 
   // ---- touch routing (window capture, before anything else). Touches on ordinary DOM UI fall through to native taps / scrolling.
   const jg = (el) => el?.closest?.('#jobgame [data-k]');
@@ -150,7 +156,7 @@ export function initTouch() {
   addEventListener('touchstart', (e) => {
     for (const t of e.changedTouches) {
       const el = t.target, b = el.closest?.('#tc [data-tc]');
-      if (b) { e.preventDefault(); const id = b.dataset.tc; T.held.set(t.identifier, { id, b }); b.classList.add('dn'); hook(b); T.press(id, true); continue; }
+      if (b) { e.preventDefault(); const id = b.dataset.tc; T.held.set(t.identifier, { id, b, x0: t.clientX, y0: t.clientY }); b.classList.add('dn'); hook(b); T.press(id, true); continue; }
       const k = jg(el);
       if (k) {   // job mini-game: press now, release on lift (hold buttons); Esc keeps its own handler (closes the layer)
         e.preventDefault(); const code = k.dataset.k, J = window.__game?.jobgame; k.classList.add('dn');
@@ -170,7 +176,7 @@ export function initTouch() {
     for (const t of e.changedTouches) {
       if (T.stick?.id === t.identifier) { mine = true; const dx = t.clientX - T.stick.x0, dy = t.clientY - T.stick.y0, v = stickVec(dx, dy); setMove(v); const L = Math.min(1, Math.hypot(dx, dy) / 56) * 56 / (Math.hypot(dx, dy) || 1); T.el.knob.style.transform = `translate(${dx * L}px,${dy * L}px)`; }
       else if (T.look?.id === t.identifier) { mine = true; lookBy(t.clientX - T.look.x, t.clientY - T.look.y); T.look.x = t.clientX; T.look.y = t.clientY; }
-      else if (T.held.has(t.identifier)) mine = true;
+      else if (T.held.has(t.identifier)) { mine = true; const h = T.held.get(t.identifier); if (h.id === 'wheel') flick(t.clientX - h.x0, t.clientY - h.y0); }
     }
     if (mine) e.preventDefault();
   }, { passive: false, capture: true });
@@ -185,7 +191,7 @@ export function initTouch() {
   addEventListener('touchend', end, { passive: false, capture: true }); addEventListener('touchcancel', end, { passive: false, capture: true });
 
   // ---- mode: what the overlay shows. play = the full set; ride = look only; menu = Back only; off = nothing (title, pause, death screens...)
-  const releaseAll = () => { endStick(); T.look = null; for (const [, h] of T.held) { h.b?.classList.remove('dn'); if (h.id) T.press(h.id, false); } T.held.clear(); if (T.more) ACT.more(); };
+  const releaseAll = () => { endStick(); T.look = null; for (const [k, h] of [...T.held]) { if (h.id === 'wheel' && G()?.menus?.view?.W?.held) continue; h.b?.classList.remove('dn'); if (h.id) T.press(h.id, false); T.held.delete(k); } if (T.more) ACT.more(); };   // a held quick wheel keeps its finger (the overlay goes to 'menu' mode when it opens)
   const modeOf = () => {
     const g = G(); if (!g) return 'off'; const ph = g.phase;
     if (ph === 'play') return g.menuPause || g.nav?.mapOpen ? 'menu' : 'play';

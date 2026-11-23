@@ -46,6 +46,53 @@ export async function padBrowser(page, fail) {
     st.connected = false; navigator.getGamepads = () => [null]; frames(2); out.gone = !pad.active && !pad.held.size;
     restore(); return out;
   });
+  // ---- second pass: job digits 8 / 9, combat verbs, the work-site hold, the conversation wheel, the lift panel deck pick
+  const R2 = await page.evaluate(async () => {
+    const g = __game, G = g.G, P = g.P, J = g.jobgame, pad = G.pad, D = g.duty, l = D.loops[0], out = {};
+    const st = { buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0], connected: true, index: 0, id: 'Mock Pad (standard)', mapping: 'standard' };
+    navigator.getGamepads = () => [st]; const B = (i, v) => { st.buttons[i] = { pressed: !!v, value: v ? 1 : 0 }; }, A = (a) => { st.axes = a; }; let t = 1000;
+    const frames = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) { t += dt; pad.tick(dt); if (G.phase === 'talk') g.talk.step(dt, t); else if (G.phase === 'play' && !G.combat.g) g.step(dt, t); G.menus.frame(dt); if (J.active) J.tick(dt); } };
+    const tapB = (i, n = 2) => { B(i, true); frames(n); B(i, false); frames(n); };
+    G.phase = 'play'; frames(3);
+    // right stick up / down inside a job game = keys 8 / 9
+    if (D.busy) D.busy = null; Object.assign(l, { billet: 'co', jtype: 'loop', label: 'Department status review', spot: 'console', sys: '', state: 'due', dueAt: D.t }); D.setPlace(G.shipDeck + 1, l.room);
+    out.jstart = g.startJob(l).ok; frames(2); tapB(0); out.jmode = pad.mode;
+    A([0, 0, 0, -1]); frames(2); out.d8 = pad.held.has('Digit8'); A([0, 0, 0, 1]); frames(2); out.d9 = pad.held.has('Digit9') && !pad.held.has('Digit8'); A([0, 0, 0, 0]); frames(2); out.dOff = !pad.held.has('Digit9');
+    pad.annotate(); out.glyph89 = document.querySelectorAll('#jobgame .pgl').length > 0;
+    tapB(1); out.jclosed = !J.active; if (D.busy) D.busy = null; frames(3);
+    // combat verbs while holding someone (rules are tested in the combat section; here only that the pad calls them)
+    const C = G.combat, calls = []; for (const n of ['subdue', 'restrain', 'release', 'primary', 'secondary']) C[n] = (...a) => { calls.push(n + (a.length ? ':' + a[0] : '')); return true; };
+    C.g = { gs: { state: 'held' } }; frames(2); out.hands = pad.sub;
+    tapB(1); out.subdue = calls.includes('subdue') && !pad.log.slice(-6).includes('+KeyC'); tapB(11); out.restrain = calls.includes('restrain'); tapB(15); out.release = calls.includes('release:let go') && !pad.log.slice(-4).includes('+KeyG');
+    C.g = null; calls.length = 0; frames(2); out.handsOff = pad.sub; B(1, true); frames(2); out.crouchBack = pad.held.has('KeyC'); B(1, false); frames(2);
+    B(6, true); frames(2); out.grab = calls.includes('secondary:true'); B(6, false); frames(2); out.grabEnd = calls.includes('secondary:false');
+    // at a work site LT holds E instead of grabbing (the right thumb stays on the stick for the 'turn' crank)
+    calls.length = 0; const w0 = G.sites.wants; G.sites.wants = () => true; frames(2); out.workSub = pad.sub; B(6, true); frames(2); out.workE = pad.held.has('KeyE'); out.noGrab = !calls.length; B(6, false); frames(2); out.workEoff = !pad.held.has('KeyE'); G.sites.wants = w0;
+    for (const n of ['subdue', 'restrain', 'release', 'primary', 'secondary']) delete C[n];
+    // the conversation wheel
+    const e = g.ents.find(x => x.kind === 'crew' && x.simmed && x.mesh?.userData.human && !x.fake); out.crew = !!e;
+    if (e) {
+      P.x = e.x + Math.sin(e.mesh.rotation.y) * 1.3; P.z = e.z + Math.cos(e.mesh.rotation.y) * 1.3; g.talk.begin(e); frames(40); out.talkPhase = G.phase; out.talkMode = pad.mode; const W = g.talk.W;
+      if (W) {
+        A([0, 0, 0.8, 0.8]); frames(2); out.rsSel = W.sel; A([0, 0, 0, 0]); frames(1); const s0 = W.sel; tapB(15); out.stepped = W.sel !== s0;
+        tapB(1); out.back = W.sel === -1; out.hintTalk = /Point/.test(document.getElementById('padhint').textContent);
+        tapB(3, 3); frames(40); out.left = G.phase === 'play';
+      }
+    }
+    // the lift panel: d-pad to a deck, A rides there
+    G.phase = 'play'; frames(2); g.openLiftPanel(); frames(3); out.liftPhase = G.phase; const rows = document.querySelectorAll('#liftrows .lr').length, cur = G.shipDeck, init = +document.querySelector('#liftrows .padsel')?.dataset.i, dn = init + 1 < rows, want = dn ? init + 1 : init - 1;
+    out.rows = rows; out.init = init; out.cur = cur; out.pinned = +document.querySelector('#liftrows .pinned')?.dataset.i; tapB(dn ? 13 : 12); out.liftMoved = +document.querySelector('#liftrows .padsel')?.dataset.i === want; tapB(0); out.rode = want === cur ? G.phase === 'play' : G.phase === 'ride' && G.lift.to === want; out.want = want;
+    G.phase = 'play'; G.lift.state = 'idle'; document.getElementById('liftui').className = ''; g.world?.setLiftOpen?.(true);
+    st.connected = false; navigator.getGamepads = () => [null]; frames(2); return out;
+  });
+  console.log('gamepad2:', JSON.stringify(R2));
+  const ck2 = (c, m) => { if (!c) fail('gamepad: ' + m + ' ' + JSON.stringify(R2)); };
+  ck2(R2.jstart && R2.jmode === 'job' && R2.d8 && R2.d9 && R2.dOff && R2.glyph89 && R2.jclosed, 'job games: right stick up / down = keys 8 / 9, B closes');
+  ck2(R2.hands === 'g' && R2.subdue && R2.restrain && R2.release, 'holding someone: B subdues, R3 restrains, d-pad right releases (B is not crouch then)');
+  ck2(R2.handsOff === '' && R2.crouchBack && R2.grab && R2.grabEnd, 'not holding: B crouches again, LT grabs and releases');
+  ck2(R2.workSub === 'w' && R2.workE && R2.noGrab && R2.workEoff, 'at a work site LT holds E (no grab)');
+  ck2(R2.crew && R2.talkPhase === 'talk' && R2.talkMode === 'talk' && R2.rsSel >= 0 && R2.stepped && R2.back && R2.hintTalk && R2.left, 'conversation wheel: RS points, d-pad steps, B backs out, Y leaves');
+  ck2(R2.liftPhase === 'select' && R2.rows >= 2 && R2.liftMoved && R2.rode, 'lift panel: d-pad moves the deck cursor, A rides to that deck');
   await page.evaluate(() => { __game.G.menus.lock = window.__jmLock; });
   console.log('gamepad:', JSON.stringify(R));
   const chk = (c, m) => { if (!c) fail('gamepad: ' + m + ' ' + JSON.stringify(R)); };

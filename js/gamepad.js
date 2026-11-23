@@ -9,11 +9,18 @@
 //   job game A Enter  X Space  d-pad / LS = arrows  Y 1  RB 2  LB 3  RT 4  LT 5  R3 6  L3 7  B cancel (Esc); the on-screen buttons show their glyph
 //   menus    d-pad / LS = move a cursor over the open layer's options (duty board, option menus, radio, comms)  A choose  B back
 //   nav map  d-pad / LS up-down = deck  A pin the hovered room  X find (F)  Y nearest lift (L)  B close
+//   hands    holding someone (js/grapple.js): LT hold = grab (let go = release)  RT throw down / shove  B subdue (C)  R3 restrain  d-pad right release
+//   work     at a work site (js/worksite-ui.js): LT also holds E, so the right thumb is free to turn the view with RS (the 'turn' crank act)
+//   job game digits 8 / 9 = right stick up / down (the game's on-screen 8 / 9 buttons show them)
+//   talk     conversation close-up: RS point at a sector / sub-ring, d-pad / LS step through, A choose, B back (Backspace), Y or Start leave (E)
+//   lift     deck panel: d-pad / LS up-down move the deck cursor (.padsel), A rides to it (starts on the pinned stop, else this deck), B steps out
 //   screens  title / dead: A or Start = Enter  boot "Enter the ship": A  pause: A resume  lift panel: A ride, B close  perk: X / Y / RB = 1 / 2 / 3
 // Calm: slower, smoothed look and no rumble. A glyph strip (`#padhint`) shows only while a pad was the last thing used.
+import { moveTo, clampCursor } from './wheel.js';
 const DZ_MOVE = 0.22, DZ_LOOK = 0.14, DIGITAL = 0.38, YAW_RATE = 2.6, PITCH_RATE = 1.8;
 const DIG_ORDER = [3, 5, 4, 7, 6, 11, 10];   // job-game digits 1..7: Y, RB, LB, RT, LT, R3, L3
 const GLYPH = { 0: 'A', 1: 'B', 2: 'X', 3: 'Y', 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT', 8: 'Back', 9: 'Start', 10: 'L3', 11: 'R3', 12: '↑', 13: '↓', 14: '←', 15: '→' };
+const GLYPH2 = { Digit8: 'RS↑', Digit9: 'RS↓' };
 const ARROWS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const CSS = `#padhint{position:fixed;right:14px;bottom:12px;z-index:60;display:none;gap:6px 10px;flex-wrap:wrap;justify-content:flex-end;max-width:min(560px,70vw);pointer-events:none;font:600 12px/1.2 system-ui,sans-serif;color:#e9e4f7}
 body.pad-on #padhint.on{display:flex}#padhint span{display:inline-flex;align-items:center;gap:5px;background:rgba(10,9,18,.72);border:1px solid #55507e;border-radius:999px;padding:3px 9px 3px 4px}
@@ -24,7 +31,7 @@ body.pad-on #padhint.on{display:flex}#padhint span{display:inline-flex;align-ite
 export class PadInput {
   constructor(ctx) {
     this.c = ctx; this.G = ctx.G; this.P = ctx.P; this.active = false; this.pad = null; this.prev = []; this.mode = 'none'; this.held = new Set(); this.swallow = new Set();
-    this.dir = null; this.dirT = 0; this.cur = 0; this.lx = 0; this.ly = 0; this.sx = 0; this.sy = 0; this.sig = ''; this.t = 0; this._ann = 0; this.log = [];
+    this.dir = null; this.dirT = 0; this.sub = ''; this.liftCur = null; this._sec = false; this.cur = 0; this.lx = 0; this.ly = 0; this.sx = 0; this.sy = 0; this.sig = ''; this.t = 0; this._ann = 0; this.log = [];
     if (typeof document === 'undefined') return;
     if (!document.getElementById('padhint-css')) { const st = document.createElement('style'); st.id = 'padhint-css'; st.textContent = CSS; document.head.appendChild(st); }
     let el = document.getElementById('padhint'); if (!el) { el = document.createElement('div'); el.id = 'padhint'; el.setAttribute('aria-hidden', 'true'); document.body.appendChild(el); } this.el = el;
@@ -47,6 +54,7 @@ export class PadInput {
   modeNow() {
     const G = this.G, UI = G.menus?.UI;
     if (G.phase === 'play') { if (UI?.wheel) return 'wheel'; if (G.jobgame?.active && G.jobgame.phase) return 'job'; if (UI?.stack?.length) return 'layer'; if (G.nav?.mapOpen) return 'map'; return 'play'; }
+    if (G.phase === 'talk' && G.talk?.M?.active) return 'talk';
     if (G.phase === 'paused' && G.scriptPaused) return 'none';   // menus.js: Start resumes
     return 'screen';
   }
@@ -65,10 +73,11 @@ export class PadInput {
     const calm = !!this.c.CFG?.calm;
 
     if (mode === 'play') this.play(dt, { btn, down, up, on, lx, ly, rx, ry, calm });
-    else if (mode === 'job') this.job({ btn, down, up, on, lx, ly });
+    else if (mode === 'job') this.job({ btn, down, up, on, lx, ly, ry });
+    else if (mode === 'talk') this.talk({ down, lx, ly, rx, ry, dt });
     else if (mode === 'layer') this.layer({ down, lx, ly, dt });
     else if (mode === 'map') this.map({ down, lx, ly, dt });
-    else if (mode === 'screen') this.screen({ down });
+    else if (mode === 'screen') this.screen({ down, lx, ly, dt });
     this.prev = btn; this.hints(mode);
   }
 
@@ -77,10 +86,12 @@ export class PadInput {
     const P = this.P, G = this.G, c = this.c;
     this.emit('KeyA', lx < -DIGITAL); this.emit('KeyD', lx > DIGITAL); this.emit('KeyW', ly < -DIGITAL); this.emit('KeyS', ly > DIGITAL);
     this.emit('ShiftLeft', on(10) && (lx || ly) !== 0);   // L3 sprint while moving
-    this.emit('Space', on(0)); this.emit('KeyC', on(1)); this.emit('KeyE', on(2));
-    if (down(11)) this.tap('KeyX');
-    if (down(13)) this.tap('KeyM'); if (down(14)) this.tap('KeyF'); if (down(15)) this.tap('KeyG');
-    if (down(7)) c.fire?.(); if (down(6)) c.secondary?.(true); if (up(6)) G.combat?.secondary?.(false);
+    const hold = G.combat?.g, work = !!G.sites?.wants?.(); this.sub = hold ? 'g' : work ? 'w' : '';
+    this.emit('Space', on(0)); this.emit('KeyC', on(1) && !hold); this.emit('KeyE', on(2) || (work && on(6)));   // at a work site LT holds E too (right thumb free for the crank)
+    if (hold && down(1)) G.combat.subdue?.();                                              // B: subdue while holding someone (instead of crouch)
+    if (down(11)) { if (hold) G.combat.restrain?.(); else this.tap('KeyX'); }
+    if (down(13)) this.tap('KeyM'); if (down(14)) this.tap('KeyF'); if (down(15)) { if (hold) G.combat.release?.('let go'); else this.tap('KeyG'); }
+    if (down(7)) c.fire?.(); if (down(6) && !work) { this._sec = true; c.secondary?.(true); } if (up(6) && this._sec) { this._sec = false; G.combat?.secondary?.(false); }
     // look: the stick speed is squared for fine aim; Calm slows the turn and eases it in
     const sc = (calm ? 0.65 : 1) * (this.c.CFG?.sens ?? 1), k = calm ? Math.min(1, dt * 9) : 1;
     this.sx += (rx - this.sx) * k; this.sy += (ry - this.sy) * k;
@@ -89,11 +100,12 @@ export class PadInput {
   }
 
   // ---- a job console game is up: its own key codes
-  job({ down, on, lx, ly }) {
+  job({ down, on, lx, ly, ry = 0 }) {
     const J = this.G.jobgame; this.dirNav(lx, ly, down, (code) => this.tap(code));
     if (J.phase === 'intro') { if (down(0) || down(2)) this.tap('Enter'); return; }
     this.emit('Enter', on(0)); this.emit('Space', on(2));
     DIG_ORDER.forEach((b, i) => this.emit('Digit' + (i + 1), on(b)));
+    this.emit('Digit8', ry < -DIGITAL); this.emit('Digit9', ry > DIGITAL);   // the games that need 8 / 9: right stick up / down
   }
   /** d-pad + left stick as edge-triggered, auto-repeating direction taps (arrows) */
   dirNav(lx, ly, down, fire, dt = 1 / 60) {
@@ -124,14 +136,31 @@ export class PadInput {
     if (down(0)) this.tap('Enter'); if (down(2)) this.tap('KeyF'); if (down(3)) this.tap('KeyL'); if (down(1)) this.tap('Escape');
   }
 
+  // ---- conversation close-up (js/talk.js owns the keys: arrows step, Enter picks, Backspace backs out, E leaves)
+  talk({ down, lx, ly, rx, ry, dt }) {
+    const T = this.G.talk, W = T?.W; if (!W || !T.M?.inputOk) { if (down(9) || down(3)) this.tap('KeyE'); return; }
+    this.dirNav(lx, ly, down, (code) => this.tap(code), dt);
+    if (Math.hypot(rx, ry) > 0.45) { const [x, y] = clampCursor(rx * 260, ry * 260); if (moveTo(W, x, y)) T.renderWheel(); }
+    if (down(0)) this.tap('Enter'); if (down(1)) this.tap('Backspace'); if (down(3) || down(9)) this.tap('KeyE');
+  }
+  /** the lift panel's deck rows: d-pad moves a cursor, A clicks the row (main.js chooseDeck), B steps out */
+  lift({ down, lx, ly, dt }) {
+    const rows = typeof document === 'undefined' ? [] : [...document.querySelectorAll('#liftrows .lr')]; if (!rows.length) return;
+    if (this.liftCur == null || this.liftCur >= rows.length) { const pi = rows.findIndex(r => r.classList.contains('pinned')), ci = rows.findIndex(r => r.classList.contains('cur')); this.liftCur = pi >= 0 ? pi : Math.max(0, ci); }
+    this.dirNav(lx, ly, down, (code, d) => { if (d === 0 || d === 2) this.liftCur = Math.max(0, this.liftCur - 1); else this.liftCur = Math.min(rows.length - 1, this.liftCur + 1); }, dt);
+    this.clearSel(); const el = rows[this.liftCur]; if (el) { el.classList.add('padsel'); el.scrollIntoView?.({ block: 'nearest' }); }
+    if (down(0) && el) el.click(); if (down(1)) this.tap('Escape');
+  }
+
   // ---- screens: title, loading, pause, perk pick, lift panel, death
-  screen({ down }) {
+  screen({ down, lx = 0, ly = 0, dt = 1 / 60 }) {
     const G = this.G, ph = G.phase; if (typeof document === 'undefined') return;
     const boot = document.getElementById('boot-go'); if (boot && boot.getClientRects().length && !boot.disabled && (down(0) || down(9))) { boot.click(); return; }
     if (ph === 'title' || ph === 'dead') { if (down(0) || down(9)) this.tap('Enter'); }
     else if (ph === 'paused') { if (down(0) || down(9)) this.c.resume?.(); }
     else if (ph === 'perk') { [2, 3, 5].forEach((b, i) => { if (down(b)) this.tap('Digit' + (i + 1)); }); }
-    else if (ph === 'select') { if (down(0)) this.tap('Enter'); if (down(1)) this.tap('Escape'); }
+    else if (ph === 'select') this.lift({ down, lx, ly, dt });
+    if (ph !== 'select') this.liftCur = null;
   }
 
   // ---- on-screen glyph hints (only while a pad is the active device)
@@ -140,12 +169,16 @@ export class PadInput {
     let items = [];
     const g = (b, label, cls = '') => `<span><b class="${cls}">${b}</b>${label}</span>`;
     if (mode === 'play') items = [g('LS', 'Move'), g('RS', 'Look'), g('A', 'Jump', 'a'), g('B', 'Crouch', 'b'), g('X', 'Use (hold or tap)', 'x'), g('RT', 'Strike'), g('LT', 'Grab'), g('Y', 'Duty', 'y'), g('LB', 'Wheel'), g('↓', 'Map')];
+    if (mode === 'play' && this.sub === 'g') items = [g('LT', 'Hold grip'), g('RT', 'Throw / shove'), g('B', 'Subdue', 'b'), g('R3', 'Restrain'), g('→', 'Release'), g('LS', 'Drag')];
+    else if (mode === 'play' && this.sub === 'w') items = [g('LT', 'Hold work'), g('X', 'Hold work', 'x'), g('RS', 'Turn the view'), g('LS', 'Move')];
     else if (mode === 'job') items = [g('A', 'Enter', 'a'), g('X', 'Space', 'x'), g('✥', 'Arrows'), g('Y·RB·LB·RT', '1·2·3·4'), g('B', 'Cancel', 'b')];
     else if (mode === 'layer') items = [g('✥', 'Move'), g('A', 'Choose', 'a'), g('B', 'Back', 'b')];
     else if (mode === 'map') items = [g('↑↓', 'Deck'), g('A', 'Pin room', 'a'), g('X', 'Find', 'x'), g('Y', 'Lift', 'y'), g('B', 'Close', 'b')];
+    else if (mode === 'talk') items = [g('RS', 'Point'), g('✥', 'Step'), g('A', 'Choose', 'a'), g('B', 'Back', 'b'), g('Y', 'Leave', 'y')];
     else if (mode === 'wheel') items = [g('RS', 'Pick'), g('A', 'Confirm', 'a'), g('B', 'Cancel', 'b')];
+    else if (mode === 'screen' && G.phase === 'select') items = [g('↑↓', 'Deck'), g('A', 'Ride', 'a'), g('B', 'Step out', 'b')];
     else if (mode === 'screen') items = [g('A', 'Confirm', 'a'), G.phase === 'perk' ? g('X·Y·RB', '1·2·3') : '', G.phase === 'select' ? g('B', 'Close', 'b') : ''];
-    const sig = this.active + mode + G.phase; const html = items.join('');
+    const sig = this.active + mode + G.phase + (mode === 'play' ? this.sub : ''); const html = items.join('');
     if (sig !== this.sig || html !== this._html) { this.sig = sig; this._html = html; this.el.innerHTML = html; this.el.classList.toggle('on', this.active && !!html); }
     if (mode === 'job' && this.active && (this._ann -= 1) <= 0) { this._ann = 6; this.annotate(); }
   }
@@ -153,6 +186,7 @@ export class PadInput {
   annotate() {
     const el = typeof document !== 'undefined' && document.getElementById('jobgame'); if (!el) return;
     const map = { Enter: ['A', 'a'], NumpadEnter: ['A', 'a'], Space: ['X', 'x'], ArrowUp: ['↑', ''], ArrowDown: ['↓', ''], ArrowLeft: ['←', ''], ArrowRight: ['→', ''] };
+    for (const k in GLYPH2) map[k] = [GLYPH2[k], ''];
     DIG_ORDER.forEach((b, i) => { map['Digit' + (i + 1)] = [GLYPH[b], b === 3 ? 'y' : '']; });
     for (const b of el.querySelectorAll('[data-k]')) { if (b.querySelector('.pgl')) continue; const m = map[b.dataset.k]; if (m) b.insertAdjacentHTML('beforeend', `<i class="pgl ${m[1]}">${m[0]}</i>`); }
   }

@@ -232,7 +232,7 @@ export function resultLine(kind, r, c, rnd = Math.random) {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 const hex = (n) => '#' + (n >>> 0).toString(16).padStart(6, '0');
 const CSS = `
-body.talking>:not(#view):not(#tk):not(.screen):not(#fade):not(#ui-resume):not(script):not(style){visibility:hidden!important}
+body.talking>:not(#view):not(#tk):not(.screen):not(#fade):not(#ui-resume):not(#tc):not(script):not(style){visibility:hidden!important}
 #tk{position:fixed;inset:0;z-index:14;pointer-events:none;font-family:var(--f-d,"Avenir Next Condensed","Roboto Condensed","Arial Narrow",Arial,sans-serif);color:#e8eef6;--u:#a3231c;--line:rgba(150,180,210,.26);--pan:rgba(7,11,19,.62);--dim:#8fa0b6;display:none}
 #tk.on{display:block}#tk .bar{position:absolute;left:0;right:0;height:7vh;background:#000;transition:transform .55s cubic-bezier(.2,.8,.2,1)}#tk .bt{top:0;transform:translateY(-100%)}#tk .bb{bottom:0;transform:translateY(100%)}
 #tk.in .bt,#tk.in .bb{transform:none}
@@ -309,7 +309,8 @@ export class Talk {
     this.dom = { plate: q('.plate'), img: q('.plate img'), h1: q('.plate h1'), sub: q('.plate .sub'), pips: q('.pips'), mood: q('.mood'), clk: q('.clk'), nm: q('.subt .nm'), tx: q('.subt .tx'), you: q('.you'), svg: q('.wbox svg'), rtx: q('.rtx'), mask: q('.meter .mask'), ghost: q('.meter .ghost'), tick: q('.meter .tick'), delta: q('.delta') };
     const svg = this.dom.svg;
     svg.addEventListener('mousemove', (ev) => { if (!this.W) return; const [x, y] = this.toView(ev.clientX, ev.clientY); if (moveTo(this.W, x, y)) this.renderWheel(); });
-    svg.addEventListener('mouseleave', () => { if (!this.W || this.W.digit != null) return; this.W.sel = -1; this.W.sub = -1; this.renderWheel(); });
+    svg.addEventListener('touchstart', () => { this._tt = performance.now(); }, { passive: true });   // a tap is followed by mouse events and a mouseleave (no hover on touch): that must not clear the tapped sector
+    svg.addEventListener('mouseleave', () => { if (!this.W || this.W.digit != null || performance.now() - (this._tt || -1e9) < 900) return; this.W.sel = -1; this.W.sub = -1; this.renderWheel(); });
     svg.addEventListener('mousedown', (ev) => {
       ev.stopPropagation(); ev.preventDefault(); if (!this.W || !this.M.inputOk) return; const [x, y] = this.toView(ev.clientX, ev.clientY); const r = Math.hypot(x, y);
       if (r < R0 - 4) { this.end(); return; }   // the hub = Leave
