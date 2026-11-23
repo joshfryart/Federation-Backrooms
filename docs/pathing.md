@@ -491,7 +491,7 @@ alert sends off-post crew to stations without stealing ordered crew; nothing app
    a second car on big decks, or sending some evacuees by Jefferies tube between decks, would need new ship geometry).
 2. **Lift crowding**: lift walkers stand < 0.45 m apart for 3-42 pair-s per 3-deck soak (mostly the called group converging on the
    doorway and the line on narrow corridors); stuck walks near the lift on surge decks (Manitoba 7 walks, 23 body-s).
-3. **The player blocks the lift mouth**: walkers never squeeze past the player, so standing in a one-tile corridor in front of the car
+3. **The player blocks the lift mouth** *(iteration 7: they now say "Excuse me" and squeeze past after ~3 s)*: walkers never squeeze past the player, so standing in a one-tile corridor in front of the car
    stops the lift traffic (the soak's lift hop does this 1/3 of the time: 10 s gaps with 3-4 people waiting). Nobody asks "excuse me".
 4. **Standing in the car** holds the doors; after 5 s boarders step back out and wait until the player leaves.
 5. **Sim ahead of the body (`early`)** 0-174 body-s per soak: `HOLD_MAX` (60 s) lets the sim count a lift rider as gone while the body
@@ -499,7 +499,7 @@ alert sends off-post crew to stations without stealing ordered crew; nothing app
    (the body still walks), but the abstract position is up to a minute early on surge decks.
 6. **Orders take real time**: cross-deck orders take 30-90 s (walk, ride, walk), so about half of the soak's orders are still under way
    at the end of a 150 s deck; refused orders (about 1 in 4 with low trust) only shake the head.
-7. **Carts**: walkers pass through parked carts (0-4 body-s per soak) and are held up behind pushed ones (up to 9-27 body-s).
+7. **Carts**: walkers pass through parked carts (0-4 body-s per soak) and are held up behind pushed ones (up to 9-27 body-s). *(iteration 7: parked carts are path-field obstacles; pushed ones are steered round, see below)*
 8. **Off-screen shortcuts**: a walk end snaps to the tile centre and cut-short walks finish out of sight (14-36 jumps per deck, none in
    sight); beyond 30 m in a clear line of sight nothing is measured (no fade at range).
 9. **Chaotic measurements**: every change moves every later walk; compare several seeds, not single cells. Step-time p99 depends on
@@ -528,6 +528,50 @@ Play as Chief of Security (`?billet=cos`) on a busy ship (Manitoba: `G.forceShip
       clearing the alert sends everyone back to their schedule.
 - [ ] Evacuation (the collapse): crew run to the shuttlebay / transporter, crawling through tubes when quicker; the lift line holds.
 - [ ] Watch someone sit at a bar / bunk / console from a few metres, and push a cart past seated people: no jumps.
-- [ ] Push a cart through a corridor while crew walk by: they currently pass through parked carts (known limit 7); report if it looks bad.
+- [ ] Push a cart through a corridor while crew walk by: they should walk round parked carts and keep out of a pushed one (iteration 7); report if they jam or jump.
+- [ ] Stand in a one-tile corridor with crew walking up behind you: after a couple of seconds they say "Excuse me" and go past through you (a clip, a guess); and watch crew walk to a service ladder, climb it (turn, climb ~3 s, gone) and appear at the foot of the other deck's ladder when you are not looking.
 - [ ] Repairs: crew walk (run when urgent) to the broken hardware on your deck, work there, and go back.
 - [ ] Change decks by lift several times: the deck you arrive on has people where the sim says, none appearing in sight.
+
+### Iteration 7 (2026-11-23)
+
+The three limits left in `Known limits` / TODO: carts shoving walkers, the player blocking the lift corridor, crew never using the service
+ladder wells. Soak: `node tools/soak-walk.mjs` (seed 11, USF Prince Edward Island, decks 3, 2, 1, 150 s, clock x6) and `--seed 12 --surge 60`,
+base = 49790b7 vs this change. New harness columns: `player in the way` (walker-s with `e.pWait` > 0) and `ladder climbs`; stuck samples carry `lad` / `opts`.
+
+| | seed 11 before | after | seed 12 + surge before | after |
+|---|---|---|---|---|
+| walkers through a cart (body-s) / held up by a pushed cart | 3.7 / 0.9 | 0.3 / 0 | 0.4 / 0.5 | 2.8 / 0.3 |
+| lift cars that left / people carried | 34 / 57 | 24 / 46 | 31 / 69 | 24 / 54 |
+| lift queue p90 (s) / max | 22.1 / 23.3 | 19.4 / 19.4 | 19.7 / 32.7 | 21.4 / 22.1 |
+| bodies that climbed a service ladder | 0 | 9 | 0 | 20 |
+| stuck walks (count, body-s) | 3, 4.8 | 1, 1.7 | 3, 1.6 | 6, 10.3 |
+| brushing near the lift (pair-s) | 5.2 | 4.0 | 26.4 | 8.7 |
+| path fields built per s | 0.19 | 0.47 | 0.20 | 0.47 |
+
+(Seed 12 `cartNearS` went up 0.4 -> 2.8 in a chaotic run: one change moves every later walk; the seed 11 run shows the intent. The 6 stuck
+walks on seed 12 were not root-caused: 3 of them are ladder walks and 3 plain walks at 0.8-1.3 m/s whose path-field value did not fall for 8 s.)
+
+Changes:
+1. **Carts are path-field obstacles.** `Haul.syncObstacles` (twice a second) puts `CART_COST` = 5 on every tile under a *parked* cart in `World.softCost`;
+   `World.field` adds it, so a walk goes round a cart when there is a way and still goes through (the old shove) when a cart fills a one-tile
+   corridor. The field cache is cleared only when the set of cart tiles changes (fields/s 0.19 -> 0.47 because pushed-and-released carts
+   change it). In `walkStep` every cart circle within 3.6 m (`Haul.obstacles`, the cart a walker pushes excluded) steers like a body (bear right, never brake for a
+   parked one, brake for a pushed one) and the walker keeps itself out of the circle (`r + 0.3`, so `Haul.collide`'s shove at `r + 0.25` finds nobody), except within 1 m
+   of its goal, after 5 s without progress (`forceT`) and near the lift car.
+2. **The player in the way.** A walker slowed to < 0.2 m/s with the player 1.6 m ahead and in line (`nearP`) says "Excuse me." / "Coming through." / "Pardon me, sir."
+   after 1.2 s (once per 25 s, `speak`) and after 3 s ignores the player and ghosts past for 1.6 s (`pPass`). Measured with a scripted one-tile corridor
+   (player held still, one walker 4 tiles back, goal 4 tiles beyond): 24.7 s before, 24.2 s after: the old 5 s no-progress rule (`forceT`) already got them past after ~4 s, so the real change is the
+   spoken line and a shorter wait (about 1 s). The walker passes *through* the player's body (a clip, no push); not seen on screen.
+3. **Crew use the service ladder wells** (`js/sim.js` `ladders`, per-deck foot tile; `js/main.js` `ladderStep`). For a trip between adjacent decks that both have a
+   well, the sim compares walk + `LADDER_T` (6 s) + walk against the lift plan and takes the ladder when shorter, unless 3 people are already on their way to that ladder
+   (`LADDER_QUEUE`, the rest take the lift); `transit.ladder`, `sim.viaOf(p)`, `bodies()` entries carry `via`. The body walks to within 1.3 m of the foot (`opts.ladder`), queues
+   (one at a time, nearest first), turns, climbs 2.6 m with the 'push' clip and is removed (or removed at once when unseen); on the other deck the arrival appears at the foot
+   when unseen (`unseenAt`) and walks off. `estimate()` returns the quicker route. Surge crowds at the lift shrank (see cars / queue).
+
+Tests: `tools/test-walk.mjs` node part ('sim uses the ladder wells': trips, no body on either deck while climbing, the leg lists `via: 'ladder'`, adjacent decks only, estimate > 0),
+the `npc bodies vs sim` check ignores ladder walkers. `walk-unit`, `sim`, `duty`, `equipment-unit`, `walk`, `lift-riders`, `ladder-well` pass.
+
+Not verified / guesses: nothing seen on a real screen; the 'push' clip stands in for a ladder climb (hands do not reach the rungs), the climb height / speed (2.6 m at 0.9 m/s),
+`CART_COST` 5, the 3 s squeeze-past and the spoken lines, `LADDER_T` 6 s and the queue of 3 are guesses. In-sight ladder departures show as the body climbing then vanishing at the top (counts as a
+`vanish` only when `unseen` is false; seed 11 showed 2). Walkers in a corridor still wait for a pushed cart head-on (slow, not a detour).

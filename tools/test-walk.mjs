@@ -50,6 +50,18 @@ export async function walkTests(fail) {
     const other = Object.keys(plan3).find(k => plan3[k].length && plan3[k].every(x => x.deckNo !== q.deckNo)), same = Object.keys(plan3).find(k => k !== q.room && plan3[k].some(x => x.deckNo === q.deckNo) && s3.site(p, k, q.deckNo, { room: k }).deckNo === q.deckNo);
     est = { here: s3.estimate(p, q.room), same: same ? +s3.estimate(p, same).toFixed(1) : null, other: other ? +s3.estimate(p, other).toFixed(1) : null };
     ck(est.here === 0 && (est.same == null || (est.same >= 3 && est.same <= WALK_MAX)) && (est.other == null || est.other > 3.5 + 1) && (est.same == null || est.other == null || est.other > est.same - WALK_MAX), 'sim.estimate ' + JSON.stringify(est)); }
+  // pathing iteration 7: crew use the service ladder wells between adjacent decks when it is quicker than the lift (sim `ladders`): a ladder rider has no body on
+  // either deck during the climb, the leg after it is listed at the foot of the new deck's ladder (`via: 'ladder'`), and estimate() never exceeds the lift route
+  let lad = null; { const decks = G.genShip(ship, seed), plan4 = G.shipPlan(ship, seed, decks), clock4 = new K.ShipClock({ seed }); clock4.assign(roster);
+    const ladders = decks.map(x => x.ladderWell ? [x.ladderWell[0] + x.ladderWell[2], x.ladderWell[1] + x.ladderWell[3]] : null), s4 = new CrewSim({ roster, clock: clock4, plan: plan4, data, seed, decks: ship.decks, lifts: decks.map(x => x.exit), ladders });
+    let trips = 0, legs = 0, bad = 0, adjOnly = true, noLad = new CrewSim({ roster, clock: clock4, plan: plan4, data, seed, decks: ship.decks, lifts: decks.map(x => x.exit) }), est = true; const seen = new Set();
+    for (let t = 0; t < 1500; t += 0.5) {
+      s4.tick(0.5); clock4.advance(0.5);
+      for (const q of s4.st.values()) { const tr = q.transit; if (tr?.ladder) { if (!seen.has(q.person.id + ':' + tr.to.deckNo + tr.room)) { seen.add(q.person.id + ':' + tr.to.deckNo + tr.room); trips++; } adjOnly = adjOnly && Math.abs(tr.to.deckNo - tr.from.deckNo) === 1; if (s4.viaOf(q.person) !== 'ladder' || s4.bodies(tr.from.deckNo).has(q.person.id) || s4.bodies(tr.to.deckNo).has(q.person.id)) bad++; if (tr.eta > 0.01) { const e = s4.estimate(q.person, tr.room); if (!(e > 0)) est = false; } }
+        else if (tr && !tr.lift && q.deckNo && tr.via === 'ladder') { legs++; const b = s4.bodies(q.deckNo).get(q.person.id), L = ladders[q.deckNo - 1]; if (!b || b.via !== 'ladder' || !L) bad++; } }
+    }
+    lad = { trips, legs, bad, adjOnly, est, wells: ladders.filter(Boolean).length };
+    ck(ladders.filter(Boolean).length < 2 || (trips > 0 && legs > 0 && bad === 0 && adjOnly && est), 'sim uses the ladder wells ' + JSON.stringify(lad)); }
   // pathing iteration 4: Duty.byDistance (the delegate menu lists subordinates nearest first, by sim.estimate; people already on a job last)
   let near = null; { const subs = duty.subs(), room = Object.keys(plan).find(k => plan[k].length > 0 && k !== 'quarters'), list = duty.byDistance(subs, room), free = list.filter(x => !duty.jobs.some(j => j.person === x.person)), etas = free.map(x => x.eta), busy = subs.find(q => !duty.jobs.some(j => j.person === q)) || subs[0];
     const fake = { person: busy, loop: { id: 'x', room }, left: 60 }; duty.jobs.push(fake); const list2 = duty.byDistance(subs, room); duty.jobs.splice(duty.jobs.indexOf(fake), 1);
@@ -57,7 +69,7 @@ export async function walkTests(fail) {
     ck(near.n === subs.length && near.sorted && near.busyAfter && near.busyLast && near.noRoom, 'Duty.byDistance ' + JSON.stringify(near)); }
   let refusal = null; { const evs2 = []; duty.on(ev => evs2.push(ev)); for (const s of duty.subs()) for (let k = 0; k < 60 && !evs2.some(e => e.type === 'refused'); k++) { duty.t += 5; const r = duty.order(s, null); if (r.ok) duty.jobs.splice(duty.jobs.indexOf(r.job), 1); }
     const ev = evs2.find(e => e.type === 'refused'); refusal = ev ? !!ev.person && ev.person.short === ev.who : 'none'; ck(refusal !== false, 'a refusal carries the person'); }
-  return { walkers, riders, maxEta: +maxEta.toFixed(1), order, hold, est, near, refusal };
+  return { walkers, riders, maxEta: +maxEta.toFixed(1), order, hold, est, lad, near, refusal };
 }
 
 export async function walkBrowser(page, fail) {
@@ -181,8 +193,8 @@ export async function walkBrowser(page, fail) {
         A.clear('red'); tick(3 * 30); for (const p of [a, b]) if (p) { for (const j of D.jobs.slice()) if (j.person === p) D.jobs.splice(D.jobs.indexOf(j), 1); S.release(p, 2); } lp.state = st0;
         out.alertOrders = { a: !!a, keep, b: !!b, taken, after, left: g.roster.people.filter(p => S.overrideOf(p)?.activity === 'stations').length }; } } }
     // bodies vs sim: never on an empty deck (parts 12-14 send people away; with fewer than 3 bodies left it moves to the busiest deck and lets the crew walk 10 s first, so the check sees arrivals / departures)
-    { const nb = () => g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish).length, n0 = nb(); if (n0 < 3) { toBusiest(); tick(10 * 30); out.bodiesMoved = { from: n0, deck: G.shipDeck + 1 }; } }
-    { const B = S.bodies(G.shipDeck + 1), es = g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish); out.bodies = { n: es.length, sim: B.size };
+    { const nb = () => g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish && !e.walk?.opts.ladder && !e.ladder).length, n0 = nb(); if (n0 < 3) { toBusiest(); tick(10 * 30); out.bodiesMoved = { from: n0, deck: G.shipDeck + 1 }; } }
+    { const B = S.bodies(G.shipDeck + 1), es = g.ents.filter(e => e.simmed && !e.board && !e.walk?.vanish && !e.walk?.opts.ladder && !e.ladder); out.bodies = { n: es.length, sim: B.size };
       const extra = es.filter(e => !B.has(e.person.id)); if (extra.length) out.bodies.extra = extra.map(e => { const st = S.st.get(e.person.id); return [e.person.short, st?.deckNo, st?.room, st?.transit ? (st.transit.lift ? 'lift>' + st.transit.to.deckNo : 'walk') : '', S.overrideOf(e.person)?.activity || '', e.walk ? (e.walk.opts.sim || 'walk') : '', e.simKey || '', e.haul ? 'haul' : '', e.op ? 'op' : '', e.cower ? 'cower' : '', e.fromCar ? 'fromCar' : ''].join(':'); }); }
     return out;
   });
