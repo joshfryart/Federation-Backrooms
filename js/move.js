@@ -192,7 +192,7 @@ export function movePlayer(dt, P, world, input, api) {
   }
   function finish() {
     const hs = Math.hypot(P.vx, P.vz);
-    const eyeT = P.mode === 'slide' ? 0.72 : P.mode === 'mantle' ? 1.25 : P.crouch ? 1.05 : 1.65;
+    const eyeT = P.hidden?.eye ?? (P.mode === 'slide' ? 0.72 : P.mode === 'mantle' ? 1.25 : P.crouch ? 1.05 : 1.65);
     P.eye += (eyeT - P.eye) * Math.min(1, dt * 12);
     const rollT = P.mode === 'wallrun' ? -P.wallSide * 0.2 : P.mode === 'slide' ? 0.05 : P.mode === 'mantle' ? (P.mant.fast ? 0.12 : 0) : clamp(-input.fx * 0.018 * Math.min(1, hs / 4), -0.03, 0.03);
     P.roll += (rollT - P.roll) * Math.min(1, dt * 9);

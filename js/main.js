@@ -39,6 +39,8 @@ import { createSave } from './save.js';   // versioned local save: settings, met
 import { renderBoard, mountSaveControls } from './save-ui.js';
 import { readRole, saveRole, resolveRole, readMission, mountRoleControl } from './role.js';   // role choice: ?role= / ?mission= / title-screen select
 import { readPace, savePace, mountPaceControl, paceFor } from './pace.js';   // shift length / pace presets (title screen, ?pace=)
+import { HIDE_PROP_KINDS as HIDE_KINDS, nearestHideSite, hideState, HIDE } from './hiding.js';
+import { Saboteur, SAB } from './saboteur.js';   // the physical culprit of the sabotage failure mode
 import { RepairCrew } from './repair.js';   // NPC repair response (Systems Nominal)
 import { barkGate, gestureFor } from './etiquette.js';   // NPC speech etiquette (when crew may speak / nod)
 import { holdItem, dropItem } from './carry.js';
@@ -556,7 +558,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
 // deck (the doors close on them, carStep), and out of the car when they arrive. Bodies only appear in place on a deck load (force).
 const liftKeepClear = (x, y) => { const c = world.car; return !!c && ((x === c.tx && y === c.ty) || (x === c.tx + c.dx && y === c.ty + c.dy)); };   // the car (its tile can belong to the room it opens into) and the tile at its doors: nobody sits / stands there
 function simTileFor(person, e) {   // a tile in the person's room: beside the furniture of their spot (facing it) when there is some, else spread by id
-  if (e.activity === 'repairing') { const t = repairStand(person); if (t) return t; }   // crew repair (js/repair.js): the tile beside the hardware / junction
+  if (e.activity === 'repairing' || e.activity === 'tampering') { const t = repairStand(person); if (t) return t; }   // crew repair (js/repair.js): the tile beside the hardware / junction
   const d = world.d, S = G.social, sx = e.tx ?? e.stx, sy = e.ty ?? e.sty, kinds = propsFor(e.spot);   // spot -> prop kinds (js/equipment.js: bar -> table, locker -> shelving …)
   let R = sx == null ? null : d.rooms?.find(r => r.type === e.room && sx >= r.x && sx < r.x + r.w && sy >= r.y && sy < r.y + r.h) || null;   // the room instance the sim chose (friends converge on one), not any room of that type
   const inR = (x, y) => !R || (x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h), ok = (x, y) => d.grid[y]?.[x] === 0 && !world.isTube(x, y) && d.room[y][x] === e.room && inR(x, y) && !liftKeepClear(x, y);
@@ -714,7 +716,7 @@ function setupRepair() {
 }
 // the tile a repairer works from on this deck (helpers one tile over), facing the hardware / junction; null when the job is elsewhere
 function repairStand(p) {
-  const j = G.repair?.jobOf(p); if (!j || !world || j.site.deckNo !== G.shipDeck + 1) return null; const s = j.site, d = world.d;
+  const j = G.repair?.jobOf(p) || G.saboteur?.jobOf(p); if (!j || !world || j.site.deckNo !== G.shipDeck + 1) return null; const s = j.site, d = world.d;
   let t = [s.stand[0], s.stand[1]];
   if (j.role === 'helper') { const nb = WALK_DIRS.map(([a, b]) => [t[0] + a, t[1] + b]).find(([x, y]) => d.grid[y]?.[x] === 0 && !world.isTube(x, y)); if (nb) t = nb; }
   const r = repairPts.find(q => q.sys === j.sys); t.face = !s.main && r && r.px !== undefined ? [r.px, r.pz] : world.center(s.face[0], s.face[1]); return t;
@@ -724,7 +726,7 @@ function repairStand(p) {
 // toward that prop's use point (1.1 m off the tile centre at the helm on USF Ontario), past the 1.0 m arrive radius below: the walk
 // restarted every second and the job only began on the 150 s forced arrival (test.mjs pace-repair --seed 1)
 function atRepairStand(e) {
-  if (!e.person || !e.simmed || !G.repair) return false; const j = G.repair.jobOf(e.person); if (!j || j.suspended) return false;
+  if (!e.person || !e.simmed || !(G.repair || G.saboteur)) return false; const j = G.repair?.jobOf(e.person) || G.saboteur?.jobOf(e.person); if (!j || j.suspended) return false;
   const t = repairStand(e.person); if (!t) return false; const [cx, cz] = world.center(t[0], t[1]); return Math.hypot(e.x - cx, e.z - cz) < 1.0;
 }
 function repairBodyState(p) {
@@ -733,17 +735,24 @@ function repairBodyState(p) {
   const t = repairStand(p); if (!t) return 'arrived'; const [cx, cz] = world.center(t[0], t[1]); return Math.hypot(e.x - cx, e.z - cz) < 1.0 ? 'arrived' : 'walking';
 }
 function repairBodies(dt) {
-  if (!G.repair || !world) return; G.repBodyT = (G.repBodyT || 0) - dt; const tick = G.repBodyT <= 0; if (tick) G.repBodyT = 0.25;
+  if (!(G.repair || G.saboteur) || !world) return; G.repBodyT = (G.repBodyT || 0) - dt; const tick = G.repBodyT <= 0; if (tick) G.repBodyT = 0.25;
   for (const e of ents) {
     if (!e.simmed || e.kind !== 'crew' || !e.person) continue;
-    const j = G.repair.jobOf(e.person), here = j && j.site.deckNo === G.shipDeck + 1 && !j.suspended;
+    const j = G.repair?.jobOf(e.person) || G.saboteur?.jobOf(e.person), here = j && j.site.deckNo === G.shipDeck + 1 && !j.suspended;
     if (here && !e.walk && ['setup', 'working', 'part'].includes(j.state)) { if (!e.repairing?.npc) beginRepairPose(e, j); else e.repairing.job = j; }
     else if (e.repairing?.npc) endRepairPose(e);
     if (tick && here && j.state === 'travel' && !e.walk && !e.board && G.sim.where(e.person)?.room === j.site.room) {   // already in the right room: walk the last metres
       const t = repairStand(e.person); if (t) { const [cx, cz] = world.center(t[0], t[1]); if (Math.hypot(e.x - cx, e.z - cz) > 1.0) { if (e.op) opEnd(e); e.room = j.site.room; e.faceAt = t.face; startWalk(e, t[0], t[1], false, { run: j.urgent }); } }
     }
-    if (tick) repairMarker(e, j);
+    if (tick) repairMarker(e, j?.covert ? null : j);   // the saboteur wears no marker: the player has to spot the sparks
   }
+  saboteurChase(dt);
+}
+// exposed saboteur on this deck: runs from the player inside ~6 m (combat flee behaviour, js/grapple.js), so catching them means a chase, a grab and a restrain
+function saboteurChase(dt) {
+  const ph = G.phases, C = G.combat; if (!ph?.saboteurExposed || !ph.saboteur || !C || G.phase !== 'play') return; G.sabChaseT = (G.sabChaseT || 0) - dt; if (G.sabChaseT > 0) return; G.sabChaseT = 1;
+  const e = ents.find(x => x.simmed && x.person === ph.saboteur); if (!e || e.cb?.ai || e.cb?.ctl) return;
+  if (Math.hypot(e.x - P.x, e.z - P.z) < 6 && world.los(P.x, P.z, e.x, e.z)) { C.begin(e, 'flee', 0.1); G.sabChases = (G.sabChases || 0) + 1; }
 }
 function beginRepairPose(e, j) {
   if (e.op) opEnd(e); const H = e.mesh.userData.human; e.repairing = { npc: true, sys: j.sys, job: j }; const t = repairStand(e.person); if (t?.face) e.faceAt = t.face;
@@ -770,6 +779,12 @@ function repairMarker(e, j) {
   else { x.lineWidth = 6; x.beginPath(); x.moveTo(23, 41); x.lineTo(36, 28); x.stroke(); x.lineWidth = 4; x.beginPath(); x.arc(39, 25, 6, 0.9, 5.4); x.stroke(); }
   m.material.map.needsUpdate = true;
 }
+// can the player see the culprit at the panel right now: same deck, within SAB.seeRange, in front of the view, clear line of sight
+function sabSeen(p, site) {
+  if (!world || !site || site.deckNo !== G.shipDeck + 1 || G.phase !== 'play') return false; const e = ents.find(x => x.simmed && x.person === p); if (!e) return false;
+  const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz); if (d > SAB.seeRange) return false;
+  return (dx * -Math.sin(P.yaw) + dz * -Math.cos(P.yaw)) / (d || 1) > 0.4 && world.los(P.x, P.z, e.x, e.z);
+}
 // first mission task of a new run: route pinned (G.pin, read by the nav agent's guide-me pin in js/nav.js) + a one-time glowing hint line
 function startIntro(ev) {
   if (G.intro || G.introDone) return; const here = G.shipDeck + 1, list = (G.plan?.[ev.room] || []).slice().sort((a, b) => Math.abs(a.deckNo - here) - Math.abs(b.deckNo - here)), s = list[0];
@@ -784,7 +799,7 @@ function introHint(dt) {
 
 // ---- the player's billet: duty loops, orders, delegation, reports, mission task board (js/duty.js, js/hud-duty.js)
 function setupDuty() {
-  G.hud2?.destroy(); G.hud2 = null; G.duty = null; if (!NOM()) return;
+  G.hud2?.destroy(); G.hud2 = null; G.duty = null; G.saboteur = null; if (!NOM()) return;
   const say = (m) => { if (m.kind === 'report') G.comms?.sim?.say?.({ from: commParty(m.from), to: BRIDGE_PARTY, text: m.text, priority: 'routine', channel: 'comm', kind: 'report' }); };
   // pace (js/pace.js): one scalar T, applied once each: clock rate, ShipState cascades, Duty constructor, Phases constructor (docs/pacing.md)
   G.pace = G.pace || readPace(location.search, localStorage, navigator.webdriver); G.comms.clock.setPace(G.pace.T); G.shipState.paceT = G.pace.T;
@@ -792,7 +807,8 @@ function setupDuty() {
   G.duty.atJob = orderAt;   G.hud2 = new DutyHUD({ getPhase: () => G.phase, onMenu: dutyMenu }); G.hud2.attach(G.duty);
   G.phases = new Phases({ shipState: G.shipState, alerts: G.comms.alerts, roster: G.roster, duty: G.duty, seed: G.runSeed, say: (t, k) => G.say(t, k), enabled: !navigator.webdriver || new URLSearchParams(location.search).get('phases') === '1', pace: G.pace });
   setupRepair(); G.pin = null; G.jobGo = null; G.sites?.cancel('new run'); G.intro = null; G.introDone = false; G.attn = {}; G.barkAt = G.nodAt = undefined;
-  G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel.`, 'warn'); });
+  G.phases.on((ev) => { if (ev.type === 'end') nomEnd(); else if (ev.type === 'sabotage') G.say(`Security: ${ev.who}'s badge was used at a junction panel${ev.deck ? ', deck ' + ev.deck : ''}.`, 'warn'); });
+  G.saboteur = new Saboteur({ phases: G.phases, sim: G.sim, shipState: G.shipState, sites: G.repair?.sites || {}, duty: G.duty, say: (t, k) => G.say(t, k), seed: G.runSeed, pace: G.pace, seen: sabSeen, bodyState: repairBodyState, playerDeck: () => G.shipDeck + 1 });
   G.duty.on((ev) => {
     const g = G.say;
     if (ev.type === 'due') g(`Duty: ${ev.label} (${ev.room}). [J]`, 'comp');
@@ -829,7 +845,7 @@ function orderAt(j) { const p = j.person, l = j.loop, S = G.sim; if (!S || !l?.r
 function orderEnd(j) { const p = j.person, S = G.sim; if (!S || S.overrideAt(p, 2)?.activity !== 'ordered') return; S.release(p, 2); const next = G.duty?.jobs.find(x => x.person === p); if (next) orderWalk(next); }
 function nomTick(dt) {
   if (!NOM() || !G.sim || worldPaused()) return;   // a menu / wheel / map / terminal / conversation is open: the ship holds still
-  G.sim.tick(dt); alertStations(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt); G.repair?.tick(dt); repairBodies(dt);
+  G.sim.tick(dt); alertStations(dt); evacuationStep(dt); simBodies(dt); G.haul?.tick(dt); G.repair?.tick(dt); G.saboteur?.tick(dt); repairBodies(dt);
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt); G.sites?.tick(dt); jobGoTick();
@@ -1200,9 +1216,13 @@ function dutyHere() {
   return D.loops.find(l => l.state === 'due' && l.room === room && near(l.spot)) || D.tasks.find(t => t.state === 'active' && t.room === room && near(t.spot)) || null;
 }
 // hiding (madness mode): E on a rack / drawer bank / shelving within reach while crouched crouches you behind it. Hunters only spot a hidden player within 1.8 m, ignore her noise, and lose the chase. Moving or E steps out.
-const HIDE_KINDS = new Set(['suitrack', 'drawers', 'shelving', 'weaponrack', 'tank']);
-function enterHide(lp) { P.hidden = { tx: lp.tx, ty: lp.ty }; P.hideR = perk('ghost') ? 1.0 : 1.8; P.vx = P.vz = 0; G.say('You crouch out of sight. Hunters only find you up close. [E] or move to step out.', 'good'); const o = $('hidefx'); if (o) o.style.opacity = 1; for (const g of gorns) if (g.state === S.CHASE && Math.hypot(g.x - P.x, g.z - P.z) > 3.5) { g.state = S.SEARCH; g.timer = 6; } }
-function exitHide() { if (!P.hidden) return; P.hidden = null; const o = $('hidefx'); if (o) o.style.opacity = 0; }
+function enterHide(spot) {   // spot: a prop { tx, ty, kind } or a wall site { x, z, nx, nz, kind } (js/hiding.js); no kind = the old crouch-behind-a-prop
+  const st = hideState(spot, !!perk('ghost')); P.hidden = st; P.hideR = st.r; P.vx = P.vz = 0;
+  if (st.x !== undefined) { P.x = st.x; P.z = st.z; P.yaw = st.yaw; P.pitch = 0; }   // into the locker / vent, facing the wall
+  G.say(HIDE[st.cls].say, 'good'); const o = $('hidefx'); if (o) o.style.opacity = 1;
+  for (const g of gorns) if (g.state === S.CHASE && Math.hypot(g.x - P.x, g.z - P.z) > 3.5) { g.state = S.SEARCH; g.timer = 6; }
+}
+function exitHide() { const h = P.hidden; if (!h) return; P.hidden = null; if (h.from) { P.x = h.from.x; P.z = h.from.z; } const o = $('hidefx'); if (o) o.style.opacity = 0; }
 // service ladder well (Systems Nominal): E at the ship's ladder in a dead-end corridor climbs down to the next deck (Shift+E up); you arrive at that deck's own ladder well. Fades out and in over ~1.7 s.
 function climbWell(dir) {
   if (G.phase !== 'play' || !NOM() || !G.ship) return false; const D = G.ship.decks; let to = G.shipDeck + dir; if (to < 0 || to >= D) { to = G.shipDeck - dir; if (to < 0 || to >= D) return false; }
@@ -1219,7 +1239,9 @@ function interact() {
   if (NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 4.2 && climbWell(keys.ShiftLeft || keys.ShiftRight ? -1 : 1)) return; }
   if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(), top = lp && lp.kind === 'catwalk' ? world.topAt(lp.tx, lp.ty) : 0;   // E at a catwalk module: climb the ladder rungs up onto its deck (a scripted 1.8 s mantle; step off an edge to come down)
     if (top > 1 && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.4) { P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: (lp.tx + 0.5) * 2.5, z: (lp.ty + 0.5) * 2.5, top, dx: 0, dz: 0, t: 0, dur: 1.8, exit: 0, fast: false }; G.say('You climb onto the catwalk.', 'good'); return; } }
-  if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && (P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft)) { enterHide(lp); return; } }
+  if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); const crouched = P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft;
+    if (crouched) { const hs = nearestHideSite(world.hideSites, P); if (hs) { enterHide(hs); return; } }   // wall locker / vent grille: true hiding spots
+    if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && crouched) { enterHide(lp); return; } }
   if (nearestRepair()) return;   // E is held to repair; handled in step()
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
   if (NOM() && G.combat?.interact()) return;   // the armory arms locker (draw a phaser) / someone knocked down or in a fight (js/grapple.js)
@@ -2050,7 +2072,7 @@ const ready = (async () => {
   Loading.hide(TEST_MODE);
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, get saboteur() { return G.saboteur; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'role', { get: () => G.role });   // { choice, billet, mission, miss } (js/role.js)

@@ -43,6 +43,7 @@ import { gaitTests } from './test-gait.mjs';
 import { movementTests } from './test-movement.mjs';
 import { equipmentTests } from './test-equipment.mjs';   // equipment motions / carry items (tools/test-equipment.mjs)
 import { roleTests } from './test-role.mjs';   // role choice: URL > storage > random (tools/test-role.mjs)
+import { saboteurTests } from './test-saboteur.mjs';   // hiding spots + the physical saboteur (tools/test-saboteur.mjs)
 import { repairTests } from './test-repair.mjs';   // NPC repair response, sim priorities, pace, speech etiquette (tools/test-repair.mjs)
 import { handheldTests } from './test-handhelds.mjs';   // handheld job equipment / improvised weapons (tools/test-handhelds.mjs)
 import { navTests, navBrowser } from './test-nav.mjs';   // routing / cross-deck plans / pins + nav HUD (tools/test-nav.mjs)
@@ -59,6 +60,7 @@ import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: s
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
   ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests], ['director-soak', directorTests]]) S(n, null, () => f(fail));
   ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['perks-unit', perkTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests], ['saboteur-unit', saboteurTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {
@@ -476,6 +478,10 @@ const mech = await page.evaluate(async () => {
     g.enterHide({ tx: 0, ty: 0 }); out.hiddenFar = h.seesPlayer(P, 30); out.hideR = P.hideR;   // hidden at 6 m: not seen
     const dx = h.x - P.x, dz = h.z - P.z, d = Math.hypot(dx, dz); P.x += dx / d * (d - 1.2); P.z += dz / d * (d - 1.2); out.hiddenNear = h.seesPlayer(P, 30);   // hidden at 1.2 m: seen
     g.exitHide(); G.perks.ghost = 1; g.enterHide({ tx: 0, ty: 0 }); out.ghostR = P.hideR; g.exitHide(); G.perks.ghost = 0; }
+  // wall locker / vent (world.hideSites): enter moves you into the spot facing the wall, lowers / raises the eye, tightens the radius; exit steps you out in front
+  { const hs = g.world.hideSites || []; out.hideSites = hs.length; const lk = hs.find(s => s.kind === 'locker' || s.kind === 'dclocker'), vt = hs.find(s => s.kind === 'ventgrille');
+    if (lk) { g.enterHide(lk); out.locker = { r: P.hideR, cls: P.hidden?.cls, at: Math.hypot(P.x - lk.x, P.z - lk.z) < 0.01 }; for (let i = 0; i < 30; i++) g.step(0.05, i * 0.05); out.lockerEye = +P.eye.toFixed(2); out.lockerStill = !!P.hidden; g.exitHide(); out.lockerExit = !P.hidden && Math.hypot(P.x - lk.x, P.z - lk.z) > 0.15; }
+    if (vt) { g.enterHide(vt); out.vent = { r: P.hideR, cls: P.hidden?.cls }; for (let i = 0; i < 30; i++) g.step(0.05, i * 0.05); out.ventEye = +P.eye.toFixed(2); g.exitHide(); } }
   // distraction: a patrolling hunter within range goes to investigate the noise
   const s2 = __T.standNear(h, 8); h.state = E.S.PATROL; h.active = true; const n = G.distract(P.x, P.z, 24); out.distract = { n, state: h.state, investigate: h.state === E.S.INVESTIGATE };
   // captions
@@ -490,6 +496,8 @@ const mech = await page.evaluate(async () => {
 });
 console.log('mechanics:', JSON.stringify(mech));
 if (mech.sightFar !== undefined && !(mech.sightFar === true && mech.hiddenFar === false && mech.hiddenNear === true && mech.hideR === 1.8 && mech.ghostR === 1)) fail('mechanics: hiding ' + JSON.stringify(mech));
+if (mech.hideSites > 0 && mech.locker && !(mech.locker.r === 1.2 && mech.locker.cls === 'locker' && mech.locker.at && mech.lockerEye > 1.3 && mech.lockerStill && mech.lockerExit)) fail('mechanics: locker hiding ' + JSON.stringify(mech));
+if (mech.vent && !(mech.vent.r === 0.8 && mech.vent.cls === 'vent' && mech.ventEye < 0.7)) fail('mechanics: vent hiding ' + JSON.stringify(mech));
 if (!(mech.distract?.n >= 1 && mech.distract.investigate)) fail('mechanics: distraction ' + JSON.stringify(mech.distract));
 if (!/^\[test roar\]/.test(mech.caption || '')) fail('mechanics: caption ' + JSON.stringify(mech.caption));
 if (!(mech.meta && ['boots', 'cell', 'hypo', 'legs'].every(p => mech.meta.perks.includes(p)) && mech.meta.bonus === 4)) fail('mechanics: career bonuses ' + JSON.stringify(mech.meta));

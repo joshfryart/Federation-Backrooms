@@ -193,7 +193,8 @@ export class Melee {
   }
 
   // ---------------------------------------------------------------- hits, reactions, consequences
-  provoked(e) { const G = this.C.G, c = e.cb; if (G.phases?.saboteur === e.person) return 'saboteur'; if (c?.hostile) return 'hostile'; const t = this.provokers.get(e.person.id); return t !== undefined && G.time - t < 25 ? 'self-defence' : 'none'; }
+  // saboteur counts only once exposed (seen at the panel / named by the badge log): a hunch is an assault
+  provoked(e) { const G = this.C.G, c = e.cb; if (G.phases?.saboteur === e.person && (G.phases.saboteurExposed || !G.saboteur)) return 'saboteur'; if (c?.hostile) return 'hostile'; const t = this.provokers.get(e.person.id); return t !== undefined && G.time - t < 25 ? 'self-defence' : 'none'; }
   // a hit outcome lands on a crew member. o: { act: strike|shove|throw|ko|phaser|lethal, by: 'player' | ent, lethal, quiet, item }
   hitNPC(e, out, o = {}) {
     const C = this.C, G = C.G, c = this.takeOver(e), by = o.by || 'player', src = by === 'player' ? C.P : by, pr = e.person; c.engT = G.time; this.lastTarget = e; this.lastTargetT = G.time;
