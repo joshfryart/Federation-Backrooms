@@ -15,6 +15,7 @@ import { kinds as FLIGHT } from './propart-flight.js';         // batch 6 (docs/
 import { kinds as STATIONS2 } from './propart-stations2.js';   // batch 7 (docs/propart-stations2.md)
 import { kinds as SECURITY } from './propart-security.js';     // batch 8 (docs/propart-security.md)
 import { kinds as POLISH } from './propart-polish.js';         // batch 11 (docs/propart-polish.md)
+import { surfaceProp } from './propsurf.js';                   // texture pass 4: wear layer + emissive screens on every art piece (decals: world.js buildProp)
 
 export const PROP_ART = { ...STATIONS1, ...GALLEY, ...PLANT, ...MEDICAL, ...SCIENCES, ...FLIGHT, ...STATIONS2, ...SECURITY, ...POLISH };
 // which batch a kind came from (gallery labels, tests)
@@ -42,6 +43,6 @@ export function buildPropArt(kind, m = {}, h = {}) {
   if (u.box) u.box = u.box.map(v => Math.max(-1.25, Math.min(1.25, v)));   // a floor prop owns one 2.5 m tile (the fuel bowser's tow bar reaches 1.4 m)
   if (u.seat && typeof u.seat === 'object') u.seatPoint = u.seat, u.seat = u.seat.y;   // stations: pelvis point -> seat height
   u.propArt = PROP_BATCH[kind];
-  return a;
+  return surfaceProp(a, kind, { decals: false });
 }
 export const PROP_ART_KINDS = Object.keys(PROP_ART);
