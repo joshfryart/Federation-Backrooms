@@ -596,6 +596,7 @@ export function buildDecor(kind) { const m = kitMats(), geo = kitGeo(kind, DECOR
 // ------------------------------------------------------------------
 // Scene construction from level data
 // ------------------------------------------------------------------
+const SHAFT_ALERT = new THREE.Color(0xff5038);
 export class World {
   constructor(data, ship) {
     this.d = data; this.ship = ship;
@@ -1286,6 +1287,7 @@ export class World {
       const mkCones = (list, tag) => {
         if (!list.length) return null;
         const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(ship.light).multiplyScalar(0.9), transparent: true, opacity: 0.04, alphaMap: T.aoGrad, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+        mat.userData.base = mat.color.clone();   // update() tints it toward the alert red
         const geo = new THREE.ConeGeometry(0.85, 2.0, 14, 1, true);
         const im = new THREE.InstancedMesh(geo, mat, list.length);
         list.forEach((p, i) => { dummy.position.set(p.x, p.y + 0.3 - 1.1 + 0.2, p.z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, p.col); });
@@ -1358,7 +1360,7 @@ export class World {
       const lens = inst(new THREE.BoxGeometry(0.3, 0.09, 0.03), this.emergMat, list, (f, o) => onFace(f, o, Math.min(2.15, ceilOf(f) - 0.3), 0.085)); if (lens) lens.receiveShadow = false;
       this.emergHalo = new THREE.MeshBasicMaterial({ map: T.halo, color: 0xff2a14, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false });
       const halo = inst(new THREE.PlaneGeometry(2.2, 1.7), this.emergHalo, list, (f, o) => onFace(f, o, Math.min(2.15, ceilOf(f) - 0.3), 0.012)); if (halo) halo.receiveShadow = false;
-      this.emerg = list.map(f => ({ x: f.px + f.dx * 0.3, y: Math.min(2.15, ceilOf(f) - 0.3), z: f.pz + f.dy * 0.3 }));
+      this.emerg = list.map(f => ({ x: f.px + f.dx * 0.3, y: Math.min(2.15, ceilOf(f) - 0.3), z: f.pz + f.dy * 0.3, nx: f.dx, nz: f.dy }));   // n: out of the wall (js/main.js points the pooled lights along it in a blackout)
     }
     // --- wall fixtures by room type; corridors get the odd extinguisher, comm panel, drinking fountain…
     {
@@ -1573,7 +1575,7 @@ export class World {
     if (this.sights) { const L = lv('transport'); for (let i = 0; i < this.sights.length; i++) { const k = L >= 2 ? 0.12 : (0.55 + 0.45 * Math.sin(t * 1.3 + i * 2.1)) * (L === 1 && Math.sin(t * 17 + i) > 0.6 ? 0.3 : 1); this.sights[i].color.setRGB(0.25 * k, k, 0.88 * k).multiplyScalar(0.35 + 0.65 * this.powerAmt); } }
     if (this.podMat) { const a = this.alertAmt > 0.5, k = a ? (Math.sin(t * 8) > 0 ? 1 : 0.15) : 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2)); this.podMat.color.setRGB((a ? 1 : 0.25) * k, (a ? 0.6 : 0.88) * k, (a ? 0.1 : 0.44) * k); }
     this.alertAmt += ((this.alertTarget || 0) - this.alertAmt) * Math.min(1, dt * 4);
-    if (this.coneMat) this.coneMat.opacity = 0.04 * this.powerAmt * (1 - this.alertAmt * 0.5);
+    if (this.coneMat) { this.coneMat.opacity = 0.04 * this.powerAmt * (1 - this.alertAmt * 0.5); if (this.alertCol) this.coneMat.color.copy(this.coneMat.userData.base).lerp(this.alertCol, this.alertAmt * 0.55); }
     if (this.coneFlickMat) this.coneFlickMat.opacity = 0.04 * this.powerAmt * this.flickerF;
     if (this.restoreT > 0) { this.restoreT -= dt; this.powerAmt = Math.random() < 0.5 ? this.powerTarget : this.powerAmt * 0.4; if (this.restoreT <= 0) this.powerAmt = 1; }
     else this.powerAmt += (this.powerTarget - this.powerAmt) * Math.min(1, dt * (this.powerTarget ? 8 : 5));
@@ -1593,7 +1595,9 @@ export class World {
     // emergency lamps: faint when all is well, beating on alert, steady and bright when the power is out
     if (this.emergMat) { const a = this.alertAmt, off = 1 - this.powerAmt, k = Math.max(0.1, off * 0.85, a * (0.35 + 0.9 * (0.5 + 0.5 * Math.sin(t * 6 + 1.5)))); this.emergMat.color.setRGB(2.6 * k, 0.2 * k, 0.12 * k); this.emergHalo.opacity = Math.min(0.55, k * 0.5); }
     if (M.kitGlow) M.kitGlow.color.setScalar(0.12 + 0.88 * this.powerAmt * (this.flickerF < 0.5 && Math.random() < 0.02 ? 0.6 : 1));
-    if (this.shaftMat) { this.shaftMat.opacity = 0.05 * (0.45 + 0.55 * this.powerAmt); this.poolMat.opacity = 0.07 * (0.45 + 0.55 * this.powerAmt); }
+    // vent light shafts: dimmer without power, a slow drift in strength (dust moving through the beam), tinted toward the alert red
+    if (this.shaftMat) { const k = (0.45 + 0.55 * this.powerAmt) * (0.82 + 0.18 * Math.sin(t * 0.7) * Math.sin(t * 0.23 + 1.3)); this.shaftMat.opacity = 0.05 * k; this.poolMat.opacity = 0.07 * k;
+      this.shaftMat.color.setHex(0xbfd8ff).lerp(SHAFT_ALERT, this.alertAmt * 0.5); this.poolMat.color.copy(this.shaftMat.color); }
     if (this.liftOpen || this.carMode) {
       const L = this.lift.getObjectByName('doorL'), R = this.lift.getObjectByName('doorR'), o = this.liftOpen ? 1.3 : 0.5, k = Math.min(1, dt * (this.carMode ? 3 : 2));
       L.position.x += (-o - L.position.x) * k; R.position.x += (o - R.position.x) * k;

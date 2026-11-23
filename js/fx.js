@@ -4,15 +4,18 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
 // ---------------------------------------------------------------
 // Post-processing: bloom + film grain + chromatic aberration + vignette
 // ---------------------------------------------------------------
 const FinalShader = {
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, danger: { value: 0 }, hurt: { value: 0 }, calm: { value: 0 }, res: { value: new THREE.Vector2(1, 1) } },
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, danger: { value: 0 }, hurt: { value: 0 }, calm: { value: 0 }, res: { value: new THREE.Vector2(1, 1) },
+    // final colour grade (js/grade.js, per room mood + blackout / alert): white balance, exposure, saturation, contrast in log2 around mid grey, split-tone
+    gWB: { value: new THREE.Vector3(1, 1, 1) }, gExpo: { value: 1 }, gSat: { value: 1 }, gCon: { value: 1 }, gSh: { value: new THREE.Vector3(0.9, 0.98, 1.1) }, gHi: { value: new THREE.Vector3(1.07, 1.02, 0.9) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float time, danger, hurt, calm; uniform vec2 res; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float time, danger, hurt, calm, gExpo, gSat, gCon; uniform vec2 res; uniform vec3 gWB, gSh, gHi; varying vec2 vUv;
     float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
     void main(){
       vec2 d = vUv - 0.5; float r2 = dot(d,d);
@@ -22,10 +25,13 @@ const FinalShader = {
       vec3 c = vec3(texture2D(tDiffuse, uv + ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - ca).b);
       float g = rnd(vUv * res + fract(time) * 100.0) - 0.5;
       c += g * 0.013 * (1.0 - calm);
+      c *= gWB * gExpo;   // grade (scene-linear, before AgX in the OutputPass)
+      float lg0 = dot(c, vec3(0.2126,0.7152,0.0722)); c = max(mix(vec3(lg0), c, gSat), 0.0);
+      c = 0.18 * exp2(log2(max(c, vec3(1e-5)) / 0.18) * gCon);
       float l = dot(c, vec3(0.299,0.587,0.114));
       c = mix(c, vec3(l), hurt * 0.5 + danger * 0.15);
       float lg = dot(c, vec3(0.299,0.587,0.114));
-      c = mix(c * vec3(0.9, 0.98, 1.1), c * vec3(1.07, 1.02, 0.9), smoothstep(0.08, 0.6, lg));
+      c = mix(c * gSh, c * gHi, smoothstep(0.08, 0.6, lg));
       vec3 cc = clamp(c, 0.0, 1.0); c = mix(c, cc * cc * (3.0 - 2.0 * cc) + (c - cc), 0.28); c = c * 0.97 + 0.006;   // S-curve on the LDR part only (values are still HDR here)
       c *= 1.0 - smoothstep(0.25, 0.95, r2 * 2.6) * (0.55 + danger * 0.3);
       c.r += danger * 0.08 * (1.0 - r2 * 2.0) + hurt * 0.25;
@@ -42,6 +48,27 @@ const CompressShader = {
     vec3 comp(vec3 x){ return mix(x, 1.6 + log2(max(x, vec3(1.6)) / 1.6) * 0.45, step(vec3(1.6), x)); }
     void main(){ vec4 c = texture2D(tDiffuse, vUv); c.rgb = clamp(c.rgb, 0.0, 1000.0); c.rgb = comp(c.rgb); gl_FragColor = c; }`,
 };
+// Ground-truth ambient occlusion (three's GTAOPass) for High quality, rung 0 of the governor ladder only (js/perfgov.js `ao`).  Its normal / depth
+// pre-pass is a second draw of the opaque scene, so: (1) it runs at half resolution (the denoised AO is soft anyway and the blend upsamples it);
+// (2) anything that is not a solid surface is hidden from that pre-pass: additive light cones / shafts / halos, decals, glass, water, particles,
+// sprites (transparent or depthWrite:false materials), or anything tagged userData.noAO, otherwise the haze would darken the wall behind it;
+// (3) fog and the background are switched off for the pre-pass (the clear colour is the "no normal" value).
+class AOPass extends GTAOPass {
+  setSize(w, h) { super.setSize(Math.max(1, Math.ceil(w * 0.5)), Math.max(1, Math.ceil(h * 0.5))); }
+  _overrideVisibility() {
+    const cache = this._visibilityCache;
+    this.scene.traverseVisible((o) => {
+      let hide = o.isPoints || o.isLine || o.isSprite || o.userData.noAO;
+      if (!hide && o.isMesh) { const m = Array.isArray(o.material) ? o.material[0] : o.material; hide = !m || m.transparent || m.depthWrite === false || m.blending === THREE.AdditiveBlending; }
+      if (hide) cache.push(o);
+    });
+    for (const o of cache) o.visible = false;
+  }
+  _renderOverride(renderer, mat, rt, cc, ca) {
+    const s = this.scene, fog = s.fog, bg = s.background; s.fog = null; s.background = null;
+    try { super._renderOverride(renderer, mat, rt, cc, ca); } finally { s.fog = fog; s.background = bg; }
+  }
+}
 export class Post {
   constructor(renderer, scene, camera, overlay = null) {
     this.renderer = renderer; this.enabled = true;
@@ -49,6 +76,11 @@ export class Post {
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.composer.addPass(new RenderPass(scene, camera));
+    // AO before the viewmodel overlay (the hands are never occluded by the world) and before bloom / grade
+    this.ao = new AOPass(scene, camera, size.x, size.y);
+    this.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12, distanceFallOff: 1, screenSpaceRadius: false });
+    this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+    this.ao.blendIntensity = 0.75; this.ao.enabled = false; this.composer.addPass(this.ao);
     if (overlay) { const vp = new RenderPass(overlay.scene, overlay.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }   // first-person viewmodel
     this.composer.addPass(new ShaderPass(CompressShader));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.3, 0.5, 1.9);
@@ -62,6 +94,14 @@ export class Post {
   // dynamic resolution (js/perfgov.js): the post chain renders at baseRatio * k and the final pass upscales onto the canvas
   setScale(k) { if (Math.abs(k - this.scale) < 1e-3) return; this.scale = k; this.composer.setPixelRatio(this.baseRatio * k) }
   setCalm(v) { this.final.uniforms.calm.value = v ? 1 : 0; }   // accessibility: no grain / scanline / wobble, weaker aberration
+  setAO(on) { this.ao.enabled = !!on; }   // js/perfgov.js ladder `ao` (pass toggle: no scene shader recompiles; its own programs are warmed by warm())
+  // js/grade.js values: final-pass grade uniforms + bloom strength / threshold (plain pass properties, read every render)
+  setGrade(p) {
+    const u = this.final.uniforms; u.gWB.value.fromArray(p.wb); u.gExpo.value = p.expo; u.gSat.value = p.sat; u.gCon.value = p.con; u.gSh.value.fromArray(p.sh); u.gHi.value.fromArray(p.hi);
+    this.bloom.strength = p.bloomS; this.bloom.threshold = p.bloomT;
+  }
+  // compile the AO pass's programs (normal pre-pass per material kind, AO, denoise, blend) with one throwaway frame, on the loading screen
+  warm() { const was = this.ao.enabled; this.ao.enabled = true; try { this.render(0.016, 0, 0, 0); } finally { this.ao.enabled = was; } }
   setSize(w, h) { this.composer.setSize(w, h); this.final.uniforms.res.value.set(w, h); }
   render(dt, t, danger, hurt) {
     this.final.uniforms.time.value = t; this.final.uniforms.danger.value = danger; this.final.uniforms.hurt.value = hurt;
