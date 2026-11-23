@@ -165,6 +165,20 @@ export class Sound {
   chip() { this.tone(660, 0.08, 'triangle', 0.2); this.tone(990, 0.08, 'triangle', 0.2, 0, 0.08); this.tone(1480, 0.2, 'triangle', 0.2, 0, 0.16); }
   heal() { this.tone(520, 0.3, 'sine', 0.15, 300); }
   ding() { this.tone(1046, 0.8, 'sine', 0.2); this.tone(784, 1.0, 'sine', 0.15, 0, 0.25); }
+  // per-material door sounds: a sliding leaf opening / closing. kind: 'metal' (corridor bulkhead), 'heavy' (cargo / engineering / shuttlebay blast door),
+  // 'pressure' (airlock / brig / morgue seal: hiss + latch), 'light' (quarters / lounge / washroom: soft whoosh), 'glass' (holodeck / lab / sickbay: chime-like tick)
+  static DOOR_MAT = { cargo: 'heavy', engineering: 'heavy', shuttlebay: 'heavy', stores: 'heavy', workshop: 'heavy', plant: 'heavy', airlock: 'pressure', brig: 'pressure', morgue: 'pressure', datacore: 'pressure', quarters: 'light', lounge: 'light', washroom: 'light', laundry: 'light', gym: 'light', mess: 'light', galley: 'light', readyroom: 'light', lab: 'glass', sickbay: 'glass', holodeck: 'glass', bridge: 'glass', transporter: 'glass', arboretum: 'glass', atrium: 'glass' };
+  doorMat(room) { return Sound.DOOR_MAT[room] || 'metal'; }
+  door(kind = 'metal', vol = 0.1, closing = false) {
+    if (!this.ctx) return; const d = closing ? 0.35 : 0;
+    if (kind === 'heavy') { this.noise(0.45, vol * 1.1, 260, 0.9, 'lowpass', d); this.thud(vol * 1.4, d + 0.4); }
+    else if (kind === 'pressure') { this.noise(0.5, vol * 0.9, 3200, 0.8, 'highpass', d); this.tone(120, 0.12, 'square', vol * 0.8, -30, d + 0.45); }
+    else if (kind === 'light') { this.noise(0.22, vol * 0.6, 1100, 0.7, 'bandpass', d); }
+    else if (kind === 'glass') { this.noise(0.12, vol * 0.5, 2600, 2, 'bandpass', d); this.tone(1320, 0.1, 'sine', vol * 0.5, 120, d + 0.02); }
+    else { this.noise(0.14, vol, 1800, 1, 'bandpass', d); this.tone(180, 0.08, 'triangle', vol * 0.6, -40, d + 0.12); }
+  }
+  // lockdown: every door seals at once (red alert) -- a low double clunk
+  lockdown() { this.thud(0.35); this.thud(0.3, 0.22); this.noise(0.4, 0.15, 500, 1, 'bandpass', 0.05); }
   denied() { this.tone(200, 0.25, 'sawtooth', 0.12); this.tone(160, 0.3, 'sawtooth', 0.12, 0, 0.2); }
   purr() { this.tone(70, 0.5, 'sawtooth', 0.05); this.noise(0.5, 0.04, 200, 1, 'lowpass'); }
   purrSoft(v = 0.5) { this.tone(48 + Math.random() * 6, 1.1, 'triangle', 0.045 * v); this.noise(1.0, 0.018 * v, 140, 0.8, 'lowpass'); }   // quiet looping-by-retrigger furble purr (main.js, within 5 m)

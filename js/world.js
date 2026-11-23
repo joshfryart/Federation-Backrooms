@@ -1153,6 +1153,17 @@ export class World {
       g.add(im);
     }
     this.vents = vents;
+    // fans behind the grilles: one InstancedMesh (4 blades + hub merged, 1 draw call) over about 60 % of the vents, spun in update() (slow, stops in a blackout). Ceiling only: no collision.
+    { const fh = (a, b) => { const h = Math.sin(a * 12.9898 + b * 78.233 + d.deck * 4.1) * 43758.5453; return h - Math.floor(h); };   // own hash: no draw from the room random stream
+      const fv = vents.filter((v, i) => fh(v.x * 2.1, v.y * 3.3 + i) < 0.6);
+      if (fv.length) {
+        const parts = []; for (let k = 0; k < 4; k++) { const b = new THREE.BoxGeometry(0.2, 0.006, 0.07); b.translate(0.11, 0, 0); b.rotateY(k * Math.PI / 2); parts.push(b); }
+        const hub = new THREE.CylinderGeometry(0.035, 0.035, 0.02, 8); parts.push(hub);
+        const fgeo = mergeGeometries(parts); for (const b of parts) b.dispose();
+        const fim = new THREE.InstancedMesh(fgeo, new THREE.MeshLambertMaterial({ color: 0x1b1d21 }), fv.length); fim.frustumCulled = false;
+        this.fans = { im: fim, list: fv.map((v, i) => ({ x: (v.x + 0.5) * TS, y: this.ceilAt(v.x, v.y) - 0.07, z: (v.y + 0.5) * TS, ph: fh(v.x, v.y) * 6.28, sp: 4 + fh(v.y, v.x * 1.7) * 3 })), a: 0, tick: 0 };
+        this.fanDummy = new THREE.Object3D(); this.fanSet(0); g.add(fim);
+      } }
     // --- floor markings: hazard tape at the lift, launch ring in shuttlebays
     const haz = canvasTex(128, (c, sz) => { c.fillStyle = '#e0b020'; c.fillRect(0, 0, sz, sz); c.fillStyle = '#111'; for (let i = -sz; i < sz * 2; i += 32) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 16, 0); c.lineTo(i + 16 - sz, sz); c.lineTo(i - sz, sz); c.fill(); } });
     const [ex, ey] = d.exit, [edx, edy] = d.exitDir; const [ecx, ecz] = this.center(ex, ey);
@@ -1438,7 +1449,7 @@ export class World {
   setFancy(on) { this.cones.visible = on; }
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
-  setDoorLock(on) { if (this.doorLock === on) return; this.doorLock = on; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }
+  setDoorLock(on, why = 'power') { if (this.doorLock === on) { if (on) this.lockWhy = why; return; } this.doorLock = on; this.lockWhy = on ? why : null; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }
   // nearest sealed door within reach of (px, pz), or null
   sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
   // hold E at a sealed door: ~3 s to force it, then it stays open 15 s. Returns progress 0..1 (or -1 when nothing to pry)
@@ -1496,20 +1507,23 @@ export class World {
   takeClutter(c) { if (c.gone) return false; c.gone = true; c.inst?.hide(); const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
   // doors part for the player (and anyone in `who`, [{x, z, w}]) within reach and close again behind them. Sealed doors (doorLock) stay shut
   // for everyone; a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player pried)
-  slideDoors(dt, px, pz, who = [], onOpen = null) {
+  slideDoors(dt, px, pz, who = [], onOpen = null, onClose = null) {
     if (!this.doors) return; const k = Math.min(1, dt * 7);
     for (const d of this.doors) {
       if (d.pried > 0) d.pried -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
       const dx = d.f.x - px, dz = d.f.z - pz; const sealed = this.doorLock && !(d.pried > 0); let near = !sealed && dx * dx + dz * dz < 2.7 * 2.7;
       if (sealed && d.open < 0.5) { let at = false; for (const w of who) if (w.w) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.6 * 1.6) { at = true; break; } } d.npry = at ? (d.npry || 0) + dt : 0; if (d.npry > 2.5) { d.npry = 0; d.pried = 10; } }
       if (!near && !sealed) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
-      if (near && !d.near && dx * dx + dz * dz < 14 * 14) onOpen?.(Math.hypot(dx, dz)); d.near = near;
+      if (near && !d.near && dx * dx + dz * dz < 14 * 14) onOpen?.(Math.hypot(dx, dz), d); else if (!near && d.near && dx * dx + dz * dz < 14 * 14) onClose?.(Math.hypot(dx, dz), d); d.near = near;
       const target = near ? 1 : 0; if (Math.abs(d.open - target) < 0.002) continue; d.open += (target - d.open) * k;
       const o = d.open * (d.hw - 0.04); d.L.position.z = -d.hw / 2 - o; d.R.position.z = d.hw / 2 + o;
     }
   }
+  // set the fan blades to angle t * speed (matrices rewritten for every fan)
+  fanSet(t) { const F = this.fans; if (!F) return; const o = this.fanDummy; F.list.forEach((f, i) => { o.position.set(f.x, f.y, f.z); o.rotation.set(0, f.ph + t * f.sp, 0); o.updateMatrix(); F.im.setMatrixAt(i, o.matrix); }); F.im.instanceMatrix.needsUpdate = true; }
   update(dt, t) {
     SPACE_T.value = t;
+    if (this.fans) { const F = this.fans; F.a += dt * this.powerAmt; F.tick += dt; if (F.tick > 0.05 && this.powerAmt > 0.02) { F.tick = 0; this.fanSet(F.a); } }   // ~20 Hz, spins down with the power
     if (this.hatches) for (const h of this.hatches) {   // tube hatches: open while anyone is near, close again behind them
       const want = this.nearFn ? (this.nearFn(h.x, h.z, 2.6) ? 1 : 0) : 0; h.open += (want - h.open) * Math.min(1, dt * 6);
       h.leaf.position.y = h.y0 + (TUBE_H - 0.1) / 2 + h.open * (TUBE_H + 0.05); h.leaf.visible = h.open < 0.98;
