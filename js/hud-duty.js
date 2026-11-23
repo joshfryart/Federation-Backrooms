@@ -8,6 +8,10 @@
 import { Q_LABEL, QUALITIES, SHIP_SEC_PER_MIN } from './duty.js';
 import { iconSvg, hasIcon } from './icons.js';
 import { UIHUB } from './ui-mode.js';
+const NR = 16, NC = 2 * Math.PI * NR;   // ring geometry (viewBox 40: r 16)
+/** ring + ETA notch: the notch sits where `eta` seconds of the window would be used; red when the time left is already less than the walk */
+function notchSVG(row, size = 40) { if (!row?.nav || !row.left || !row.total || !row.due) return ''; const f = Math.min(1, row.nav.eta / row.total), late = row.left < row.nav.eta; return `<line class="nt${late ? ' late' : ''}" x1="20" y1="1.5" x2="20" y2="7" transform="rotate(${(f * 360).toFixed(1)} 20 20)"/>`; }
+const navRows = () => { try { return UIHUB.nav?.rows?.() || []; } catch { return []; } };
 
 const CSS = `
 #bd-brief{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(3,6,12,.9);font:14px/1.45 'Helvetica Neue',Arial,sans-serif;color:#e6eef7}
@@ -23,6 +27,10 @@ const CSS = `
 .rg svg.r{width:40px;height:40px;display:block;margin:0 auto;transform:rotate(-90deg)}.rg .tr{fill:rgba(5,8,14,.7);stroke:#1f2b3d;stroke-width:4}.rg .pg{fill:none;stroke:var(--c);stroke-width:4}
 .rg .ic{position:absolute;left:0;right:0;top:10px;display:grid;place-items:center;color:var(--c)}.rg .ic .ico{width:18px;height:18px}
 .rg small{display:block;font:700 9px var(--f-m,monospace);color:var(--c);margin-top:1px}.rg .lb{display:block;font:9px var(--f-d,Arial);letter-spacing:.04em;color:#cfe0f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px;margin:0 -6px}
+.rg .nt{stroke:#fff;stroke-width:3;stroke-linecap:butt}.rg .nt.late{stroke:#ff5a4a}.rg.pin svg.r{filter:drop-shadow(0 0 4px #8ef3ff)}
+.lanes .lh.pinrow{cursor:pointer}.lanes .lh.pinrow:hover{background:rgba(142,243,255,.08)}.lanes .lh.pinrow.pin{box-shadow:inset 3px 0 0 #8ef3ff;background:rgba(142,243,255,.12)}
+.lanes .lh .pr{position:relative;width:30px;height:30px;flex:none;display:grid;place-items:center}.lanes .lh .pr svg{position:absolute;inset:0;width:30px;height:30px;transform:rotate(-90deg)}.lanes .lh .pr .tr{fill:none;stroke:#1f2b3d;stroke-width:3.5}.lanes .lh .pr .pg{fill:none;stroke:var(--c,#7e8ea6);stroke-width:3.5}.lanes .lh .pr .nt{stroke:#fff;stroke-width:3}.lanes .lh .pr .nt.late{stroke:#ff5a4a}.lanes .lh .pr .ico{width:14px;height:14px}
+.lanes .lh em{margin-left:auto;flex:none;font:700 9px var(--f-m,monospace);font-style:normal;color:#8ef3ff}
 .rg.s-due{--c:#ffb347}.rg.s-overdue{--c:#ff5a4a}.rg.s-doing{--c:#8fd8ff}.rg.s-done{--c:#4fd18b}.rg.s-delegated{--c:#b79cff}.rg.s-pending{--c:#7e8ea6}.rg.s-rushed{--c:#c8d94a}.rg.s-faked{--c:#d38bff}.rg.s-skipped,.rg.s-missed{--c:#6b7586}
 .rg.s-overdue svg.r{animation:bdpulse 1s ease-in-out infinite}.rg.s-due svg.r{animation:bdpulse 1.8s ease-in-out infinite}
 @keyframes bdpulse{50%{filter:drop-shadow(0 0 5px var(--c))}}body.reduce-motion .rg svg.r{animation:none!important}@media (prefers-reduced-motion:reduce){.rg svg.r{animation:none!important}}
@@ -171,7 +179,7 @@ export class DutyHUD {
   renderBoard() {
     const D = this.duty; if (!D || !this.boardEl) return;
     this.boardEl.classList.toggle('off', this.hudMode === 2); if (this.hudMode === 2) return;
-    const C = 2 * Math.PI * 16, rings = D.loops.map(l => { const r = ringFor(D, l); return `<div class="rg s-${r.st}" title="${esc(l.label)} · ${r.st}"><svg class="r" viewBox="0 0 40 40"><circle class="tr" cx="20" cy="20" r="16"/><circle class="pg" cx="20" cy="20" r="16" stroke-dasharray="${(C * r.frac).toFixed(1)} ${C.toFixed(1)}"/></svg><span class="ic">${ico(loopIcon(l))}</span><small>${esc(r.txt)}</small>${this.big ? `<span class="lb">${esc(l.label)}</span>` : ''}</div>`; }).join('');
+    const C = 2 * Math.PI * 16, NRW = navRows(), rings = D.loops.map(l => { const r = ringFor(D, l), nr = NRW.find(x => x.kind === 'duty' && x.id === l.id); return `<div class="rg s-${r.st}${nr?.pinned ? ' pin' : ''}" title="${esc(l.label)} · ${r.st}${nr?.nav ? ' · ' + nr.nav.m + ' m, ' + fmtLeft(nr.nav.eta) + ' walk' : ''}"><svg class="r" viewBox="0 0 40 40"><circle class="tr" cx="20" cy="20" r="16"/><circle class="pg" cx="20" cy="20" r="16" stroke-dasharray="${(C * r.frac).toFixed(1)} ${C.toFixed(1)}"/>${notchSVG(nr)}</svg><span class="ic">${ico(loopIcon(l))}</span><small>${esc(r.txt)}</small>${this.big ? `<span class="lb">${esc(l.label)}</span>` : ''}</div>`; }).join('');
     const pips = D.tasks.map(t => `<i class="${t.state === 'done' ? 'd' : t.state === 'missed' ? 'm' : t.state === 'active' ? 'a' : ''}" title="${esc(t.task)}"></i>`).join('');
     const rep = this.repairs().map(r => `<span class="rp ${r.status}" title="${esc(r.label)} · ${r.status}">${ico(r.status === 'needs' ? 'box' : 'repair')}</span>`).join('');
     const alert = UIHUB.menus?.alertTop?.();
@@ -208,7 +216,7 @@ export class DutyHUD {
     return { t0, t1, now, lanes, band, end };
   }
   renderPanel() {
-    const D = this.duty; if (!D || !this.panelEl) return;
+    const D = this.duty; if (!D || !this.panelEl) return; this._nr = null;
     const TL = this.timeline(), span = TL.t1 - TL.t0, pct = (t) => ((t - TL.t0) / span * 100), me = D.player, PT = this.PT, sm = D.summary();
     const boss = me.reportsTo != null ? D.roster.people[me.reportsTo] : null;
     const ax = Array.from({ length: Math.floor(span / 120) + 1 }, (_, k) => `<span style="left:${pct(k * 120)}%">${k * 2}m</span>`).join('');
@@ -217,8 +225,15 @@ export class DutyHUD {
     const GRP = { loop: 'Your rounds', tasks: 'Mission tasks', repair: 'Ship repairs', crew: 'Your crew' }, rows = []; let grp = '';
     for (const L of TL.lanes) {
       const g = GRP[L.kind]; if (g !== grp) { grp = g; rows.push(`<div class="lh grp">${g}</div><div class="ln grp">${L.kind === 'loop' ? band(1) : ''}</div>`); }
-      const head = L.person && PT ? PT.img(L.person, 24, 'lp') : ico(L.icon);
-      rows.push(`<div class="lh">${head}<span>${esc(L.label)}<small>${esc(L.sub || '')}</small></span></div><div class="ln">${band(0)}${L.blocks.filter(b => b.b > TL.t0 && b.a < TL.t1).map(blk).join('')}</div>`);
+      const NRW = this._nr || (this._nr = navRows()), nr = L.kind === 'loop' ? NRW.find(x => x.kind === 'duty' && x.id === L.id) : L.kind === 'tasks' ? (NRW.find(x => x.kind === 'task' && x.pinned) || NRW.find(x => x.kind === 'task' && x.due && x.room && x.room !== 'any')) : null;
+      let head = L.person && PT ? PT.img(L.person, 24, 'lp') : ico(L.icon), tail = '', pk = '';
+      if (nr && nr.room && nr.room !== 'any' && UIHUB.nav) {
+        const fr = nr.status === 'doing' ? 0.5 : nr.due ? (nr.total ? Math.max(0, Math.min(1, (nr.left ?? 0) / nr.total)) : 1) : 0, col = nr.due ? (nr.late || (nr.left != null && nr.nav && nr.left < nr.nav.eta) ? '#ff5a4a' : '#ffb347') : '#7e8ea6';
+        head = `<span class="pr" style="--c:${col}"><svg viewBox="0 0 40 40"><circle class="tr" cx="20" cy="20" r="${NR}"/><circle class="pg" cx="20" cy="20" r="${NR}" stroke-dasharray="${(NC * fr).toFixed(1)} ${NC.toFixed(1)}"/>${notchSVG(nr)}</svg>${ico(L.icon)}</span>`;
+        tail = nr.nav ? `<em title="walk from here">${nr.nav.m} m · ${fmtLeft(nr.nav.eta)}</em>` : '';
+        pk = ` pinrow${nr.pinned ? ' pin' : ''}" data-pin="${nr.kind}:${esc(String(nr.id))}" title="${nr.pinned ? 'Guiding here: click to stop' : 'Click to guide here'}`;
+      }
+      rows.push(`<div class="lh${pk}">${head}<span>${esc(L.label)}<small>${esc(L.sub || '')}</small></span>${tail}</div><div class="ln">${band(0)}${L.blocks.filter(b => b.b > TL.t0 && b.a < TL.t1).map(blk).join('')}</div>`);
     }
     const legend = Object.entries({ pending: 'Later', due: 'Due now', overdue: 'Overdue', doing: 'Working', done: 'Done properly', rushed: 'Rushed', faked: 'Log faked', skipped: 'Skipped', delegated: 'Delegated' }).map(([s, t]) => `<span style="--c:${STC[s]}"><i></i>${ico(ST_ICON[s])}${t}</span>`).join('');
     this.panelEl.innerHTML = `<div class="ph">${ico('duty')}<h3>Duty board</h3><button class="x" data-x>J / Esc</button></div><div class="pb">
@@ -258,6 +273,7 @@ export class DutyHUD {
   panelClick(e) {
     if (e.target.closest('[data-x]')) { this.closeBoard(); return; }
     if (e.target.closest('[data-popx]')) { this.pop = null; this.renderPanel(); return; }
+    const pr = e.target.closest('[data-pin]'); if (pr) { const [kind, ...id] = pr.dataset.pin.split(':'); const N = UIHUB.nav, it = N?.items?.find(i => i.kind === kind && String(i.id) === id.join(':')); if (N && it) { N.pinItem(it.kind, it.id); this.renderPanel(); } return; }
     const a = e.target.closest('[data-do]'); if (a) { this.act(a.dataset.do, a.dataset.k); return; }
     const b = e.target.closest('.blk'); if (b) { this.pop = this.pop === b.dataset.k ? null : b.dataset.k; this.renderPanel(); }
   }
