@@ -165,6 +165,11 @@ export class Decals {
       for (let i = 0; i < 4; i++) { const x0 = 24 + i * 22 + Math.random() * 6; g.strokeStyle = 'rgba(15,12,10,0.95)'; g.lineWidth = 3.2; g.beginPath(); g.moveTo(x0, 6); g.quadraticCurveTo(x0 + 10 + Math.random() * 8, s / 2, x0 + 2 + Math.random() * 10, s - 8); g.stroke();
         g.strokeStyle = 'rgba(190,190,180,0.55)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x0 + 3, 6); g.quadraticCurveTo(x0 + 13, s / 2, x0 + 6, s - 8); g.stroke(); }
     }), 50);
+    mk('gprint', tex(64, (g, s) => {   // a three-toed reptile print, toes up (bloody): toe pads with a claw dot each, a wide pad and a heel
+      g.clearRect(0, 0, s, s); g.fillStyle = 'rgba(70,10,8,0.92)';
+      for (const [x, y, r] of [[18, 16, 6], [32, 11, 6.5], [46, 16, 6], [32, 38, 14], [32, 54, 8]]) { g.beginPath(); g.ellipse(x, y, r * 0.8, r * 1.15, 0, 0, 7); g.fill(); }
+      g.fillStyle = 'rgba(25,8,6,0.95)'; for (const [x, y] of [[17, 7], [32, 2], [47, 7]]) { g.beginPath(); g.arc(x, y, 1.8, 0, 7); g.fill(); }
+    }), 120);
     this.dummy = new THREE.Object3D(); this.col = new THREE.Color();
   }
   clear() { for (const s of Object.values(this.sets)) { s.n = 0; s.im.count = 0; } }
@@ -178,6 +183,7 @@ export class Decals {
     const name = kind.startsWith('blood') ? 'blood' + (kind === 'blood' ? Math.floor(Math.random() * 3) : kind.slice(5)) : kind;
     this._put(name, x, 0.012 + Math.random() * 0.004, z, -Math.PI / 2, 0, Math.random() * 6.28, size, size * (0.8 + Math.random() * 0.4), 0.55 + fresh * 0.5);
   }
+  print(kind, x, z, yaw, size, fresh = 1) { this._put(kind, x, 0.013, z, -Math.PI / 2, 0, yaw + Math.PI, size * 0.8, size, 0.5 + fresh * 0.5); }   // a footprint pointing along `yaw` (the heading, atan2(dx, dz))
   wall(kind, x, y, z, ry, size) {
     const name = kind.startsWith('blood') ? 'blood' + (kind === 'blood' ? (Math.random() < 0.5 ? 1 : 3) : kind.slice(5)) : kind;
     this._put(name, x, y, z, 0, ry, kind === 'claw' ? (Math.random() - 0.5) * 0.6 : Math.random() * 6.28, size, size, 0.7 + Math.random() * 0.3);

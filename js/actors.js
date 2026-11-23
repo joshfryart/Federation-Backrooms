@@ -166,45 +166,67 @@ export function makeGorn() {
     on(Math.PI / 2 + 0.05, new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 10), M.brass), 0.035); }
   { const el = arms[0].el, cuff = mk(new THREE.TorusGeometry(0.1, 0.022, 6, 14), M.iron, 0, -0.4, 0); cuff.rotation.x = Math.PI / 2; el.add(cuff);
     for (let i = 0; i < 3; i++) { const l = mk(new THREE.TorusGeometry(0.03, 0.008, 5, 10), M.iron, 0.1 + i * 0.012, -0.44 - i * 0.05, 0); l.rotation.y = i % 2 ? Math.PI / 2 : 0; el.add(l); } }
-  g.userData = { body, torso, head, jaw, arms, legs, tail, neck, chest, lids, tongue, eyeM, lookY: 0, seed: Math.random() * 10 };
+  g.userData = { body, torso, head, jaw, arms, legs, tail, neck, chest, lids, tongue, eyeM, lookY: 0, lookP: 0, roarE: 0, hurtK: 0, sniffK: 0, prevAp: -1, whipSide: 1, seed: Math.random() * 10 };
   g.scale.setScalar(1.22);
   return g;
 }
 
-// ex: { stunned, look (yaw to the quarry relative to the body, radians), attacking }
+const sstep = (a, b, x) => { const k = Math.max(0, Math.min(1, (x - a) / (b - a))); return k * k * (3 - 2 * k); };
+// strike envelopes over the attack phase p (0 = the blow lands in the game, 1 = recovered): a short rear-back, then the lunge, then a slow recovery
+const gWind = (p) => sstep(0, 0.12, p) * (1 - sstep(0.12, 0.24, p));
+const gStrike = (p) => sstep(0.1, 0.24, p) * (1 - sstep(0.4, 0.95, p));
+
+// ex: { stunned, look (yaw to the quarry relative to the body, radians), lookPitch (+ = down), attackP (0..1 while striking, <0 otherwise), roarP (0..1 over one roar, <0 otherwise),
+//       hurt (0..1: limp, clutched arm, hung head, laboured breath), sniff (head low, scanning, tongue tasting), attacking, roaring (booleans used when the phase values are absent) }
 export function animateGorn(g, speed, t, roaring, ex = {}) {
   const u = g.userData; const f = Math.min(1, speed / 3), st = !!ex.stunned;
   const ph = t * (2.3 + speed * 1.15);
+  // smoothed state: roar envelope (a rise, a hold, a fade), injury, sniffing
+  const re = ex.roarP !== undefined ? (ex.roarP < 0 || ex.roarP > 1 ? 0 : Math.min(1, ex.roarP * 6) * (1 - sstep(0.75, 1, ex.roarP))) : (u.roarE += ((roaring ? 1 : 0) - u.roarE) * 0.15);
+  u.hurtK += ((st ? 1 : ex.hurt || 0) - u.hurtK) * 0.08; const hk = u.hurtK;
+  u.sniffK += ((ex.sniff && !st ? 1 : 0) - u.sniffK) * 0.1; const sn = u.sniffK;
+  const ap = ex.attackP !== undefined ? ex.attackP : -1, striking = ap >= 0;
+  if (striking && u.prevAp < 0) u.whipSide = -u.whipSide; u.prevAp = ap;
+  const w = striking ? gWind(ap) : 0, s0 = striking ? gStrike(ap) : 0;
   for (const L of u.legs) {
-    const s = Math.sin(ph + (L.sx > 0 ? 0 : Math.PI)), c = Math.cos(ph + (L.sx > 0 ? 0 : Math.PI));
-    L.hip.rotation.x = 0.45 + s * 0.6 * f;
-    L.knee.rotation.x = -0.95 + Math.max(0, -c) * 0.7 * f;
-    L.ankle.rotation.x = 0.55 - s * 0.35 * f;
+    const s = Math.sin(ph + (L.sx > 0 ? 0 : Math.PI)), c = Math.cos(ph + (L.sx > 0 ? 0 : Math.PI)), fl = L.sx > 0 ? 1 - 0.55 * hk : 1;   // the right leg is the bad one: short stride
+    L.hip.rotation.x = 0.45 + s * 0.6 * f * fl + s0 * 0.25 + (L.sx > 0 ? hk * 0.15 : 0);
+    L.knee.rotation.x = -0.95 + Math.max(0, -c) * 0.7 * f * fl - s0 * 0.2;
+    L.ankle.rotation.x = 0.55 - s * 0.35 * f * fl;
   }
   u.arms.forEach((a, i) => {
-    const s = Math.sin(ph + (i ? Math.PI : 0));
-    a.sh.rotation.x = -0.25 - s * 0.45 * f + (st ? 0.2 : 0); a.sh.rotation.z = (i ? -1 : 1) * (0.12 + (roaring ? 0.7 : 0));
-    a.el.rotation.x = -0.6 - (roaring ? 0.5 : 0) - Math.max(0, s) * 0.4 * f + (st ? 0.4 : 0);
+    const s = Math.sin(ph + (i ? Math.PI : 0)), sg = i ? -1 : 1, s1 = striking ? gStrike(ap - i * 0.06) : 0;   // the left claw follows the right
+    a.sh.rotation.x = -0.25 - s * 0.45 * f + (st ? 0.2 : 0) + w * 0.9 - s1 * 1.5 - (i ? hk * 0.75 : 0);
+    a.sh.rotation.z = sg * (0.12 - 0.8 * re + (i ? hk * 0.2 : 0));   // a roar throws the arms wide; the wounded right arm is held across the body
+    a.el.rotation.x = -0.6 - 0.5 * re - Math.max(0, s) * 0.4 * f + (st ? 0.4 : 0) - w * 0.4 + s1 * 0.5 - (i ? hk * 0.9 : 0);
   });
-  u.body.position.y = Math.abs(Math.sin(ph)) * 0.07 * f;
-  u.body.rotation.z = Math.sin(ph) * 0.04 * f;
-  u.torso.rotation.x = 0.5 + Math.sin(t * 1.6) * 0.02 + (roaring ? -0.3 : 0) + f * 0.1;
+  u.body.position.y = Math.abs(Math.sin(ph)) * 0.07 * f + re * 0.07 - hk * 0.06 * (0.6 + 0.4 * Math.sin(ph));
+  u.body.position.z = 0.5 * s0 - 0.15 * w;   // the lunge carries the whole body forward
+  u.body.rotation.z = Math.sin(ph) * 0.04 * f + hk * (0.07 + 0.05 * Math.sin(ph));   // lists to the bad side
+  u.torso.rotation.x = 0.5 + Math.sin(t * 1.6) * 0.02 - 0.45 * re + f * 0.1 - 0.35 * w + 0.55 * s0 + hk * 0.12;
   u.torso.rotation.y = Math.sin(ph) * 0.1 * f;
-  // breathing: slow at rest, heaving after a run
-  if (u.chest) { const br = Math.sin(t * (1.7 + f * 2.2) + u.seed) * (0.02 + f * 0.015); u.chest.scale.set(1.18 * (1 + br), 1, 0.9 * (1 + br * 1.6)); }
-  // tail: lazy sway, a hard lash when it roars or strikes
-  const lash = roaring || ex.attacking ? 1 : 0;
-  u.tail.forEach((s, i) => { s.rotation.y = Math.sin(t * 2.2 * (0.6 + f) - i * 0.7) * (0.16 + i * 0.035) * (0.6 + f) + lash * Math.sin(t * 11 - i * 0.9) * (0.12 + i * 0.05); if (i) s.rotation.x = -0.05 + (st ? -0.06 : Math.sin(t * 1.3 - i * 0.5) * 0.03); });
-  // head: idle scanning, or locked on to the quarry
-  const want = st ? 0 : ex.look !== undefined ? Math.max(-0.95, Math.min(0.95, ex.look)) - u.torso.rotation.y : Math.sin(t * 0.9) * 0.3 * (1 - f * 0.7);
+  // breathing: slow at rest, heaving after a run or a wound
+  if (u.chest) { const br = Math.sin(t * (1.7 + f * 2.2 + hk * 2.5) + u.seed) * (0.02 + f * 0.015 + hk * 0.02) + re * 0.12; u.chest.scale.set(1.18 * (1 + br), 1, 0.9 * (1 + br * 1.6)); }
+  // tail: lazy sway (droops when hurt), a hard lash through the roar, and a whip on every strike: cocked to one side, then snapped across with a travelling lag
+  const lash = re > 0.05 || (ex.roarP === undefined && ex.attacking) ? 1 : 0;
+  u.tail.forEach((sg, i) => {
+    const pj = ap - i * 0.035, whip = striking ? (gStrike(pj) * 1.5 - gWind(pj) * 0.8) * u.whipSide * (0.12 + i * 0.07) : 0;
+    sg.rotation.y = Math.sin(t * 2.2 * (0.6 + f) - i * 0.7) * (0.16 + i * 0.035) * (0.6 + f) * (1 - 0.5 * hk) + lash * (ex.roarP === undefined ? 1 : re) * Math.sin(t * 11 - i * 0.9) * (0.12 + i * 0.05) + whip;
+    if (i) sg.rotation.x = -0.05 + (st ? -0.06 : Math.sin(t * 1.3 - i * 0.5) * 0.03) - hk * 0.05;
+  });
+  // head: idle scanning, sniffing out a trail, or locked on to the quarry (pitching down at a player below its eyes)
+  const want = st ? 0 : ex.look !== undefined ? Math.max(-0.95, Math.min(0.95, ex.look)) - u.torso.rotation.y : Math.sin(t * (0.9 + sn * 1.6)) * (0.3 + sn * 0.3) * (1 - f * 0.7);
   u.lookY += (want - u.lookY) * 0.12; u.head.rotation.y = u.lookY * 0.65; u.neck.rotation.y = u.lookY * 0.35;
-  u.head.rotation.x = st ? 0.4 : roaring ? -0.35 : Math.sin(t * 1.3) * 0.04; u.head.rotation.z = st ? 0.22 : Math.sin(t * 0.7 + u.seed) * 0.04;
-  u.jaw.rotation.x = st ? 0.32 : roaring ? 0.65 + Math.sin(t * 28) * 0.05 : 0.04 + Math.max(0, Math.sin(t * 1.5)) * 0.06;
-  // nictitating lids: each eye blinks on its own clock; half shut when stunned
-  if (u.lids) u.lids.forEach((l, i) => { const b = (t * 0.23 + u.seed + i * 0.37) % 1, k = st ? 0.62 : b > 0.955 ? Math.sin((b - 0.955) / 0.045 * Math.PI) : 0; l.scale.y = 0.02 + 0.98 * k; l.position.y = 0.1 + 0.07 * (1 - k); l.visible = k > 0.01; });
-  // tongue: quick tasting flicks, lolling when stunned
-  if (u.tongue) { const b = (t * 0.31 + u.seed * 0.5) % 1, fl = st ? 0.8 : roaring ? 0.4 : b > 0.9 ? Math.abs(Math.sin((b - 0.9) * 10 * Math.PI * 2)) : 0; u.tongue.scale.z = 0.05 + fl * 0.95; u.tongue.rotation.x = st ? 0.5 : Math.sin(t * 40) * 0.08 * fl; u.tongue.rotation.y = st ? 0.3 : 0; }
-  if (u.eyeM) u.eyeM.emissiveIntensity = st ? (Math.sin(t * 37) > 0.2 ? 0.25 : 0.04) : 0.55 + (roaring ? 0.6 : 0);
+  u.lookP += ((st || ex.look === undefined ? 0 : ex.lookPitch || 0) - u.lookP) * 0.1;
+  u.neck.rotation.x = -0.6 - 0.25 * re + 0.4 * s0;
+  u.head.rotation.x = st ? 0.4 : -0.55 * re + Math.sin(t * 1.3) * 0.04 + Math.sin(t * 38) * 0.025 * re - 0.3 * w + 0.2 * s0 + hk * 0.28 + sn * (0.28 + Math.sin(t * 7) * 0.06) + u.lookP * 0.7;
+  u.head.rotation.z = st ? 0.22 : Math.sin(t * 0.7 + u.seed) * 0.04 + hk * 0.1;
+  u.jaw.rotation.x = st ? 0.32 : 0.04 + Math.max(0, Math.sin(t * 1.5)) * 0.06 + re * (0.7 + Math.sin(t * 28) * 0.05) + w * 0.5 + s0 * 0.75 + hk * 0.08;
+  // nictitating lids: each eye blinks on its own clock; half shut when stunned, drooping when hurt
+  if (u.lids) u.lids.forEach((l, i) => { const b = (t * 0.23 + u.seed + i * 0.37) % 1, k = st ? 0.62 : Math.max(hk * 0.3, b > 0.955 ? Math.sin((b - 0.955) / 0.045 * Math.PI) : 0); l.scale.y = 0.02 + 0.98 * k; l.position.y = 0.1 + 0.07 * (1 - k); l.visible = k > 0.01; });
+  // tongue: quick tasting flicks (faster while sniffing), lolling when stunned
+  if (u.tongue) { const b = (t * (0.31 + sn * 0.9) + u.seed * 0.5) % 1, fl = st ? 0.8 : re > 0.3 ? 0.4 : b > 0.9 - sn * 0.5 ? Math.abs(Math.sin((b - 0.9) * 10 * Math.PI * 2)) : 0; u.tongue.scale.z = 0.05 + fl * 0.95; u.tongue.rotation.x = st ? 0.5 : Math.sin(t * 40) * 0.08 * fl; u.tongue.rotation.y = st ? 0.3 : 0; }
+  if (u.eyeM) u.eyeM.emissiveIntensity = st ? (Math.sin(t * 37) > 0.2 ? 0.25 : 0.04) : (0.55 + re * 0.6 + s0 * 0.3) * (1 - 0.35 * hk);
 }
 
 // =====================================================================
