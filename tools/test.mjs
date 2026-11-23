@@ -1,7 +1,9 @@
-// Headless test suite:  node tools/test.mjs [--gate] [--only a,b] [--seed N] [--ship i] [--list]   (needs `playwright` + Chromium; starts its own static server)
+// Headless test suite:  node tools/test.mjs [--gate] [--only a,b] [--page k,k] [--seed N] [--ship i] [--list]   (needs `playwright` + Chromium; starts its own static server)
 //   full (default)  every section: node-only checks, then the browser sections page by page (one live page at a time), then the seed-set smoke
 //   --gate          the node-only sections + one browser smoke (load, newRun, 300 test-clock frames, lift one deck down, one high-quality render); target < 2 min
 //   --only a,b      just these sections (names: --list); a browser section runs on a fresh page of its kind
+//   --page k,k      just the browser sections of these page kinds (madness, nominal, nominal3, voices, touch, smoke; see --list); CI shards on this
+//   --list          print `name [page|node]` per section, one per line, then exit
 //   --seed N        Math.random seed for every page (env TEST_SEED; default 1); each browser section re-seeds from (N, its name) before it runs,
 //                   so `--only <section> --seed N` replays the section with the same random draws as in a full run
 //   --ship i        pin G.forceShip to SHIPS[i] for the whole run (sections that pick a ship themselves are overridden)
@@ -15,7 +17,7 @@
 //   voices.html; nominal page 3: nav HUD, NPC walking, comms HUD, UI, talk, combat, wiring, job mini-games, pace / crew repair / shift end; smoke on the seed set (tools/seed-scan.mjs).
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync } from 'node:fs';
 import { extname, join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -954,7 +956,9 @@ for (const [i, [ship, seed]] of SEED_SET.entries()) S('smoke-set' + i, 'smoke', 
 
 // ---- runner ----
 if (argv.includes('--list')) { console.log(sections.map(s => `${s.name}${s.page ? ' [' + s.page + ']' : ' [node]'}`).join('\n')); process.exit(0); }
-const pick = ONLY ? sections.filter(s => ONLY.includes(s.name)) : GATE ? sections.filter(s => !s.page || s.name === 'smoke') : sections.filter(s => s.name !== 'smoke');
+const PAGEF = arg('page', null) ? String(arg('page')).split(',') : null;
+if (PAGEF) for (const k of PAGEF) if (!sections.some(s => s.page === k)) { console.log(`no page kind '${k}' (--list)`); process.exit(2); }
+const pick = PAGEF ? sections.filter(s => s.page && PAGEF.includes(s.page)) : ONLY ? sections.filter(s => ONLY.includes(s.name)) : GATE ? sections.filter(s => !s.page || s.name === 'smoke') : sections.filter(s => s.name !== 'smoke');
 if (ONLY) for (const n of ONLY) if (!sections.some(s => s.name === n)) { console.log(`no section '${n}' (--list)`); process.exit(2); }
 console.log(`test: ${ONLY ? 'only ' + ONLY.join(',') : GATE ? 'gate' : 'full'}, seed ${SEED}${SHIP != null ? ', ship ' + SHIP : ''}, ${pick.length} sections`);
 const T0 = Date.now(), times = []; let page = null, pageKind = null;
@@ -967,7 +971,7 @@ for (const sec of pick) {
   try { if (game) { const sd = strSeed(sec.name); await page.evaluate(([s, n, pinShip]) => { window.__seedRandom(s); const G = __game.G; G.forceSeed = s % 1000000; if (pinShip) G.forceShip = s % n; }, [sd, SHIPSM.SHIPS.length, SHIP == null && sec.page !== 'nominal3' && sec.page !== 'smoke']); ctx = await snap(page); } await sec.fn(page); } catch (e) { threw = e; }
   if (game) ctx = await snap(page).catch(() => ctx);
   if (threw) { fail(`${sec.name} threw: ${String(threw.message || threw).split('\n')[0]}`); if (page) await page.close().catch(() => { }); page = null; pageKind = null; }   // a crashed / wedged page: the next section opens a fresh one
-  if (secFails && curPage) console.log(where());
+  if (secFails && curPage) { console.log(where()); if (page && process.env.TEST_SHOTS) { mkdirSync(join(ROOT, 'results'), { recursive: true }); await page.screenshot({ path: join(ROOT, 'results', `fail-${sec.name}.png`) }).catch(() => { }); } }
   if (errors.length > e0) console.log(`  page errors in ${sec.name}: ${[...new Set(errors.slice(e0))].slice(0, 3).join(' | ').slice(0, 400)}`);
   const ms = Date.now() - t0; times.push([sec.name, ms]);
   console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, ${game ? `ship=${ctx.ship ?? '-'} seed=${ctx.runSeed ?? '-'} deck=${ctx.deck ?? '-'}, ` : ''}heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB`);

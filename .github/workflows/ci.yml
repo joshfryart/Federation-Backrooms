@@ -20,7 +20,7 @@ jobs:
           node-version: lts/*
 
       # tools/test.mjs does `require('playwright')` at module load, so the package must resolve even
-      # for the node-only sections. No browser is downloaded: the browser sections are not run here.
+      # for the node-only sections. No browser is downloaded in this job.
       - name: Cache npm downloads
         uses: actions/cache@v4
         with:
@@ -30,8 +30,8 @@ jobs:
       - name: Install playwright module (no browser)
         run: npm install --no-save --no-package-lock playwright@1.49.1
 
-      # Every [node] section from `node tools/test.mjs --list`: unit suites, generator, ship decks,
-      # inventory rooms, director cascade, crew voices, pace presets. Browser sections need Chromium and are not run in CI.
+      # Node-only sections from `node tools/test.mjs --list`: unit suites, generator, ship decks,
+      # inventory rooms, director cascade, crew voices, pace presets. Browser sections run in the browser jobs below.
       - name: Generator and unit tests (node-only sections)
         run: node tools/test.mjs --only comms,sim,walk-unit,duty,social,gait,movement,equipment-unit,repair-unit,handhelds-unit,nav-unit,ui-unit,talk-unit,combat-unit,wiring-unit,jobgames-unit,room-props,generator,ship-decks,inventory-rooms,director-cascade,voices,pace-presets,grade-unit,perf-governor,perf-lod,role
 
@@ -40,3 +40,112 @@ jobs:
 
       - name: Check job registry is up to date
         run: node tools/merge-jobs.mjs --check
+
+  # Browser sections (Playwright 1.49.1 + Chromium on software GL / SwiftShader, see tools/test.mjs).
+  # `node tools/test.mjs --list` prints every section with its page kind; `--page <kind>` runs the browser sections of one kind.
+  # The smoke job runs first as a gate; the page-kind shards then run two at a time (software GL is memory and CPU hungry).
+  # Timeouts and shard splits are guesses: this has never run on GitHub Actions, tune them from the first real run's `time:` line.
+  browser-smoke:
+    name: Browser gate (smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-playwright-1.49.1
+      - name: Install playwright module
+        run: npm install --no-save --no-package-lock playwright@1.49.1
+      - name: Cache Chromium
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.49.1-${{ runner.os }}
+      - name: Install Chromium and system libraries
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+      - name: Smoke (load, new run, 300 frames, lift, high-quality render)
+        run: set -o pipefail && node tools/test.mjs --only smoke 2>&1 | tee test-smoke.log
+        env:
+          TEST_SHOTS: "1"
+      - name: Upload logs and failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-failure
+          path: |
+            test-smoke.log
+            results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser:
+    name: Browser sections (${{ matrix.shard }})
+    needs: browser-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - shard: madness
+            args: --page madness
+          - shard: nominal
+            args: --page nominal
+          - shard: nominal3
+            args: --page nominal3
+          - shard: misc (voices, touch, seed-set smoke)
+            args: --page voices,touch,smoke
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-playwright-1.49.1
+      - name: Install playwright module
+        run: npm install --no-save --no-package-lock playwright@1.49.1
+      - name: Cache Chromium
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-1.49.1-${{ runner.os }}
+      - name: Install Chromium and system libraries
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+      - name: Browser sections
+        run: |
+          set -o pipefail
+          node tools/test.mjs --list
+          node tools/test.mjs ${{ matrix.args }} 2>&1 | tee test-browser.log
+        env:
+          TEST_SHOTS: "1"
+      - name: Upload logs and failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-${{ strategy.job-index }}
+          path: |
+            test-browser.log
+            results/
+          if-no-files-found: ignore
+          retention-days: 7
