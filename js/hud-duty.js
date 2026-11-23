@@ -183,7 +183,7 @@ export class DutyHUD {
     const pips = D.tasks.map(t => `<i class="${t.state === 'done' ? 'd' : t.state === 'missed' ? 'm' : t.state === 'active' ? 'a' : ''}" title="${esc(t.task)}"></i>`).join('');
     const rep = this.repairs().map(r => `<span class="rp ${r.status}" title="${esc(r.label)} · ${r.status}">${ico(r.status === 'needs' ? 'box' : 'repair')}</span>`).join('');
     const alert = UIHUB.menus?.alertTop?.();
-    this.boardEl.innerHTML = `<div class="dhud"><div class="t">Duty <em>${mmss(D.t)}${D.shiftLen ? ' / ' + mmss(D.shiftLen) : ''}</em></div><div class="rings">${rings}</div><div class="pipsrow">${pips}${D.tasks.length ? `<span>&nbsp;${D.tasks.filter(t => t.state === 'done').length}/${D.tasks.length}</span>` : ''}${rep}${alert ? `<span style="color:${alert.colour || '#ffb347'}">${ico('alert')}</span>` : ''}</div></div>`;
+    const html = `<div class="dhud"><div class="t">Duty <em>${mmss(D.t)}${D.shiftLen ? ' / ' + mmss(D.shiftLen) : ''}</em></div><div class="rings">${rings}</div><div class="pipsrow">${pips}${D.tasks.length ? `<span>&nbsp;${D.tasks.filter(t => t.state === 'done').length}/${D.tasks.length}</span>` : ''}${rep}${alert ? `<span style="color:${alert.colour || '#ffb347'}">${ico('alert')}</span>` : ''}</div></div>`; if (html !== this._boardHTML || this.boardEl.childElementCount === 0) { this._boardHTML = html; this.boardEl.innerHTML = html; }   // 4 Hz: rebuild only when it changed (a same-string innerHTML still replaces the nodes and restyles)
   }
   setHint(t, icon = null) { if (!this.hintEl) return; this.hintEl.innerHTML = t ? (icon ? ico(icon) : '') + `<span>${esc(t)}</span>` : ''; this.hintEl.style.display = t ? 'flex' : 'none'; }
 

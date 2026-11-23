@@ -66,6 +66,9 @@ import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual 
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
 const $ = (id) => document.getElementById(id);
+// per-frame HUD writes: only touch the DOM when the value changes (every textContent / className / innerHTML write invalidates style + layout, even with the same value)
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; }, setClass = (el, v) => { if (el.className !== v) el.className = v; };
+const setHTML = (el, v) => { if (el._html !== v) { el._html = v; el.innerHTML = v; } };   // el._html: last string written here (innerHTML reads back a re-serialised form); only updateHUD writes these elements
 { const st = document.createElement('style'); st.textContent = STATUS_CSS; document.head.appendChild(st); }
 const NOM = () => G.mode === 'nominal';
 const winDeck = () => G.ship ? G.ship.decks : 8;   // a run is one ship, top deck to keel
@@ -217,14 +220,14 @@ function updateHUD() {
   $('hpbar').style.width = Math.max(0, G.hp / G.maxHp * 100) + '%';
   $('stbar').style.width = Math.max(0, G.stamina) + '%';
   const cells = $('cells'); let h = '';
-  for (let i = 0; i < G.maxPhaser; i++) h += `<span class="${i < G.phaser ? '' : 'off'}"></span>`; cells.innerHTML = h;
+  for (let i = 0; i < G.maxPhaser; i++) h += `<span class="${i < G.phaser ? '' : 'off'}"></span>`; setHTML(cells, h);
   if (vm && !vm.reloading?.()) { vm.cells.forEach((c, i) => c.material.color.set(i < Math.ceil(G.phaser / G.maxPhaser * 3) ? 0x40c8ff : 0x10222c)); vm.ring.material.color.set(G.phaser > 0 ? 0xff9a3a : 0x30180a); }
   const need = world ? world.d.chips.length : 0;
-  $('objective').innerHTML = NOM() ? '' : G.chips >= need
+  setHTML($('objective'), NOM() ? '' : G.chips >= need
     ? `<b>Tubelift online</b> — reach the lift<br>Chips ${G.chips}/${need}`
-    : `Logic chips <b>${G.chips}/${need}</b><br>Restore power to the tubelift`;
+    : `Logic chips <b>${G.chips}/${need}</b><br>Restore power to the tubelift`);
   const pl = Object.entries(G.perks).map(([id, n]) => PERKS.find(p => p.id === id).name + (n > 1 ? ' ×' + n : '')).join(' · ');
-  $('perks').textContent = pl;
+  setText($('perks'), pl);
 }
 
 // ---------------- level loading ----------------
@@ -1434,6 +1437,9 @@ let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
 // game timers: setTimeout normally; under the test clock (G.manual, tools/test.mjs) they wait for __game.advance() game time instead of the wall clock
 let manT = 0; const timers = [];
 function later(fn, ms) { if (G.manual) timers.push({ at: manT + ms / 1000, fn }); else setTimeout(fn, ms); }
+const VM_ALERT = new THREE.Color(0xff2010);   // viewmodel key light alert tint (was a new Color per frame)
+const _who = [];   // slideDoors' crew list, reused every frame (was a fresh array of fresh objects per frame)
+function doorWho() { let n = 0; for (const e of ents) if (e.simmed) { const o = _who[n] || (_who[n] = { x: 0, z: 0, w: false }); o.x = e.x; o.z = e.z; o.w = !!e.walk; n++; } _who.length = n; return _who; }
 function step(dt, t) {
   if (NOM() && G.menuPause) return;   // a menu / wheel / panel / map is open: the whole world holds still (js/menus.js keeps the UI alive)
   if (shot > 0) shot -= dt;
@@ -1557,12 +1563,12 @@ function step(dt, t) {
   if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (lp && lp.kind === 'ship_ladder') prompt = `[E] Climb down to Deck ${G.shipDeck + 2 <= G.ship.decks ? G.shipDeck + 2 : G.shipDeck} · [Shift+E] up`; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   if (!prompt && rp) prompt = `${SYS[rp.sys].name} — nominal`;   // status label last: a junction beside a fixture, clutter or terminal must not hide what [E] does there
-  $('prompt').textContent = prompt;
+  setText($('prompt'), prompt);
 
   // room label + exploration
   const [tx, ty] = world.tile(P.x, P.z);
   const rt = world.d.room[ty]?.[tx];
-  $('roomname').textContent = rt ? ROOMS[rt].label : 'Corridor';
+  setText($('roomname'), rt ? ROOMS[rt].label : 'Corridor');
   sound.setRoom(rt || null); sound.roomTick(dt);   // per-room ambience bed + events (js/audio.js ROOM_AMB)
   if (rt === 'jefferies' && !G.hints.tube) { G.hints.tube = 1; G.say('You squeeze into a Jiffy tube. The big ones cannot follow — the small ones can.', 'npc'); }
   mapT += dt; if (mapT > 0.12) { mapT = 0; world.reveal(P.x, P.z, 3); drawMap(); updateHUD(); }
@@ -1576,7 +1582,7 @@ function step(dt, t) {
     if (sd >= 0) { noiseNow = Math.max(noiseNow, 7); G.pryT = (G.pryT || 0) - dt; if (G.pryT <= 0) { G.pryT = 0.5; sound.clang?.(0.1); } if (sd >= 1) G.say('You force the door open.', 'good'); }
     else if (NOM() && world.sealedDoorNear(P.x, P.z)) { if (!(G.sealMsgT > 0)) { G.say(world.lockWhy === 'red' ? 'Door sealed (red alert lockdown). Hold E to pry it open.' : 'Door sealed (no power). Hold E to pry it open.', 'warn'); G.sealMsgT = 6; } }
     if (G.sealMsgT > 0) G.sealMsgT -= dt; }
-  world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z, w: !!e.walk })), (d, dr) => { if (d < 9) sound.door?.(sound.doorMat(dr?.f?.room), Math.max(0.02, 0.1 - d * 0.01)); }, (d, dr) => { if (d < 7) sound.door?.(sound.doorMat(dr?.f?.room), Math.max(0.015, 0.07 - d * 0.01), true); });
+  world.update(dt, t); world.slideDoors(dt, P.x, P.z, doorWho(), (d, dr) => { if (d < 9) sound.door?.(sound.doorMat(dr?.f?.room), Math.max(0.02, 0.1 - d * 0.01)); }, (d, dr) => { if (d < 7) sound.door?.(sound.doorMat(dr?.f?.room), Math.max(0.015, 0.07 - d * 0.01), true); });
   lamp.position.set(P.x, 2.4, P.z);
   flickT -= dt;
   if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = (bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0)) * (0.03 + 0.97 * world.powerAmt); }
@@ -1632,7 +1638,7 @@ function step(dt, t) {
 
   if (armRigs.length) { const dv = G.player && G.roster?.uniformOf ? G.roster.uniformOf(G.player) : 0xa3231c; if (dv !== armTint) { armTint = dv; for (const r of armRigs) r.recolour(dv); } }   // sleeve follows the player's division
   if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
-    { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; const handMode = ['mantle', 'ladder', 'slide', 'grapple', 'wallrun'].includes(P.mode) && G.phase === 'play' && !P.hidden;
+    { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(VM_ALERT, al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; const handMode = ['mantle', 'ladder', 'slide', 'grapple', 'wallrun'].includes(P.mode) && G.phase === 'play' && !P.hidden;
     hands?.pose(handMode ? P.mode : 'none', P.mant ? Math.min(1, P.mant.t) : 0, dt, { time: G.time, side: P.wallSide || 1 });
     gunVM.visible = G.phase === 'play' && !NOM() && !(handMode && P.mode !== 'grapple'); }
   // camera
@@ -1646,7 +1652,7 @@ function step(dt, t) {
   camera.rotation.set(P.pitch - dip * 0.35 + (Math.random() - 0.5) * P.shake * 0.05 * shakeK, P.yaw + (onFoot ? Math.sin(P.bob * 1.1) * 0.004 : 0) + (Math.random() - 0.5) * P.shake * 0.05 * shakeK, P.roll + (onFoot ? Math.sin(P.bob * 1.1) * 0.006 : 0));
   const fovT = 75 + Math.max(0, Math.min(1, (speedNow - 3.6) / 6)) * 15 + (P.mode === 'grapple' ? 7 : 0) + (P.mode === 'slide' ? 4 : 0);
   camera.fov += (fovT - camera.fov) * Math.min(1, dt * 5); camera.updateProjectionMatrix();
-  $('grap').className = P.mode === 'grapple' ? 'on' : P.grapCd > 0 ? 'cd' : ''; $('grap').firstElementChild.style.width = (100 - Math.min(1, P.grapCd / MOVE.grapCooldown) * 100) + '%';
+  setClass($('grap'), P.mode === 'grapple' ? 'on' : P.grapCd > 0 ? 'cd' : ''); $('grap').firstElementChild.style.width = (100 - Math.min(1, P.grapCd / MOVE.grapCooldown) * 100) + '%';
   $('speed').style.opacity = Math.max(0, Math.min(0.6, (speedNow - 7) / 8));
 }
 
