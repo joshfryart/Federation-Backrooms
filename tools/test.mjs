@@ -481,6 +481,8 @@ const mech = await page.evaluate(async () => {
   g.SAVE.setMeta({ runs: 9, bestDeck: 5, kills: 20, wins: 1 }); g.newRun(); out.meta = { perks: Object.keys(G.perks).sort(), bonus: (G.metaBonus || []).length }; g.SAVE.setMeta({});
   // hands: shown for parkour verbs, hidden otherwise
   const A = await import('/js/actors.js'), hd = A.makeHands(); for (let i = 0; i < 30; i++) hd.pose('mantle', 0.8, 0.05, { time: i * 0.05 }); const shown = hd.group.visible; for (let i = 0; i < 60; i++) hd.pose('none', 0, 0.05); out.hands = { shown, hiddenAgain: !hd.group.visible };
+  { const rg = A.makeRiggedArms(), h2 = A.makeHands(undefined, undefined, rg); for (let i = 0; i < 30; i++) h2.pose('mantle', 0.8, 0.05, { time: i * 0.05 }); const hb = rg?.rig.getObjectByName('hand_r'), p = hb && hb.getWorldPosition(new (await import('three')).Vector3());   // rigged arms: cheap, finite pose, hand near the mantle target
+    out.rigArms = { built: !!rg, tris: rg?.tris || 0, shown: h2.group.visible, finite: !!p && [p.x, p.y, p.z].every(Number.isFinite) }; }
   return out;
 });
 console.log('mechanics:', JSON.stringify(mech));
@@ -489,6 +491,7 @@ if (!(mech.distract?.n >= 1 && mech.distract.investigate)) fail('mechanics: dist
 if (!/^\[test roar\]/.test(mech.caption || '')) fail('mechanics: caption ' + JSON.stringify(mech.caption));
 if (!(mech.meta && ['boots', 'cell', 'hypo', 'legs'].every(p => mech.meta.perks.includes(p)) && mech.meta.bonus === 4)) fail('mechanics: career bonuses ' + JSON.stringify(mech.meta));
 if (!(mech.hands?.shown && mech.hands.hiddenAgain)) fail('mechanics: hands ' + JSON.stringify(mech.hands));
+if (!(mech.rigArms?.built && mech.rigArms.tris < 9000 && mech.rigArms.shown && mech.rigArms.finite)) fail('mechanics: rigged arms ' + JSON.stringify(mech.rigArms));
 });
 S('breach', 'nominal', async (page) => {   // a hull breach pulls and hurts, and holding E at it seals it
 await installHelpers(page);

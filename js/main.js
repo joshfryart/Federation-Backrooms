@@ -8,7 +8,7 @@ import { tubeStep } from './tube.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance, MODEL_FILES, PBR_SETS } from './assets.js';
-import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, dressCrew, prewarmOutfits } from './actors.js';
+import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, makeRiggedArms, dressCrew, prewarmOutfits } from './actors.js';
 import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
@@ -1339,12 +1339,15 @@ beamCone = (() => {
   m.position.set(0.12, -0.1, 0); m.frustumCulled = false; camera.add(m); return m;
 })();
 // first-person zapper: procedural sidearm + hand (js/actors.js makeViewmodel)
-let gunVM = null, gunKick = 0, muzzle = null, vm = null, hands = null;
+let gunVM = null, gunKick = 0, muzzle = null, vm = null, hands = null, armRigs = [], armTint = null;
 function buildViewmodel() {
   vm = makeViewmodel(); gunVM = vm.group; muzzle = vm.flash;
   gunVM.traverse(o => { if (o.isMesh) o.renderOrder = 10; });
   gunVM.rotation.set(0.05, 0.1, 0); gunVM.userData.baseRx = 0.05; gunVM.scale.setScalar(0.9);
-  hands = makeHands(); vmScene.add(hands.group);   // parkour hands (mantle / ladder / slide / grapple / wall-run)
+  // optional rigged arms (crew rig, sleeve tinted by the player's division, js/actors.js makeRiggedArms); a failed load leaves the blocky hands
+  const rigV = makeRiggedArms({ sides: ['r'], shoulderMid: new THREE.Vector3(0.18, -0.3, 0.32) }), rigH = makeRiggedArms({ shoulderMid: new THREE.Vector3(0, -0.34, 0.22) });
+  if (rigV) vm.useRig(rigV); armRigs = [rigV, rigH].filter(Boolean);
+  hands = makeHands(undefined, undefined, rigH); vmScene.add(hands.group);   // parkour hands (mantle / ladder / slide / grapple / wall-run)
   vmScene.add(gunVM); vmScene.environment = scene.environment; vmScene.environmentIntensity = 0.25; updateHUD();
 }
 G.testMode = TEST_MODE;
@@ -1544,6 +1547,7 @@ function step(dt, t) {
   if (G.clangT <= 0) { G.clangT = 18 + Math.random() * 30; if (!NOM()) sound.clang(0.15); }
   if (G.stamina < 25) { G.breathT = (G.breathT || 0) - dt; if (G.breathT <= 0) { G.breathT = 0.7; sound.breath(0.1); } }
 
+  if (armRigs.length) { const dv = G.player && G.roster?.uniformOf ? G.roster.uniformOf(G.player) : 0xa3231c; if (dv !== armTint) { armTint = dv; for (const r of armRigs) r.recolour(dv); } }   // sleeve follows the player's division
   if (gunVM) { gunKick = Math.max(0, gunKick - dt * 6); vm.tick?.(dt, gunKick, G.phaser); gunVM.position.set(0.18 + Math.sin(P.bob * 1.1) * 0.006, -0.15 + Math.abs(Math.sin(P.bob * 1.1)) * 0.008 + (P.crouch ? 0.02 : 0) - Math.max(-0.04, Math.min(0.05, P.vy * 0.006)) - P.land * 0.03, -0.4 + gunKick * 0.05); gunVM.rotation.z = -P.roll * 1.5;
     { const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0; vmHemi.intensity = 0.05 + 0.5 * pa; vmKey.intensity = 0.1 + 1.3 * pa; vmKey.color.set(ship ? ship.light : 0xffffff).lerp(new THREE.Color(0xff2010), al * 0.6); vmRim.intensity = P.torch ? 1.2 : 0; } gunVM.rotation.x = 0.05 + gunKick * 0.25; muzzle.material.opacity = gunKick > 0.6 ? 1 : 0; const handMode = ['mantle', 'ladder', 'slide', 'grapple', 'wallrun'].includes(P.mode) && G.phase === 'play' && !P.hidden;
     hands?.pose(handMode ? P.mode : 'none', P.mant ? Math.min(1, P.mant.t) : 0, dt, { time: G.time, side: P.wallSide || 1 });

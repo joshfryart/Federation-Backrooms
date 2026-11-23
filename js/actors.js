@@ -3,7 +3,7 @@ import { textures } from './world.js';
 import { pbr } from './assets.js';
 import { buildItem } from './itemart.js';
 import { wearOutfit, wearHeadgear, outfitFor } from './wearart.js';
-import { makeHuman } from './humans.js';
+import { makeHuman, humansReady } from './humans.js';
 // generated normal + roughness (+AO) from tools/build-textures.mjs, when loaded; repeat set per use
 const withSet = (mat, set, rx = 1, ry = rx, ns = 1) => { const p = pbr(set); if (!p) return mat; const rep = (t) => { const c = t.clone(); c.needsUpdate = true; c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(rx, ry); return c; }; mat.normalMap = rep(p.n); mat.normalScale = new THREE.Vector2(ns, ns); mat.roughnessMap = rep(p.r); mat.roughness = 1; return mat; };
 
@@ -540,6 +540,7 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   P(new THREE.BoxGeometry(0.03, 0.095, 0.04), grip, 0, -0.06, 0.035, 0.28).geometry.translate(0, 0, 0);
   P(new THREE.TorusGeometry(0.018, 0.003, 5, 12, Math.PI), dark, 0, -0.03, -0.005, 0, Math.PI / 2, Math.PI);
   // hand: palm, four fingers wrapped round the grip, index on the trigger, thumb along the body
+  const hand0 = g.children.length;   // everything added from here to hand1 is the blocky hand + forearm (hidden when the rigged arm is used)
   const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 3, 8);
   P(new THREE.BoxGeometry(0.02, 0.085, 0.075), skinM, 0.024, -0.065, 0.05, 0.28).geometry.translate(0, 0, 0);
   for (let i = 0; i < 3; i++) { P(cap(0.0095, 0.04), skinM, -0.004, -0.05 - i * 0.021, 0.012 - i * 0.006, 0, 0, Math.PI / 2); P(cap(0.009, 0.022), skinM, -0.024, -0.05 - i * 0.021, 0.03 - i * 0.006, Math.PI / 2 - 0.2, 0, 0); }
@@ -549,6 +550,7 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   const arm = P(cap(0.032, 0.34), skinM, 0.05, -0.2, 0.2, 0.95, 0, -0.22); arm.scale.set(1, 1, 0.85);
   const slv = P(new THREE.CylinderGeometry(0.043, 0.05, 0.3, 12), cloth, 0.063, -0.262, 0.285, 0.95, 0, -0.22);
   P(new THREE.CylinderGeometry(0.0445, 0.0445, 0.012, 12), new THREE.MeshStandardMaterial({ color: 0xd8b24a, metalness: 0.8, roughness: 0.3 }), 0.047, -0.178, 0.168, 0.95, 0, -0.22); // rank braid
+  const hand1 = g.children.length;
   // ---- detail: sights, heat vents, induction coil, warning label, wrist comm band ----
   P(new THREE.BoxGeometry(0.004, 0.008, 0.006), dark, 0, 0.035, -0.1);                                     // front sight post
   for (const sx of [-1, 1]) P(new THREE.BoxGeometry(0.005, 0.008, 0.006), dark, sx * 0.008, 0.035, 0.04);  // rear notch
@@ -559,8 +561,10 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
   P(new THREE.CylinderGeometry(0.0028, 0.0028, 0.054, 6), steel, 0, -0.03, 0.035, 0, 0, Math.PI / 2);        // grip pin
   P(new THREE.BoxGeometry(0.032, 0.006, 0.044), dark, 0, -0.108, 0.049, 0.28);                             // butt cap
   const band = P(new THREE.CylinderGeometry(0.0375, 0.0385, 0.034, 14), dark, 0.0385, -0.132, 0.119, 0.95, 0, -0.22);   // wrist comm band
+  const handParts = [...g.children.slice(hand0, hand1), band];
   const commM = glow(0x40c8ff), comm = P(new THREE.BoxGeometry(0.026, 0.02, 0.004), commM, 0.022, -0.105, 0.135, 0.95 - Math.PI / 2, 0, -0.22); comm.rotation.order = 'XYZ';
   P(new THREE.BoxGeometry(0.004, 0.004, 0.004), glow(0xff4030), 0.006, -0.112, 0.128);
+  handParts.push(comm);
   const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -0.18); g.add(muzzle);
   const flash = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })); flash.position.copy(muzzle.position); flash.scale.set(1, 1, 2.2); g.add(flash);
   g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
@@ -580,7 +584,14 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
     if (rel < 1) cells.forEach((c, i) => c.material.color.setRGB(0.25, 0.78, 1).multiplyScalar(rel > 0.4 + i * 0.15 ? 1.4 : 0.15));
     ring.material.color.setRGB(1, 0.6 + 0.2 * rs, 0.23 + 0.5 * rs);
   };
-  return { group: g, muzzle, flash, cells, ring, lens, tick, vents, reloading: () => rel < 1 };
+  // optional rigged right arm (makeRiggedArms({ sides: ['r'] })): swaps the blocky hand + forearm for the crew rig's, gripping the pistol grip with the fingers curled round it; solved once, it rides the gun group
+  const useRig = (rig) => {
+    if (!rig) return false; for (const o of handParts) o.visible = false;
+    rig.group.scale.setScalar(0.62); g.add(rig.group);
+    rig.solve('r', new THREE.Vector3(0.03, -0.062, 0.045).divideScalar(0.62), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.28, 0, -Math.PI / 2)), 0.85, new THREE.Vector3(0.6, -1, 0.3));
+    return true;
+  };
+  return { group: g, muzzle, flash, cells, ring, lens, tick, vents, reloading: () => rel < 1, useRig };
 }
 
 // duty clothes by department (docs/wearart.md, docs/propart-integration.md "Batches 5-11"): engineering coveralls, medical scrubs, galley whites; everyone else keeps the uniform.
@@ -610,9 +621,98 @@ export function prewarmOutfits(kinds = ['crew_m', 'crew_f', 'crew_f2', 'crew_hea
 }
 
 
+// =====================================================================
+//  RIGGED FIRST-PERSON ARMS: the crew rig's arms (forearm, hand, five fingers, sleeve) cut out of a crew_m body, posed by 2-bone IK + finger curl.
+//  Cheap: only arm triangles are kept (body forearm/hand + garment sleeve), no extra lights, materials are the crew's own (sleeve tinted by division, recolour()).
+//  Returns null when the crew models are not loaded or the rig is not as expected (callers keep their blocky hands).
+//  solve(side 'l'|'r', pos Vector3 palm centre, quat Quaternion (canonical hand frame: fingers -Z, palm -Y, thumb toward the body centre), curl 0..1, pole Vector3?) poses one arm in the group's space.
+// =====================================================================
+export function makeRiggedArms({ sleeve = 0xa3231c, skin = 0xd9a47c, sides = ['l', 'r'], shoulderMid = new THREE.Vector3(0, -0.3, 0.2) } = {}) {
+  try {
+    if (!humansReady()) return null;
+    const h = makeHuman({ kind: 'crew_m', seed: 3, height: 1.74, skin, uniform: sleeve, style: 'plain', kit: false, shadow: false });
+    if (!h) return null;
+    const H = h.userData.human, inner = H.inner; H.mixer.stopAllAction();
+    const meshes = []; inner.traverse(o => { if (o.isSkinnedMesh) meshes.push(o); });
+    const keep = []; meshes[0].skeleton.pose(); inner.updateMatrixWorld(true);
+    const ARM = /^(upperarm|lowerarm|hand|thumb|index|middle|ring|pinky)\w*_([lr])$/, FORE = /^(lowerarm|hand|thumb|index|middle|ring|pinky)\w*_([lr])$/;
+    for (const o of meshes) {
+      const mn = o.material.name || '', body = mn === 'body', gar = mn.startsWith('garment') && !mn.includes('shoes');
+      if (body || gar) {
+        const g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, bn = o.skeleton.bones.map(b => b.name), idx = g.index.array, rx = body ? FORE : ARM;
+        const dom = (i) => { let bi = 0, bw = -1; for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (w > bw) { bw = w; bi = si.getComponent(i, k); } } const m = rx.exec(bn[bi]); return m ? m[2] : ''; };
+        for (const sd of sides) {
+          const map = new Map(), ids = [], vs = [];
+          for (let t = 0; t < idx.length; t += 3) {
+            if (dom(idx[t]) !== sd || dom(idx[t + 1]) !== sd || dom(idx[t + 2]) !== sd) continue;
+            for (let k = 0; k < 3; k++) { const v = idx[t + k]; let n = map.get(v); if (n === undefined) { n = vs.length; map.set(v, n); vs.push(v); } ids.push(n); }
+          }
+          if (!ids.length) continue;
+          const ng = new THREE.BufferGeometry();
+          for (const name of ['position', 'normal', 'uv', 'skinIndex', 'skinWeight', 'color']) {
+            const a = g.attributes[name]; if (!a) continue; const arr = name === 'skinIndex' ? new Uint16Array(vs.length * a.itemSize) : new Float32Array(vs.length * a.itemSize);   // getComponent: the glTF attributes may be interleaved / normalised
+            for (let i = 0; i < vs.length; i++) for (let c = 0; c < a.itemSize; c++) arr[i * a.itemSize + c] = a.getComponent(vs[i], c);
+            ng.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize));
+          }
+          ng.setIndex(ids);
+          const sm = new THREE.SkinnedMesh(ng, o.material); sm.bind(o.skeleton, o.bindMatrix); sm.frustumCulled = false; sm.castShadow = sm.receiveShadow = false; sm.renderOrder = 11; sm.userData.garment = gar; if (gar) { sm.material = o.material.clone(); sm.material.map = null; sm.material.needsUpdate = true; }   // flat sleeve: the suit texture is darker on the right sleeve, and the division colour reads better plain
+          keep.push(sm);
+        }
+      }
+      o.parent.remove(o);
+    }
+    if (!keep.length) return null;
+    for (const m of keep) inner.add(m);
+    const V = (x, y, z) => new THREE.Vector3(x, y, z), rig = new THREE.Group(), holder = new THREE.Group(); inner.rotation.y = Math.PI; rig.add(inner); holder.add(rig);   // the rig faces +Z, the camera looks down -Z
+    const bone = (n) => { const b = inner.getObjectByName(n); if (!b) throw new Error('rig bone ' + n); return b; };
+    const FING = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+    const hInv = new THREE.Matrix4(), hQi = new THREE.Quaternion(), sync = () => { holder.updateMatrixWorld(true); hInv.copy(holder.matrixWorld).invert(); holder.getWorldQuaternion(hQi).invert(); };   // wp / wq: bone pose in the holder's space, wherever the holder is
+    const wq = (b) => b.getWorldQuaternion(new THREE.Quaternion()).premultiply(hQi), wp = (b) => b.getWorldPosition(new THREE.Vector3()).applyMatrix4(hInv);
+    const arms = {};
+    sync();   // the whole rig sits so the midpoint of the shoulders lands on shoulderMid (rig space == holder space: no rotation)
+    const sh = sides.map(s => wp(bone('upperarm_' + s))), mid = sh.reduce((a, b) => a.add(b), V(0, 0, 0)).multiplyScalar(1 / sh.length); rig.position.copy(shoulderMid).sub(mid); sync();
+    for (const s of sides) {
+      const side = s === 'r' ? 1 : -1, B = { up: bone('upperarm_' + s), lo: bone('lowerarm_' + s), hand: bone('hand_' + s), fing: FING.map(f => [1, 2, 3].map(i => bone(`${f}_0${i}_${s}`))) };
+      const A = { side, B, q0: new Map(), L1: wp(B.lo).distanceTo(wp(B.up)), L2: wp(B.hand).distanceTo(wp(B.lo)) };
+      for (const b of [B.up, B.lo, B.hand, ...B.fing.flat()]) A.q0.set(b, b.quaternion.clone());
+      // hand-local frame: a = along the fingers, t = toward the thumb, n = a x t (back of a right hand)
+      const hq = wq(B.hand), hinv = hq.clone().invert(), loc = (b) => wp(b).sub(wp(B.hand)).applyQuaternion(hinv);
+      const a = loc(B.fing[2][0]).normalize(), tt = loc(B.fing[1][0]).sub(loc(B.fing[4][0])); tt.addScaledVector(a, -tt.dot(a)).normalize(); const n = a.clone().cross(tt);
+      A.local = new THREE.Matrix4().makeBasis(a, tt, n); const axisW = tt.clone().applyQuaternion(hq);   // curl axis in world rest
+      A.axis = new Map(); for (const b of B.fing.flat()) A.axis.set(b, axisW.clone().applyQuaternion(wq(b.parent).invert()));
+      // curl sign: the middle finger's second joint must move toward the palm (palm = -side * n, hand-local)
+      const palm = n.clone().multiplyScalar(-side).applyQuaternion(hq), m1 = B.fing[2][0], m2 = B.fing[2][1], p0 = wp(m2), q = m1.quaternion.clone();
+      m1.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(A.axis.get(m1), 0.4)); inner.updateMatrixWorld(true); A.sign = wp(m2).sub(p0).dot(palm) >= 0 ? 1 : -1; m1.quaternion.copy(q); inner.updateMatrixWorld(true);
+      arms[s] = A;
+    }
+    const Qc = new THREE.Quaternion(), Mc = new THREE.Matrix4(), Mt = new THREE.Matrix4(), tmp = new THREE.Quaternion(), pv = new THREE.Vector3();
+    const aim = (b, child, dir) => {   // turn bone b so the segment to `child` points along dir
+      const cur = wp(child).sub(wp(b)).normalize(), d = new THREE.Quaternion().setFromUnitVectors(cur, dir), nw = d.multiply(wq(b)); b.quaternion.copy(wq(b.parent).invert().multiply(nw)); b.updateMatrixWorld(true);
+    };
+    function solve(s, pos, quat, curl = 0.3, pole = null) {
+      const A = arms[s]; if (!A) return; const B = A.B, side = A.side;
+      sync(); for (const [b, q] of A.q0) b.quaternion.copy(q); holder.updateMatrixWorld(true);
+      const fdir = V(0, 0, -1).applyQuaternion(quat), wrist = pos.clone().addScaledVector(fdir, -0.04).sub(rig.position), S = wp(B.up).sub(rig.position);
+      const dv = wrist.clone().sub(S), dist = dv.length(), d = Math.min(dist, A.L1 + A.L2 - 1e-3), dn = dv.divideScalar(dist || 1), W = S.clone().addScaledVector(dn, d);
+      const aL = (A.L1 * A.L1 - A.L2 * A.L2 + d * d) / (2 * d), hh = Math.sqrt(Math.max(0, A.L1 * A.L1 - aL * aL));
+      pv.copy(pole || V(side * 0.45, -1, 0.25)); pv.addScaledVector(dn, -pv.dot(dn)); if (pv.lengthSq() < 1e-6) pv.set(0, -1, 0); pv.normalize();
+      const E = S.clone().addScaledVector(dn, aL).addScaledVector(pv, hh);
+      aim(B.up, B.lo, E.clone().sub(S).normalize()); aim(B.lo, B.hand, W.clone().sub(E).normalize());
+      // hand: bone basis -> canonical basis (fingers -Z, thumb toward the centre, third axis by cross product) turned by quat
+      Mc.makeBasis(V(0, 0, -1), V(-side, 0, 0), V(0, 0, -1).cross(V(-side, 0, 0))); Mt.copy(A.local).transpose(); Mc.multiply(Mt);
+      Qc.setFromRotationMatrix(Mc); tmp.copy(quat).multiply(Qc); B.hand.quaternion.copy(wq(B.lo).invert().multiply(tmp)); B.hand.updateMatrixWorld(true);
+      const k = A.sign * curl * 1.3;
+      for (let f = 0; f < 5; f++) for (let j = 0; j < 3; j++) { const b = B.fing[f][j], amt = f === 0 ? [0.25, 0.5, 0.5][j] * k : [0.9, 1.1, 0.8][j] * k; b.quaternion.premultiply(tmp.setFromAxisAngle(A.axis.get(b), amt)); }
+      holder.updateMatrixWorld(true);
+    }
+    const recolour = (c) => { for (const m of keep) if (m.userData.garment) m.material.color.set(c); };
+    return { group: holder, rig, solve, recolour, sides, tris: keep.reduce((a, m) => a + m.geometry.index.count / 3, 0) };
+  } catch (e) { console.warn('makeRiggedArms', e.message); return null; }
+}
+
 // First-person hands for the parkour verbs (mantle, ladder, slide, grapple, wall-run). Two bare hands with sleeved forearms, built from capsules; main.js poses them each frame
 // through hands.pose(mode, k, dt) where k is a 0..1 phase. Returns { group, pose }. Same skin / sleeve colours as the viewmodel so the zapper hand and these match.
-export function makeHands(skin = 0xd9a47c, sleeve = 0xa3231c) {
+export function makeHands(skin = 0xd9a47c, sleeve = 0xa3231c, rig = null) {   // rig: optional makeRiggedArms({ sides: ['l','r'] }); the blocky hands stay as the fallback
   const group = new THREE.Group(), skinM = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6 }), cloth = new THREE.MeshStandardMaterial({ color: sleeve, roughness: 0.9 });
   const cap = (r, l, m) => new THREE.Mesh(new THREE.CapsuleGeometry(r, l, 3, 8), m);
   const hand = (side) => {
@@ -622,7 +722,8 @@ export function makeHands(skin = 0xd9a47c, sleeve = 0xa3231c) {
     const arm = cap(0.03, 0.34, cloth); arm.rotation.x = Math.PI / 2; arm.position.set(0, 0, 0.26); h.add(arm);
     h.userData.fingers = fingers; h.userData.thumb = th; return h;
   };
-  const L = hand(-1), R = hand(1); group.add(L, R); group.visible = false; group.traverse(o => { if (o.isMesh) o.renderOrder = 11; });
+  const L = hand(-1), R = hand(1); group.add(L, R); group.visible = false;
+  if (rig) { group.add(rig.group); L.visible = R.visible = false; } group.traverse(o => { if (o.isMesh) o.renderOrder = 11; });
   const cur = { l: new THREE.Vector3(-0.22, -0.4, -0.3), r: new THREE.Vector3(0.22, -0.4, -0.3), lr: new THREE.Euler(), rr: new THREE.Euler(), curl: 0.2, vis: 0 };
   const tgt = { l: new THREE.Vector3(), r: new THREE.Vector3(), lrx: 0, rrx: 0, lrz: 0, rrz: 0, curl: 0.2, show: false };
   const lerpV = (a, b, k) => a.lerp(b, k);
@@ -644,6 +745,7 @@ export function makeHands(skin = 0xd9a47c, sleeve = 0xa3231c) {
     L.position.copy(cur.l); R.position.copy(cur.r); L.rotation.set(tgt.lrx, 0, tgt.lrz); R.rotation.set(tgt.rrx, 0, tgt.rrz);
     for (const h of [L, R]) for (const f of h.userData.fingers) f.rotation.x = cur.curl * 1.3;
     group.visible = cur.vis > 0.05; group.scale.setScalar(0.9);
+    if (rig && group.visible) { const q = new THREE.Quaternion(); rig.solve('l', cur.l, q.setFromEuler(L.rotation), cur.curl); rig.solve('r', cur.r, q.setFromEuler(R.rotation), cur.curl); }
   }
-  return { group, pose };
+  return { group, pose, rig };
 }
