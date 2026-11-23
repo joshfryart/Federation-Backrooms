@@ -56,6 +56,8 @@ if (set === 'crew') {
   add('Space-madness (run)', ...enemy('crazed', 4.6)); add('Space-madness (attack)', ...enemy('crazed', 0, { attacking: true }));
   add('Compliance Drone', ...enemy('drone', 1.7)); add('Mr. Grinsworth', ...enemy('phantom', 1)); add('Grinsworth (watched)', ...enemy('phantom', 0, { frozen: true }));
   add('Slimeling impostor', ...enemy('slimeling', 4.2)); add('Clingon Crawler', ...enemy('clinger', 0)); add('Crawler (running)', ...enemy('clinger', 4));
+  { const m1 = MODELS.clinger(); m1.mesh.rotation.x = Math.PI; add('Crawler (ceiling hang)', m1.mesh, (dt) => m1.tick(dt, 0, { lurk: true }), 2.0); }
+  add('Crawler (dropping)', ...enemy('clinger', 0, { drop: true })); add('Crawler (latched, tearing loose)', ...enemy('clinger', 0, { latched: true, fr: 0.2 }));
 } else if (set === 'misc') {
   for (const k of ['chip', 'battery', 'medkit']) { const m = makeItem(k); add(k, m, (dt) => { m.rotation.y += dt; }, 0.8); }
   add('Furble', makeTribble(), null, 0.8); const f2 = makeTribble(); f2.scale.setScalar(2.5); add('Furble (close)', f2, null, 1.3);

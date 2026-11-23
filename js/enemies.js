@@ -456,7 +456,10 @@ export class Clinger extends Enemy {
     this.mesh.rotation.x = Math.PI; this.mesh.position.set(this.x, this.ceil, this.z); this.fall = 0; this.latchT = 0; this.fleeT = 0;
   }
   stunFor() { if (this.dead) return; this.kill(); }
-  kill() { this.dead = true; this.mesh.visible = false; this.game?.bloodAt?.(this.mode === 'lurk' ? this.x : this.x, this.mode === 'lurk' ? 1.5 : 0.4, this.z, 40); this.sound.squelch(); }
+  kill() {   // death splat: a burst where it hung or ran, plus goo on the floor beneath
+    this.dead = true; this.mesh.visible = false; const hi = this.mode === 'lurk' || this.mode === 'drop', y = hi ? Math.max(1.2, this.mesh.position.y) : 0.4;
+    this.game?.bloodAt?.(this.x, y, this.z, 70); this.game?.splatAt?.(this.x, this.z, 1.3); this.sound.squelch();
+  }
   update(dt, p, noiseR, crouch, game) {
     if (this.dead) return; this.t += dt; this.game = game;
     const dx = p.x - this.x, dz = p.z - this.z, dist = Math.hypot(dx, dz);
@@ -480,7 +483,7 @@ export class Clinger extends Enemy {
       this.mesh.position.set(this.x, 0, this.z); this.mesh.rotation.y = this.yaw; this.quiet = true; this.state = S.PATROL;
       if (this.fleeT <= 0) { this.dead = true; this.mesh.visible = false; }
     }
-    this.model.tick(dt, this.mode === 'flee' ? 4 : 0, { latched: this.mode === 'latched', lurk: this.mode === 'lurk' });
+    this.model.tick(dt, this.mode === 'flee' ? 4 : 0, { latched: this.mode === 'latched', lurk: this.mode === 'lurk', drop: this.mode === 'drop', fr: game.clungFrac ? game.clungFrac() : 1 });
   }
 }
 
