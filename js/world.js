@@ -265,6 +265,7 @@ function mergeStatic(g) {
 }
 export function buildProp(kind) {
   const m = mats(); const g = new THREE.Group(); const R = Math.random;
+  const drum = (x, z) => R() < 0.45 && hasModel('ph_drum') ? model('ph_drum', 0.88, x, z, R() * 6) : model('ph_barrel', 0.95, x, z, R() * 6);   // Poly Haven Barrel_02 steel drum / barrel_03
   switch (kind) {
     case 'console': { g.userData.top = 0.92;
       g.add(rbox(1.7, 0.86, 0.75, m.dark, 0, 0, 0, 0.06)); g.add(rbox(1.78, 0.06, 0.82, m.metal, 0, 0.86, 0, 0.02));
@@ -325,9 +326,9 @@ export function buildProp(kind) {
         const n = 2 + Math.floor(R() * 3); let y = 0;
         for (let i = 0; i < n; i++) { const c = model('ph_crate', 0.34, (R() - 0.5) * 0.12, (R() - 0.5) * 0.12, (R() - 0.5) * 0.25 + (R() < 0.2 ? Math.PI / 2 : 0), y); g.add(c); y += 0.335; }
         g.userData.top = y;
-        if (R() < 0.6) g.add(model('ph_barrel', 0.95, 0.75, 0.75, R() * 6));
+        if (R() < 0.6) g.add(drum(0.75, 0.75));
       } else if (roll < 0.8 && hasModel('ph_barrel')) {
-        for (const [x, z] of [[-0.4, -0.35], [0.42, -0.3], [0.0, 0.42]]) if (R() < 0.85) g.add(model('ph_barrel', 0.95, x, z, R() * 6));
+        for (const [x, z] of [[-0.4, -0.35], [0.42, -0.3], [0.0, 0.42]]) if (R() < 0.85) g.add(drum(x, z));
         g.add(box(1.7, 0.08, 1.7, m.crate2, 0, -0.02, 0)); g.userData.top = 0.95;
       } else {
         const mt = R() < 0.5 ? m.crate : m.crate2; const h = 0.8 + R() * 0.9;
@@ -374,7 +375,7 @@ export function buildProp(kind) {
       g.add(rbox(0.3, 0.3, 0.4, m.panel, 0.65, 0.88, 0, 0.03)); g.add(box(0.08, 0.2, 0.12, m.hazard, 0.1, 0.88, 0.25)); g.add(box(1.0, 0.03, 0.01, m.hazard, 0, 0.3, 0.28)); break; }
     case 'workbench': { g.userData.top = 0.95;
       g.add(rbox(1.7, 0.08, 0.8, m.wood, 0, 0.86, 0, 0.02)); for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.07, 0.86, 0.07, m.metal, sx * 0.78, 0, sz * 0.33)); g.add(rbox(1.5, 0.12, 0.6, m.dark, 0, 0.2, 0, 0.02));
-      g.add(rbox(0.16, 0.14, 0.16, m.dark, -0.7, 0.94, 0.25, 0.02)); g.add(box(0.05, 0.1, 0.18, m.metal, -0.7, 1.08, 0.25)); g.add(box(0.5, 0.12, 0.06, m.hazard, 0.2, 0.94, -0.25)); g.add(rbox(0.3, 0.06, 0.18, m.metal, 0.5, 0.94, 0.1, 0.01)); break; }
+      g.add(rbox(0.16, 0.14, 0.16, m.dark, -0.7, 0.94, 0.25, 0.02)); g.add(box(0.05, 0.1, 0.18, m.metal, -0.7, 1.08, 0.25)); g.add(box(0.5, 0.12, 0.06, m.hazard, 0.2, 0.94, -0.25)); const tb = model('ph_toolbox', 0.3, 0.45, 0.08, 0.15 + R() * 0.3, 0.94); if (tb) g.add(tb); else g.add(rbox(0.3, 0.06, 0.18, m.metal, 0.5, 0.94, 0.1, 0.01)); break; }   // scanned steel toolbox (Poly Haven metal_toolbox)
     case 'tank': {   // plant room pressure vessel with a gauge, valve wheel and piping
       g.add(cyl(0.55, 0.55, 1.7, m.metal, 0, 0.12, 0, 22)); const dome = new THREE.Mesh(new THREE.SphereGeometry(0.55, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), m.metal); dome.position.y = 1.82; g.add(dome); g.add(cyl(0.6, 0.6, 0.12, m.dark, 0, 0, 0, 22));
       for (const y of [0.5, 1.2]) { const band = cyl(0.57, 0.57, 0.06, m.hazard, 0, y, 0, 22); g.add(band); } g.add(cyl(0.05, 0.05, 0.9, m.pipe, 0.6, 0.2, 0.3, 10)); g.add(cyl(0.04, 0.04, 0.5, m.pipe, 0.35, 2.0, 0, 8));
@@ -566,7 +567,8 @@ const DECOR = {
   coil(K) { for (const x of [-0.62, 0, 0.62]) { K.box(0.3, 2.3, 0.1, x, 1.3, DK).box(0.11, 2.1, 0.02, x, 1.3, GB, 0.1, true); for (let i = 0; i < 6; i++) K.box(0.32, 0.045, 0.14, x, 0.4 + i * 0.36, MT); } K.box(1.7, 0.1, 0.16, 0, 2.5, STEEL).box(1.7, 0.1, 0.16, 0, 0.1, STEEL); },
   menu(K) { K.box(1.2, 0.76, 0.05, 0, 1.72, DK).box(1.0, 0.08, 0.006, 0, 2.0, GO, 0.05, true); [0.9, 0.7, 0.8, 0.5, 0.75, 0.6].forEach((w, i) => { K.box(w * 0.7, 0.035, 0.006, -0.5 + w * 0.35, 1.86 - i * 0.075, i % 3 === 2 ? [1.9, 1.7, 1.2] : GO, 0.05, true).box(0.12, 0.035, 0.006, 0.42, 1.86 - i * 0.075, GG, 0.05, true); });
     K.box(1.2, 0.04, 0.2, 0, 1.15, MT); [-0.4, -0.25, -0.1].forEach((x, i) => K.cyl(0.04, 0.1, x, 1.22, i === 1 ? 0x9ac0e0 : WHT, 0.06)); K.box(0.3, 0.02, 0.16, 0.3, 1.18, 0x9a6a3a, 0.02); },
-  extinguisher(K) { K.box(0.34, 0.66, 0.03, 0, 1.0, DK).cyl(0.085, 0.44, 0, 0.96, RD, 0.04, 'y', false, 12).cyl(0.03, 0.08, 0, 1.22, MT, 0.095).box(0.14, 0.03, 0.03, 0.05, 1.27, DK, 0.11).box(0.02, 0.3, 0.02, 0.11, 1.08, 0x18181a, 0.12).box(0.1, 0.1, 0.006, 0, 1.0, 0xe0d8c0, 0.21).box(0.26, 0.26, 0.01, 0, 1.62, RD).box(0.16, 0.05, 0.006, 0, 1.62, WHT, 0.01).box(0.05, 0.16, 0.006, 0, 1.62, WHT, 0.01); },
+  extinguisher(K) { K.box(0.34, 0.66, 0.03, 0, 1.0, DK); if (!hasModel('ph_extinguisher')) K.cyl(0.085, 0.44, 0, 0.96, RD, 0.04, 'y', false, 12).cyl(0.03, 0.08, 0, 1.22, MT, 0.095).box(0.14, 0.03, 0.03, 0.05, 1.27, DK, 0.11).box(0.02, 0.3, 0.02, 0.11, 1.08, 0x18181a, 0.12).box(0.1, 0.1, 0.006, 0, 1.0, 0xe0d8c0, 0.21);   // the scanned cylinder (EXT_MODEL) replaces the box-built one when loaded
+    K.box(0.26, 0.26, 0.01, 0, 1.62, RD).box(0.16, 0.05, 0.006, 0, 1.62, WHT, 0.01).box(0.05, 0.16, 0.006, 0, 1.62, WHT, 0.01); },
   comm(K) { K.box(0.36, 0.52, 0.05, 0, 1.45, 0x30343c); for (let i = 0; i < 5; i++) K.box(0.22, 0.014, 0.006, 0, 1.3 + i * 0.03, 0x121418, 0.05); K.box(0.24, 0.1, 0.006, 0, 1.6, GO, 0.05, true).box(0.07, 0.07, 0.012, -0.08, 1.49, GB, 0.05, true).box(0.07, 0.07, 0.012, 0.08, 1.49, 0x5a6068, 0.05); },
   fountain(K) { K.box(0.52, 0.56, 0.06, 0, 1.22, MT).box(0.52, 0.18, 0.3, 0, 0.95, 0xc8ccd0).box(0.4, 0.012, 0.2, 0, 1.042, 0x3a3f45, 0.05).cyl(0.014, 0.1, 0.12, 1.09, MT, 0.12).box(0.1, 0.05, 0.02, -0.12, 0.95, DK, 0.3).box(0.3, 0.16, 0.006, 0, 1.36, 0x9ac0e0, 0.06).box(0.04, 0.04, 0.008, 0.2, 1.36, GB, 0.06, true).cyl(0.03, 0.5, 0, 0.55, MT, 0.04); },
   ventgrille(K) { K.box(0.96, 0.44, 0.03, 0, 0.45, 0x2f333a); for (let i = 0; i < 7; i++) K.box(0.84, 0.022, 0.016, 0, 0.3 + i * 0.05, 0x121418, 0.03); for (const sx of [-0.44, 0.44]) for (const y of [0.27, 0.63]) K.cyl(0.012, 0.01, sx, y, MT, 0.03, 'z', false, 6); },
@@ -587,11 +589,14 @@ const ROOM_DECOR = {
 };
 dressTable('decor', ROOM_DECOR);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.decor`
 const kitCache = {};
+// Poly Haven korean_fire_extinguisher_01 in its bracket: origin on the wall line, +z into the room; the bracket plate sits at z 0 to 0.03
+const EXT_MODEL = { name: 'ph_extinguisher', height: 0.62, y: 0.7, z: 0.22 };
+function extModel(f) { const e = model(EXT_MODEL.name, EXT_MODEL.height, 0, EXT_MODEL.z, 0, EXT_MODEL.y); if (!e) return null; const p = new THREE.Group(); p.add(e); if (f) { p.position.set(f.px, 0, f.pz); p.rotation.y = f.ry; } return p; }
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
 function kitMats() { const m = mats(); if (!m.kit) { m.kit = wearMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 })); m.kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true }); } return m; }
 export const DECOR_KINDS = Object.keys(DECOR);
 // one wall fixture as a stand-alone group (model viewer)
-export function buildDecor(kind) { const m = kitMats(), geo = kitGeo(kind, DECOR[kind]), g = new THREE.Group(); if (geo.solid) g.add(new THREE.Mesh(geo.solid, m.kit)); if (geo.glow) g.add(new THREE.Mesh(geo.glow, m.kitGlow)); return g; }
+export function buildDecor(kind) { const m = kitMats(), geo = kitGeo(kind, DECOR[kind]), g = new THREE.Group(); if (kind === 'extinguisher') { const e = extModel(); if (e) g.add(e); } if (geo.solid) g.add(new THREE.Mesh(geo.solid, m.kit)); if (geo.glow) g.add(new THREE.Mesh(geo.glow, m.kitGlow)); return g; }
 
 // ------------------------------------------------------------------
 // Scene construction from level data
@@ -1384,6 +1389,12 @@ export class World {
       for (const r of d.rooms) { if (r.type !== 'sickbay' || (byKind.stretcher_rack || []).some(f => f.room === 'sickbay' && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h)) continue;
         const f = faces.find(f => !f.deco && !f.win && !f.sign && f.room === 'sickbay' && ceilOf(f) >= WH - 0.01 && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h); if (f) { f.deco = true; (byKind.stretcher_rack || (byKind.stretcher_rack = [])).push(f); } }
       for (const [k, list] of Object.entries(byKind)) if (DECOR[k]) kit(k, DECOR[k], list);
+      if (byKind.extinguisher?.length && hasModel(EXT_MODEL.name)) {   // scanned cylinders: one model instance per wall face, merged per material so a deck pays 3 draws, not 3 per extinguisher
+        const by = new Map(), sh = new Map();
+        for (const f of byKind.extinguisher) { const p = extModel(f); p.updateMatrixWorld(true);
+          p.traverse(o => { if (!o.isMesh) return; const key = o.material.name || o.name; if (!sh.has(key)) sh.set(key, o.material); (by.get(key) || by.set(key, []).get(key)).push(o.geometry.clone().applyMatrix4(o.matrixWorld)); }); }
+        for (const [key, l] of by) { const geo = mergeGeometries(l, false); for (const x of l) x.dispose(); if (!geo) continue; const mesh = new THREE.Mesh(geo, sh.get(key)); mesh.castShadow = false; mesh.receiveShadow = true; g.add(mesh); }
+      }
         else if (PROP_ART_FIXTURES.has(k)) for (const f of list) { const p = buildPropArt(k, m); p.position.set(f.px, 0, f.pz); p.rotation.y = f.ry; p.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); g.add(p);
           if (p.userData.item === 'stretcher') {   // MED-3: the folded stretcher can be taken off its bracket ([E] Take, like loose clutter: js/main.js nearestClutter / takeClutter); its parts sit at z 0.13
             const parts = p.children.filter(o => (Math.abs(o.position.z - 0.13) < 0.01 && o.position.y > 0.55 && o.position.y < 1.85) || (Math.abs(o.position.z - 0.17) < 0.004 && o.position.y > 0.9 && o.position.y < 1.55));   // bed, poles, handles, straps, buckles
