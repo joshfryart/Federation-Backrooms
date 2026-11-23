@@ -5,6 +5,7 @@ import { procClips } from './proc-anims.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { has, get } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
+import { prepareHumanLod } from './humanlod.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
@@ -467,6 +468,7 @@ export function makeHuman(opts = {}) {
     },
   };
   g.userData.human = H; H.play('idle', { fade: 0 }); mixer.update(rnd() * 3);
+  prepareHumanLod(g, inner, hairParts, g.userData.cutParts || []);   // decimated body / garment / hair meshes for distance (js/humanlod.js, swapped by js/perfcull.js)
   return g;
 }
 

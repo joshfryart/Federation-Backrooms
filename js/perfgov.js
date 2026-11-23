@@ -1,17 +1,17 @@
 // Auto-quality governor (no three.js import: it is a pure state machine so tools/test.mjs can drive it in node).
 // Ladder, cheapest change first:   level 0 = High at full resolution   1 = High, 85 % render scale   2 = High, 70 % (+ half-size torch shadow map)
-//                                  3 = High, 55 % (+ light cones off)   4 = Performance (the old "low": no post chain, pixel ratio 1)
+//                                  3 = High, 55 % (+ light cones off)   (`lod` = person-LOD distance multiplier, js/humanlod.js: lower rungs switch to the decimated meshes sooner)   4 = Performance (the old "low": no post chain, pixel ratio 1)
 // Step down when the smoothed frame time stays over DOWN_MS for DOWN_S seconds (the last rung needs a worse frame time, so Performance mode stays a
 // last resort, as the old 45 ms / 4 s rule had it).  Step up only after the smoothed frame time has stayed under UP_MS for UP_S seconds, with a
 // cool-down after any change, and every time a recovery is followed by another drop within FLAP_S the next recovery waits twice as long
 // (hysteresis: no ping-pong between two levels).  Frames over SPIKE_MS (tab switch, a load hitch, a breakpoint) are ignored.  Manual choice in the
 // pause menu pins the level (auto = false) until the player picks High again.
 export const LEVELS = [
-  { scale: 1, quality: 'high', shadow: 1024, cones: true },
-  { scale: 0.85, quality: 'high', shadow: 1024, cones: true },
-  { scale: 0.7, quality: 'high', shadow: 512, cones: true },
-  { scale: 0.55, quality: 'high', shadow: 512, cones: false },
-  { scale: 1, quality: 'low', shadow: 512, cones: false },
+  { scale: 1, quality: 'high', shadow: 1024, cones: true, lod: 1 },
+  { scale: 0.85, quality: 'high', shadow: 1024, cones: true, lod: 1 },
+  { scale: 0.7, quality: 'high', shadow: 512, cones: true, lod: 0.8 },
+  { scale: 0.55, quality: 'high', shadow: 512, cones: false, lod: 0.6 },
+  { scale: 1, quality: 'low', shadow: 512, cones: false, lod: 0.6 },
 ];
 export const DEFAULTS = { DOWN_MS: 30, DOWN_LAST_MS: 45, DOWN_S: 2.5, UP_MS: 19, UP_S: 8, UP_LOW_MS: 12, UP_LOW_S: 20, COOL_S: 5, FLAP_S: 30, SPIKE_MS: 250, SEVERE_MS: 80, EMA: 0.08, MAX_LOW_RECOVERIES: 2 };
 
@@ -45,11 +45,11 @@ export class Governor {
   }
 }
 
-// Apply one ladder rung.  ctx: { post, torch, world, beamCone, CFG, TEST } from main.js.  Dynamic resolution only touches the post chain's render
+// Apply one ladder rung.  ctx: { post, torch, world, lodCfg, beamCone, CFG, TEST } from main.js.  Dynamic resolution only touches the post chain's render
 // targets (the canvas keeps its size, the last pass upscales), so a change costs one target re-allocation and no shader compile.
 export function applyLevel(L, ctx) {
   const { post, torch, world } = ctx, high = L.quality === 'high';
-  post?.setScale(high ? L.scale : 1);
+  post?.setScale(high ? L.scale : 1); if (ctx.lodCfg) ctx.lodCfg.scale = L.lod ?? 1;
   if (world?.cones) world.cones.visible = high && L.cones;
   if (torch && torch.shadow.mapSize.x !== L.shadow) { torch.shadow.mapSize.set(L.shadow, L.shadow); if (torch.shadow.map) { torch.shadow.map.dispose(); torch.shadow.map = null; } }
 }
