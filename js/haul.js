@@ -85,6 +85,8 @@ export function pushHook(e, w, dt) {   // walkStep: pushing borrows the climbing
   const c = w.opts.push; if (!c?.mesh || !C) return; e.climbing = true; const gt = C.gaitFor(e); e.v = Math.min(e.v || 0, gt.v * 0.7);
   cartFollow(c, e.x, e.z, e.heading ?? e.mesh.rotation.y, dt);
 }
+export const CART_COST = 5;   // extra path-field cost of a tile under a parked cart
+function cartPoints(c) { const u = c.mesh.userData, off = Math.max(0, u.half[1] - u.half[0]); return [[c.x + Math.sin(c.yaw) * off, c.z + Math.cos(c.yaw) * off], [c.x - Math.sin(c.yaw) * off, c.z - Math.cos(c.yaw) * off]]; }
 const handleOf = (c) => { const h = c.mesh.userData.handle; return [c.x - Math.sin(c.yaw) * h, c.z - Math.cos(c.yaw) * h]; };
 
 export class Haul {
@@ -108,8 +110,20 @@ export class Haul {
         const kind = r.type === 'shuttlebay' && k ? 'tool' : 'cargo'; this.addCart(kind, cx + wx * 0.5, cz + wy * 0.5, Math.atan2(wy, -wx), hash01('ld', this.seed, i++) < 0.6); }
     }
   }
-  dispose() { for (const c of this.carts) C.scene.remove(c.mesh); for (const it of this.dropped) C.scene.remove(it.mesh); if (this.vm) C.vmScene?.remove(this.vm); this.carts = []; this.dropped = []; const P = C.P; P.cart = null; P.pushing = false; P.carryMul = 1; }
-  tick(dt) { this.jobsStep(dt); this.collide(); this.playerStep(dt); this.vmStep(); }
+  dispose() { if (this.W) this.W.softCost = null; for (const c of this.carts) C.scene.remove(c.mesh); for (const it of this.dropped) C.scene.remove(it.mesh); if (this.vm) C.vmScene?.remove(this.vm); this.carts = []; this.dropped = []; const P = C.P; P.cart = null; P.pushing = false; P.carryMul = 1; }
+  tick(dt) { this.jobsStep(dt); this.syncObstacles(dt); this.collide(); this.playerStep(dt); this.vmStep(); }
+  // carts as path-field obstacles (docs/pathing.md iteration 7): the tiles a PARKED cart covers cost +CART_COST in every path field (walkable, so a cart in a
+  // one-tile corridor never cuts the ship in two, but a walk goes round it when there is a way). The cache is rebuilt only when the set of tiles changes
+  // (a cart left somewhere, a parked cart bumped over a tile line), checked twice a second.
+  syncObstacles(dt) {
+    this.obsT = (this.obsT || 0) - dt; if (this.obsT > 0) return; this.obsT = 0.5; const W = this.W, tiles = new Set();
+    for (const c of this.carts) { if (c.pusher) continue; for (const [px, pz] of cartPoints(c)) { const [tx, ty] = W.tile(px, pz); if (W.grid[ty]?.[tx] === 0) tiles.add(tx + ty * W.W); } }
+    const sig = [...tiles].sort((a, b) => a - b).join(','); if (sig === this.obsSig) return; this.obsSig = sig;
+    if (!tiles.size) W.softCost = null; else { const m = new Uint8Array(W.W * W.H); for (const i of tiles) m[i] = CART_COST; W.softCost = m; }
+    C.G.fieldCache = null;
+  }
+  // every cart's solid circles (x, z, radius) for steering: walkers keep out of them instead of being shoved. `except` = the cart a walker is pushing
+  obstacles(except = null) { const out = []; for (const c of this.carts) { if (c === except) continue; const r = c.mesh.userData.half[0] + 0.1; for (const [x, z] of cartPoints(c)) out.push({ x, z, r, pushed: !!c.pusher }); } return out; }
 
   // ---- NPC hauling jobs: walk to a cart, grab it, push it along a real path to a destination room, release it, go back ----
   destFor(e, spec) {

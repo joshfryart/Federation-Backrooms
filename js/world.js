@@ -677,7 +677,7 @@ export class World {
   // noTube = too big to crawl; climb = can vault props and use ladders / upper runs (crazed crew).
   field(tx, ty, noTube = false, climb = false) {
     const W = this.W, H = this.H, g = this.grid, T = this.d.tubeAxis, L = this.d.tubeLevel;
-    const d = new Int16Array(W * H).fill(-1);
+    const d = new Int16Array(W * H).fill(-1), soft = this.softCost;   // soft: extra cost per tile (parked carts: walkable, but a detour is preferred; js/haul.js)
     if (tx < 0 || ty < 0 || tx >= W || ty >= H) return d;
     const cost = (x, y, i) => {
       const c = g[y][x];
@@ -696,7 +696,7 @@ export class World {
           const n = nx + ny * W, w = cost(nx, ny, n); if (w < 0) continue;
           const tb = T[n];
           if ((ta || tb) && !tubeStep(this.d, id, n, dx, dy)) continue;   // tubes are entered / left only through their open ends (bends turn)
-          const nd = c + w; if (d[n] < 0 || nd < d[n]) { d[n] = nd; (buckets[nd] || (buckets[nd] = [])).push(n); }
+          const nd = c + w + (soft ? soft[n] : 0); if (d[n] < 0 || nd < d[n]) { d[n] = nd; (buckets[nd] || (buckets[nd] = [])).push(n); }
         }
       }
     }

@@ -423,7 +423,7 @@ function gaitFor(e) {   // this walker's gait right now: their own mix of parts,
   if (!e.gaitCtx || G.time - e.gaitT > 1 || e.gaitRun !== !!e.run) { e.gaitRun = !!e.run; const h = G.comms ? G.comms.clock.localHour(e.person) : 2; e.gaitT = G.time; e.gaitCtx = gaitNow(e.gaitBase, { run: !!e.run, alert: G.comms?.alerts?.top()?.def.severity ?? 0, tired: Math.max(0, Math.min(1, (h - 5) / 3)), relaxed: h > 8 && h < 20 }); }
   return e.gaitCtx;
 }
-function startWalk(e, tx, ty, vanish, opts = {}) { e.walk = { tx, ty, vanish, stuck: 0, np: 0, opts, t0: G.time }; e.liftWait = null; e.liftGo = false; e.run = !!opts.run; e.bestF = e.bestT = undefined; if (opts.sim) e.simKey = null; }
+function startWalk(e, tx, ty, vanish, opts = {}) { e.ladder = null; e.walk = { tx, ty, vanish, stuck: 0, np: 0, opts, t0: G.time }; e.liftWait = null; e.liftGo = false; e.run = !!opts.run; e.bestF = e.bestT = undefined; if (opts.sim) e.simKey = null; }
 const WALK_SEP = 0.55;   // m between two bodies' centres that a walker keeps (walkStep)
 const CAR_SLOTS = [[0, 0.55], [0.6, 0.55], [-0.6, 0.55], [0.3, -0.1], [-0.3, -0.1], [0, -0.6], [0.6, -0.6], [-0.6, -0.6]];   // >= 0.58 m apart; [lateral, back] m from the car centre: where boarders stand while the doors close (8: iteration 5, one car per deck, so a surge needs bigger carfuls; the front pair stands 0.5 m inside the doors)
 // where lift walkers wait while the car is shut / cycling or people are stepping out of it: beside the doors ([lateral, out] m from the car
@@ -452,7 +452,7 @@ const hiddenFar = (x, z) => Math.hypot(x - P.x, z - P.z) > 30 || !world.los(P.x,
 function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased speed, capped turn rate, look-ahead steering, right-hand passing, braking, wall clearance.
   const w = e.walk, H = e.mesh.userData.human, f = pathField(w.tx, w.ty, !!w.opts.tubes), W = world.W, gt = gaitFor(e);
   const clampY = () => { const here = world.hostileGround(e.x, e.z), ahead = world.hostileGround(e.x + Math.sin(e.heading || 0) * 0.6, e.z + Math.cos(e.heading || 0) * 0.6), gy = (e.v || 0) > 0.2 && ahead > here ? ahead : here, y0 = e.y || 0, dy = gy - y0; e.y = y0 + Math.max(-2.4 * dt, Math.min(3.2 * dt, dy * Math.min(1, dt * 9))); e.mesh.position.y = e.y; };
-  const finish = () => { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.opts.sim) e.simKey = w.opts.sim; if (w.opts.board) { if (H) { H.play('idle', { fade: 0.3 }); H.standing = true; H.add = null; } e.walking = false; return false; }   /* settled on a spot in the car */ if (w.vanish) { const c = world.car; if (c && G.lift && world.tile(e.x, e.z).join() === c.tx + ',' + c.ty) { const used = new Set(ents.filter(o => o.board).map(o => o.boardSlot)), pt = ([l, b]) => [c.x - c.dy * l - c.dx * b, c.z + c.dx * l - c.dy * b]; let k = 0, bd = 1e9; CAR_SLOTS.forEach((q, i) => { const [qx, qz] = pt(q), dd = Math.hypot(qx - e.x, qz - e.z) + (used.has(i) ? 100 : 0); if (dd < bd) { bd = dd; k = i; } }); const [sl, sb] = CAR_SLOTS[k]; e.boardSlot = k; e.board = true; G.lift.boardN = (G.lift.boardN || 0) + 1;   /* the doors close when nobody else is walking up, or after 4 s (carStep) */ startWalk(e, 0, 0, false, { point: [c.x - c.dy * sl - c.dx * sb, c.z + c.dx * sl - c.dy * sb], board: true }); return true; }   /* in the car: step to a free spot in it (not all on the centre), the doors close on them (carStep), then they are gone */   /* in the car: the doors close on them (carStep), then they are gone */ else dropBody(e); } else { if (w.opts.off && !w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); if (w.opts.sim) e.simKey = w.opts.sim; startWalk(e, w.tx, w.ty, false, { point: [cx + w.opts.off[0], cz + w.opts.off[1]] }); return true; }   /* sharing a tile in a full room: step off its centre */ if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
+  const finish = () => { if (w.opts.ladder) { e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.simKey = w.opts.sim; e.ladder = { t: 0, y0: e.y || 0 }; return false; }   /* at the foot of the ladder: ladderStep climbs and removes the body */ e.walk = null; e.v = 0; e.heading = undefined; e.run = false; e.crawl = false; e.climbing = false; if (w.opts.returnTo) { e.retT = 2.4; e.returnTo = w.opts.returnTo; } if (w.opts.sim) e.simKey = w.opts.sim; if (w.opts.board) { if (H) { H.play('idle', { fade: 0.3 }); H.standing = true; H.add = null; } e.walking = false; return false; }   /* settled on a spot in the car */ if (w.vanish) { const c = world.car; if (c && G.lift && world.tile(e.x, e.z).join() === c.tx + ',' + c.ty) { const used = new Set(ents.filter(o => o.board).map(o => o.boardSlot)), pt = ([l, b]) => [c.x - c.dy * l - c.dx * b, c.z + c.dx * l - c.dy * b]; let k = 0, bd = 1e9; CAR_SLOTS.forEach((q, i) => { const [qx, qz] = pt(q), dd = Math.hypot(qx - e.x, qz - e.z) + (used.has(i) ? 100 : 0); if (dd < bd) { bd = dd; k = i; } }); const [sl, sb] = CAR_SLOTS[k]; e.boardSlot = k; e.board = true; G.lift.boardN = (G.lift.boardN || 0) + 1;   /* the doors close when nobody else is walking up, or after 4 s (carStep) */ startWalk(e, 0, 0, false, { point: [c.x - c.dy * sl - c.dx * sb, c.z + c.dx * sl - c.dy * sb], board: true }); return true; }   /* in the car: step to a free spot in it (not all on the centre), the doors close on them (carStep), then they are gone */   /* in the car: the doors close on them (carStep), then they are gone */ else dropBody(e); } else { if (w.opts.off && !w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); if (w.opts.sim) e.simKey = w.opts.sim; startWalk(e, w.tx, w.ty, false, { point: [cx + w.opts.off[0], cz + w.opts.off[1]] }); return true; }   /* sharing a tile in a full room: step off its centre */ if (!w.opts.point) { const [cx, cz] = world.center(w.tx, w.ty); e.x = cx; e.z = cz; e.mesh.position.x = cx; e.mesh.position.z = cz; } poseFor(e); } return false; };
   if (e.heading === undefined) e.heading = e.mesh.rotation.y;
   const turnTo = (gx, gz, k = 1) => { const want = Math.atan2(gx - e.x, gz - e.z); const err = Math.atan2(Math.sin(want - e.heading), Math.cos(want - e.heading)); const mt = (e.v > 0.3 ? Math.min(5.2, gt.turn) : Math.min(3.4, gt.turn * 1.3)) * dt * k; e.heading += Math.max(-mt, Math.min(mt, err)); e.mesh.rotation.y = e.heading; return err; };
   const animate = (clip, scale) => { if (!H) return; if (!e.walking || e.clip !== clip) { try { H.play(clip, { fade: 0.2 }); } catch (er) { H.play('idle'); } H.standing = false; e.walking = true; e.clip = clip; } };
@@ -480,12 +480,15 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   if (cur === 0) { gx = fx; gz = fz; }
   // pass others on the right-hand side (so two people meeting both step the same way), slow for anyone you cannot get round
   let slow = 1; const dxg = gx - e.x, dzg = gz - e.z, dg = Math.hypot(dxg, dzg) || 1, ux = dxg / dg, uz = dzg / dg, rx = uz, rz = -ux;   // (rx, rz) = right of travel
-  const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh && !o.board).map(o => ({ x: o.mesh.position.x, z: o.mesh.position.z, walk: !!o.walk, ent: o })), { x: P.x, z: P.z, player: true }];   // where their body really is (a seated / operating body sits on the seat or use point, not on its logical tile centre)
+  const others = [...ents.filter(o => o !== e && o.kind === 'crew' && o.mesh && !o.board).map(o => ({ x: o.mesh.position.x, z: o.mesh.position.z, walk: !!o.walk, ent: o })), { x: P.x, z: P.z, player: true }], cobs = (!tubeish && G.haul) ? G.haul.obstacles(w.opts.push).filter(c => Math.hypot(c.x - e.x, c.z - e.z) < 3.6) : [];   // cobs: cart circles to steer round (iteration 7). Where their body really is (a seated / operating body sits on the seat or use point, not on its logical tile centre)
   if (cur < (e.bestF ?? 1e9) - 0.5) { e.bestF = cur; e.bestT = G.time; w.np = 0; } if (G.time - (e.bestT ?? G.time) > 5 && toEnd > 0.5) { e.forceT = 2; e.bestT = G.time; e.bestF = cur; if (++w.np >= 4 && w.opts.sim && (w.vanish ? hiddenFar : unseenAt)(e.x, e.z)) return finish(); }   /* a lift walk cut short vanishes: only where nobody can see it */   // no progress for 5 s: ignore everyone and head straight down the field for a moment; a schedule walk held up for 20 s is cut short, but only out of sight
   if (e.forceT > 0) e.forceT -= dt;
-  for (const o of (tubeish || e.forceT > 0) ? [] : others) {
-    const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 3.0 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.3) continue; const lat = ox * rx + oz * rz; if (Math.abs(lat) > 1.3) continue;
-    const need = gt.space * 1.05 - (o.player ? 0.1 : 0), k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0); gx += rx * off; gz += rz * off;   // always bear right of them
+  let nearP = false; const passing = G.time < (e.pPass || 0);   // passing: squeezing past a player who has blocked the way for a while (iteration 7)
+  for (const o of (tubeish || e.forceT > 0) ? [] : others.concat(cobs)) {
+    if (o.player && passing) continue; const ox = o.x - e.x, oz = o.z - e.z, od = Math.hypot(ox, oz); if (od > 3.0 || od < 1e-3) continue; const ahead = (ox * ux + oz * uz) / od; if (ahead < 0.3) continue; const lat = ox * rx + oz * rz; if (Math.abs(lat) > 1.3) continue;
+    const need = o.r ? o.r + 0.4 : gt.space * 1.05 - (o.player ? 0.1 : 0), k = Math.max(0.25, 1 - od / 3.0) * 1.2, off = Math.min(need * k, dg * 0.6, 1.0); gx += rx * off; gz += rz * off;   // always bear right of them
+    if (o.player && od < 1.6 && ahead > 0.5 && Math.abs(lat) < 0.7) nearP = true;
+    if (o.r && !o.pushed) continue;   // a parked cart: steer round it, no braking
     if (od < 0.8 + gt.space * 0.3 && (!(e.ghost > 0) || o.player)) slow = Math.min(slow, Math.max(0.05, (od - 0.35) / 0.8));
   }
   const carFull = (G.lift?.boardN || 0) >= CAR_SLOTS.length;   // a full car takes nobody else (they wait for the next one)
@@ -523,8 +526,10 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const turnK = (Math.abs(err) > 1.2 && toEnd > 0.5) ? 0 : Math.max(0.25, Math.cos(Math.min(1.3, Math.abs(err)))), brake = Math.sqrt(2 * 1.5 * gt.accel * Math.max(0, toEnd - 0.04)) + 0.12;
   let target = gt.v * slow * turnK * (e.climbing ? 0.4 : e.crawl ? 0.5 : vault ? 0.55 : 1); if (!w.vanish) target = Math.min(target, brake);
   e.v = (e.v || 0); e.v += Math.max(-1.5 * gt.accel * dt, Math.min(gt.accel * dt, target - e.v));
+  // the player stands in the way (a one-tile corridor, the lift mouth): wait, say so after a moment, then squeeze past (iteration 7; they used to wait for good)
+  if (nearP && e.v < 0.2 && !tubeish) { e.pWait = (e.pWait || 0) + dt; if (e.pWait > 1.2 && !(e.pSay > G.time - 25)) { e.pSay = G.time; try { speak(e.person, ['Excuse me.', 'Coming through.', 'Pardon me, sir.'][e.person.id % 3], { gain: 1 }); } catch (er) { } } if (e.pWait > 3) { e.pPass = G.time + 1.6; e.pWait = 0; e.ghost = Math.max(e.ghost || 0, 1.6); } } else if (e.pWait) e.pWait = Math.max(0, e.pWait - dt * 2);
   if (w.vanish && toEnd < 3.4 && G.lift) G.lift.npcT = 1;   // someone is walking up to the lift: the doors open for them too (carStep)
-  if (toEnd < 0.05 && !w.vanish) return finish();
+  if (toEnd < (w.opts.ladder ? 1.3 : 0.05) && !w.vanish) return finish();   // a ladder walk ends within 1.3 m of the foot (the ladder prop's box and the others in the queue keep them off its centre) (ladderStep queues them)
   if (w.vanish && cur === 0 && toEnd < 0.75 && !liftWait) return finish();   // inside the car: step to a free spot in it (finish), not everyone onto its centre
   // blocked by someone for a while: squeeze past (ghost through NPCs) rather than teleport; a player in a one-tile corridor is simply waited for
   if (e.v < 0.05 && slow < 0.3) { w.stuck += dt; if (w.stuck > 2.5) e.ghost = 1.5; if (w.stuck > 30 && (w.vanish ? hiddenFar : unseenAt)(e.x, e.z)) return finish(); } else w.stuck = Math.max(0, w.stuck - dt);
@@ -534,6 +539,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const sp = Math.min(e.v * dt, toEnd); e.x += Math.sin(e.heading) * sp; e.z += Math.cos(e.heading) * sp;
   const nearCar = world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 2.6;   // the car and its doors have their own choreography (spots in the car, holding back while it cycles); everyone keeps their space once outside the doors (iteration 2)
   const sep = G.walkSep ?? WALK_SEP; if (!tubeish && (!nearCar || Math.hypot(e.x - world.car.x, e.z - world.car.z) > 1.3) && !atSpot && toEnd > 0.3 && !(e.ghost > 0)) for (const o of others) { if (o.player) continue; const ox = e.x - o.x, oz = e.z - o.z, od = Math.hypot(ox, oz); if (od < sep) { const side = od > 1e-3 ? Math.sign(ox * rx + oz * rz) || 1 : (e.person.id & 1 ? 1 : -1), k = Math.min(sep - od, 0.8 * dt) * side; e.x += rx * k; e.z += rz * k; } }   // personal space: a walker slides sideways (never back) off anyone closer than `sep` (side by side in a doorway, overtaking) instead of walking through them; not while squeezing past (ghost)
+  if (cobs.length && toEnd > 1.0 && !(e.forceT > 0) && !(world.car && Math.hypot(e.x - world.car.x, e.z - world.car.z) < 2)) for (const c of cobs) { const dx = e.x - c.x, dz = e.z - c.z, dd = Math.hypot(dx, dz), need = c.r + 0.3; if (dd < need && dd > 1e-4) { e.x = c.x + dx / dd * need; e.z = c.z + dz / dd * need; } }   // keep out of a cart's circles ourselves, so Haul.collide has nobody to shove (iteration 7)
   if (!e.climbing) { const q = { x: e.x, z: e.z, y: e.y || 0 }; world.resolve(q, 0.26); e.x = q.x; e.z = q.z; }   // never clip walls
   if (toEnd < 0.35 && !w.vanish) { const k = Math.min(1, dt * 7); e.x += (fx - e.x) * k; e.z += (fz - e.z) * k; }   // ease onto the exact spot
   e.mesh.position.x = e.x; e.mesh.position.z = e.z; clampY();
@@ -553,6 +559,18 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   return true;
 }
 
+// crew climbing a service ladder well (iteration 7): at the foot of the ladder, turn to it, climb ~2.4 m with the 'push' (climbing) clip and are gone (sim.holdBody lets the trip start once the body is removed)
+function ladderStep(e, dt, d) {
+  const L = e.ladder, w = world.d.ladderWell, H = e.mesh.userData.human; if (!w) { dropBody(e); return; }
+  if (!L.go) { const [qx, qz] = world.center(w[0] + w[2], w[1] + w[3]), me = Math.hypot(e.x - qx, e.z - qz); if (ents.some(q => q !== e && q.ladder && (q.ladder.go || (!q.ladder.go && Math.hypot(q.x - qx, q.z - qz) < me - 0.05)))) { if (H) { if (e.clip !== 'idle') { H.play('idle', { fade: 0.3 }); e.clip = 'idle'; e.walking = false; } if (d <= 22) H.update(dt); } return; } L.go = true; }   // one at a time, nearest the foot first
+  L.t += dt;
+  const [wx, wy, dx, dy] = w, [cx, cz] = world.center(wx + dx, wy + dy), want = Math.atan2(-dx, -dy); let err = Math.atan2(Math.sin(want - (e.heading ?? e.mesh.rotation.y)), Math.cos(want - (e.heading ?? e.mesh.rotation.y)));
+  e.heading = (e.heading ?? e.mesh.rotation.y) + Math.max(-4 * dt, Math.min(4 * dt, err)); e.mesh.rotation.y = e.heading;
+  const up = Math.max(0, L.t - 0.5); if (L.t > 0) { const k = Math.min(1, dt * 3); e.x += (cx - dx * 0.3 - e.x) * k; e.z += (cz - dy * 0.3 - e.z) * k; e.mesh.position.x = e.x; e.mesh.position.z = e.z; }
+  e.y = (L.y0 || 0) + Math.min(2.6, up * 0.9); e.mesh.position.y = e.y; e.climbing = true;
+  if (H) { if (H.has('push')) H.play('push', { fade: 0.2, speed: up > 0 ? 3 : 0.1 }); if (d <= 22) H.update(dt); }
+  if (up > 2.6 / 0.9 + 0.3 || (L.t > 1 && unseenAt(e.x, e.z))) { e.climbing = false; dropBody(e); G.simT = 0; }
+}
 // ---- NPC sim bodies: people the sim puts on this deck get a body; others are abstract. A body always walks: to its next spot on this deck
 // (real path, js/sim.js lists a person at their destination as soon as they set off), to the lift car when the sim sends them to another
 // deck (the doors close on them, carStep), and out of the car when they arrive. Bodies only appear in place on a deck load (force).
@@ -599,13 +617,17 @@ function simBodies(dt, force = false) {
     if (force) { if (!o || o.room !== e.room || e.board || e.walk?.vanish) { dropBody(e); have.delete(e.person); } continue; }
     if (e.board) continue;
     if (e.walk ? (!e.walk.opts.sim && !(!o && e.haul && car)) || e.walk.opts.sim === k : e.simKey === k || (o && o.room === e.room && busy(e))) continue;   // on its way there / already there / someone else's walk (haul, repair, dodge) / held (combat, repair pose). A cart job does not outlast the person's time on the deck: when the sim sends them off it, they leave the cart and walk to the lift (js/haul.js drops a job whose walk is replaced; iteration 6: the sim had them riding while the body kept pushing, one body too many on the deck)
+    if (!o && G.sim.viaOf(e.person) === 'ladder' && world.d.ladderWell) { const [wx, wy, dx, dy] = world.d.ladderWell; startWalk(e, wx + dx, wy + dy, false, { sim: k, ladder: true, ...(runFor(e.person) ? { run: true } : {}) }); continue; }   // crew climb the service ladder between adjacent decks (iteration 7): walk to the foot of it, then climb (ladderStep)
     if (!o) { if (car) startWalk(e, car.tx, car.ty, true, { sim: k, ...(runFor(e.person) ? { run: true, tubes: true } : {}) }); else if (unseenAt(e.x, e.z)) dropBody(e); continue; }   // left the deck: walk to the lift and go
     const t = simTileFor(e.person, o); if (t) { place(e, o, t); startWalk(e, t[0], t[1], false, { sim: k, off: t.off, ...(runFor(e.person) ? { run: true } : {}) }); }   // a new room or spot on this deck: walk there
   }
   let n = 0; for (const o of here.values()) {   // arrive: out of the lift car (its doors are shut, or it is out of sight), a few at a time
     if (have.has(o.person) || o.person.status === 'dead' || o.person.status === 'crazed') continue;
     const k = `${o.room}|${o.spot}|${o.tx},${o.ty}`, t = simTileFor(o.person, o); if (!t) continue; let [cx, cz] = world.center(t[0], t[1]); if (t.off) { cx += t.off[0]; cz += t.off[1]; } let rot = (o.person.id * 0.9) % 6.28, out = false;
-    if (!force && car) {
+    if (!force && o.via === 'ladder' && world.d.ladderWell) {   // climbed down / up the service ladder (iteration 7): appears at its foot when nobody can see it, walks off
+      const [wx, wy, dx, dy] = world.d.ladderWell; [cx, cz] = world.center(wx + dx, wy + dy);
+      if (n >= 2 || !unseenAt(cx, cz) || ents.some(q => q.kind === 'crew' && q.mesh && !q.board && Math.hypot(q.x - cx, q.z - cz) < 0.7)) continue; n++; rot = Math.atan2(dx, dy); out = true;
+    } else if (!force && car) {
       const hid = hiddenFar(car.x, car.z) && CAR_SLOTS.every(([l, b]) => hiddenFar(car.x - car.dy * l - car.dx * b, car.z + car.dx * l - car.dy * b)) && ents.every(q => !q.board || hiddenFar(q.x, q.z));   /* every spot in the car, not only its centre (iteration 5: an arrival appeared on a side spot in sight round a corner) */   // nobody waiting in the car is in sight either (they are removed when the car comes back)
       if (n >= 3 || G.fx?.liftLocked) continue;   // at most 3 per cycle (this line sat inside the comment above until iteration 2)
       if (!hid && !(L && !world.liftOpen && L.closedT > 1)) { if (L && !inCarTile() && !(L.shutT > 0) && !L.boardN && !liftComing()) L.shutT = 1.6; if (L) L.arrive = true; continue; }   // the player is looking into the open car: it leaves and comes back with them, but not while people are boarding or walking up to it: they arrive when the doors shut on those (one cycle, docs/pathing.md iteration 3)
@@ -994,7 +1016,7 @@ function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 
   document.body.classList.toggle('nominal', NOM()); P.torch = !NOM(); torch.visible = P.torch; if (beamCone) beamCone.visible = P.torch && CFG.quality === 'high';
   if (NOM()) { const decks = genShip(G.ship, G.runSeed); G.plan = shipPlan(G.ship, G.runSeed, decks); G.shipDecks = decks.map((data, i) => ({ idx: i, data, used0: new Set(data.used), st: { sites: new Set(), explored: null } })); }
   else { G.plan = null; G.shipDecks = null; }
-  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.holdBody = simHold; G.sim.on('depart', simDepart); }
+  G.sim = NOM() ? new CrewSim({ roster: G.roster, clock: G.comms.clock, plan: G.plan, data: commsData(), seed: G.runSeed, decks: G.ship.decks, lifts: G.shipDecks?.map(x => x.data.exit), ladders: G.shipDecks?.map(x => { const w = x.data.ladderWell; return w ? [w[0] + w[2], w[1] + w[3]] : null; }) }) : null; if (G.sim) { G.sim.setPlayer(G.player); G.sim.holdBody = simHold; G.sim.on('depart', simDepart); }
   G.social = G.sim ? generateSocial(G.roster, { seed: G.runSeed, plan: G.plan, data: commsData(), clock: G.comms.clock, ship: G.ship }) : null; if (G.social) G.sim.setSocial(G.social);   // js/social.js: groups, friendships, rivalries (before setupDuty: seeds trust)
   setupDuty();
   hideScreens(); fade(0);
@@ -1467,6 +1489,7 @@ function step(dt, t) {
       if (e.simmed && !e.walk) dodgeCheck(e, dt, d);
       if (e.op && e.walk) opEnd(e);   // leaving the equipment: put things away
       const q = e.ease; if (q) { const k = Math.max(0, 1 - dt * 3.5); q[0] *= k; q[1] *= k; if (q[0] * q[0] + q[1] * q[1] < 4e-4) { q[0] = q[1] = 0; e.ease = null; } }   // opEnd left the mesh on the seat / use point: it eases back onto the logical position instead of snapping
+      if (e.ladder && !e.walk) { ladderStep(e, dt, d); continue; }
       if (e.walk && (wearWalk(e, G, d), walkStep(e, dt, d))) { if (q) { e.mesh.position.x += q[0]; e.mesh.position.z += q[1]; } continue; }
       if (q && !e.op) { e.mesh.position.x = e.x + q[0]; e.mesh.position.z = e.z + q[1]; }
       if (e.turning !== undefined) { turnStep(e, dt, d); continue; }
