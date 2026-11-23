@@ -470,6 +470,16 @@ export function makeHuman(opts = {}) {
   return g;
 }
 
+// a dropped sidearm lying on the deck: body, barrel, one dead emitter lens (shared geometry and materials)
+let zapGeo = null, zapMat = null;
+function deadZapper() {
+  zapGeo = zapGeo || { body: new THREE.BoxGeometry(0.13, 0.04, 0.05), grip: new THREE.BoxGeometry(0.035, 0.07, 0.04), tip: new THREE.CylinderGeometry(0.014, 0.014, 0.06, 8) };
+  zapMat = zapMat || { shell: new THREE.MeshStandardMaterial({ color: 0x2b3038, metalness: 0.6, roughness: 0.45 }), lens: new THREE.MeshStandardMaterial({ color: 0x3a1010, emissive: 0x401006, emissiveIntensity: 0.5, roughness: 0.3 }) };
+  const g = new THREE.Group(), b = new THREE.Mesh(zapGeo.body, zapMat.shell), h = new THREE.Mesh(zapGeo.grip, zapMat.shell), t = new THREE.Mesh(zapGeo.tip, zapMat.lens);
+  b.position.y = 0.02; h.position.set(-0.04, 0.0, 0); h.rotation.z = 0.25; h.position.y = 0.02; t.rotation.z = Math.PI / 2; t.position.set(0.09, 0.02, 0);
+  for (const m of [b, h, t]) { m.castShadow = false; g.add(m); } g.rotation.z = 0; return g;
+}
+
 // blink + small idle expression; call each frame for living, friendly humans
 export function liveFace(H, t, seed = 0) {
   const b = (t * 0.37 + seed) % 1; const lid = b > 0.96 ? 1 : 0;
@@ -485,7 +495,7 @@ export function makeSurvivor(rnd = Math.random, person = null) {
   return g;
 }
 // corpses: on their back (end of death01), face-down, or slumped where they sat down
-export function makeCorpse(rnd = Math.random, person = null, pose = null) {
+export function makeCorpse(rnd = Math.random, person = null, pose = null, prop = null) {   // prop: true / false forces the dropped zapper (default: about half)
   const g = makeHuman({ rnd, person, bloody: 1, pale: 0.5, shadow: false, rank: person ? person.rank : Math.floor(rnd() * 4), kind: person ? person.body : pickOf([...CREW_KINDS, 'crew_heavy'], rnd), ...(person ? { uniform: person.uniform } : {}) }); if (!g) return null; const H = g.userData.human;
   pose = pose || pickOf(['back', 'back', 'facedown', 'facedown', 'slumped'], rnd); g.userData.pose = pose;
   const B = (n) => H.inner.getObjectByName(n);
@@ -508,6 +518,8 @@ export function makeCorpse(rnd = Math.random, person = null, pose = null) {
   let lowY = Infinity; const v = new THREE.Vector3();
   H.inner.traverse(o => { if (!o.isSkinnedMesh || !/^(body|garment)/.test(o.material.name || '')) return; o.skeleton.update(); const n = o.geometry.attributes.position.count; for (let i = 0; i < n; i += 7) { o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld); if (v.y < lowY) lowY = v.y; } });
   if (isFinite(lowY)) (H.inner.parent === g ? H.inner : H.inner.parent).position.y -= lowY - 0.015;
+  // props: a zapper dropped a little way from the open hand (~half the bodies; 3 small meshes sharing material)
+  if (prop ?? rnd() < 0.5) { g.updateMatrixWorld(true); const hp = (H.bones.hand_r || B('hand_r'))?.getWorldPosition(new THREE.Vector3()); if (hp) { g.worldToLocal(hp); const z = deadZapper(); z.position.set(hp.x + (rnd() - 0.5) * 0.5, 0.012, hp.z + (rnd() - 0.5) * 0.5); z.rotation.y = rnd() * 6.28; g.add(z); g.userData.prop = 'zapper'; } }
   g.rotation.y = rnd() * 6.28; return g;
 }
 // a Slimeling wearing someone: the tell is small — eyes that catch the light green, skin a little too glossy, a bead of slime at the nape
