@@ -1112,6 +1112,7 @@ function die(by, line = null) {
 }
 
 // callbacks used by Gorn AI
+G.footprint = (g, side) => decals.print('gprint', g.x + Math.cos(g.yaw) * 0.4 * side, g.z - Math.sin(g.yaw) * 0.4 * side, g.yaw, 0.55, Math.min(1, (g.bloodTrail || 0) / 6));
 G.onEnemyStep = (g, d) => { if (d < 30) { if (d < 20) caption('footsteps', g.x, g.z); sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
 // sound captions (accessibility): a short bracketed line with a direction arrow relative to where you face; throttled per text
 let capLast = {};

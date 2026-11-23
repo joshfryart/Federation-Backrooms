@@ -10,6 +10,7 @@ import { makeGorn, animateGorn, makeCrew, makeTribble, makeItem, makeViewmodel }
 import { loadModels, loadTextures } from './js/assets.js';
 import { makeHuman, makeCorpse, markImpostor, holoMaterial, DIVISIONS, liveFace } from './js/humans.js';
 import { MODELS } from './js/enemies.js';
+import { Decals } from './js/fx.js';
 import { buildProp, PROP_KINDS, PROP_GALLERY, buildDecor, DECOR_KINDS } from './js/world.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { makeItemMesh, makeCart, holdItem, dropItem, tickHeld, rollCart } from './js/carry.js';
@@ -27,7 +28,7 @@ const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), new THREE.MeshStan
 await Promise.all([loadModels(), loadTextures()]);
 const list = []; const add = (name, mesh, tick, w = 1.1) => { if (mesh && (!only || only.split(',').includes(name.toLowerCase().replace(/\W+/g, '')))) list.push({ name, mesh, tick, w }); };
 const hum = (o, c = clip || 'idle', face) => { const m = makeHuman(o); if (!m) return [null]; const H = m.userData.human; H.play(c); if (face) H.face(face); return [m, (dt, t) => { if (!face) liveFace(H, t, m.id); H.update(dt); }]; };
-const enemy = (k, speed, flags = {}) => { const m = MODELS[k](); return [m.mesh, (dt) => m.tick(dt, speed, flags), 1.5]; };
+const enemy = (k, speed, flags = {}, fn) => { const m = MODELS[k](); return [m.mesh, (dt, t) => m.tick(dt, speed, fn ? fn(t) : flags), 1.5]; };
 if (set === 'crew') {
   add('Command (m)', ...hum({ kind: 'crew_m', uniform: DIVISIONS[1], rank: 6, name: 'Tremblay' })); add('Security (f)', ...hum({ kind: 'crew_f', uniform: DIVISIONS[0], rank: 2, name: 'Okafor' }, clip || 'idle_talking')); add('Science (f)', ...hum({ kind: 'crew_f2', uniform: DIVISIONS[2], rank: 4, name: 'Nguyen' }));
   add('Engineer', ...hum({ kind: 'crew_heavy', uniform: 0xb8862a, rank: 3, name: 'MacLeod' }, clip || 'idle')); add('Walking', ...hum({ kind: 'crew_m', uniform: DIVISIONS[0] }, clip || 'walk'));
@@ -45,6 +46,13 @@ if (set === 'crew') {
   for (let i = 0; i < n; i++) { const o = { kind: kinds[i % kinds.length], uniform: DIVISIONS[i % 3], rank: i % 7, seed: s0 * 100 + i, hairStyle: q.get('hair') === 'random' ? undefined : hairs[i % hairs.length], cut: cuts[i % cuts.length], name: 'Crew' + i }; if (q.get('hc')) o.hair = q.get('hc').split(',').map(Number); if (q.get('hair') === 'random') delete o.hairStyle; const mm = makeHuman(o); if (mm) { mm.userData.human.play(clip || 'idle'); mm.rotation.y = +(q.get('rot') || 0) * Math.PI / 180; add(`${o.kind.slice(5)} ${mm.userData.look.hairStyle} / ${mm.userData.look.cut}`, mm, (dt) => mm.userData.human.update(dt), 1.0); } }
 } else if (set === 'enemies') {
   { const g = makeGorn(); let t = 0; add('Gronk', g, (dt) => { t += dt; animateGorn(g, 1.2, t, Math.sin(t * 0.5) > 0.7); }, 2.2); }
+  // Gronk states (js/enemies.js Hunter feeds the same flags): ?only=gronkroar etc.
+  { const cyc = (t, per) => (t % per) / per;
+    add('Gronk roar', ...enemy('gronk', 0, {}, (t) => ({ roaring: true, roarP: cyc(t, 2.4) })), 2.4);
+    add('Gronk lunge', ...enemy('gronk', 0, {}, (t) => { const k = cyc(t, 2.2) * 2.2; return { attacking: k < 1, attackP: k < 1 ? k : -1, look: 0.25, lookPitch: 0.3 }; }), 2.4);
+    add('Gronk sniffing', ...enemy('gronk', 0.8, {}, () => ({ sniff: true })), 2.4);
+    add('Gronk injured', ...enemy('gronk', 1.6, {}, () => ({ hurt: 1 })), 2.4);
+    add('Gronk stalking', ...enemy('gronk', 1.2, {}, (t) => ({ look: Math.sin(t * 0.6) * 0.8, lookPitch: 0.25 })), 2.4); }
   add('Space-madness (run)', ...enemy('crazed', 4.6)); add('Space-madness (attack)', ...enemy('crazed', 0, { attacking: true }));
   add('Compliance Drone', ...enemy('drone', 1.7)); add('Mr. Grinsworth', ...enemy('phantom', 1)); add('Grinsworth (watched)', ...enemy('phantom', 0, { frozen: true }));
   add('Slimeling impostor', ...enemy('slimeling', 4.2)); add('Clingon Crawler', ...enemy('clinger', 0)); add('Crawler (running)', ...enemy('clinger', 4));
@@ -74,6 +82,7 @@ else if (set === 'carry') {   // carts (wheels roll), held items in a hand, and 
   }
 }   // wall fixtures (instanced set dressing)
 let x = 0; const total = list.reduce((a, l) => a + l.w, 0);
+if (set === 'enemies' && !only) { const dc = new Decals(s); for (let i = 0; i < 12; i++) dc.print('gprint', -5.5 + i * 0.5, 1.6 + (i % 2 ? 0.4 : -0.4), Math.PI / 2, 0.55, 0.3 + i / 14); }   // a trail of Gronk footprints in front of the line-up
 for (const l of list) { l.mesh.position.x = x + l.w / 2 - total / 2; x += l.w; l.mesh.traverse(o => { if (o.isMesh && o.material?.type !== 'ShaderMaterial' && !o.material?.transparent) { o.castShadow = true; o.receiveShadow = true; } }); s.add(l.mesh);
   l.el = document.createElement('div'); l.el.className = 'tag'; l.el.textContent = l.name; document.body.appendChild(l.el); }
 // orbit camera

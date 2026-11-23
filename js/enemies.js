@@ -273,8 +273,10 @@ export class Hunter extends Enemy {
     const cfg = { ...HUNTERS[type], ...(opts.cfg || {}) }; super(world, spawnTile, deck, delay, scene, sound, cfg.model(opts));
     this.cfg = cfg; this.kind = type; this.name = cfg.name; this.noCrawl = !!cfg.noCrawl; this.climber = !!cfg.climber; this.y = 0; this.hitY = cfg.hitY; this.hitR = cfg.hitR;
     this.baseSpeed = cfg.base + Math.min(deck, 8) * cfg.baseDeck; this.chaseSpeed = Math.min(cfg.chase + deck * cfg.chaseDeck, cfg.chaseMax);
-    this.growlT = 3 + Math.random() * 4; this.huntT = 0; this.pulse = 16 + Math.random() * 10;
+    this.growlT = 3 + Math.random() * 4; this.huntT = 0; this.pulse = 16 + Math.random() * 10; this.hurtT = 0; this.roarMax = 0; this.printD = 0; this.printSide = 1;
   }
+  // a zap leaves it hurt for a while (Gronk limps, clutches an arm, bleeds a trail of footprints); no change to its speed
+  stunFor(sec) { super.stunFor(sec); this.hurtT = 18; this.bloodTrail = Math.max(this.bloodTrail || 0, 8); }
   // space madness: hunt the other crew on this deck first; you only matter once they're gone (or if you get too close)
   stalk(dt, p, dist, game) {
     const prey = game.preyFor?.(this); if (!prey) return false;
@@ -346,10 +348,15 @@ export class Hunter extends Enemy {
       this.growlT -= dt;
       if (this.growlT <= 0) { this.growlT = 4 + Math.random() * 6; if (dist < 28) (this.kind === 'gronk' ? this.sound.growl(Math.max(0.03, 0.14 - dist * 0.004)) : this.sound.mutter(Math.max(0.03, 0.12 - dist * 0.004))); }
     }
-    if (this.roar > 0) this.roar -= dt;
+    if (this.roar > 0) { this.roar -= dt; if (this.roar > this.roarMax) this.roarMax = this.roar; } else this.roarMax = 0;
+    if (this.hurtT > 0) this.hurtT -= dt;
     if (this.climber) this.stepY(dt);
     this.place();
-    this.model.tick(dt, this.state === S.STUNNED ? 0 : this.speed, { stunned: this.state === S.STUNNED, roaring: this.roar > 0, attacking: this.attacking > 0, crawl: this.crawl, climb: this.climbing, vault: this.vaulting, look: this.state === S.CHASE || dist < 8 ? wrapA(Math.atan2(dx, dz) - this.yaw) : undefined });
+    if (this.kind === 'gronk' && this.speed > 0.5 && (this.bloodTrail > 0 || this.hurtT > 0)) {   // bloody feet leave prints, one per stride, alternating sides
+      this.printD += this.speed * dt; if (this.printD > 0.95) { this.printD = 0; this.printSide = -this.printSide; game.footprint?.(this, this.printSide); }
+    }
+    const looking = this.state === S.CHASE || dist < 8, quiet = this.state === S.INVESTIGATE || this.state === S.SEARCH;
+    this.model.tick(dt, this.state === S.STUNNED ? 0 : this.speed, { stunned: this.state === S.STUNNED, roaring: this.roar > 0, roarP: this.roar > 0 ? 1 - this.roar / this.roarMax : -1, attacking: this.attacking > 0, attackP: this.attacking > 0 ? Math.min(1, 1 - this.attacking / 0.5) : -1, hurt: Math.min(1, this.hurtT / 5), sniff: quiet && !looking, crawl: this.crawl, climb: this.climbing, vault: this.vaulting, look: looking ? wrapA(Math.atan2(dx, dz) - this.yaw) : undefined, lookPitch: looking ? Math.atan2(Math.max(0, 2.3 - ((p.y || 0) + (crouch ? 1.0 : 1.6))), Math.max(0.5, dist)) : 0 });
   }
 }
 
