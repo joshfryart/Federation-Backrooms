@@ -1090,6 +1090,8 @@ G.distract = (x, z, radius = 20) => {
   return n; };
 G.onEnemySpotted = (g) => { caption(g.name + ' roars', g.x, g.z); flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
 G.bloodAt = (x, y, z, n) => bloodBurst(x, y, z, n, 3);
+G.splatAt = (x, z, r) => { decals.floor('blood1', x, z, r, 1); for (let i = 0; i < 4; i++) decals.floor('blood', x + (Math.random() - 0.5) * r * 1.4, z + (Math.random() - 0.5) * r * 1.4, 0.2 + Math.random() * 0.4, 1); };
+G.clungFrac = () => P.clung > 0 ? Math.min(1, P.clung / (P.clungMax || 4.5)) : 1;
 G.canBeAttacked = () => G.phase === 'play' && invuln <= 0 && !(P.clung > 0);
 G.isClung = () => P.clung > 0;
 G.drainStamina = (n) => { G.stamina = Math.max(0, G.stamina - n); };

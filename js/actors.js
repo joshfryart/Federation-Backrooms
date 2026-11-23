@@ -441,7 +441,7 @@ function spiderMats() {
     eye: new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 1.3, roughness: 0.1 }),
     fang: new THREE.MeshStandardMaterial({ color: 0xd8d0b0, roughness: 0.3 }),
     joint: new THREE.MeshStandardMaterial({ color: 0x5a2228, roughness: 0.35 }),
-    geo: { up: cap(0.02, 0.3, 5), low: cap(0.015, 0.4, 5), tar: cap(0.011, 0.13, 4), claw: new THREE.ConeGeometry(0.014, 0.07, 5), knee: new THREE.SphereGeometry(0.03, 7, 5), bristle: new THREE.ConeGeometry(0.006, 0.07, 4) },
+    geo: { up: cap(0.02, 0.3, 5), low: cap(0.015, 0.4, 5), tar: cap(0.011, 0.13, 4), claw: new THREE.ConeGeometry(0.014, 0.07, 5), knee: new THREE.SphereGeometry(0.03, 7, 5), bristle: new THREE.ConeGeometry(0.006, 0.07, 4), barb: new THREE.ConeGeometry(0.007, 0.045, 4), tooth: new THREE.ConeGeometry(0.006, 0.035, 4), thigh: new THREE.SphereGeometry(0.03, 7, 5) },
   };
 }
 export function makeSpider() {
@@ -462,6 +462,8 @@ export function makeSpider() {
     const j = new THREE.Group(); j.position.set(sx * 0.05, 0.33, 0.26); g.add(j);
     const base = mk(cap(0.03, 0.06, 5), M.joint, 0, -0.03, 0.02); j.add(base);
     const fang = mk(new THREE.ConeGeometry(0.02, 0.13, 6), M.fang, -sx * 0.012, -0.13, 0.03); fang.rotation.set(Math.PI + 0.15, 0, sx * 0.2); j.add(fang);
+    for (let q = 0; q < 3; q++) { const th = mk(G.tooth, M.fang, -sx * 0.026, -0.05 - q * 0.032, 0.035 + q * 0.004); th.rotation.z = sx * 1.25; th.castShadow = false; j.add(th); }   // serrated inner edge
+    const hook = mk(new THREE.ConeGeometry(0.012, 0.07, 5), M.fang, -sx * 0.035, -0.2, 0.065); hook.rotation.set(Math.PI + 0.7, 0, sx * 0.5); hook.castShadow = false; j.add(hook);   // inward hook behind the fang
     jaws.push({ j, sx });
     const palp = new THREE.Group(); palp.position.set(sx * 0.11, 0.32, 0.22); palp.rotation.y = sx * 0.5; g.add(palp);
     const p1 = mk(cap(0.014, 0.12, 4), skin, 0, 0.0, 0.07); p1.rotation.x = Math.PI / 2 - 0.3; palp.add(p1); const p2 = mk(cap(0.012, 0.09, 4), M.joint, 0, -0.07, 0.15); p2.rotation.x = 0.5; palp.add(p2);
@@ -474,7 +476,9 @@ export function makeSpider() {
     const up = new THREE.Mesh(G.up, skin); up.position.set(0, 0.0, 0.17); up.castShadow = true; up.rotation.x = Math.PI / 2 - 0.5; hip.add(up);
     const knee = new THREE.Group(); knee.position.set(0, 0.072, 0.3); hip.add(knee);
     const kn = new THREE.Mesh(G.knee, M.joint); knee.add(kn);
+    const th = new THREE.Mesh(G.thigh, skin); th.position.set(0, 0.03, 0.2); th.scale.set(1, 1.6, 1); hip.add(th);   // femur bulge
     const low = new THREE.Mesh(G.low, skin); low.position.set(0, -0.19, 0.05); low.castShadow = true; low.rotation.x = -0.25; knee.add(low);
+    for (let b = 0; b < 2; b++) { const br = new THREE.Mesh(G.barb, M.fang); br.position.set(0, -0.14 - b * 0.1, 0.07 + b * 0.025); br.rotation.x = -0.9; br.castShadow = false; knee.add(br); }   // spines on the shin
     const foot = new THREE.Group(); foot.position.set(0, -0.384, 0.099); knee.add(foot);
     const tar = new THREE.Mesh(G.tar, skin); tar.position.set(0, -0.012, 0.06); tar.rotation.x = Math.PI / 2 - 0.2; foot.add(tar);
     const claw = new THREE.Mesh(G.claw, M.fang); claw.position.set(0, -0.045, 0.135); claw.rotation.x = Math.PI - 0.45; foot.add(claw);
@@ -483,17 +487,21 @@ export function makeSpider() {
   g.userData = { legs, body, abd, jaws };
   return g;
 }
-// ex: { lurk: hanging from the ceiling, waiting }
+// ex: { lurk: hanging from the ceiling, waiting; drop: mid-fall (legs spread); fr: 0..1 grip left while latched (lower = being torn off) }
 export function animateSpider(g, t, speed, latched, ex = {}) {
-  const u = g.userData, run = speed > 0.5, lurk = !!ex.lurk && !run && !latched;
+  const u = g.userData, run = speed > 0.5, lurk = !!ex.lurk && !run && !latched, drop = !!ex.drop && !latched, fr = ex.fr ?? 1;
   u.legs.forEach((l, i) => {
     const f = latched ? 3 : run ? 12 : 2.2, tw = lurk && Math.sin(t * 0.6 + i * 2.1) > 0.93 ? Math.sin(t * 30) * 0.12 : 0;   // a single leg twitches now and then while it waits
     l.knee.rotation.x = Math.sin(t * f + l.ph) * (run || latched ? 0.5 : 0.12) + (latched ? 0.55 : lurk ? -0.22 : 0) + tw;
     l.hip.rotation.z = Math.sin(t * f * 0.7 + l.ph) * (run || latched ? 0.2 : 0.04);
     l.hip.rotation.x = latched ? 0.35 : lurk ? 0.2 + Math.sin(t * 0.8 + l.ph) * 0.03 : run ? Math.sin(t * f + l.ph + 1.2) * 0.18 : 0;
     l.foot.rotation.x = latched ? 0.7 : lurk ? -0.3 : Math.sin(t * f + l.ph + 0.6) * (run ? 0.35 : 0.05);
+    if (lurk && l.k === 0) { l.hip.rotation.x = 0.5 + Math.sin(t * 1.3 + l.ph) * 0.15; l.knee.rotation.x = -0.5 + Math.sin(t * 1.7 + l.ph) * 0.1; }   // front legs feel the air for prey
+    if (drop) { l.hip.rotation.x = -0.35; l.hip.rotation.z = Math.sin(t * 20 + l.ph) * 0.1; l.knee.rotation.x = -0.6; l.foot.rotation.x = -0.4; }   // legs flung wide, claws out
+    if (latched) { const sq = 0.5 + 0.5 * Math.sin(t * (6 + (1 - fr) * 14) + l.ph); l.hip.rotation.x = 0.35 + sq * 0.25; l.knee.rotation.x += (1 - fr) * 0.4 * Math.sin(t * 30 + l.ph); }   // clamps on harder, thrashes as it is torn off
   });
-  u.abd.scale.y = 0.85 + Math.sin(t * 3) * 0.05; u.abd.position.y = 0.36 + (lurk ? 0.05 + Math.sin(t * 1.1) * 0.012 : 0); u.abd.rotation.x = lurk ? -0.18 : 0;
+  if (latched) { u.abd.rotation.x = -0.7 + Math.sin(t * 9) * 0.15; u.body.scale.set(1 + Math.sin(t * 11) * 0.04, 0.7 + Math.sin(t * 11 + 1) * 0.05, 1.2); } else u.body.scale.set(1, 0.7, 1.2);   // abdomen curls over, body throbs while it feeds
+  u.abd.scale.y = 0.85 + Math.sin(t * 3) * 0.05; u.abd.position.y = 0.36 + (lurk ? 0.05 + Math.sin(t * 1.1) * 0.012 : 0); if (!latched) u.abd.rotation.x = lurk ? -0.18 : 0;
   const chew = latched ? 0.5 + Math.sin(t * 22) * 0.4 : lurk ? 0.12 + Math.max(0, Math.sin(t * 1.4)) * 0.2 : run ? 0.35 : 0.1 + Math.sin(t * 2) * 0.06;
   for (const { j, sx, palp } of u.jaws) { if (palp) { j.rotation.x = Math.sin(t * (latched ? 14 : 2.6) + sx) * (latched ? 0.3 : 0.14); } else { j.rotation.z = -sx * chew; j.rotation.x = latched ? -0.3 : 0; } }
 }
