@@ -1,50 +1,37 @@
-// Chief of security: post a guard at the lab. Five officers are on the roster, each with a rest bar. Press an officer's digit to pick them, then Enter to
-// post them. Three posts must be filled. Never post an officer under the rest line: an exhausted guard sleeps through the door. Posted officers leave the list.
-import { define, machine, DIG, shuffle, rf, box, bar, txt, COL, ri } from './kit.js';
+// Chief of security: post a guard at the lab. The lab door has to be watched for the whole survey, and a guard on the door tires while the others rest
+// and recover. Five officers on the roster each show a rest bar. Press an officer's number to relieve the guard on the door with that officer. Never
+// let the guard on the door fall under the rest line, and never relieve with an officer who is under it: an exhausted guard sleeps through the door.
+import { define, machine, DIG, ri, rf, txt, box, bar, COL } from './kit.js';
 
-const NAMES = ['Ensign Rel', 'Crewman Vos', 'Crewman Dahl', 'Petty Officer Hane', 'Crewman Ilo'];
-const LINE = 45;
+const LINE = 0.3, DUR = 20;
 export default define({
   job: { billet: 'cos', label: 'Post a guard at the lab', type: 'task:survey' },
-  title: 'Post the rested officer', dept: 'security', host: 'console', tool: 'Duty roster',
-  how: 'Pick an officer by pressing their digit: the rest bar shows how rested they are. Press Enter to post them. Only post officers above the rest line; three posts to fill.',
-  keys: ['1 – 5 pick an officer', 'Enter post the officer'], limit: 30, maxFaults: 3,
-  fingerprint: { verb: 'post by rest', input: 'digits+enter', win: 'three posts filled, each by an officer above the rest line, with no officer posted twice',
-    fail: 'posting an officer below the rest line, who would sleep through the door',
-    rule: 'Five officers with rest bars. A digit picks one; Enter posts the picked officer. A bar under the rest line means exhausted, and posting them is a fault. Posted officers leave the list.' },
+  title: 'Rotate the tiring lab guard', dept: 'security', host: 'console', tool: 'Duty roster rest bars',
+  how: 'The guard on the lab door tires; the rest recover. Press an officer\'s number to relieve the door guard with them. Keep the door guard above the rest line for the whole watch.',
+  keys: ['1-5 relieve the door guard with that officer'], limit: 32, maxFaults: 3,
+  fingerprint: { verb: 'rotate guards', input: 'digits',
+    win: 'the lab door held for twenty seconds by relieving the tiring guard with rested officers before they fell under the rest line',
+    fail: 'leaving the door guard to fall under the rest line, or relieving with an officer who is already under it',
+    rule: 'The guard on the door loses rest each second; officers off the door recover. Press a number to swap that officer onto the door. Swap before the bar reaches the line, and only with someone above it.' },
   rush: 'Wrote the first three names on the roster and left the lab to the next watch.',
-  captions: { 'posted tired': 'alarm tone' }, says: {},
+  captions: { asleep: 'guard asleep on the door', 'too tired': 'relieved with an exhausted officer' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd;
-    m.rest = shuffle(r, NAMES.map((_, k) => (k < 3 ? ri(r, 55, 95) : ri(r, 10, 40))));
-    m.posted = new Set(); m.sel = -1; m.posts = 3; m.postsDone = 0;
-    m.key = (code, down = true) => {
-      if (m.state !== 'play' || !down) return false;
-      const d = DIG(code);
-      if (d) { if (d <= NAMES.length && !m.posted.has(d - 1)) m.sel = d - 1; return true; }
-      if (code === 'Enter' || code === 'NumpadEnter') {
-        if (m.sel < 0 || m.posted.has(m.sel)) return true;
-        if (m.rest[m.sel] < LINE) { m.fault('posted tired'); return true; }
-        m.posted.add(m.sel); m.sel = -1; m.postsDone++; m.ev('post');
-        if (m.postsDone >= m.posts) m.win();
-        return true;
-      }
-      return false;
+    const m = machine(this, seed, opts), r = m.rnd, k = m.calm ? 0.75 : 1; m.post = 0; m.sleep = 0;
+    m.o = Array.from({ length: 5 }, (_, i) => ({ rest: i === 0 ? rf(r, 0.6, 0.75) : rf(r, 0.35, 1), n: ['Okafor', 'Reyes', 'Tanaka', 'Voss', 'Lindqvist'][(i + ri(r, 0, 4)) % 5] }));
+    m.key = (code, down = true) => { if (m.state !== 'play') return false; const d = DIG(code); if (d < 1 || d > 5) return false; if (!down) return true; const i = d - 1; if (i === m.post) return true; if (m.o[i].rest < LINE) { m.fault('too tired'); return true; } m.post = i; return true; };
+    m.tick = (dt) => {
+      if (!m.live(dt)) return; m.o.forEach((q, i) => { q.rest = Math.max(0, Math.min(1, q.rest + (i === m.post ? -0.06 * k : 0.05 * k) * dt)); });
+      if (m.o[m.post].rest < LINE) { m.sleep += dt; if (m.sleep > 0.5) { m.sleep = -1.5; m.fault('asleep'); } } else if (m.sleep > 0) m.sleep = 0; if (m.sleep < 0) m.sleep = Math.min(0, m.sleep + dt);
+      if (m.state === 'play' && m.t >= DUR) m.win();
     };
-    const pick = () => m.rest.findIndex((v, k) => v >= LINE && !m.posted.has(k));
-    m.hint = () => { const k = pick(); if (k < 0) return []; return m.sel === k ? [['Enter', true]] : [[`Digit${k + 1}`, true]]; };
-    m.bad = () => { const k = m.rest.findIndex((v, q) => v < LINE && !m.posted.has(q)); return m.sel === k ? 'Enter' : `Digit${k + 1}`; };
-    m.buttons = () => [['Digit1', '1'], ['Digit2', '2'], ['Digit3', '3'], ['Digit4', '4'], ['Digit5', '5'], ['Enter', 'post']];
-    m.view = () => ({ rest: m.rest.slice() });
+    m.hint = () => { if (m.state !== 'play' || m.o[m.post].rest > 0.5 * 1) return []; let b = -1; m.o.forEach((q, i) => { if (i !== m.post && (b < 0 || q.rest > m.o[b].rest)) b = i; }); return b >= 0 && m.o[b].rest > m.o[m.post].rest ? [['Digit' + (b + 1), true]] : []; };
+    m.bad = () => 'Digit5';
+    m.view = () => ({ o: m.o.map(q => [+q.rest.toFixed(2), q.n]), p: m.post });
+    m.buttons = () => [['Digit1', '1'], ['Digit2', '2'], ['Digit3', '3'], ['Digit4', '4'], ['Digit5', '5']];
     m.draw = (c, W, H, P) => {
-      NAMES.forEach((n, k) => {
-        const y = 8 + k * 26, out = m.posted.has(k), on = k === m.sel;
-        box(c, 10, y, 380, 22, on ? 'rgba(244,194,91,.18)' : 'rgba(255,255,255,.05)', on ? COL.gold : null, 6);
-        txt(c, `${k + 1}  ${n}`, 20, y + 15, { size: 11, col: out ? COL.dim : COL.ink });
-        bar(c, 215, y + 7, 130, 8, m.rest[k] / 100, { band: [LINE / 100, 1], col: m.rest[k] >= LINE ? P.good : P.bad, mark: LINE / 100 });
-        txt(c, out ? 'posted' : `${m.rest[k]}%`, 382, y + 15, { size: 10, align: 'right', col: COL.dim });
-      });
-      txt(c, `Posts filled ${m.postsDone} / ${m.posts}`, 200, 164, { size: 11, align: 'center', col: COL.peri });
+      m.o.forEach((q, i) => { const y = 8 + i * 30, on = i === m.post; box(c, 10, y, 380, 26, COL.panel, on ? COL.gold : null, 4); txt(c, `${i + 1} ${q.n}`, 18, y + 17, { size: 12, col: on ? COL.gold : COL.ink }); txt(c, on ? 'ON DOOR' : q.rest < LINE ? 'exhausted' : 'rested', 110, y + 17, { size: 10, col: on ? COL.gold : q.rest < LINE ? P.bad : COL.dim });
+        bar(c, 190, y + 7, 190, 12, q.rest, { band: [LINE, 1], mark: LINE, col: q.rest < LINE ? P.bad : COL.peri }); });
+      txt(c, `door watch ${Math.min(DUR, m.t).toFixed(0)} / ${DUR} s`, 200, 166, { size: 10, align: 'center', col: COL.dim });
     };
     return m;
   },

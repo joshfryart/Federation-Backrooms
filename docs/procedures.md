@@ -261,7 +261,7 @@ or input, re-runs `check-jobs`, then merges.
 
 - Verified headless only: node auto-play for all 30 pilots, and a browser test (`node tools/test.mjs --only jobmodules`) that plays three
   of them through the real UI with hinted input. **Nobody has play-tested them by hand.** Pacing, readability and difficulty are untested.
-- The fingerprint check is lexical. It cannot prove two games feel different; reviewers should still read new modules.
+- The fingerprint check is lexical. `node tools/job-similarity.mjs` adds a behavioural check (replays each module's hint on 3 seeds and compares action sequences, timing, view shape, draw ops and bad-play shape, then clusters at 0.72 average linkage). Its weights and cut are judgement calls, not ground truth; neither tool can prove two games feel different, so reviewers should still read new modules.
 - Room modules use only E, the view, and walking between the sites; they cannot react to the player's footsteps. The canvas is 400 × 170.
 - The registry loads every module up front (about 700 small files when complete). That is fine for a static site, but it could be bundled
   later.

@@ -1,55 +1,38 @@
-// Helm: submit the maneuver report. Copy each line of the maneuver test log onto the report form: test name, handling figure, its unit,
-// and a status judged against the printed limit (pass at or under it, marginal up to a tenth over, fail beyond). The console carries the
-// previous form's entries over to the next one, so every field has to be checked, not just the blank ones. File each form with Enter; a
-// blank field or a figure carried over from the last test sends it back from the CFO.
-import { define, machine, ARROW, ENTER, rf, shuffle, txt, box, COL } from './kit.js';
+// Helm: submit the maneuver report. The report goes to the yard by radio, dictated, not typed. Hold Space to key the microphone while you read the
+// report; the level meter shows how loud the transmission is, and the console's input swings with the ship's hum. Hold Up / Down to ride the gain
+// and keep the level in the green band. Speak for nine seconds of clean level and the report is read out; garbled for too long and the yard asks you to repeat.
+import { define, machine, ARROW, SPACE, rf, txt, box, bar, COL } from './kit.js';
 
-const FIELDS = ['Test', 'Figure', 'Unit', 'Status'], UNITS = ['—', 'deg', 's'], STAT = ['—', 'pass', 'marginal', 'fail'];
+const NEED = 9, LO = 0.4, HI = 0.6;
 export default define({
   job: { billet: 'helm', label: 'Submit maneuver report', type: 'task:shakedown' },
-  title: 'Maneuver report form transcription', dept: 'flight', host: 'console', tool: 'Maneuver test log and report form',
-  how: 'Move between form fields with ← / →, change a field with ↑ / ↓ to match the highlighted log line (status from the limit), then press Enter to file. Check the carried-over fields too.',
-  keys: ['← / → field', '↑ / ↓ change value', 'Enter file the form'], limit: 40, maxFaults: 3,
-  fingerprint: { verb: 'transcribe', input: 'arrows+enter', win: 'three report forms filed with every field copied from its own log line and the status judged from the limit',
-    fail: 'filing a form with a blank field, or with a figure or unit carried over from the previous test',
-    rule: 'The cursor field is outlined; ↑ / ↓ cycles its value and ← / → moves between fields. The next form starts with the last one\'s entries. Enter files the form; any blank or mismatch sends it back.' },
+  title: 'Dictate the report, ride the gain', dept: 'flight', host: 'console', tool: 'Radio microphone and level meter',
+  how: 'Hold Space to talk, and hold Up / Down to turn the gain so the level stays in the green band. Nine seconds of clean level reads the whole report out.',
+  keys: ['hold Space: transmit', 'hold Up / Down: gain'], limit: 28, maxFaults: 3,
+  fingerprint: { verb: 'transmit and trim', input: 'space-hold+arrows-hold',
+    win: 'nine seconds of transmission with the level meter kept inside the green band by riding the gain while the hum swings',
+    fail: 'staying out of the band for more than three-quarters of a second three times so the yard cannot read the report',
+    rule: 'Space keys the mic; the level is the ship\'s swinging hum plus your gain. Hold Up or Down to move the gain and keep the level in the band; seconds only count while Space is held and the level is green.' },
   rush: 'Filed the report with the previous test\'s numbers copied down the page.',
-  captions: { 'blank field': 'CFO returns the form', 'wrong entry': 'CFO: these numbers are not from this test' },
+  captions: { garbled: 'yard: transmission garbled, say again' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd;
-    const names = shuffle(r, ['Forward', 'Reverse', 'Port turn', 'Starboard turn']).slice(0, 3);
-    m.log = names.map(n => { const turn = /turn/.test(n), lim = turn ? 15 : 4.0, k = r(), fig = +(lim * (k < 0.4 ? rf(r, 0.6, 0.98) : k < 0.7 ? rf(r, 1.02, 1.09) : rf(r, 1.15, 1.4))).toFixed(1);
-      return { n, fig, unit: turn ? 1 : 2, lim, st: fig <= lim ? 1 : fig <= lim * 1.1 ? 2 : 3 }; });
-    m.figs = ['—', ...shuffle(r, m.log.map(l => l.fig))]; m.names = ['—', ...shuffle(r, ['Forward', 'Reverse', 'Port turn', 'Starboard turn'])];
-    m.i = 0; m.cur = 0; m.form = [0, 0, 0, 0]; m.filed = []; m.rounds = 3; m.round = 0;
-    const opts4 = () => [m.names.length, m.figs.length, UNITS.length, STAT.length];
-    const want = () => { const l = m.log[m.i]; return [m.names.indexOf(l.n), m.figs.indexOf(l.fig), l.unit, l.st]; };
-    m.key = (code, down = true) => {
-      if (m.state !== 'play') return false; const a = ARROW(code);
-      if (a) { if (!down) return true; if (a === 'L' || a === 'R') m.cur = (m.cur + (a === 'R' ? 1 : 3)) % 4; else { const n = opts4()[m.cur]; m.form[m.cur] = (m.form[m.cur] + (a === 'D' ? 1 : n - 1)) % n; } return true; }
-      if (ENTER(code)) { if (!down) return true; if (m.form.some(v => v === 0)) { m.fault('blank field'); return true; }
-        const w = want(); if (m.form.some((v, k) => v !== w[k])) { m.fault('wrong entry'); return true; }
-        m.filed.push([...m.form]); m.i++; m.round = m.i; m.cur = 0; if (m.i >= 3) m.win(); return true; }
-      return false;
+    const m = machine(this, seed, opts), r = m.rnd, k = m.calm ? 0.7 : 1, gr = m.calm ? 1 : 0.8; m.g = rf(r, -0.25, 0.25); m.talk = 0; m.bad_t = 0; m.held = { S: false, U: false, D: false };
+    m.ph = [rf(r, 0, 6.28), rf(r, 0, 6.28)]; m.am = [rf(r, 0.14, 0.2) * k, rf(r, 0.07, 0.12) * k]; m.fr = [rf(r, 0.7, 1.0), rf(r, 1.8, 2.4)];
+    m.base = () => 0.5 + m.am[0] * Math.sin(m.t * m.fr[0] + m.ph[0]) + m.am[1] * Math.sin(m.t * m.fr[1] + m.ph[1]); m.level = () => m.base() + m.g;
+    m.key = (code, down = true) => { if (m.state !== 'play') return false; if (SPACE(code)) { m.held.S = down; return true; } const a = ARROW(code); if (a === 'U' || a === 'D') { m.held[a] = down; return true; } return !!a; };
+    m.tick = (dt) => {
+      if (!m.live(dt)) return; m.g += ((m.held.U ? 1 : 0) - (m.held.D ? 1 : 0)) * gr * dt; const l = m.level();
+      if (m.held.S) { if (l >= LO && l <= HI) { m.talk += dt; m.bad_t = 0; } else { m.bad_t += dt; if (m.bad_t > 0.75) { m.bad_t = 0; m.fault('garbled'); } } } else m.bad_t = 0;
+      if (m.state === 'play' && m.talk >= NEED) m.win();
     };
-    m.tick = (dt) => { m.live(dt); };
-    m.hint = () => {
-      if (m.state !== 'play') return []; const w = want(), f = m.form.findIndex((v, k) => v !== w[k]); if (f < 0) return [['Enter', true]];
-      if (f !== m.cur) return [[f > m.cur ? 'ArrowRight' : 'ArrowLeft', true]];
-      const n = opts4()[f], up = (m.form[f] - w[f] + n) % n; return [[up <= n / 2 ? 'ArrowUp' : 'ArrowDown', true]];
-    };
-    m.bad = () => 'Enter';
-    m.view = () => ({ log: m.log.map(l => [l.n, l.fig]) });
-    m.buttons = () => [['ArrowLeft', '◀ field'], ['ArrowUp', '▲'], ['ArrowDown', '▼'], ['ArrowRight', 'field ▶'], ['Enter', 'File']];
+    m.hint = () => { if (m.state !== 'play') return []; const e = 0.5 - m.level(); return [['Space', true], e > 0.03 ? ['ArrowUp', true] : ['ArrowUp', false], e < -0.03 ? ['ArrowDown', true] : ['ArrowDown', false]]; };
+    m.bad = () => null;
+    m.view = () => ({ g: +m.g.toFixed(2), a: m.am.map(x => +x.toFixed(2)), p: m.ph.map(x => +x.toFixed(2)) });
+    m.buttons = () => [['Space', 'Hold: talk'], ['ArrowUp', '▲ gain'], ['ArrowDown', '▼ gain']];
     m.draw = (c, W, H, P) => {
-      box(c, 10, 10, 180, 150, COL.panel, null, 6); txt(c, 'TEST LOG', 20, 26, { size: 10, col: COL.dim });
-      m.log.forEach((l, i) => { const y = 46 + i * 34; txt(c, `${i + 1}. ${l.n}`, 20, y, { size: 12, col: i === m.i ? COL.gold : i < m.i ? COL.dim : COL.ink });
-        txt(c, `${l.fig} ${UNITS[l.unit]}   limit ${l.lim} ${UNITS[l.unit]}`, 30, y + 15, { size: 11, col: i === m.i ? COL.pale : COL.dim }); });
-      txt(c, `REPORT FORM ${Math.min(3, m.i + 1)} / 3`, 206, 26, { size: 10, col: COL.dim });
-      const vals = [m.names[m.form[0]], m.figs[m.form[1]], UNITS[m.form[2]], STAT[m.form[3]]];
-      FIELDS.forEach((f, k) => { const y = 36 + k * 30; box(c, 206, y, 180, 24, 'rgba(255,255,255,.05)', k === m.cur ? COL.gold : null, 4);
-        txt(c, f, 214, y + 16, { size: 10, col: COL.dim }); txt(c, String(vals[k]), 270, y + 16, { size: 12, col: m.form[k] === 0 ? COL.warn : COL.ink }); });
-      txt(c, 'Enter: file to CFO queue', 206, 162, { size: 10, col: COL.dim });
+      const l = Math.max(0, Math.min(1, m.level())), ok = l >= LO && l <= HI; txt(c, 'LEVEL', 14, 26, { size: 10, col: COL.dim }); bar(c, 60, 14, 320, 18, l, { band: [LO, HI], col: ok ? P.good : P.bad });
+      txt(c, m.held.S ? (ok ? 'TRANSMITTING' : 'GARBLED') : 'MIC OFF', 200, 70, { size: 16, align: 'center', col: m.held.S ? (ok ? P.good : P.bad) : COL.dim });
+      txt(c, `gain ${m.g >= 0 ? '+' : ''}${m.g.toFixed(2)}`, 60, 104, { size: 11, col: COL.pale }); bar(c, 60, 116, 320, 12, m.talk / NEED, {}); txt(c, `${m.talk.toFixed(1)} / ${NEED} s read out`, 200, 150, { size: 11, align: 'center', col: COL.dim });
     };
     return m;
   },

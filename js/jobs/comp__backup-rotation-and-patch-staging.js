@@ -1,48 +1,48 @@
-// Computer specialist: backup rotation and patch staging. Each cartridge goes insert -> verify -> rotate into the rack, but every action runs for
-// a while and you must not touch the next one until the drive says done. A cartridge that fails verify is ejected, never racked. Then stage the
-// patch and purge the stale cache, in that order.
-import { define, machine, DIG, ri, rf, txt, box, bar, COL } from './kit.js';
+// Computer specialist: backup rotation and patch staging. Two drives work in parallel and each cartridge takes a while to verify. Press 1 or 2 to load
+// the next cartridge into that drive; do not touch a drive while it is busy. When it finishes, a cartridge that verified OK is racked with the same
+// number, and one that failed is ejected with Space. After all four are done, 3 stages the patch, and only when that finishes 4 purges the stale cache.
+import { define, machine, DIG, SPACE, ri, txt, box, bar, COL } from './kit.js';
 
-const ACT = ['Insert', 'Verify', 'Rotate to rack', 'Eject', 'Stage patch', 'Purge cache'];
 export default define({
   job: { billet: 'comp', label: 'Backup rotation and patch staging', type: 'loop' },
-  title: 'Cartridge rotation desk', dept: 'operations', host: 'console', tool: 'Data-core backup drive',
-  how: 'Rotate three backup cartridges through the drive (insert, verify, rack), waiting for each operation to finish, then stage the patch and purge the cache.',
-  keys: ['1 insert', '2 verify', '3 rack', '4 eject', '5 stage', '6 purge'], limit: 34, maxFaults: 3,
-  fingerprint: { verb: 'wait-and-commit', input: 'digits', win: 'three cartridges verified and racked (bad ones ejected), then patch staged and cache purged in order',
-    fail: 'acting while the drive is still busy, acting out of order, or racking a cartridge that failed verify',
-    rule: 'One action at a time: start it, wait for DONE, then the next. Per cartridge 1 insert, 2 verify, then 3 rack if it verified OK or 4 eject if it failed. Last, 5 stage, then 6 purge.' },
+  title: 'Keep both drives verifying', dept: 'operations', host: 'console', tool: 'Twin backup drives',
+  how: 'Press 1 or 2 to load a cartridge into an idle drive; when it is done press the same number to rack a good one or Space to eject a failed one. Then 3 stages the patch and 4 purges.',
+  keys: ['1 / 2: load or rack the drive', 'Space: eject a failed cartridge', '3 stage patch, then 4 purge cache'], limit: 32, maxFaults: 3,
+  fingerprint: { verb: 'run two drives', input: 'digits+space',
+    win: 'four cartridges verified across two drives in parallel and racked or ejected as their results showed, then the patch staged and the cache purged',
+    fail: 'touching a busy drive, racking a failed cartridge, ejecting a good one, or purging before the patch is staged',
+    rule: 'Each drive verifies a cartridge for about two seconds. Idle drive + its number loads; done and OK + its number racks; done and failed + Space ejects. Last: 3 stage, wait, then 4 purge.' },
   rush: 'Racked the cartridges without waiting for the verify to finish.',
-  captions: { busy: 'drive busy chirp', 'out of order': 'operator error tone', 'racked a bad copy': 'checksum alarm' },
+  captions: { busy: 'drive still busy', 'bad rack': 'failed cartridge racked', 'bad eject': 'good cartridge ejected', order: 'cache purged before the patch staged', empty: 'no cartridge left to load' },
   create(seed, opts) {
-    const m = machine(this, seed, opts), r = m.rnd, badOne = ri(r, 0, 3);   // 3: none fails
-    m.carts = [0, 1, 2].map(i => ({ label: `Vol ${String.fromCharCode(65 + ri(r, 0, 20))}-${ri(r, 10, 99)}`, bad: i === badOne, st: 0, verdict: null }));
-    m.cur = 0; m.op = null; m.tail = 0; m.rounds = 4; m.round = 0;
-    const want = () => { if (m.cur < 3) { const c = m.carts[m.cur]; return c.st === 0 ? 1 : c.st === 1 ? 2 : c.bad ? 4 : 3; } return m.tail === 0 ? 5 : 6; };
-    const dur = (a) => a === 2 ? rf(r, 1.4, 2.4) : a === 5 ? 1.5 : 0.7;
+    const m = machine(this, seed, opts), r = m.rnd, run = m.calm ? 2.8 : 2.2, ST = m.calm ? 2 : 1.5; m.q = [0, 1, 2, 3].map(() => r() < 0.35); if (m.q.every(x => !x)) m.q[1] = true; if (m.q.every(x => x)) m.q[2] = false;
+    m.q = m.q.map(bad => bad); m.drv = [{ s: 'idle', t: 0, bad: false }, { s: 'idle', t: 0, bad: false }]; m.next = 0; m.cleared = 0; m.stage = 'carts'; m.st = 0; m.racked = 0;
     m.key = (code, down = true) => {
-      if (m.state !== 'play' || !down) return false; const d = DIG(code); if (!d || d > 6) return false;
-      if (m.op) { m.fault('busy'); return true; }
-      const w = want(); if (d !== w) { m.fault(d === 3 && w === 4 ? 'racked a bad copy' : 'out of order'); return true; }
-      m.op = { a: d, t: 0, len: dur(d) }; return true;
+      if (m.state !== 'play') return false; const d = DIG(code), sp = SPACE(code); if (!down) return d >= 1 && d <= 4 || sp; if (!(d >= 1 && d <= 4) && !sp) return false;
+      if (sp) { const x = m.drv.findIndex(v => v.s === 'done' && v.bad); if (x >= 0) { m.drv[x].s = 'idle'; m.cleared++; } else m.fault('bad eject'); return true; }
+      if (d >= 3) { if (m.stage === 'carts' || m.stage === 'run') { m.fault('order'); return true; } if (d === 3 && m.stage === 'ready3') { m.stage = 'run'; m.st = ST; m.which = 3; } else if (d === 4 && m.stage === 'ready4') { m.stage = 'run'; m.st = ST; m.which = 4; } else m.fault('order'); return true; }
+      const v = m.drv[d - 1]; if (v.s === 'run') { m.fault('busy'); return true; }
+      if (v.s === 'idle') { if (m.next >= m.q.length) { m.fault('empty'); return true; } v.s = 'run'; v.t = run; v.bad = m.q[m.next++]; return true; }
+      if (v.bad) { m.fault('bad rack'); return true; } v.s = 'idle'; m.cleared++; m.racked++; return true;
     };
     m.tick = (dt) => {
-      if (!m.live(dt) || !m.op) return; m.op.t += dt; if (m.op.t < m.op.len) return; const a = m.op.a; m.op = null;
-      if (m.cur < 3) { const c = m.carts[m.cur]; if (a === 1) c.st = 1; else if (a === 2) { c.st = 2; c.verdict = c.bad ? 'CHECKSUM FAIL' : 'OK'; } else { c.st = a === 3 ? 3 : 4; m.cur++; m.round++; } }
-      else { m.tail++; if (m.tail >= 2) { m.round = 4; m.win(); } }
+      if (!m.live(dt)) return; for (const v of m.drv) if (v.s === 'run') { v.t -= dt; if (v.t <= 0) v.s = 'done'; }
+      if (m.stage === 'carts' && m.cleared >= 4) m.stage = 'ready3';
+      if (m.stage === 'run') { m.st -= dt; if (m.st <= 0) { if (m.which === 4) m.win(); else m.stage = 'ready4'; } }
     };
-    m.hint = () => m.op ? [] : [['Digit' + want(), true]];
-    m.bad = () => m.op ? 'Digit1' : 'Digit' + (want() === 1 ? 3 : 1);
-    m.view = () => ({ carts: m.carts.map(c => [c.label, c.bad]) });
-    m.buttons = () => ACT.map((n, i) => ['Digit' + (i + 1), `${i + 1} ${n}`]);
+    m.hint = () => {
+      if (m.state !== 'play') return []; if (m.stage === 'ready3') return [['Digit3', true]]; if (m.stage === 'ready4') return [['Digit4', true]]; if (m.stage !== 'carts') return [];
+      const e = m.drv.findIndex(v => v.s === 'done' && v.bad); if (e >= 0) return [['Space', true]]; const k = m.drv.findIndex(v => v.s === 'done'); if (k >= 0) return [['Digit' + (k + 1), true]];
+      const i = m.drv.findIndex(v => v.s === 'idle'); if (i >= 0 && m.next < m.q.length) return [['Digit' + (i + 1), true]]; return [];
+    };
+    m.bad = () => 'Digit4';
+    m.view = () => ({ q: m.q.map(b => (b ? 1 : 0)) });
+    m.buttons = () => [['Digit1', 'Drive 1'], ['Digit2', 'Drive 2'], ['Space', 'Eject'], ['Digit3', '3 Stage'], ['Digit4', '4 Purge']];
     m.draw = (c, W, H, P) => {
-      m.carts.forEach((q, i) => {
-        const y = 12 + i * 34, on = i === m.cur; box(c, 10, y, 250, 28, on ? 'rgba(240,147,58,.18)' : 'rgba(255,255,255,.04)', on ? COL.orange : null, 12);
-        txt(c, q.label, 22, y + 18, { size: 12, col: COL.gold }); txt(c, ['in tray', 'in drive', q.verdict || 'verified', 'racked ✓', 'ejected ⏏'][q.st], 110, y + 18, { size: 11, col: q.verdict === 'CHECKSUM FAIL' ? P.bad : q.st >= 3 ? P.good : COL.ink });
-      });
-      ['Stage patch', 'Purge cache'].forEach((n, k) => txt(c, `${n}${m.tail > k ? ' ✓' : ''}`, 280, 30 + k * 26, { size: 11, col: m.tail > k ? P.good : COL.dim }));
-      txt(c, m.op ? `${ACT[m.op.a - 1].toUpperCase()}… ` : 'DRIVE READY', 14, H - 30, { size: 12, col: m.op ? COL.warn : P.good });
-      bar(c, 14, H - 22, W - 28, 10, m.op ? m.op.t / m.op.len : 1, { col: m.op ? COL.peri : P.good });
+      m.drv.forEach((v, i) => { const x = 14 + i * 190; box(c, x, 12, 176, 72, COL.panel, v.s === 'done' ? (v.bad ? P.bad : P.good) : COL.dim, 6); txt(c, `${i + 1}  DRIVE`, x + 8, 28, { size: 11, col: COL.gold });
+        txt(c, v.s === 'idle' ? 'empty' : v.s === 'run' ? 'verifying…' : v.bad ? 'FAILED: eject' : 'OK: rack', x + 8, 52, { size: 13, col: v.s === 'done' ? (v.bad ? P.bad : P.good) : COL.ink }); if (v.s === 'run') bar(c, x + 8, 62, 160, 8, 1 - v.t / run, {}); });
+      txt(c, `cartridges left ${m.q.length - m.next}   done ${m.cleared}/4   racked ${m.racked}`, 14, 108, { size: 11, col: COL.dim });
+      txt(c, m.stage === 'carts' ? '3 stage patch / 4 purge cache: after the cartridges' : m.stage === 'ready3' ? 'press 3: stage the patch' : m.stage === 'ready4' ? 'patch staged: press 4 to purge' : 'running…', 14, 146, { size: 12, col: m.stage === 'carts' ? COL.dim : COL.gold });
     };
     return m;
   },
