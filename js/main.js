@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { iconSvg } from './icons.js';
 import { setMapPalette } from './minimap.js';
 import { Loading, paint } from './loading.js';
-import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, pick } from './data.js';
+import { SHIPS, ROOMS, PERKS, REDSHIRT_LINES, DEATH_LINES, META_UNLOCKS, pick } from './data.js';
+import { synergyFx, completes, careerHTML } from './perks.js';
 import { generate, World, TS, genShip, shipPlan } from './world.js';
 import { tubeStep } from './tube.js';
 import { Sound } from './audio.js';
@@ -167,6 +168,7 @@ const keys = {}, pressed = { jump: false, crouch: false, grappleCancel: false };
 let beamCone = null, wasChased = false, world = null, gorns = [], ents = [], ship = null, shot = 0, noiseNow = 0, mapOn = true, locked = false, lastHeart = 0, invuln = 0;
 
 const perk = (id) => G.perks[id] || 0;
+const syn = () => synergyFx(NOM() ? null : G.perks);   // active perk synergies (js/perks.js)
 
 // ---------------- UI helpers ----------------
 let toastTimer = 0;
@@ -959,8 +961,7 @@ function recordRun(extra) {
 }
 function endBoard(screenId, rank) { const host = $(screenId)?.querySelector('.in'); if (!host) return; let el = host.querySelector('.sv-board'); if (!el) { el = document.createElement('div'); host.appendChild(el); } renderBoard(el, SAVE, G.mode, rank); }
 function titleBoard() { let el = $('svtitle'); if (!el) { el = document.createElement('div'); el.id = 'svtitle'; $('best').after(el); } renderBoard(el, SAVE, G.mode); $('best').textContent = G.best ? `Best run: Deck ${G.best}` : ''; }
-const META_UNLOCKS = [[(M) => M.bestDeck >= 3, 'boots', 'Reached deck 3'], [(M) => M.kills >= 8, 'cell', '8 hostiles stunned or downed'], [(M) => M.wins >= 1, 'legs', 'Escaped a ship'], [(M) => M.runs >= 5, 'hypo', '5 shifts survived or not']];
-function metaGrant() { const M = metaGet(), got = []; for (const [ok, id, why] of META_UNLOCKS) if (ok(M)) { G.perks[id] = (G.perks[id] || 0) + 1; if (id === 'hypo') { G.maxHp += 25; G.hp = G.maxHp; } if (id === 'cell') { G.maxPhaser++; G.phaser++; } got.push(`${PERKS.find(p => p.id === id).name} (${why})`); } G.metaBonus = got; if (got.length) later(() => { if (G.phase === 'play') G.say('Career bonus: ' + got.join(', '), 'good'); }, 3500); }
+function metaGrant() { const M = metaGet(), got = []; for (const { key, need, perk: id, why } of META_UNLOCKS) if ((M[key] | 0) >= need) { G.perks[id] = (G.perks[id] || 0) + 1; if (id === 'hypo') { G.maxHp += 25; G.hp = G.maxHp; } if (id === 'cell') { G.maxPhaser++; G.phaser++; } got.push(`${PERKS.find(p => p.id === id).name} (${why})`); } G.metaBonus = got; if (got.length) later(() => { if (G.phase === 'play') G.say('Career bonus: ' + got.join(', '), 'good'); }, 3500); }
 G.metaGet = metaGet;
 function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 'loading' and return enter() (the loading screen's button calls it from a click, so pointer lock is allowed)
   releaseCling(); G.taught = {}; G.visits = {}; G.nomDeaths = 0; G.recorded = false;
@@ -1038,6 +1039,8 @@ function completeDeck() {
   }, 1000);
 }
 
+// perk-card note: the synergy this pick would complete, or the one it moves toward
+function synNote(p) { const d = completes(G.perks, p.id)[0]; return d ? `<small class="syn">Synergy: ${d.name}. ${d.desc}</small>` : ''; }
 function offerPerks() {
   document.exitPointerLock?.();
   const avail = PERKS.filter(p => perk(p.id) < p.max);
@@ -1045,7 +1048,7 @@ function offerPerks() {
   const cards = $('cards'); cards.innerHTML = '';
   choices.forEach((p, i) => {
     const el = document.createElement('div'); el.className = 'card';
-    el.innerHTML = `<svg class="pi" viewBox="0 0 40 40"><use href="#pk-${p.id}"/></svg><h3>${i + 1}. ${p.name}</h3><p>${p.desc}</p><small>${perk(p.id) ? 'Owned ×' + perk(p.id) : 'New'}</small>`;
+    el.innerHTML = `<svg class="pi" viewBox="0 0 40 40"><use href="#pk-${p.id}"/></svg><h3>${i + 1}. ${p.name}</h3><p>${p.desc}</p><small>${perk(p.id) ? 'Owned ×' + perk(p.id) : 'New'}</small>${synNote(p)}`;
     el.onclick = () => choosePerk(p.id); cards.appendChild(el);
   });
   G.perkChoices = choices.map(p => p.id);
@@ -1084,7 +1087,7 @@ function caption(text, x, z) {
 G.caption = caption;
 // distraction (madness mode): a noise made at (x, z) pulls hunters that are not chasing you to investigate that spot; the closer, the surer
 G.distract = (x, z, radius = 20) => {
-  radius *= 1 + 0.3 * perk('noisemaker');
+  radius *= (1 + 0.3 * perk('noisemaker')) * syn().lureMul;
   sound.clang?.(0.25); caption('clatter', x, z); const [tx, ty] = world.tile(x, z); if (world.grid[ty]?.[tx] !== 0) return 0; let n = 0;
   for (const g of gorns) { if (!g.active || g.dead || ![S.PATROL, S.INVESTIGATE, S.SEARCH].includes(g.state) || !g.setTarget) continue; const d = Math.hypot(g.x - x, g.z - z); if (d > radius || (d > radius * 0.6 && Math.random() < 0.4)) continue; g.state = S.INVESTIGATE; g.timer = 7; g.setTarget(tx, ty); n++; }
   return n; };
@@ -1106,7 +1109,7 @@ G.hitPlayer = (gorn, dmg) => {
   P.shake = 0.6; invuln = 1.2;
   if (!G.shield || G.hp < G.maxHp) { bloodBurst(P.x, 1.2, P.z, 60, 4, Math.sin(gorn.yaw) * 2, Math.cos(gorn.yaw) * 2); decals.floor('blood1', P.x, P.z, 1.4, 1); sound.squelch(); screenSplat(4); gorn.bloodTrail = 14; }
   const dx = P.x - gorn.x, dz = P.z - gorn.z, d = Math.hypot(dx, dz) || 1;
-  const kb = (perk('dampener') ? 4 : 8) * G.fx.knockMul; P.kbx = dx / d * kb; P.kbz = dz / d * kb;
+  const kb = (perk('dampener') ? 4 : 8) * G.fx.knockMul * syn().knockMul; P.kbx = dx / d * kb; P.kbz = dz / d * kb;
   if (gorn.cfg) { gorn.attackCd = Math.max(gorn.attackCd, gorn.cfg.atkCd); gorn.state = S.SEARCH; gorn.timer = 4; }
   if (G.hp <= 0) die(gorn);
   updateHUD();
@@ -1127,7 +1130,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyX' && G.kit) G.kit.useJob();
     if (e.code === 'KeyT' && G.kit) G.kit.throwIt();
     if (e.code === 'KeyM') { mapOn = !mapOn; $('minimap').style.display = mapOn ? '' : 'none'; }
-    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8 + 0.5 * perk('tough'); sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); const m = $('clungmash'); if (m) { m.style.transform = 'scale(1.35)'; setTimeout(() => { m.style.transform = 'scale(1)'; }, 70); } } else interact(); }
+    if (e.code === 'KeyE') { if (P.clung > 0) { P.clung -= 0.8 + 0.5 * perk('tough') + syn().tearBonus; sound.squelch(); bloodBurst(P.x, 1.5, P.z, 6, 1.5); const m = $('clungmash'); if (m) { m.style.transform = 'scale(1.35)'; setTimeout(() => { m.style.transform = 'scale(1)'; }, 70); } } else interact(); }
     if (e.code === 'KeyQ' && !e.repeat && !NOM()) fireGrapple();   // Systems Nominal: Q is the quick wheel (js/menus.js)
   }
   if ((e.code === 'Enter') && (G.phase === 'dead' || G.phase === 'title')) startRun();
@@ -1155,7 +1158,7 @@ $('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(
 $('vsel').value = voiceMode(); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
 if (CFG.quality === 'low') setQuality('low');
 $('resume').onmousedown = (e) => e.stopPropagation();
-$('credbtn').onclick = () => showScreen('credits'); $('companybtn').onclick = (e) => { e.stopPropagation(); showCompany(); }; $('companyback').onclick = (e) => { e.stopPropagation(); showScreen('pause'); }; $('credback').onclick = () => showScreen('title');
+$('credbtn').onclick = () => showScreen('credits'); $('careerbtn').onclick = () => { $('careerbody').innerHTML = careerHTML(metaGet(), SAVE.best()); showScreen('career'); }; $('careerback').onclick = () => showScreen('title'); $('companybtn').onclick = (e) => { e.stopPropagation(); showCompany(); }; $('companyback').onclick = (e) => { e.stopPropagation(); showScreen('pause'); }; $('credback').onclick = () => showScreen('title');
 $('begin').onclick = startRun; $('again').onclick = startRun; $('again2').onclick = startRun; $('resume').onclick = resumeGame;
 G.pace = readPace(location.search, localStorage, navigator.webdriver); mountPaceControl(document, G.pace, (p) => { G.pace = p; savePace(p.id, localStorage); });
 G.roleChoice = readRole(location.search, localStorage); G.roleCtl = mountRoleControl(document, G.roleChoice, (c) => { G.roleChoice = c; saveRole(c, localStorage); }, DUTIES); loadDuties().then(d => G.roleCtl?.setDuties(d));   // title screen: shift length (js/pace.js)
@@ -1184,7 +1187,7 @@ function fire() {
   beam.geometry.setFromPoints([start, end]); beam.visible = true; beamT = 0.12;
   if (hit && hit.mad && --hit.hp <= 0) { killMad(hit); return; }
   if (hit) {
-    const r = hit.stunFor(4 + perk('overload') * 3); G.stuns++;
+    const r = hit.stunFor(4 + perk('overload') * 3 + syn().stunBonus); G.stuns++;
     const msg = hit.kind === 'drone' ? (r === 'adapted' ? 'The drone has ADAPTED to your zapper!' : 'Drone stunned — it will adapt. Run.') :
       hit.kind === 'phantom' ? 'Hologram dissolved… for now.' : hit.kind === 'clinger' ? 'Splat. One less ceiling-dweller.' : hit.mad ? `${hit.person.short} is down — one more shot ends it.` : `Direct hit! ${hit.name} is stunned — RUN`;
     G.say(msg, 'good'); flash('#fa5', 0.25);
@@ -1325,7 +1328,7 @@ function drawMap() {
   const lp = world.liftPos; const ld = Math.hypot(lp.x - P.x, lp.z - P.z);
   if ((G.fx.liftOnMap && ld < (R + 3) * TS) || world.explored[world.d.exit[0] + world.d.exit[1] * W]) blip(lp.x, lp.z, NOM() || G.chips >= world.d.chips.length ? '#6f6' : '#f55', 2);
   for (const r of repairPts) { const st = SHIP().status(r.sys); if (st === 'nominal') continue; const pulse = 1.6 + Math.sin(performance.now() / 160) * 0.8; mctx.fillStyle = st === 'offline' ? '#ff4a3a' : '#ffb347'; const x = r.x / TS * s, y = r.z / TS * s; mctx.beginPath(); mctx.moveTo(x, y - pulse - 1); mctx.lineTo(x + pulse + 1, y + pulse); mctx.lineTo(x - pulse - 1, y + pulse); mctx.fill(); }
-  if (perk('scan') && G.fx.lifeScan) for (const g of gorns) if (g.active && Math.hypot(g.x - P.x, g.z - P.z) < 18) blip(g.x, g.z, '#f33', 2);
+  if (perk('scan') && G.fx.lifeScan) for (const g of gorns) if (g.active && Math.hypot(g.x - P.x, g.z - P.z) < syn().lifeScanR) blip(g.x, g.z, '#f33', 2);
   blip(P.x, P.z, '#fff', 1.8);
   mctx.strokeStyle = '#fff'; mctx.beginPath(); mctx.moveTo(P.x / TS * s, P.z / TS * s); mctx.lineTo(P.x / TS * s - Math.sin(P.yaw) * 5, P.z / TS * s - Math.cos(P.yaw) * 5); mctx.stroke();
 }
@@ -1380,7 +1383,7 @@ function step(dt, t) {
 
   // stamina
   const legs = perk('legs');
-  if (P.sprint && P.grounded) G.stamina -= dt * (20 - legs * 3.5) * (1 - P.flow * 0.35); else if (P.mode === 'wallrun' || P.mode === 'grapple' || P.mode === 'mantle') { } else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * (moving ? 0.6 : 1.2) * G.fx.staminaRegen);
+  if (P.sprint && P.grounded) G.stamina -= dt * (20 - legs * 3.5) * (1 - P.flow * 0.35); else if (P.mode === 'wallrun' || P.mode === 'grapple' || P.mode === 'mantle') { } else G.stamina = Math.min(100, G.stamina + dt * (14 + legs * 5) * syn().staminaRegen * (moving ? 0.6 : 1.2) * G.fx.staminaRegen);
   if (G.stamina < 0) G.stamina = 0;
   if (P.clung > 0) { const cb = $('clungbar'); if (cb) cb.style.width = Math.max(0, P.clung / (P.clungMax || 4.5) * 100) + '%'; }
   if (P.clung > 0) { P.clung -= dt; G.hp -= 2.5 * dt; $('clung').style.transform = `translate(${(Math.random() - 0.5) * 6}px,${(Math.random() - 0.5) * 6}px)`; if (P.clung <= 0) { $('clung').style.opacity = 0; G.say('You tear it off and hurl it away!', 'good'); bloodBurst(P.x, 1.5, P.z, 25, 3); if (G.hp <= 0) { die(gorns.find(g => g.kind === 'clinger') || gorns[0]); return; } } updateHUD(); }
@@ -1395,7 +1398,7 @@ function step(dt, t) {
     else if (world.isTube(...world.tile(P.x, P.z))) sound.crawl(0.1);
     else sound.step(P.crouch ? 0.05 : P.sprint ? 0.22 : 0.13);
   }
-  const boots = (1 - perk('boots') * 0.3) * (perk('boots') >= 2 && perk('ghost') ? 0.6 : 1);   // Ghost Protocol synergy
+  const boots = (1 - perk('boots') * 0.3) * syn().stepNoise;   // Ghost Protocol synergy
   const sneakNoise = !P.grounded ? 0 : speedNow < 0.5 ? 0 : P.mode === 'slide' ? 9 : P.crouch ? 2.5 : P.sprint ? 15 : 7;
   noiseNow = Math.max(noiseNow * (1 - dt * 3), sneakNoise * boots);
   P.bob += speedNow * dt * (P.sprint ? 1.8 : 1.5);
