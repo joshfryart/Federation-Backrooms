@@ -1307,7 +1307,9 @@ export class World {
 
   // service ladder well dressing (deterministic, no random stream): a yellow hazard outline on the floor in front of the ladder
   _ladderWellDress(g) {
-    const w = this.d.ladderWell; if (!w) return;
+    // every deck has the same number of lights: three.js keys every lit material's shader program on the scene's light count, so a deck without a well (the top
+    // deck, or no free dead end) used to differ by one point light and the next lift ride recompiled ~60 programs (tools/decktime.mjs). A dark lamp stands in.
+    const w = this.d.ladderWell; if (!w) { const dark = new THREE.PointLight(0xffb040, 0, 6, 1.6); dark.position.set(0, -50, 0); g.add(dark); return; }
     const [wx, wy, dx, dy] = w, [cx, cz] = this.center(wx + dx, wy + dy), m = kitMats(), grp = new THREE.Group();
     for (const [sx, sz, bw, bd] of [[0, -0.95, 1.9, 0.07], [0, 0.95, 1.9, 0.07], [-0.95, 0, 0.07, 1.9], [0.95, 0, 0.07, 1.9]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.012, bd), m.hazard); b.position.set(sx, 0.007, sz); grp.add(b); }
     grp.position.set(cx, 0, cz); g.add(grp);

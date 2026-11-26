@@ -691,6 +691,15 @@ const lw = await page.evaluate(async () => {
 });
 console.log('ladder well:', JSON.stringify(lw));
 if (!(lw.well && lw.kind === 'ship_ladder' && lw.climbed && lw.down === lw.start + 1 && lw.phase === 'play' && lw.well1 && lw.atWell && lw.up && lw.back === lw.start)) fail('ladder well ' + JSON.stringify(lw));
+// every deck has the same number of lights (a dark stand-in lamp where there is no well): three.js keys lit shader programs on the light count, so one light
+// more or less recompiled every lit material at the next lift arrival (js/world.js _ladderWellDress, tools/decktime.mjs)
+const lc = await page.evaluate(() => {
+  const g = __game, G = g.G, count = () => { const c = {}; g.scene.traverseVisible(o => { if (o.isLight) c[o.type] = (c[o.type] || 0) + 1; }); return JSON.stringify(c); };
+  const here = G.shipDeck, a = count(), D = G.shipDecks[here].data, w = D.ladderWell; D.ladderWell = null;
+  try { g.loadDeck(here + 1); return { withWell: a, without: count(), hadWell: !!w }; } finally { D.ladderWell = w; g.loadDeck(here + 1); G.phase = 'play'; }
+});
+console.log('ladder well lights:', JSON.stringify(lc));
+if (!lc.hadWell || lc.withWell !== lc.without) fail('deck light count differs without a ladder well ' + JSON.stringify(lc));
 });
 S('search', 'madness', async (page) => {   // search a wall fixture: this run's deck, the player in front of a fixture with a clear stand point, crew moved off, no damaged system in reach
 await installHelpers(page);

@@ -122,6 +122,10 @@ export async function talkBrowser(page, fail) {
     const s0 = g.sim.t; frame(5); out.esc.runs = g.sim.t > s0;
     // E ends it too
     stand(); g.step(1 / 30, t); g.talk.begin(e); frame(10); key('KeyE'); frame(25); out.eEnd = G.phase === 'play' && !g.ui.frozen;
+    // the talk UI is built on the second zoom frame (js/talk.js setupUI); a wheel key before that builds it at once and still picks
+    stand(); g.step(1 / 30, t); g.talk.begin(e); { const tk = document.getElementById('tk'), n = g.talk.log.length; out.early = { on: tk.classList.contains('on'), deferred: !tk.classList.contains('in') && !!g.talk.uiDue }; key('Digit3'); out.early.pick = g.talk.log.length === n + 1 && g.talk.log[n].id === 'mood'; out.early.in = tk.classList.contains('in'); }
+    frame(5); key('Escape'); frame(25); out.early.end = G.phase === 'play';
+    stand(); g.step(1 / 30, t); g.talk.begin(e); frame(1); out.early.f1 = !!g.talk.uiDue; frame(1); out.early.f2 = !g.talk.uiDue && document.getElementById('tk').classList.contains('in') && document.querySelectorAll('#tk .wseg').length === 8; key('Escape'); frame(25);
     // the speaker vanishes mid-talk -> immediate restore
     stand(); g.step(1 / 30, t); const c1 = cam.position.clone(); g.talk.begin(e); frame(10); const i = g.ents.indexOf(e); g.ents.splice(i, 1); frame(2); out.gone = { phase: G.phase, dp: +cam.position.distanceTo(c1).toFixed(4), active: g.talk.active, frozen: g.ui.frozen }; g.ents.splice(i, 0, e);
     // the phase changes under us (death, lift, end of watch) -> abort; a red alert -> hurried exit
@@ -143,6 +147,8 @@ export async function talkBrowser(page, fail) {
   ck(r.digit, 'digits choose on the wheel');
   ck(r.esc.out === 'out' && !r.esc.layer && r.esc.phase === 'play' && !r.esc.pause && !r.esc.frozen && !r.esc.body && r.esc.dp < 1e-9 && r.esc.dq < 1e-9 && r.esc.fov && r.esc.runs, 'Esc ends it: no pause screen, camera and phase restored exactly, world runs');
   ck(r.eEnd, 'E ends the conversation');
+  ck(r.early.on && r.early.deferred && r.early.f1 && r.early.f2, 'talk UI shown at once, built on the second zoom frame ' + JSON.stringify(r.early));
+  ck(r.early.pick && r.early.in && r.early.end, 'a wheel key before the UI is built builds it and picks ' + JSON.stringify(r.early));
   ck(r.gone.phase === 'play' && r.gone.dp < 1e-6 && !r.gone.active && !r.gone.frozen, 'speaker removed mid-talk: immediate restore');
   ck(!r.phaseChange.active && !r.phaseChange.body, 'phase change mid-talk aborts cleanly');
   ck(r.alert.phase === 'play' && r.alert.said, 'red alert / hazard ends it with a hurried line');

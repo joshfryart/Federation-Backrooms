@@ -156,6 +156,7 @@ function setQuality(q, auto = false) {   // auto: the governor (js/perfgov.js) m
   if (!auto) gov.setManual(q);
   CFG.quality = q; torch.castShadow = q === 'high'; world?.setFancy(q === 'high'); if (beamCone) beamCone.visible = q === 'high' && P.torch; renderer.setPixelRatio(q === 'high' && !TEST_MODE ? Math.min(devicePixelRatio, 1.5) : 1); resize(); if (!auto) saveCfg(); applyPerf();
   const el = $('qsel'); if (el) el.value = q;
+  if (q === 'high' && !TEST_MODE) try { G.talk?.warmDof?.(); } catch { /* not built yet */ }   // resize re-created the post buffers: draw the talk depth-of-field pass into them now, not on the next talk
 }
 
 // phaser beam visual
@@ -1003,9 +1004,32 @@ function prewarmPrograms() {
   renderer.setRenderTarget(tgt);
   try { renderer.compile(scene, camera); renderer.compile(vmScene, vmCam); } finally { renderer.setRenderTarget(prev); }
 }
+// Draw everything once, now, into every buffer the world is really drawn into, at one pixel. renderer.compile() only builds programs: textures, geometry buffers
+// and (on ANGLE D3D11 / Metal / Vulkan and many GL drivers) the per-program, per-target pipeline are only set up at an object's first real draw, so the first
+// frame on a new deck did ~50 of them (and the next frame ~50 more: the post chain alternates its two buffers every frame, compile warmed one) plus everything
+// off screen as it came into view (tools/decktime.mjs "first draws"). Frustum culling off, scissored to one pixel (raster is nothing; the frame's own
+// RenderPass clears the buffers), no shadow-map pass (its handful of depth programs are drawn on every deck). Crowd culling (perfcull.js) is not applied here.
+function warmDraws() {
+  const R = renderer, C = CFG.quality === 'high' ? post?.composer : null, tgts = C?.renderTarget1 ? [C.renderTarget1, C.renderTarget2] : [null];
+  const culled = [], off = (o) => { if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); } };
+  scene.traverse(off); vmScene.traverse(off);
+  const prev = R.getRenderTarget(), sm = R.shadowMap, au = sm.autoUpdate, nu = sm.needsUpdate, ac = R.autoClear, sc = R.getScissor(new THREE.Vector4()), st = R.getScissorTest();
+  sm.autoUpdate = false; sm.needsUpdate = false;
+  try {
+    for (const t of tgts) {
+      const ts = t && t.scissor.clone(), tt = t && t.scissorTest;
+      if (t) { t.scissor.set(0, 0, 1, 1); t.scissorTest = true; } R.setRenderTarget(t); if (!t) { R.setScissor(0, 0, 1, 1); R.setScissorTest(true); }
+      try { R.autoClear = true; R.render(scene, camera); R.autoClear = false; R.clearDepth(); R.render(vmScene, vmCam); }
+      finally { if (t) { t.scissor.copy(ts); t.scissorTest = tt; } }
+    }
+  } finally {
+    for (const o of culled) o.frustumCulled = true;
+    R.autoClear = ac; sm.autoUpdate = au; sm.needsUpdate = nu; R.setRenderTarget(prev); R.setScissor(sc); R.setScissorTest(st);
+  }
+}
 // a deck changed mid-run (lift, ladder well, next deck): queue the new deck's programs in one go, so the driver compiles them together (in parallel where it has
 // KHR_parallel_shader_compile) instead of one stall per material as each first comes into view while walking the deck
-function deckPrograms() { if (!TEST_MODE) try { prewarmPrograms(); } catch (e) { console.warn('compile', e.message); } }
+function deckPrograms() { if (!TEST_MODE) try { prewarmPrograms(); warmDraws(); G.talk?.warmDof?.(); } catch (e) { console.warn('compile', e.message); } }   // + the conversation's depth-of-field pass in both post buffers (js/talk.js warmDof)
 // Begin / retry: loading screen -> build the run (ship, crew, systems, deck 1: the heavy synchronous part) -> compile shaders -> render every crew portrait (so the radio, duty board and
 // wheel never render heads mid-play) -> an "Enter the ship" button (a click, so pointer lock is allowed). Nothing plays until all of it is done.
 let runLoading = false; const PORTRAIT_BATCH_MS = 120;   // crew portraits rendered per paint during boarding: keeps the bar and the face card moving several times a second
@@ -2070,7 +2094,7 @@ function frame() {
   elapsed += dt; tickWorld(dt, elapsed); G.menus?.frame(dt); G.pad?.tick(dt); G.jobgame?.tick(dt);   // UI: wheel hold, gamepad, name tags, portraits, belt (runs while the world is paused)
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
-  { const lv = gov.tick(raw, G.phase === 'play'); if (lv >= 0) { const L = LEVELS[lv]; if (L.quality !== CFG.quality) { setQuality(L.quality, true); if (L.quality === 'low') G.say('Performance mode enabled (change in pause menu)', 'comp'); } else applyPerf(); } }   // js/perfgov.js: steps down / recovers with hysteresis
+  { const lv = gov.tick(raw, G.phase === 'play'); if (lv >= 0) { const L = LEVELS[lv]; if (L.quality !== CFG.quality) { setQuality(L.quality, true); if (L.quality === 'low') G.say('Performance mode enabled (change in pause menu)', 'comp'); } else { applyPerf(); if (CFG.quality === 'high' && !TEST_MODE) G.talk?.warmDof?.(); } } }   /* a new render scale re-creates the post buffers (talk DoF: js/talk.js warmDof) */   // js/perfgov.js: steps down / recovers with hysteresis
   if (G.phase !== 'loading' && !Loading.visible && !titleUp()) render(dt, elapsed);   // the loading overlay (boot and boarding) is opaque: do not spend the GPU drawing behind it (at boot that drawing starved the asset decode and uniform prewarm: ~11 s of a 19 s headless boot)
 }
 function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
@@ -2128,7 +2152,7 @@ Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.de
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'role', { get: () => G.role });   // { choice, billet, mission, miss } (js/role.js)
 Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
-Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact;   // conversation close-up (js/talk.js)
+Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact; window.__game.deckPrograms = deckPrograms; window.__game.warmDraws = warmDraws;   // conversation close-up (js/talk.js)
 titleBoard();
 mountSaveControls(document, SAVE, { onChange: () => { Object.assign(CFG, SAVE.cfg()); G.best = SAVE.best(); sound.vol = CFG.vol; sound.setVolume?.(CFG.vol); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality; $('calm').checked = !!CFG.calm; if ($('aoon')) $('aoon').checked = !!CFG.ao; post.setAO?.(CFG.ao); $('capson').checked = !!CFG.caps; $('cbmode').checked = !!CFG.cb; document.body.classList.toggle('cb', !!CFG.cb); document.body.classList.toggle('lc-calm', !!CFG.calm); post.setCalm?.(CFG.calm); titleBoard(); } });   // pause menu: export / import / reset save (js/save-ui.js)
 frame();
