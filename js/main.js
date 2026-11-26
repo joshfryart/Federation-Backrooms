@@ -55,6 +55,7 @@ import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E 
 import { Governor, LEVELS, applyLevel } from './perfgov.js';   // auto-quality ladder (dynamic resolution, shadow size, cones, Performance) + crowd draw culling (js/perfcull.js)
 import { cullCrowd, uncullCrowd, cullStats as cullStatsRef } from './perfcull.js';
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
+import { SMOKE_DEFS, smokeAlerts, smokeDeckOf, pickSourceRoom, densityAt, smokeEffects } from './smoke.js';   // per-deck / per-room alert smoke that hurts (js/smoke.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
 const $ = (id) => document.getElementById(id);
@@ -94,7 +95,7 @@ const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
 const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
 const smoke = new Particles(scene, 220, { size: 1.3, opacity: 0.2, gravity: 0.05, drag: 0.6 });   // alert smoke (fire / contamination / abandon): dark haze pooling under the ceiling near the player
-const SMOKE_COL = new THREE.Color(0x2a2724);
+const SMOKE_COL = new THREE.Color(0x2a2724), BADAIR_COL = new THREE.Color(0x4a5236);
 const decals = new Decals(scene);
 const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
@@ -249,7 +250,7 @@ function loadDeck(n) {
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
   G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
-  scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
+  scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); G.fogBase = ship.fogD; scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
 
@@ -841,7 +842,7 @@ function nomTick(dt) {
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt); G.sites?.tick(dt); jobGoTick();
-  if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }
+  if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp && !G.smoke?.fx?.dense) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }   // no regen in dense smoke
   if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(G.sites?.active ? G.sites.hint() : D.busy ? `Working: ${D.busy.loop.label}…` : G.jobGo ? `✦ ${G.jobGo.label}: go to the ${G.jobGo.where} — it starts when you get there · [G] guide` : (G.intro && (!due || due.task === G.intro.task)) ? introHint(dt) : (dutyHere() ? `[E] ${(dutyHere().label || dutyHere().task)}   ·   [J] rush / skip…` : '')); }
 }
 // the whole world pauses while any menu / wheel / panel / map / terminal / conversation is open (G.menuPause is set by the menus agent)
@@ -1359,6 +1360,44 @@ G.testMode = TEST_MODE;
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
 // game timers: setTimeout normally; under the test clock (G.manual, tools/test.mjs) they wait for __game.advance() game time instead of the wall clock
 let manT = 0; const timers = [];
+// alert smoke (js/smoke.js): each smoking alert fills one source room on one deck (the alert's deck, else the deck you were on
+// when it was first seen) and creeps outward; abandon ship adds a thin harmless haze everywhere. Dense smoke (>= DENSE) makes
+// you cough, drains health (no regen), slows you and closes the fog in; crouching (smoke pools under the ceiling) and an
+// emergency breather help. Calm mode halves the fog and drops the cough shake; captions say "you cough" / "smoke".
+function smokeStep(dt) {
+  const S = G.smoke ||= { srcs: [], here: 0, fx: null, fog: 1, coughT: 0, sayT: -99 };
+  const al = NOM() && world ? smokeAlerts(G.comms?.alerts?.active?.()) : [], deckNo = G.shipDeck ?? 0;   // alert.deck is the 0-based ship deck index (the HUD / PA show deck + 1)
+  S.srcs = []; let haze = 0;
+  for (const a of al) {
+    const id = a.def.id, def = SMOKE_DEFS[id], age = G.comms.alerts.elapsed(a); if (def.haze) haze = Math.max(haze, def.haze * Math.min(1, age / 6));
+    if (smokeDeckOf(a, deckNo) !== deckNo) continue;   // smoke stays on its own deck
+    if (id === 'hull_breach' && G.breach?.deck === G.deck) { S.srcs.push({ id, kind: 'point', x: G.breach.x, z: G.breach.z, age, ts: TS }); continue; }
+    const key = `${G.runSeed}|${deckNo}|${id}|${a.seq}`; if (a.smokeKey !== key) { a.smokeKey = key; a.smokeRoom = pickSourceRoom(world.d.rooms, key); }
+    if (!a.smokeRoom) continue; const R = a.smokeRoom, [cx, cz] = world.center(R.x + (R.w >> 1), R.y + (R.h >> 1));
+    S.srcs.push({ id, kind: 'room', room: R, age, ts: TS, cx, cz });
+    if (!a.smokeSeen) { a.smokeSeen = 1; caption('smoke', cx, cz); }
+  }
+  const densAt = (x, z) => { const [tx, ty] = world.tile(x, z); let d = haze; for (const s of S.srcs) d = Math.max(d, densityAt(s, x, z, tx, ty)); return Math.min(1, d); };
+  const play = G.phase === 'play' && world;
+  S.here = play && (S.srcs.length || haze) ? densAt(P.x, P.z) * (P.crouch ? 0.7 : 1) : 0;
+  const hurt = Math.max(0, ...S.srcs.map(s => SMOKE_DEFS[s.id].hurt));
+  S.fx = smokeEffects(S.here, hurt, { breather: G.carry?.item === 'breather', calm: !!CFG.calm });
+  P.smokeSlow = S.fx.slow;
+  S.fog += (S.fx.fog - S.fog) * Math.min(1, dt * (CFG.calm ? 0.8 : 1.5)); if (scene.fog && G.fogBase) scene.fog.density = G.fogBase * S.fog;
+  if (play && S.fx.dense) {
+    G.hp -= S.fx.drain * dt;
+    if (G.time - S.sayT > 12) { S.sayT = G.time; G.say(G.carry?.item === 'breather' ? 'Thick smoke. The breather is keeping most of it out.' : 'Thick smoke — you can hardly breathe. Get low and get out.', 'warn'); }
+    if (S.fx.cough && (S.coughT -= dt) <= 0) { S.coughT = 1.6 + Math.random() * 2; sound.noise?.(0.13, 0.22, 650, 0.9, 'bandpass'); sound.noise?.(0.11, 0.18, 600, 0.9, 'bandpass', 0.2); caption('you cough'); if (!CFG.calm) P.shake = Math.max(P.shake, 0.12); }
+    if (G.hp <= 0) { if (NOM()) nomDie('smoke inhalation'); else G.hp = 1; }
+  } else S.coughT = Math.min(S.coughT, 0.4);
+  // particles: dark haze pooling under the ceiling, only where the smoke is (bad air is a paler green-grey)
+  if (play && (S.srcs.length || haze)) for (let k = 0, n = Math.random() < dt * 30 ? 2 : 0; k < n; k++) {
+    const a = Math.random() * 6.283, r = 2 + Math.random() * 12, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r, [tx, ty] = world.tile(x, z);
+    if (world.solid(tx, ty)) continue; const d = densAt(x, z); if (Math.random() > d * 1.3) continue;
+    const bad = S.srcs.length && S.srcs.every(s => s.id === 'contamination');
+    smoke.add(x, world.ceilAt(tx, ty) - 0.4 - d * Math.random() * 1.2, z, (Math.random() - 0.5) * 0.5, -0.05 - Math.random() * 0.1, (Math.random() - 0.5) * 0.5, bad ? BADAIR_COL : SMOKE_COL, 5 + Math.random() * 3);
+  }
+}
 function later(fn, ms) { if (G.manual) timers.push({ at: manT + ms / 1000, fn }); else setTimeout(fn, ms); }
 function step(dt, t) {
   if (NOM() && G.menuPause) return;   // a menu / wheel / panel / map is open: the whole world holds still (js/menus.js keeps the UI alive)
@@ -1377,7 +1416,7 @@ function step(dt, t) {
   if (G.touchMove) { fx += G.touchMove.x; fz += G.touchMove.z; }   // js/touch.js: the on-screen move stick (analog direction)
   if (P.hidden) { fx = fz = 0; if (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || pressed.jump) exitHide(); }   // hiding: stand still; any move key steps out
   const moving = fx || fz;
-  P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
+  P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1) * (P.smokeSlow ?? 1);   // smokeSlow: dense alert smoke (smokeStep)   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
   movePlayer(dt, P, world, { fx, fz, sprint: !!(keys.ShiftLeft || keys.ShiftRight), crouch: !!(keys.KeyC || keys.ControlLeft), crouchPressed: pressed.crouch, jump: pressed.jump && !(P.clung > 0), grappleCancel: pressed.grappleCancel }, moveApi);
   pressed.jump = pressed.crouch = pressed.grappleCancel = false;
   updateRope(dt);
@@ -1530,10 +1569,7 @@ function step(dt, t) {
       if (d < 22) { for (let i = 0; i < 14; i++) sparks.add(sp.x, 1.1, sp.z, (Math.random() - 0.5) * 3, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3, SPARK, 0.5 + Math.random() * 0.5); if (d < 14) sound.zap(); }
     }
   }
-  { const top = G.comms?.alerts?.top?.(), id = top?.def?.id;   // smoke only under alerts that mean smoke; the closer to the player the denser
-    if (top && (id === 'fire' || id === 'contamination' || id === 'abandon_ship' || id === 'hull_breach') && world && Math.random() < dt * 16) {
-      const a = Math.random() * 6.283, r = 3 + Math.random() * 11, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r, [tx, ty] = world.tile(x, z);
-      if (!world.solid(tx, ty)) smoke.add(x, world.ceilAt(tx, ty) - 0.4, z, (Math.random() - 0.5) * 0.5, -0.05 - Math.random() * 0.1, (Math.random() - 0.5) * 0.5, SMOKE_COL, 5 + Math.random() * 3); } }
+  smokeStep(dt);
   // hull breach: while the alert is up a breach opens at one spot on the deck (seeded per deck): air rushes toward it, pulling you in and hurting inside 3 m.
   // Holding an emergency breather halves the damage; getting out of line of sight / > 14 m ends the pull. Cleared when the alert clears.
   { const top = G.comms?.alerts?.top?.(), on = !!top && top.def.id === 'hull_breach' && G.phase === 'play' && world;

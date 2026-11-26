@@ -521,6 +521,40 @@ const br = await page.evaluate(async () => {
 console.log('breach:', JSON.stringify(br));
 if (!(br.breach && br.spot && br.pulled > 0.5 && br.hpLost > 1 && br.sealed)) fail('breach ' + JSON.stringify(br));
 });
+S('smoke-unit', null, async () => {   // alert smoke maths (js/smoke.js): per-deck pinning, per-room density falloff, effects incl. breather / calm
+  const M = await import('../js/smoke.js');
+  const a = { id: 'fire', def: { id: 'fire' }, deck: null }, b = { def: { id: 'fire' }, deck: 4 };
+  if (!(M.smokeDeckOf(a, 2) === 2 && M.smokeDeckOf(a, 5) === 2 && M.smokeDeckOf(b, 0) === 4)) fail('smoke-unit: deck pinning');
+  if (M.smokeAlerts([{ def: { id: 'red' } }, a]).length !== 1) fail('smoke-unit: only smoking alerts');
+  const rooms = [{ x: 2, y: 2, w: 4, h: 3, type: 'galley' }, { x: 10, y: 2, w: 3, h: 3, type: 'lab' }, { x: 0, y: 0, w: 1, h: 1, type: 'lift' }];
+  const r1 = M.pickSourceRoom(rooms, 'k1'); if (!r1 || r1.type === 'lift' || M.pickSourceRoom(rooms, 'k1') !== r1) fail('smoke-unit: stable source room');
+  const R = rooms[0], src = { id: 'fire', kind: 'room', room: R, age: 30, ts: 2.5 };
+  const inR = M.densityAt(src, 0, 0, 3, 3), near = M.densityAt(src, 0, 0, 8, 3), far = M.densityAt(src, 0, 0, 20, 3), young = M.densityAt({ ...src, age: 1 }, 0, 0, 3, 3);
+  if (!(inR >= M.DENSE && near < inR && near > 0 && far === 0 && young < inR)) fail('smoke-unit: density falloff ' + JSON.stringify({ inR, near, far, young }));
+  const e = M.smokeEffects(1, 3, {}), eb = M.smokeEffects(1, 3, { breather: true }), ec = M.smokeEffects(1, 3, { calm: true }), e0 = M.smokeEffects(0.2, 3, {});
+  if (!(e.dense && e.drain > 2 && e.slow < 0.8 && e.cough && eb.drain < e.drain / 2 && !eb.cough && ec.fog < e.fog && ec.fog > 1 && !e0.dense && e0.drain === 0 && e0.slow === 1)) fail('smoke-unit: effects ' + JSON.stringify({ e, eb, ec, e0 }));
+});
+S('smoke-haze', 'nominal', async (page) => {   // a fire fills one room on the player's deck: dense there (cough caption, HP drain, slow, thicker fog), clear on other decks
+await installHelpers(page);
+const r = await page.evaluate(async () => {
+  const g = __game, G = g.G, P = g.P; g.G.forceShip = 0; g.newRun(); g.setQuality('low'); g.CFG.caps = true; document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); await new Promise(r => setTimeout(r, 300)); G.phase = 'play';
+  const A = G.comms.alerts, a = A.raise('fire', { scope: 'deck', deck: G.shipDeck }); for (let i = 0; i < 3; i++) { G.phase = 'play'; g.step(0.05, i * 0.05); }
+  const S = G.smoke, src = S.srcs[0]; if (!src) return { src: null };
+  A.t += 40;   // let the smoke build and spread
+  const w = g.world, R = src.room; let spot = null; for (let y = R.y; y < R.y + R.h && !spot; y++) for (let x = R.x; x < R.x + R.w; x++) { const [cx, cz] = w.center(x, y); if (!w.solidAt(cx, cz)) { spot = [cx, cz]; break; } }
+  if (!spot) return { src: true, spot: null };
+  P.x = spot[0]; P.z = spot[1]; G.hp = G.maxHp = 1000; const fog0 = G.fogBase; let slow = 1;
+  for (let i = 0; i < 60; i++) { G.phase = 'play'; g.step(0.05, 1 + i * 0.05); P.x = spot[0]; P.z = spot[1]; slow = Math.min(slow, P.smokeSlow); }
+  const caps = [...document.querySelectorAll('#caps div')].map(d => d.textContent).join('|');
+  const inRoom = { dens: +S.here.toFixed(2), hpLost: +(1000 - G.hp).toFixed(1), slow: +slow.toFixed(2), fog: +(w && g.scene.fog.density / fog0).toFixed(2), caps };
+  // another deck: the same alert is pinned to its own deck, so this deck stays clear
+  G.shipDeck = (G.shipDeck + 1) % 3; for (let i = 0; i < 3; i++) { G.phase = 'play'; g.step(0.05, 5 + i * 0.05); } const other = { srcs: G.smoke.srcs.length, dens: G.smoke.here };
+  A.clear('fire'); return { src: true, spot: true, inRoom, other };
+});
+console.log('smoke-haze:', JSON.stringify(r));
+const I = r.inRoom || {};
+if (!(r.src && r.spot && I.dens >= 0.45 && I.hpLost > 2 && I.slow < 0.9 && I.fog > 1.5 && /you cough/.test(I.caps) && r.other.srcs === 0 && r.other.dens === 0)) fail('smoke-haze ' + JSON.stringify(r));
+});
 S('ladder-well', 'nominal', async (page) => {   // the service ladder in a dead-end corridor climbs to the next deck (and back up with Shift)
 await installHelpers(page);
 const lw = await page.evaluate(async () => {
