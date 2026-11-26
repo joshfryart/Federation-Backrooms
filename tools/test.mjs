@@ -492,7 +492,8 @@ const mech = await page.evaluate(async () => {
   // distraction: a patrolling hunter within range goes to investigate the noise
   const s2 = __T.standNear(h, 8); h.state = E.S.PATROL; h.active = true; const n = G.distract(P.x, P.z, 24); out.distract = { n, state: h.state, investigate: h.state === E.S.INVESTIGATE };
   // captions
-  g.CFG.caps = true; G.caption('test roar', P.x + 5, P.z); const capEl = document.getElementById('caps'); out.caption = capEl?.lastChild?.textContent || null; g.CFG.caps = false;
+  g.CFG.caps = true; G.caption('test roar', P.x + 5, P.z); const capEl = document.getElementById('caps'); out.caption = capEl?.lastChild?.textContent || null;
+  G.phase = 'play'; g.step(0.02, 50); h.x = P.x - 3; h.z = P.z; h.sound.giggle(0.1); out.emitCap = capEl?.lastChild?.textContent || null; out.emitter = typeof h.sound.at === 'function' && !!g.sound.lis; g.CFG.caps = false;   // positional emitter caption (js/audio.js)
   // career bonuses: milestones grant starting perks on the next madness run
   g.SAVE.setMeta({ runs: 9, bestDeck: 5, kills: 20, wins: 1 }); g.newRun(); out.meta = { perks: Object.keys(G.perks).sort(), bonus: (G.metaBonus || []).length }; g.SAVE.setMeta({});
   // hands: shown for parkour verbs, hidden otherwise
@@ -503,6 +504,7 @@ console.log('mechanics:', JSON.stringify(mech));
 if (mech.sightFar !== undefined && !(mech.sightFar === true && mech.hiddenFar === false && mech.hiddenNear === true && mech.hideR === 1.8 && mech.ghostR === 1)) fail('mechanics: hiding ' + JSON.stringify(mech));
 if (!(mech.distract?.n >= 1 && mech.distract.investigate)) fail('mechanics: distraction ' + JSON.stringify(mech.distract));
 if (!/^\[test roar\]/.test(mech.caption || '')) fail('mechanics: caption ' + JSON.stringify(mech.caption));
+if (!(mech.emitter && /^\[giggling\]/.test(mech.emitCap || ''))) fail('mechanics: enemy emitter caption ' + JSON.stringify({ c: mech.emitCap, e: mech.emitter }));
 if (!(mech.meta && ['boots', 'cell', 'hypo', 'legs'].every(p => mech.meta.perks.includes(p)) && mech.meta.bonus === 4)) fail('mechanics: career bonuses ' + JSON.stringify(mech.meta));
 if (!(mech.hands?.shown && mech.hands.hiddenAgain)) fail('mechanics: hands ' + JSON.stringify(mech.hands));
 });
@@ -533,6 +535,27 @@ S('smoke-unit', null, async () => {   // alert smoke maths (js/smoke.js): per-de
   if (!(inR >= M.DENSE && near < inR && near > 0 && far === 0 && young < inR)) fail('smoke-unit: density falloff ' + JSON.stringify({ inR, near, far, young }));
   const e = M.smokeEffects(1, 3, {}), eb = M.smokeEffects(1, 3, { breather: true }), ec = M.smokeEffects(1, 3, { calm: true }), e0 = M.smokeEffects(0.2, 3, {});
   if (!(e.dense && e.drain > 2 && e.slow < 0.8 && e.cough && eb.drain < e.drain / 2 && !eb.cough && ec.fog < e.fog && ec.fog > 1 && !e0.dense && e0.drain === 0 && e0.slow === 1)) fail('smoke-unit: effects ' + JSON.stringify({ e, eb, ec, e0 }));
+});
+S('audio-unit', null, async () => {   // positional audio for enemies (js/audio.js spatial / at / emitter): pan by bearing, falloff, occlusion, captions
+  const A = await import('../js/audio.js'), L = { x: 0, z: 0, yaw: 0 };   // facing -z (forward is (-sin yaw, -cos yaw))
+  const ahead = A.spatial(L, 0, -6), left = A.spatial(L, -6, 0), right = A.spatial(L, 6, 0), behind = A.spatial(L, 0, 6), far = A.spatial(L, 0, -30), occ = A.spatial(L, 0, -6, true);
+  if (!(Math.abs(ahead.pan) < 0.01 && left.pan < -0.7 && right.pan > 0.7 && behind.cutoff < ahead.cutoff)) fail('audio-unit: pan / head shadow ' + JSON.stringify({ ahead, left, right, behind }));
+  if (!(A.spatial(L, 0, -2).gain === 1 && far.gain < ahead.gain && far.cutoff < ahead.cutoff && occ.gain < ahead.gain && occ.cutoff <= 900)) fail('audio-unit: falloff / occlusion ' + JSON.stringify({ far, occ }));
+  const turned = A.spatial({ x: 0, z: 0, yaw: Math.PI / 2 }, -6, 0); if (Math.abs(turned.pan) > 0.01) fail('audio-unit: listener yaw ' + JSON.stringify(turned));   // turned to face -x: a sound at -x is ahead
+  if (!(A.spatial(L, 0, -20).heard && !A.spatial(L, 0, -20, true).heard && !A.spatial(L, 0, -40).heard)) fail('audio-unit: hearing range');
+  // emitter: captions with position (no AudioContext), not when out of range / through walls past 16 m
+  const s = new A.Sound(), caps = []; s.onCaption = (t, x, z) => caps.push([t, x, z]); s.setListener(0, 0, 0);
+  let clear = true; const src = { x: 5, z: 0, w: { los: () => clear } }, em = s.emitter(src);
+  em.growl(0.1); src.x = 40; em.growl(0.1); src.x = 20; clear = false; em.giggle(0.1); clear = true; em.giggle(0.1); em.stunned();
+  if (JSON.stringify(caps) !== JSON.stringify([['growl', 5, 0], ['giggling', 20, 0]])) fail('audio-unit: emitter captions ' + JSON.stringify(caps));
+  // routing: with a (mock) context, an emitter's tone() / noise() go through one panner -> lowpass -> gain chain into the master bus
+  const node = (kind) => { const n = { kind, outs: [], connect(o) { n.outs.push(o); return o; }, disconnect() { }, start() { }, stop() { } }; for (const p of ['gain', 'pan', 'frequency', 'Q']) n[p] = { value: 0, setValueAtTime() { }, exponentialRampToValueAtTime() { }, cancelScheduledValues() { }, setTargetAtTime() { } }; return n; };
+  const ctx = { currentTime: 0, createGain: () => node('gain'), createStereoPanner: () => node('pan'), createBiquadFilter: () => node('filter'), createOscillator: () => node('osc'), createBufferSource: () => node('buf') };
+  const s2 = new A.Sound(); s2.ctx = ctx; s2.master = node('master'); s2.setListener(0, 0, 0); let P = null; const mk = ctx.createStereoPanner, made = []; ctx.createStereoPanner = () => (P = mk()); const mg = ctx.createGain; ctx.createGain = () => { const n = mg(); made.push(n); return n; };
+  s2.emitter({ x: -6, z: 0 }).growl(0.1);
+  const lp = P?.outs[0], g = lp?.outs[0], fed = made.filter(n => n.outs.includes(P)).length;   // envelope gains of the growl's tone + noise feed the panner
+  if (!(P && P.pan.value < -0.7 && lp.kind === 'filter' && g.outs[0] === s2.master && fed === 2 && !s2._dest)) fail('audio-unit: chain ' + JSON.stringify({ pan: P?.pan.value, lp: lp?.kind, fed }));
+  s2.growl(0.1); if (s2._dest) fail('audio-unit: _dest leaked');
 });
 S('smoke-haze', 'nominal', async (page) => {   // a fire fills one room on the player's deck: dense there (cough caption, HP drain, slow, thicker fog), clear on other decks
 await installHelpers(page);

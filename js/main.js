@@ -1082,7 +1082,7 @@ function die(by, line = null) {
 }
 
 // callbacks used by Gorn AI
-G.onEnemyStep = (g, d) => { if (d < 30) { if (d < 20) caption('footsteps', g.x, g.z); sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
+G.onEnemyStep = (g, d) => { if (d < 30) { if (d < 20) caption('footsteps', g.x, g.z); sound.at(g.x, g.z, () => sound.thud(Math.max(0.04, 0.4 - d * 0.013)), !world.los(g.x, g.z, P.x, P.z)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
 // sound captions (accessibility): a short bracketed line with a direction arrow relative to where you face; throttled per text
 let capLast = {};
 function caption(text, x, z) {
@@ -1090,11 +1090,11 @@ function caption(text, x, z) {
   let dir = ''; if (x !== undefined) { const a = Math.atan2(-(x - P.x), -(z - P.z)) - P.yaw, d = Math.atan2(Math.sin(a), Math.cos(a)); dir = Math.abs(d) < 0.6 ? ' ↑' : Math.abs(d) > 2.5 ? ' ↓' : d > 0 ? ' ←' : ' →'; if (Math.hypot(x - P.x, z - P.z) > 18) dir += ' (far)'; }
   const el = $('caps'); if (!el) return; const li = document.createElement('div'); li.textContent = `[${text}]${dir}`; el.appendChild(li); while (el.children.length > 3) el.firstChild.remove(); setTimeout(() => li.remove(), 2800);
 }
-G.caption = caption;
+G.caption = caption; sound.onCaption = caption;   // enemy emitters (js/audio.js emitter) caption growls / tells / skitters through the same setting
 // distraction (madness mode): a noise made at (x, z) pulls hunters that are not chasing you to investigate that spot; the closer, the surer
 G.distract = (x, z, radius = 20) => {
   radius *= 1 + 0.3 * perk('noisemaker');
-  sound.clang?.(0.25); caption('clatter', x, z); const [tx, ty] = world.tile(x, z); if (world.grid[ty]?.[tx] !== 0) return 0; let n = 0;
+  sound.at(x, z, () => sound.clang?.(0.25)); caption('clatter', x, z); const [tx, ty] = world.tile(x, z); if (world.grid[ty]?.[tx] !== 0) return 0; let n = 0;
   for (const g of gorns) { if (!g.active || g.dead || ![S.PATROL, S.INVESTIGATE, S.SEARCH].includes(g.state) || !g.setTarget) continue; const d = Math.hypot(g.x - x, g.z - z); if (d > radius || (d > radius * 0.6 && Math.random() < 0.4)) continue; g.state = S.INVESTIGATE; g.timer = 7; g.setTarget(tx, ty); n++; }
   return n; };
 G.onEnemySpotted = (g) => { caption(g.name + ' roars', g.x, g.z); flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
@@ -1400,6 +1400,7 @@ function smokeStep(dt) {
 }
 function later(fn, ms) { if (G.manual) timers.push({ at: manT + ms / 1000, fn }); else setTimeout(fn, ms); }
 function step(dt, t) {
+  sound.setListener(P.x, P.z, P.yaw);   // positional audio: enemies / screams / footsteps pan and fade from here (js/audio.js)
   if (NOM() && G.menuPause) return;   // a menu / wheel / panel / map is open: the whole world holds still (js/menus.js keeps the UI alive)
   if (shot > 0) shot -= dt;
   if (invuln > 0) invuln -= dt;
@@ -1499,7 +1500,7 @@ function step(dt, t) {
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
         H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
         if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) { fidgetStep(e, dt, d); wearStep(e, dt, d, G, world); } }   // impostors never blink
-        if (e.fake && d < 5) { e.tellT = (e.tellT ?? 2 + Math.random() * 3) - dt; if (e.tellT <= 0) { e.tellT = 3.5 + Math.random() * 3; sound.tell?.(); } }   // impostor tell: a faint wet tick, only heard up close
+        if (e.fake && d < 5) { e.tellT = (e.tellT ?? 2 + Math.random() * 3) - dt; if (e.tellT <= 0) { e.tellT = 3.5 + Math.random() * 3; sound.at(e.x, e.z, () => sound.tell?.()); caption('wet tick', e.x, e.z); } }   // impostor tell: a faint wet tick, only heard up close
         H.update(dt * (e.fake ? 0.82 : 1));
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
@@ -1950,7 +1951,7 @@ function beginTurn(e) {
   G.director?.bump(0.2, 'someone turned');
   e.turning = 2.6; e.used = true; G.mad.pending = e; const H = e.mesh.userData.human, d = Math.hypot(e.x - P.x, e.z - P.z);
   if (H) { H.standing = false; H.play('hit_head', { loop: false, fade: 0.1 }); H.face({ JawDrop: 1, NoseWrinkler: 1, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 1 }); }
-  sound.shriek(Math.max(0.06, 0.35 - d * 0.008)); caption('scream', e.x, e.z); if (d < 9) P.shake = Math.max(P.shake, 0.25);
+  sound.at(e.x, e.z, () => sound.shriek(Math.max(0.06, 0.35 - d * 0.008))); caption('scream', e.x, e.z); if (d < 9) P.shake = Math.max(P.shake, 0.25);
   const who = `${e.person.short}, ${e.person.title}`;
   if (d < 14 && world.los(e.x, e.z, P.x, P.z)) G.say(`${who} clutches their head and starts to laugh…`, 'warn');
   else if (G.fx.comms < 2) G.say(garble(`Computer: Medical emergency — ${who}. Crew are advised to keep clear.`), 'warn');
@@ -1974,8 +1975,8 @@ function updateMadness(dt) {
 G.preyFor = (h) => { let best = null, bd = 1e9; for (const e of ents) { if (e.kind !== 'crew' || e.fake || e.turning !== undefined || e.dying) continue; const d = Math.hypot(e.x - h.x, e.z - h.z); if (d < bd) { bd = d; best = e; } } if (best && !best.id) best.id = Math.random(); return best; };
 G.killNpc = (e, by) => {
   e.dying = true; const d = Math.hypot(e.x - P.x, e.z - P.z), p = e.person;
-  bloodBurst(e.x, 1.2, e.z, 70, 3); decals.floor('blood0', e.x, e.z, 1.8, 1); sound.squelch();
-  if (d < 40) { sound.shriek(Math.max(0.04, 0.32 - d * 0.008)); G.director?.bump(d < 20 ? 0.25 : 0.12, 'crew killed'); }
+  bloodBurst(e.x, 1.2, e.z, 70, 3); decals.floor('blood0', e.x, e.z, 1.8, 1); sound.at(e.x, e.z, () => sound.squelch());
+  if (d < 40) { sound.at(e.x, e.z, () => sound.shriek(Math.max(0.04, 0.32 - d * 0.008))); caption('scream', e.x, e.z); G.director?.bump(d < 20 ? 0.25 : 0.12, 'crew killed'); }
   if (d < 20 && world.los(e.x, e.z, P.x, P.z)) G.say(`${by.person ? by.person.short : 'The madman'} tears into ${p ? p.short : 'a crewman'}!`, 'warn');
   else if (d < 40) G.say('A scream, somewhere close. Then nothing.', 'warn');
   scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1);   // game time, not wall time: no timers here
