@@ -323,6 +323,7 @@ export class Talk {
   renderWheel() { if (!this.dom || !this.W) return; const P = UIHUB.portraits; this.dom.svg.innerHTML = wheelSVG(this.W, { portrait: P ? (p) => P.get(p) : null }); }
   keydown(ev) {
     if (this.G.phase !== 'talk' || !this.M.active) return; ev.preventDefault(); ev.stopImmediatePropagation(); if (ev.repeat) return;
+    if (this.uiDue && ev.code !== 'Escape' && ev.code !== 'KeyE') this.setupUI();   // a wheel key in the first zoom frame: build the wheel now
     const code = ev.code, W = this.W;
     if (code === 'Escape') { const UI = UIHUB.ui; if (UI?.top()?.kind === 'talk') UI.escape(); else this.end(); return; }
     if (code === 'KeyE') { this.end(); return; }
@@ -388,17 +389,26 @@ export class Talk {
       this.fwd0 = { x: ax, z: az }; this.clear = null; this.face = null; this.camPos = null; this.camLook = null;
       G.phase = 'talk'; this.M.begin(); document.body?.classList.add('talking');
       UIHUB.ui?.open('talk', { close: () => this.end() });   // releases pointer lock on purpose: no pause screen, Esc pops this layer
-      this.memo.trust0 = G.duty ? G.duty.trust(e.person) : 0.5;
+      this.memo.trust0 = G.duty ? G.duty.trust(e.person) : 0.5; this.mood = moodOf({ trust: this.memo.trust0, stress: clamp((this.save.alert || 0) / 4, 0, 1) });   // the face until setupUI (refresh) has the full context
       if (this.c.vmScene) { this.vmWas = this.c.vmScene.visible; this.c.vmScene.visible = false; }
       this.addLight(); this.setupDof();
-      this.refresh(); this.showUI(true); this.dom && (this.dom.you.textContent = '', this.dom.tx.textContent = '', this.dom.nm.textContent = '');
-      this.queue(lineFor('open', this.lineCtx()), 0.75, null);
+      // the zoom starts now; the talk UI (intents, wheel SVG, plate, relationship meter) is built on the second zoom frame, once the first close-up frame is
+      // on screen (tools/talktime.mjs: building it here, with a forced layout to start the fade-in, added 7-43 ms between E and that first frame).
+      // #tk is display:block from here on but shows nothing until 'in' (bars off screen, vignette / plate / wheel at opacity 0).
+      this.uiDue = 2; this.showUI(true);
       this.step(0, 0); return true;
     } catch (er) { console.warn('talk: begin failed, falling back to the list menu', er); this.abort(); return false; }
   }
+  /** the deferred half of begin(): intents + wheel + plate, the fade-in, the opener line (still 0.75 s after E). Runs on the second zoom frame, or at once
+   *  when something needs the wheel earlier (a key / click / choose() in the first frame). Not after the exit has started. */
+  setupUI() {
+    this.uiDue = 0; if (!this.e || !this.M.active || this.M.state === 'out') return;
+    this.refresh(); this.dom && (this.dom.you.textContent = '', this.dom.tx.textContent = '', this.dom.nm.textContent = ''); this.el?.classList.add('in');   // 'on' was set (and drawn) a frame ago: no forced layout to start the transition
+    this.queue(lineFor('open', this.lineCtx()), Math.max(0, 0.75 - this.tt), null);
+  }
   /** leave (Esc / E / hub / Leave). fast = hurried (alert, hazard): 0.3 s */
   end(fast = false) {
-    if (!this.M.active || this.M.state === 'out') return false; this.M.end(fast); this.pending = null;
+    if (!this.M.active || this.M.state === 'out') return false; this.M.end(fast); this.pending = null; this.uiDue = 0;
     UIHUB.ui?.closed('talk');   // re-requests pointer lock inside this key / click gesture; a refusal shows the "Click to resume" chip in play
     this.showUI(false); return true;
   }
@@ -420,11 +430,12 @@ export class Talk {
     document.body?.classList.remove('talking'); this.showUI(false, true);
     if (UIHUB.ui?.has('talk')) UIHUB.ui.closed('talk');
     if (G.phase === 'talk') G.phase = 'play';
-    this.e = null; this.save = null; this.speech = null; this.pending = null;
+    this.e = null; this.save = null; this.speech = null; this.pending = null; this.uiDue = 0;
   }
 
   // ---------------------------------------------------------------- choices
   pick(it) {
+    if (this.uiDue) this.setupUI();
     if (!it || !this.M.inputOk || !this.e) return false;
     const lock = lockOf(this.cats, it.id); const dom = this.dom;
     if (lock) { if (dom) { dom.you.textContent = lock; dom.you.className = 'you no'; } return false; }
@@ -433,6 +444,7 @@ export class Talk {
   }
   /** run an intent by id (tests and the wheel). Returns the reply { text, gesture } or false when locked */
   choose(id) {
+    if (this.uiDue) this.setupUI();   // chosen before the wheel was built (a key in the first zoom frame)
     if (!this.e || !this.M.inputOk) return false; const lock = lockOf(this.cats, id); if (lock) { if (this.dom) { this.dom.you.textContent = lock; this.dom.you.className = 'you no'; } return false; }
     const G = this.G, D = G.duty, pr = this.e.person, it = intentIndex(this.cats).get(id), you = youLine(id, it?.label);
     if (this.dom) { this.dom.you.textContent = 'You: “' + you + '”'; this.dom.you.className = 'you'; }
@@ -484,6 +496,7 @@ export class Talk {
     const e = this.e; if (!this.M.active || !e) return;
     if (this.watch()) return;
     this.tt += dt; const ev = this.M.tick(dt);
+    if (this.uiDue && dt > 0 && --this.uiDue === 0) this.setupUI();
     if (this.pending && this.tt >= this.pending.at && this.M.state !== 'out') { const p = this.pending; this.pending = null; this.sayNow(p.line, p.delta); }
     this.speaker(dt); this.camera(dt); this.typeStep(dt);
     try { this.c.world?.update(dt, t); } catch { }   // lamps / screens keep their glow (visual only, no logic)
@@ -566,7 +579,17 @@ export class Talk {
   ensureLight() { const T = this.c.THREE; if (this.light || !T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.light.position.set(0, -50, 0); this.lightI = 0.45; this.c.scene.add(this.light); }
   addLight() { this.ensureLight(); this.lightI = 0.45; if (this.light) this.light.intensity = 0; this._occ = false; }
   /** compile the depth-of-field pass now (one throwaway composer frame with it enabled): the loading screen calls this so the first talk does not */
-  warm() { const post = this.c.post; if (!this.dof || !post?.composer || this.c.CFG?.quality !== 'high') return; const was = this.dof.enabled; this.dof.enabled = true; this.dof.uniforms.amount.value = 0; try { post.render(0.016, 0, 0, 0); } finally { this.dof.enabled = was; } }
+  warm() { const post = this.c.post; if (!this.dof || !post?.composer || this.c.CFG?.quality !== 'high') return; const was = this.dof.enabled; this.dof.enabled = true; this.dof.uniforms.amount.value = 0; try { post.render(0.016, 0, 0, 0); } finally { this.dof.enabled = was; } this.warmDof(); }
+  /** draw the depth-of-field pass alone into BOTH of the composer's ping-pong buffers (two full-screen quads, no scene). The composer alternates its buffers,
+   *  so warm()'s one frame drew it into only one of them and the first talk drew it into the other for the first time (tools/talktime.mjs "first draws";
+   *  drivers that build a pipeline per program and target pay for that on the first draw, not at compile). Cheap: main.js also calls it after every deck
+   *  change and when the quality goes back to High (the buffers are re-created on a resize). */
+  warmDof() {
+    const C = this.c.post?.composer, R = this.c.renderer, d = this.dof; if (!d || !C?.renderTarget1 || !C.renderTarget2 || !R) return false;
+    const prev = R.getRenderTarget(), amt = d.uniforms.amount.value; d.uniforms.amount.value = 0;
+    try { d.render(R, C.renderTarget1, C.renderTarget2, 0, false); d.render(R, C.renderTarget2, C.renderTarget1, 0, false); } finally { d.uniforms.amount.value = amt; R.setRenderTarget(prev); }
+    return true;
+  }
   setupDof() {
     if (this.dof || this._dofLoading || !this.c.post?.composer || typeof document === 'undefined') { if (this.dof) this.dof.enabled = false; return; }
     this._dofLoading = true; const T = this.c.THREE;
@@ -581,7 +604,7 @@ export class Talk {
   }
 
   // ---------------------------------------------------------------- HUD pieces
-  showUI(on, now = false) { if (!this.el) return; if (on) { this.el.classList.add('on'); void this.el.offsetWidth; this.el.classList.add('in'); } else { this.el.classList.remove('in'); clearTimeout(this._hideT); if (now) this.el.classList.remove('on'); else this._hideT = setTimeout(() => { if (!this.M.active || this.M.state === 'out') this.el.classList.remove('on'); }, 600); } }
+  showUI(on, now = false) { if (!this.el) return; if (on) { clearTimeout(this._hideT); this.el.classList.add('on'); }   /* 'in' (the fade-in) follows in setupUI */ else { this.el.classList.remove('in'); clearTimeout(this._hideT); if (now) this.el.classList.remove('on'); else this._hideT = setTimeout(() => { if (!this.M.active || this.M.state === 'out') this.el.classList.remove('on'); }, 600); } }
   renderPlate() {
     const d = this.dom, e = this.e; if (!d || !e) return; const p = e.person, dep = DEPT[p.dept], div = dep ? DIVISION[dep.division] : null;
     this.el.style.setProperty('--u', div ? hex(div.color) : '#a3231c'); this.el.style.setProperty('--uc', deptCol(p)); this.el.style.setProperty('--dc', deptCol(p));
