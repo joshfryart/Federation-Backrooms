@@ -20,7 +20,7 @@ You do not need to read the engine to author a module. This page, the kit's head
 |---|---|
 | `js/jobs/kit.js` | helper kit: `define`, `machine`, `room`, keys, seeded random, canvas helpers |
 | `js/jobs/<billet>__<slug>.js` | one job's module (you write these) |
-| `js/jobs/index.js` | GENERATED registry. Never edit it; run `node tools/merge-jobs.mjs` |
+| `js/jobs/index.js` | GENERATED registry: every job module's code bundled into this one file (one request at page load instead of 701). Never edit it; run `node tools/merge-jobs.mjs` after adding **or editing** a job file, or the game keeps the old code (the `jobgames-unit` test fails while it is stale) |
 | `js/jobs/host.js` | in-room host (engine): places a room job's sites and runs it inside the work-site UI |
 | `tools/job-human.json` | the source notes for all 701 jobs: `human_steps`, `tools`, `what_makes_it_hard`, `ideal_interaction` |
 | `tools/check-jobs.mjs` | validator (`--brief` prints what to author, `<files>` checks them, `--report` shows coverage) |

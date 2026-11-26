@@ -997,7 +997,7 @@ function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 
 }
 // Begin / retry: loading screen -> build the run (ship, crew, systems, deck 1: the heavy synchronous part) -> compile shaders -> render every crew portrait (so the radio, duty board and
 // wheel never render heads mid-play) -> an "Enter the ship" button (a click, so pointer lock is allowed). Nothing plays until all of it is done.
-let runLoading = false;
+let runLoading = false; const PORTRAIT_BATCH_MS = 120;   // crew portraits rendered per paint during boarding: keeps the bar and the face card moving several times a second
 async function startRun() {
   if (runLoading || G.phase === 'loading') return; runLoading = true;
   try {
@@ -1009,7 +1009,13 @@ async function startRun() {
     if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } } mark('run:talkWarm');   // depth-of-field pass for the conversation close-up
     if (NOM() && G.menus && !TEST_MODE) {
       const list = G.menus.portraitOrder(), n = list.length;
-      for (let i = 0; i < n; i++) { Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i + 1} / ${n}`); const p = list[i], url = G.portraits.renderNow(p); if (url) Loading.crew(url, p.short || p.full, p.title); await paint(); }   // the face being rendered right now fades in over the last one
+      // in time-boxed batches, one paint per batch: a paint per face waits for a whole display frame each (91 faces >= 1.5 s at 60 Hz) while a face itself is a few ms
+      // once the first world frame is done. The last face of each batch fades in over the previous one.
+      for (let i = 0; i < n;) {
+        const t0 = performance.now(); let shown = null;
+        do { const p = list[i++], url = G.portraits.renderNow(p); if (url) shown = [url, p]; } while (i < n && performance.now() - t0 < PORTRAIT_BATCH_MS);
+        Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i} / ${n}`); if (shown) Loading.crew(shown[0], shown[1].short || shown[1].full, shown[1].title); await paint();
+      }
     }
     mark('run:portraits'); Loading.set(0.99, 'Almost ready…'); await paint();
     mark('run:ready'); Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);
