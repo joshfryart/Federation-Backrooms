@@ -805,19 +805,22 @@ export class World {
       im.receiveShadow = true; g.add(im);
     }
     dummy.rotation.set(0, 0, 0);
-    // ceiling: per-room variants (acoustic tile, riveted metal, slatted baffle); corridors follow the hull class
+    // ceiling: per-room variants (acoustic tile, riveted metal, slatted baffle, clinical light panel, felt coffers); corridors follow the hull class
     {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
-      const ck = (k) => T.d[k] ? k : 'ceil';
-      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg') };
+      const ck = (k) => T.d[k] ? k : T.d.ceilt ? 'ceilt' : 'ceil';
+      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg'),
+        bridge: ck('ceilp'), sickbay: ck('ceilp'), lab: ck('ceilp'), morgue: ck('ceilp'), washroom: ck('ceilp'), laundry: ck('ceilp'),
+        quarters: ck('ceilc'), lounge: ck('ceilc'), readyroom: ck('ceilc'), mess: ck('ceilc'), gym: ck('ceilc') };
       dressTable('ceil', CEIL_OF, { ck, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.ceil`
       const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
       const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
+      const CEIL_GAIN = { ceilt: 1.0, ceilp: 1.05, ceilc: 0.95 };   // tint gain per ceiling set (the clinical panel reads whiter, felt coffers warmer)
       for (const [kind, list] of Object.entries(byC)) {
         const dm = T.d[kind]; if (!dm) continue;
         const cm = new THREE.MeshStandardMaterial(dm.orm ? { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, aoMap: dm.rough, metalnessMap: dm.rough, roughness: 1, metalness: 1 } : { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, roughness: 1, metalness: 0 });
         const im = new THREE.InstancedMesh(geo, cm, list.length);
-        list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(kind === 'ceilt' ? 1.0 : 0.85)); });
+        list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(CEIL_GAIN[kind] || 0.85)); });
         g.add(im);
       }
     }
@@ -1188,7 +1191,7 @@ export class World {
       vents.forEach((v, i) => { dummy.position.set((v.x + 0.5) * TS, this.ceilAt(v.x, v.y) - 0.03, (v.y + 0.5) * TS); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
       g.add(im);
     }
-    this.vents = vents;
+    this.vents = vents; this.ceilBusy = new Set([...pipes, ...vents].map(v => v.x + ',' + v.y));   // tiles whose ceiling already carries a pipe / slat vent (fan vents keep off them)
     // --- floor markings: hazard tape at the lift, launch ring in shuttlebays
     const haz = canvasTex(128, (c, sz) => { c.fillStyle = '#e0b020'; c.fillRect(0, 0, sz, sz); c.fillStyle = '#111'; for (let i = -sz; i < sz * 2; i += 32) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 16, 0); c.lineTo(i + 16 - sz, sz); c.lineTo(i - sz, sz); c.fill(); } });
     const [ex, ey] = d.exit, [edx, edy] = d.exitDir; const [ecx, ecz] = this.center(ex, ey);
@@ -1347,6 +1350,13 @@ export class World {
       const halo = inst(new THREE.PlaneGeometry(2.2, 1.7), this.emergHalo, list, (f, o) => onFace(f, o, Math.min(2.15, ceilOf(f) - 0.3), 0.012)); if (halo) halo.receiveShadow = false;
       this.emerg = list.map(f => ({ x: f.px + f.dx * 0.3, y: Math.min(2.15, ceilOf(f) - 0.3), z: f.pz + f.dy * 0.3 }));
     }
+    // --- wall vent fans (built with the ceiling ones further down): claim their faces before the fixture passes fill the room walls
+    const FAN_ROOMS = new Set(['engineering', 'plant', 'workshop', 'cargo', 'shuttlebay', 'laundry', 'datacore', 'stores', 'gym', 'washroom', 'mess', 'brig', 'armory', 'transporter']), fanFaces = [];
+    for (const f of faces) {
+      if (f.deco || f.win || f.sign || fanFaces.length >= 32 || ceilOf(f) < WH - 0.01) continue;
+      const p = f.room ? (FAN_ROOMS.has(f.room) ? 0.25 : 0) : 0.03; if (!p || hash(f.tx * 2.3 + f.dx, f.ty * 3.1 + f.dy) >= p) continue;
+      f.deco = true; fanFaces.push(f);
+    }
     // --- wall fixtures by room type; corridors get the odd extinguisher, comm panel, drinking fountain…
     {
       const byKind = {};
@@ -1444,6 +1454,40 @@ export class World {
       const [edx, edy] = d.exitDir; const spots = [{ x: d.start[0], y: d.start[1], ry: 0 }, { x: ex + edx, y: ey + edy, ry: Math.atan2(edx, edy) }].filter(s => d.grid[s.y]?.[s.x] === 0);
       inst(sg, decal(st, 0.42, accent.clone().lerp(new THREE.Color(0xffffff), 0.5)), spots, (s, o) => { o.position.set((s.x + 0.5) * TS, 0.0125, (s.y + 0.5) * TS); o.rotation.y = s.ry; });
     }
+    // --- vent fans: a square housing with a round shroud and a guard, five pitched blades that spin (World.update). On the wall of service rooms
+    // (and the odd corridor face) and in the ceiling, beside the light panel. They spin down in a blackout and when life support fails.
+    {
+      const housing = kitGeo('fan_housing', K => {
+        K.box(0.62, 0.62, 0.008, 0, 0, 0x101216);   // dark plenum behind the blades
+        for (const [w, h, x, y] of [[0.62, 0.05, 0, 0.285], [0.62, 0.05, 0, -0.285], [0.05, 0.52, 0.285, 0], [0.05, 0.52, -0.285, 0]]) K.box(w, h, 0.05, x, y, STEEL);
+        for (const [x, y] of [[0.27, 0.27], [-0.27, 0.27], [0.27, -0.27], [-0.27, -0.27]]) K.cyl(0.014, 0.012, x, y, 0x9aa0a8, 0.05, 'z', false, 6);
+        const ring = new THREE.TorusGeometry(0.255, 0.022, 6, 24); K._add(ring, 0, 0, 0.06, 0x3a3f47, false);
+        for (const y of [-0.16, -0.08, 0, 0.08, 0.16]) K.box(0.5 - Math.abs(y) * 1.2, 0.01, 0.01, 0, y, 0x6a7078, 0.115);   // front guard
+        K.box(0.01, 0.5, 0.01, 0, 0, 0x6a7078, 0.115);
+        K.box(0.018, 0.2, 0.05, 0, -0.14, 0x2a2d33, 0.008);   // motor strut
+      });
+      const blades = kitGeo('fan_blades', K => {
+        K.cyl(0.055, 0.05, 0, 0, 0x2a2d33, -0.025, 'z', false, 12); K.cyl(0.03, 0.012, 0, 0, YL, 0.025, 'z', false, 10);
+        for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2, b = new THREE.BoxGeometry(0.2, 0.075, 0.008); b.rotateX(0.45); b.translate(0.13, 0, 0); b.rotateZ(a); K._add(b, 0, 0, 0, 0x7d838c, false); }
+      });
+      const list = [], mk = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v3 = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+      for (const f of fanFaces) { e.set(0, f.ry, 0); list.push(mk.compose(v3.set(f.px, Math.min(2.5, ceilOf(f) - 0.5), f.pz), q.setFromEuler(e), one).clone()); }
+      const nWall = list.length;
+      for (const [x, y] of d.openTiles) {
+        if (list.length >= 72) break;
+        if (d.grid[y][x] !== 0 || this.isTube(x, y) || this.ceilBusy?.has(x + ',' + y)) continue; const r = d.room[y][x]; if (r === 'jefferies') continue;
+        const h = hash(x * 3.7 + 2, y * 1.9 + 5), p = r ? (FAN_ROOMS.has(r) ? 0.12 : 0.025) : 0.04; if (h >= p) continue;
+        const side = hash(x, y * 2.2 + 7) < 0.5 ? -1 : 1;   // beside the light panel, never under it
+        e.set(Math.PI / 2, 0, 0); list.push(mk.compose(v3.set((x + 0.5) * TS, this.ceilAt(x, y) - 0.004, (y + 0.5 + side * 0.32) * TS), q.setFromEuler(e), one).clone());
+      }
+      if (list.length) {
+        const hm = new THREE.InstancedMesh(housing.solid, m.kit, list.length), bm = new THREE.InstancedMesh(blades.solid, m.kit, list.length);
+        list.forEach((mt, i) => hm.setMatrixAt(i, mt)); hm.receiveShadow = true; g.add(hm);
+        const hub = new THREE.Matrix4().makeTranslation(0, 0, 0.075);
+        this.fans = { im: bm, base: list.map(mt => mt.clone().multiply(hub)), ang: list.map((_, i) => hash(i, 3.3) * 6.28), speed: list.map((_, i) => (i < nWall ? 6 : 4.5) + hash(i * 1.7, 9.1) * 4), spin: 1, nWall };
+        this._fanTick(0); bm.receiveShadow = true; g.add(bm);
+      }
+    }
     // --- ceiling: hanging cable loops, dropped ceiling tiles, light shafts under some vents
     {
       const cab = [], broken = [];
@@ -1470,6 +1514,12 @@ export class World {
     }
   }
 
+  _fanTick(dt) {
+    const F = this.fans, R = this._fanR || (this._fanR = new THREE.Matrix4()), M2 = this._fanM || (this._fanM = new THREE.Matrix4());
+    if (dt && F.spin < 0.002) return;
+    for (let i = 0; i < F.base.length; i++) { F.ang[i] = (F.ang[i] + dt * F.speed[i] * F.spin) % (Math.PI * 2); F.im.setMatrixAt(i, M2.multiplyMatrices(F.base[i], R.makeRotationZ(F.ang[i]))); }
+    F.im.instanceMatrix.needsUpdate = true;
+  }
   setFancy(on) { this.cones.visible = on; }
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
@@ -1593,6 +1643,7 @@ export class World {
     // emergency lamps: faint when all is well, beating on alert, steady and bright when the power is out
     if (this.emergMat) { const a = this.alertAmt, off = 1 - this.powerAmt, k = Math.max(0.1, off * 0.85, a * (0.35 + 0.9 * (0.5 + 0.5 * Math.sin(t * 6 + 1.5)))); this.emergMat.color.setRGB(2.6 * k, 0.2 * k, 0.12 * k); this.emergHalo.opacity = Math.min(0.55, k * 0.5); }
     if (M.kitGlow) M.kitGlow.color.setScalar(0.12 + 0.88 * this.powerAmt * (this.flickerF < 0.5 && Math.random() < 0.02 ? 0.6 : 1));
+    if (this.fans) { const L = lv('life'), k = this.powerAmt * (L >= 2 ? 0 : L === 1 ? 0.4 : 1); this.fans.spin += (k - this.fans.spin) * Math.min(1, dt * 0.7); this._fanTick(dt); }   // vent fans spin down in a blackout / with life support out
     if (this.shaftMat) { this.shaftMat.opacity = 0.05 * (0.45 + 0.55 * this.powerAmt); this.poolMat.opacity = 0.07 * (0.45 + 0.55 * this.powerAmt); }
     if (this.liftOpen || this.carMode) {
       const L = this.lift.getObjectByName('doorL'), R = this.lift.getObjectByName('doorR'), o = this.liftOpen ? 1.3 : 0.5, k = Math.min(1, dt * (this.carMode ? 3 : 2));

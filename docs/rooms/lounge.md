@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/lounge.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs lounge`, look: `node tools/shot-room.mjs lounge <seed>`.
 - Size: 3-5 tiles; spawn weight 0 (zone weights only); department services.
-- world.js today: wall pool ROOM_DECOR `picture, shelf, fountain, mirror, monitorB`; FIT `shelf`; floor `carpet`; ceiling `ceilt`; walls `wallq`; light #ffcf9a.
+- world.js today: wall pool ROOM_DECOR `picture, shelf, fountain, mirror, monitorB`; FIT `shelf`; floor `carpet`; ceiling `ceilc`; walls `wallq`; light #ffcf9a.
 
 ## Backlog (10 slots)
 

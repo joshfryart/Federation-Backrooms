@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/readyroom.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs readyroom`, look: `node tools/shot-room.mjs readyroom <seed>`.
 - Size: 3-3 tiles; spawn weight 0 (zone weights only); department command.
-- world.js today: wall pool ROOM_DECOR `picture, shelf, monitorB, locker`; FIT `locker, shelf`; floor `carpet`; ceiling `ceilt`; walls `wallq`; light #ffd8a8.
+- world.js today: wall pool ROOM_DECOR `picture, shelf, monitorB, locker`; FIT `locker, shelf`; floor `carpet`; ceiling `ceilc`; walls `wallq`; light #ffd8a8.
 
 ## Backlog (10 slots)
 

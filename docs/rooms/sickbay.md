@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/sickbay.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs sickbay`, look: `node tools/shot-room.mjs sickbay <seed>`.
 - Size: 3-5 tiles; spawn weight 2; department medical.
-- world.js today: wall pool ROOM_DECOR `medcab, monitorG, medcab, kit, locker, gas_panel, stretcher_rack, gas_panel`; FIT `medcab, kit`; floor `hex`; ceiling `ceilt`; walls `wallp`; light #d2fff2; placards biological.
+- world.js today: wall pool ROOM_DECOR `medcab, monitorG, medcab, kit, locker, gas_panel, stretcher_rack, gas_panel`; FIT `medcab, kit`; floor `hex`; ceiling `ceilp`; walls `wallp`; light #d2fff2; placards biological.
 
 ## Backlog (10 slots)
 

@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/gym.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs gym`, look: `node tools/shot-room.mjs gym <seed>`.
 - Size: 3-5 tiles; spawn weight 0 (zone weights only); department services.
-- world.js today: wall pool ROOM_DECOR `mirror, fountain, shelf, extinguisher`; FIT `locker, shelf`; floor `rubber`; ceiling `ceilt`; walls `wallp`; light #f4fff0.
+- world.js today: wall pool ROOM_DECOR `mirror, fountain, shelf, extinguisher`; FIT `locker, shelf`; floor `rubber`; ceiling `ceilc`; walls `wallp`; light #f4fff0.
 
 ## Backlog (10 slots)
 
