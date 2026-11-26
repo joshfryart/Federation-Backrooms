@@ -482,6 +482,10 @@ class Kit {
 // what a window / the bridge viewscreen shows: a ray from the camera through each pixel hits a far star sphere, so stars shift with your position (parallax) and slowly turn;
 // a planet limb sits low on the horizon. speed > 1 gives the viewscreen its forward drift. SPACE_T.value is advanced by World.update.
 export const SPACE_T = { value: 0 };
+// what a doorway's leaves are made of (by the room it opens into): sets its open / close / seal / pry sounds (js/audio.js Sound.door)
+const HEAVY_DOOR = new Set(['engineering', 'cargo', 'shuttlebay', 'plant', 'workshop', 'brig', 'armory', 'airlock', 'datacore', 'stores', 'transporter']);
+const LIGHT_DOOR = new Set(['quarters', 'lounge', 'washroom', 'arboretum', 'holodeck', 'readyroom', 'gym', 'laundry', 'atrium', 'mess']);
+export const doorMaterial = (room) => HEAVY_DOOR.has(room) ? 'heavy' : LIGHT_DOOR.has(room) ? 'light' : 'std';
 export function spaceMaterial(stars, speed = 1) {
   stars.wrapS = stars.wrapT = THREE.RepeatWrapping;
   return new THREE.ShaderMaterial({
@@ -1354,7 +1358,7 @@ export class World {
       // sliding door leaves: two panels per doorway that part when someone walks up (World.slideDoors, driven by main.js)
       { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.roughness = 1; dm.metalness = 1; dm.color.set(0xb0b8c4); } }
         const hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
-        this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false }; }); }
+        this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false, mat: doorMaterial(f.room) }; }); }
     }
     // --- window frames with depth and a glass pane
     {
@@ -1429,9 +1433,11 @@ export class World {
   setFancy(on) { this.cones.visible = on; }
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
-  setDoorLock(on) { if (this.doorLock === on) return; this.doorLock = on; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }
+  // door lock mode: false (doors work), 'power' (blackout: walkers force a door after ~2.5 s, it then stays open 10 s) or 'alert' (red-alert
+  // lockdown: crew key a door with their codes in ~1 s and it reseals right behind them). `true` means 'power'. The player pries either (pryDoor)
+  setDoorLock(on) { on = on === true ? 'power' : on || false; if (this.doorLock === on) return; this.doorLock = on; if (this.doors) for (const d of this.doors) { d.pry = 0; d.npry = 0; d.keyed = 0; } }
   // nearest sealed door within reach of (px, pz), or null
-  sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
+  sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0 || d.keyed > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
   // hold E at a sealed door: ~3 s to force it, then it stays open 15 s. Returns progress 0..1 (or -1 when nothing to pry)
   pryDoor(px, pz, dt) { const d = this.sealedDoorNear(px, pz); if (!d) return -1; d.prying = true; d.pry = (d.pry || 0) + dt; if (d.pry >= 3) { d.pried = 15; d.pry = 0; return 1; } return d.pry / 3; }
 
@@ -1486,15 +1492,22 @@ export class World {
   // pick a piece of clutter up: hide its instance and drop it from the look list
   takeClutter(c) { if (c.gone) return false; c.gone = true; c.inst?.hide(); const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
   // doors part for the player (and anyone in `who`, [{x, z, w}]) within reach and close again behind them. Sealed doors (doorLock) stay shut
-  // for everyone; a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player pried)
-  slideDoors(dt, px, pz, who = [], onOpen = null) {
-    if (!this.doors) return; const k = Math.min(1, dt * 7);
+  // for everyone. In a blackout ('power') a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player
+  // pried); in a red-alert lockdown ('alert') a walker keys it open in ~1 s and it stays unsealed only while crew are in the doorway (+1.2 s).
+  // onDoor(dist, door, kind) for doors within 14 m: kind 'open' / 'close' (leaves start to move), 'seal' (the lock just shut an open door),
+  // 'key' (crew keyed a lockdown door), 'force' (crew forced a blackout door); door.mat says what it sounds like
+  slideDoors(dt, px, pz, who = [], onDoor = null) {
+    if (!this.doors) return; const k = Math.min(1, dt * 7), alert = this.doorLock === 'alert';
     for (const d of this.doors) {
-      if (d.pried > 0) d.pried -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
-      const dx = d.f.x - px, dz = d.f.z - pz; const sealed = this.doorLock && !(d.pried > 0); let near = !sealed && dx * dx + dz * dz < 2.7 * 2.7;
-      if (sealed && d.open < 0.5) { let at = false; for (const w of who) if (w.w) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.6 * 1.6) { at = true; break; } } d.npry = at ? (d.npry || 0) + dt : 0; if (d.npry > 2.5) { d.npry = 0; d.pried = 10; } }
+      if (d.pried > 0) d.pried -= dt; if (d.keyed > 0) d.keyed -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
+      const dx = d.f.x - px, dz = d.f.z - pz, dd = dx * dx + dz * dz, hear = dd < 14 * 14 && onDoor; let sealed = !!this.doorLock && !(d.pried > 0) && !(d.keyed > 0);
+      if (sealed && d.open < 0.5) { let at = false; for (const w of who) if (w.w) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.6 * 1.6) { at = true; break; } } d.npry = at ? (d.npry || 0) + dt : 0;
+        if (d.npry > (alert ? 1 : 2.5)) { d.npry = 0; if (alert) d.keyed = 1.2; else d.pried = 10; sealed = false; if (hear) onDoor(Math.sqrt(dd), d, alert ? 'key' : 'force'); } }
+      if (alert && d.keyed > 0) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.0) { d.keyed = Math.max(d.keyed, 1.2); break; } }   // held while crew are in the doorway (within 1 m of the leaves)
+      if (sealed && !d.sealed && d.open > 0.05 && hear) onDoor(Math.sqrt(dd), d, 'seal'); d.sealed = sealed;
+      let near = !sealed && dd < 2.7 * 2.7;
       if (!near && !sealed) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
-      if (near && !d.near && dx * dx + dz * dz < 14 * 14) onOpen?.(Math.hypot(dx, dz)); d.near = near;
+      if (near !== d.near && hear && !sealed) onDoor(Math.sqrt(dd), d, near ? 'open' : 'close'); d.near = near;   // a sealing door already said 'seal'
       const target = near ? 1 : 0; if (Math.abs(d.open - target) < 0.002) continue; d.open += (target - d.open) * k;
       const o = d.open * (d.hw - 0.04); d.L.position.z = -d.hw / 2 - o; d.R.position.z = d.hw / 2 + o;
     }

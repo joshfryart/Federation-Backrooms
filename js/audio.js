@@ -208,4 +208,23 @@ export class Sound {
   breath(vol = 0.12) { this.noise(0.45, vol, 900, 0.5, 'bandpass'); }
   setVolume(v) { if (this.master) this.master.gain.value = v; this.vol = v; }
   flick() { this.noise(0.05, 0.1, 3000, 2, 'highpass'); }
+  // sliding doors by material (js/world.js doorMaterial): 'std' pneumatic hiss, 'heavy' low rumbling blast door, 'light' quick high swish.
+  // kind: 'open' / 'close' (leaves move), 'seal' (a lock slams an open door shut and latches), 'key' (crew code chirp at a lockdown door),
+  // 'force' (crew wrench a dead door open). `dist` in metres fades it out by ~14 m
+  door(kind, mat = 'std', dist = 0) {
+    if (!this.ctx) return; const v = Math.max(0.015, 1 - dist / 14), N = (d, g, f, q, t, dl) => this.noise(d, g * v, f, q, t, dl), T = (f, d, ty, g, sl, dl) => this.tone(f, d, ty, g * v, sl, dl);
+    const heavy = mat === 'heavy', light = mat === 'light';
+    if (kind === 'open' || kind === 'close') {
+      const sh = kind === 'close';
+      if (heavy) { N(0.55, 0.11, sh ? 380 : 520, 0.7, 'lowpass'); T(62, 0.5, 'sawtooth', 0.05, sh ? -12 : 14); if (sh) this.thud(0.16 * v, 0.42); else N(0.08, 0.05, 1200, 2, 'bandpass'); }
+      else if (light) { N(0.1, 0.07, sh ? 2200 : 2700, 1.6, 'bandpass'); if (sh) N(0.03, 0.04, 3200, 3, 'bandpass', 0.09); }
+      else { N(0.16, 0.1, sh ? 1500 : 1800, 1, 'bandpass'); if (sh) this.thud(0.07 * v, 0.14); }
+    } else if (kind === 'seal') {   // fast close, hard stop, the lock bolts going home
+      N(0.12, heavy ? 0.14 : 0.1, heavy ? 600 : 1500, 1, 'bandpass'); this.thud((heavy ? 0.4 : light ? 0.16 : 0.26) * v, 0.1);
+      for (let i = 0; i < (heavy ? 3 : 2); i++) N(0.04, 0.07, 3000, 3, 'bandpass', 0.22 + i * 0.09); T(heavy ? 110 : 180, 0.12, 'square', 0.03, 0, 0.2);
+    } else if (kind === 'key') { T(1320, 0.06, 'square', 0.03); T(1760, 0.08, 'square', 0.03, 0, 0.08); N(0.05, 0.05, 2600, 3, 'bandpass', 0.2); }   // code accepted, bolts drawn
+    else if (kind === 'force') { N(0.5, 0.12, heavy ? 300 : light ? 900 : 550, 1.2, 'bandpass'); T(heavy ? 140 : 260, 0.45, 'sawtooth', 0.04, -60); }
+  }
+  // one grind of a door being pried by hand (repeated while E is held); bigger, lower and slower for heavy doors
+  pry(mat = 'std') { const heavy = mat === 'heavy', light = mat === 'light'; this.noise(0.2, 0.08, heavy ? 260 : light ? 700 : 400, 1, 'bandpass'); if (Math.random() < (heavy ? 0.5 : 0.3)) this.tone(heavy ? 90 : light ? 300 : 180, 0.18, 'triangle', 0.035, -30); }
 }

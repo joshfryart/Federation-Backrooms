@@ -92,6 +92,14 @@ export async function walkBrowser(page, fail) {
       if (dr && e) { const [ax, az] = w.center(dr.A[0], dr.A[1]); e.x = ax; e.z = az; e.mesh.position.set(ax, 0, az); P.x = ax + 30; P.z = az; G.blackout = 90; for (let i = 0; i < 30; i++) tick(1);   /* main power failure: doors seal */ const shut = dr.o.open < 0.5;
         g.startWalk(e, dr.B[0], dr.B[1], false); let pried = false, n = 0; for (; n < 30 * 30 && e.walk; n++) { tick(1); pried = pried || dr.o.pried > 0; } const tl = tileOf(e);
         out.seal = { door: true, shut, pried, secs: +(n / 30).toFixed(1), through: !e.walk && tl[0] === dr.B[0] && tl[1] === dr.B[1] }; G.blackout = 0.01; tick(2); } }
+    // 4b) red-alert lockdown: the same door seals; a walker keys it with their codes (~1 s, no forced 10 s window), gets through, and it reseals behind them
+    { const dr = (w.doors || []).map(o => { const a = o.f.ax ? [1, 0] : [0, 1], A = w.tile(o.f.x - a[0] * 1.5, o.f.z - a[1] * 1.5), B = w.tile(o.f.x + a[0] * 1.5, o.f.z + a[1] * 1.5); return { o, A, B }; }).find(q => d.grid[q.A[1]]?.[q.A[0]] === 0 && d.grid[q.B[1]]?.[q.B[0]] === 0 && (q.A[0] !== q.B[0] || q.A[1] !== q.B[1]) && g.pathField(q.B[0], q.B[1])[q.A[0] + q.A[1] * w.W] === 1);
+      const e = idle()[0], AL = G.comms?.alerts; out.lock = { door: !!dr && !!AL };
+      if (dr && e && AL) { tick(30); const [ax, az] = w.center(dr.A[0], dr.A[1]); e.x = ax; e.z = az; e.mesh.position.set(ax, 0, az); P.x = ax + 30; P.z = az; AL.raise('red', { source: 'test', reason: 'lockdown test' }); G.stationT = 1e9;   /* hold the stations call off: this walker is ours */ dr.o.pried = 0;   /* case 4 may have forced this door: drop its open window */
+        for (let i = 0; i < 30; i++) tick(1); const mode = w.doorLock, shut = dr.o.open < 0.5;
+        g.startWalk(e, dr.B[0], dr.B[1], false); let keyed = false, pried = false, n = 0; for (; n < 30 * 30 && e.walk; n++) { tick(1); keyed = keyed || dr.o.keyed > 0; pried = pried || dr.o.pried > 0; } const tl = tileOf(e);
+        for (let i = 0; i < 4 * 30; i++) tick(1); const resealed = dr.o.open < 0.2;
+        out.lock = { door: true, mode, shut, keyed, pried, resealed, secs: +(n / 30).toFixed(1), through: !e.walk && tl[0] === dr.B[0] && tl[1] === dr.B[1] }; AL.clear('red'); G.stationT = 0; tick(2); } }
     // 5) room instance + friends: the tile is inside the instance the sim chose; a friend already there draws you to the same furniture
     { const types = [...new Set(d.rooms.map(r => r.type))], multi = types.map(tp => d.rooms.filter(r => r.type === tp && G.plan[tp]?.some(s => s.deckNo === here && s.tx >= r.x && s.tx < r.x + r.w && s.ty >= r.y && s.ty < r.y + r.h))).find(l => l.length >= 2);
       const inRect = (t, r) => !!t && t[0] >= r.x && t[0] < r.x + r.w && t[1] >= r.y && t[1] < r.y + r.h, p0 = g.roster.people.find(p => !p.isPlayer);
@@ -192,6 +200,7 @@ export async function walkBrowser(page, fail) {
   if (!(L && L.toLift && L.boarded && L.gone && L.inCar && L.doorsShut && L.jump < 0.6 && L.where !== undefined)) fail('npc boards the lift ' + JSON.stringify(L));
   if (!(A && A.appeared && A.inCar && A.shutAtSpawn && !A.lost && A.jump < 0.6 && A.inRoom)) fail('npc arrives by lift ' + JSON.stringify(A));
   if (!(S && (!S.door || (S.shut && S.pried && S.through)))) fail('npc at a sealed door ' + JSON.stringify(S));
+  { const K = r.lock; if (!(K && (!K.door || (K.mode === 'alert' && K.shut && K.keyed && !K.pried && K.through && K.resealed)))) fail('npc at a red-alert lockdown door ' + JSON.stringify(K)); }
   if (r.inst && !r.inst.every(Boolean)) fail('npc room instance ' + JSON.stringify(r.inst));
   if (F && !(F.inRect && F.apart && (!F.prop || !F.room || F.same))) fail('npc sits with friends ' + JSON.stringify(F));
   const O = r.order; if (O && !(O.ord && (O.walked || O.from === O.to) && O.heldAway && O.ran && O.done && O.inRoom && O.released)) fail('npc ordered job walks to the job room ' + JSON.stringify(O));

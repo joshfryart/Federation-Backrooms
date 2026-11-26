@@ -697,7 +697,14 @@ const nom = await page2.evaluate(async () => {
     { // sliding doors, clutter pick-up, terminal and talk menus
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
       if (dr) { w.setDoorLock(false);   // the phases ticked above can black the deck out (a power fault seals the doors, js/main.js step): start from powered doors, the seal is tested below
-        w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2;  w.setDoorLock(true); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.sealed = dr.open < 0.2; const q = { x: dr.f.x + (dr.f.ax ? 0.3 : 0), z: dr.f.z + (dr.f.ax ? 0 : 0.3), y: 0 }; w.resolve(q, 0.3); out.doors2.blocked = dr.f.ax ? q.x > dr.f.x + 0.3 : q.z > dr.f.z + 0.3; let pr = 0; for (let i = 0; i < 14; i++) pr = Math.max(pr, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.pried = pr >= 1 && dr.open > 0.5; w.setDoorLock(false); }
+        w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2;  w.setDoorLock(true); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.sealed = dr.open < 0.2; const q = { x: dr.f.x + (dr.f.ax ? 0.3 : 0), z: dr.f.z + (dr.f.ax ? 0 : 0.3), y: 0 }; w.resolve(q, 0.3); out.doors2.blocked = dr.f.ax ? q.x > dr.f.x + 0.3 : q.z > dr.f.z + 0.3; let pr = 0; for (let i = 0; i < 14; i++) pr = Math.max(pr, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.pried = pr >= 1 && dr.open > 0.5; w.setDoorLock(false);
+        { // red-alert lockdown ('alert'): seals like a blackout, a walker keys through in ~1 s (no 10 s forced-open window), it reseals behind them, the player pries it; sounds by material
+          dr.pried = 0; for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); const heard = []; const cb = (dd, o, k) => { if (o === dr) heard.push(k); };
+          w.setDoorLock('alert'); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x + 8, dr.f.z, [], cb); const sealed = dr.open < 0.2, seal = heard.includes('seal');
+          const crew = [{ x: dr.f.x + (dr.f.ax ? 1.2 : 0), z: dr.f.z + (dr.f.ax ? 0 : 1.2), w: true }]; let tk = 0; for (; tk < 40 && dr.open < 0.5; tk++) w.slideDoors(0.1, dr.f.x + 8, dr.f.z, crew, cb);
+          const keyedOpen = dr.open > 0.5, keySecs = +(tk * 0.1).toFixed(1); for (let i = 0; i < 40; i++) w.slideDoors(0.1, dr.f.x + 8, dr.f.z, [], cb); const resealed = dr.open < 0.2 && !(dr.pried > 0);
+          let pr2 = 0; for (let i = 0; i < 14; i++) pr2 = Math.max(pr2, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z);
+          out.doors2.lockdown = { sealed, seal, keyedOpen, keySecs, resealed, key: heard.includes('key'), pried: pr2 >= 1 && dr.open > 0.5, mat: dr.mat, mats: [...new Set(w.doors.map(o => o.mat))] }; w.setDoorLock(false); } }
       const c = w.clutter[0], n0 = w.clutter.length; out.clutter = { took: c ? w.takeClutter(c) : null, left: w.clutter.length === n0 - 1 };
       G.phase = 'play'; g.shipState.repair('computer'); g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
       const ppl = g.sim.onDeck(G.shipDeck + 1)[0]; if (ppl) { g.talkMenu({ person: ppl.person }); out.talk = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu(); }
@@ -749,6 +756,7 @@ console.log('nominal:', JSON.stringify(nom));
     ["n.doors2.sealed", () => n.doors2.sealed],
     ["n.doors2.blocked", () => n.doors2.blocked],
     ["n.doors2.pried", () => n.doors2.pried],
+    ["n.doors2.lockdown (red alert: seals, crew key through in ~1 s and it reseals, player pries)", () => { const L = n.doors2.lockdown; return !!L && L.sealed && L.keyedOpen && L.keySecs <= 1.6 && L.resealed && L.key && L.pried && ['std', 'heavy', 'light'].includes(L.mat); }],
     ["n.clutter.took", () => n.clutter.took],
     ["n.clutter.left", () => n.clutter.left],
     ["n.term.open", () => n.term.open],

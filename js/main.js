@@ -1485,12 +1485,16 @@ function step(dt, t) {
   if (NOM()) G.nav?.frame(dt);   // route tick 0.12 s inside; minimap / compass 30 Hz; floor chevrons + beacon
 
   // environment flicker / lights
-  world.setDoorLock(NOM() && world.powerTarget === 0);   // blackout seals the doors; hold E to pry one open
+  // door locks: a blackout seals the doors (crew force them), a red alert locks them down (crew key through with their codes, js/world.js
+  // slideDoors); the player pries either with E. Not in the collapse (index >= 4): evacuation needs the doors
+  { const red = NOM() && !!G.comms?.alerts?.has('red') && !(G.phases?.index >= 4), mode = !NOM() ? false : world.powerTarget === 0 ? 'power' : red ? 'alert' : false;
+    if (mode === 'alert' && world.doorLock !== 'alert') { G.say('Red alert lockdown: doors are sealed. Crew key through; hold E to pry a door.', 'warn'); G.sealMsgT = 6; }
+    world.setDoorLock(mode); }
   { const sd = NOM() && keys.KeyE && P.grounded && !(P.clung > 0) ? world.pryDoor(P.x, P.z, dt) : -1;
-    if (sd >= 0) { noiseNow = Math.max(noiseNow, 7); G.pryT = (G.pryT || 0) - dt; if (G.pryT <= 0) { G.pryT = 0.5; sound.noise?.(0.2, 0.08, 400, 1, 'bandpass'); } if (sd >= 1) G.say('You force the door open.', 'good'); }
-    else if (NOM() && world.sealedDoorNear(P.x, P.z)) { if (!(G.sealMsgT > 0)) { G.say('Door sealed (no power). Hold E to pry it open.', 'warn'); G.sealMsgT = 6; } }
+    if (sd >= 0) { noiseNow = Math.max(noiseNow, 7); G.pryT = (G.pryT || 0) - dt; if (G.pryT <= 0) { G.pryT = 0.5; sound.pry?.(world.sealedDoorNear(P.x, P.z)?.mat); } if (sd >= 1) G.say('You force the door open.', 'good'); }
+    else if (NOM() && world.sealedDoorNear(P.x, P.z)) { if (!(G.sealMsgT > 0)) { G.say(world.doorLock === 'alert' ? 'Door sealed (red alert lockdown). Hold E to pry it open.' : 'Door sealed (no power). Hold E to pry it open.', 'warn'); G.sealMsgT = 6; } }
     if (G.sealMsgT > 0) G.sealMsgT -= dt; }
-  world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z, w: !!e.walk })), (d) => { if (d < 9) { sound.noise?.(0.14, Math.max(0.02, 0.1 - d * 0.01), 1800, 1, 'bandpass'); } });
+  { let n = 0; world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z, w: !!e.walk })), (d, dr, kind) => { if (d < 12 && n++ < 3) sound.door?.(kind, dr.mat, d); }); }   // at most 3 door sounds a frame (a lockdown slams every door in earshot)
   lamp.position.set(P.x, 2.4, P.z);
   flickT -= dt;
   if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = (bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0)) * (0.03 + 0.97 * world.powerAmt); }
