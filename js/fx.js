@@ -74,12 +74,12 @@ export class Post {
     const size = renderer.getSize(new THREE.Vector2());
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
-    this.composer.addPass(new RenderPass(scene, camera));
+    const wp = new RenderPass(scene, camera); this.composer.addPass(wp); this.scenePasses = [wp];   // the passes that draw a scene (world, viewmodel): Talk.warm can skip them
     // AO goes between the world and the viewmodel overlay: the held tool is neither darkened nor casts AO onto the world
     this.ao = new GameGTAOPass(scene, camera, Math.max(1, size.x * AO_RES), Math.max(1, size.y * AO_RES), undefined, { radius: 0.45, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12, distanceFallOff: 1 }, { radius: 6, samples: 12 });
     this.ao.blendIntensity = 0.85; this.ao.enabled = false; this.aoWanted = false; this.aoAllowed = true;
     this.composer.addPass(this.ao);
-    if (overlay) { const vp = new RenderPass(overlay.scene, overlay.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }   // first-person viewmodel
+    if (overlay) { const vp = new RenderPass(overlay.scene, overlay.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); this.scenePasses.push(vp); }   // first-person viewmodel
     this.composer.addPass(new ShaderPass(CompressShader));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.3, 0.5, 1.9);
     this.composer.addPass(this.bloom);

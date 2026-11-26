@@ -578,8 +578,15 @@ export class Talk {
   // so adding it per conversation (and removing it again afterwards) stalled the game for a second or more, at the start and at the end of every talk.
   ensureLight() { const T = this.c.THREE; if (this.light || !T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.light.position.set(0, -50, 0); this.lightI = 0.45; this.c.scene.add(this.light); }
   addLight() { this.ensureLight(); this.lightI = 0.45; if (this.light) this.light.intensity = 0; this._occ = false; }
-  /** compile the depth-of-field pass now (one throwaway composer frame with it enabled): the loading screen calls this so the first talk does not */
-  warm() { const post = this.c.post; if (!this.dof || !post?.composer || this.c.CFG?.quality !== 'high') return; const was = this.dof.enabled; this.dof.enabled = true; this.dof.uniforms.amount.value = 0; try { post.render(0.016, 0, 0, 0); } finally { this.dof.enabled = was; } this.warmDof(); }
+  /** compile the depth-of-field pass now (one throwaway composer frame with it enabled): the loading screen calls this so the first talk does not.
+   *  { world: false }: the post passes only, the scene passes skipped (the boarding screen draws every object into both buffers itself, main.js warmDraws,
+   *  so a full-resolution world raster here would add a whole frame of GPU time and no first draw); then drawn twice, as the composer's buffers swap roles
+   *  from one frame to the next, so the post passes' first draws in both orders are made here too */
+  warm({ world = true } = {}) {
+    const post = this.c.post; if (!this.dof || !post?.composer || this.c.CFG?.quality !== 'high') return; const was = this.dof.enabled, off = world ? [] : (post.scenePasses || []).filter(p => p.enabled);
+    this.dof.enabled = true; this.dof.uniforms.amount.value = 0; for (const p of off) p.enabled = false;
+    try { post.render(0.016, 0, 0, 0); if (!world) post.render(0.016, 0, 0, 0); } finally { this.dof.enabled = was; for (const p of off) p.enabled = true; } this.warmDof();
+  }
   /** draw the depth-of-field pass alone into BOTH of the composer's ping-pong buffers (two full-screen quads, no scene). The composer alternates its buffers,
    *  so warm()'s one frame drew it into only one of them and the first talk drew it into the other for the first time (tools/talktime.mjs "first draws";
    *  drivers that build a pipeline per program and target pay for that on the first draw, not at compile). Cheap: main.js also calls it after every deck

@@ -1027,6 +1027,11 @@ function warmDraws() {
     R.autoClear = ac; sm.autoUpdate = au; sm.needsUpdate = nu; R.setRenderTarget(prev); R.setScissor(sc); R.setScissorTest(st);
   }
 }
+// resolves once the GPU has finished everything queued so far (a WebGL2 fence polled between tasks: never blocks the main thread); at most `capMs`
+function gpuIdle(capMs = 30000) {
+  const gl = renderer.getContext(); if (!gl.fenceSync) return Promise.resolve(); const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); const t0 = performance.now();
+  return new Promise((res) => { const poll = () => { const r = sync ? gl.clientWaitSync(sync, 0, 0) : gl.WAIT_FAILED; if (r !== gl.TIMEOUT_EXPIRED || performance.now() - t0 > capMs) { if (sync) gl.deleteSync(sync); res(); } else setTimeout(poll, 16); }; poll(); });
+}
 // a deck changed mid-run (lift, ladder well, next deck): queue the new deck's programs in one go, so the driver compiles them together (in parallel where it has
 // KHR_parallel_shader_compile) instead of one stall per material as each first comes into view while walking the deck
 function deckPrograms() { if (!TEST_MODE) try { prewarmPrograms(); warmDraws(); G.talk?.warmDof?.(); } catch (e) { console.warn('compile', e.message); } }   // + the conversation's depth-of-field pass in both post buffers (js/talk.js warmDof)
@@ -1042,18 +1047,30 @@ async function startRun() {
     mark('run:start'); const enter = newRun({ hold: true }); mark('run:newRun');   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
     Loading.set(0.5, 'Compiling shaders…'); await paint();
     try { world && prewarmPrograms(); } catch (e) { console.warn('compile', e.message); } mark('run:compile');
-    if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } } mark('run:talkWarm');   // depth-of-field pass for the conversation close-up
+    // the post passes (and the conversation's depth of field) first, in both buffer orders: they draw onto the canvas, and presenting the canvas waits for all the GPU
+    // work queued before it, so this goes before the big warm-up below (when it went after, the main thread sat ~7 s in that wait, headless). The world is skipped here
+    // (warmDraws draws it) unless the torch is on: its shadow-map pass, left out of warmDraws, is then drawn in this frame.
+    if (!TEST_MODE) { try { G.talk?.warm?.({ world: !world || torch.visible }); } catch (e) { console.warn('talk warm', e.message); } } mark('run:talkWarm');
     if (NOM() && G.menus && !TEST_MODE) {
       const list = G.menus.portraitOrder(), n = list.length;
       // in time-boxed batches, one paint per batch: a paint per face waits for a whole display frame each (91 faces >= 1.5 s at 60 Hz) while a face itself is a few ms
-      // once the first world frame is done. Each batch is one atlas and one GPU readback (Portraits.renderMany). The last face of each batch fades in over the previous one.
+      // once the first world frame is done. Each batch is one atlas and one GPU readback (Portraits.renderManyAsync). The last face of each batch fades in over the previous one.
+      // Two batches in flight: batch k+1 is drawn (CPU: build the body, submit the draw) while batch k's pixels are still on their way back, so the main thread
+      // is not idle while the GPU works through the compile above and the previous faces.
+      let got = 0, prev = null; const show = (done) => { got += done.length; const shown = done.filter(d => d.url).pop(); Loading.set(0.58 + 0.4 * (got / n), `Crew portraits ${Math.min(got, n)} / ${n}`); if (shown) Loading.crew(shown.url, shown.p.short || shown.p.full, shown.p.title); };
       for (let i = 0; i < n;) {
-        const done = G.portraits.renderMany(list.slice(i), PORTRAIT_BATCH_MS); i += Math.max(1, done.length); const shown = done.filter(d => d.url).pop();
-        Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${Math.min(i, n)} / ${n}`); if (shown) Loading.crew(shown.url, shown.p.short || shown.p.full, shown.p.title); await paint();
+        const b = G.portraits.renderManyAsync(list.slice(i), PORTRAIT_BATCH_MS); i += Math.max(1, b.n);
+        if (prev) show(await prev); prev = b.done; await paint();
       }
+      if (prev) show(await prev);
     }
-    mark('run:portraits'); Loading.set(0.99, 'Almost ready…'); await paint();
-    mark('run:ready'); Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);
+    mark('run:portraits');
+    // every object's first draw into both post buffers (warmDraws: no canvas, so nothing waits on it here): the first play frames after Enter did ~70 of them
+    // (tools/loadtime.mjs enterFrames). Queued last, so the faces above are not stuck behind it; the GPU works through it while the player reads the button,
+    // and a click before it is done keeps the overlay up ("Almost ready…") until a fence says the GPU is idle, instead of a frozen first frame.
+    let idle = null; if (!TEST_MODE && world) { try { warmDraws(); idle = gpuIdle().then(() => mark('run:gpuIdle')); } catch (e) { console.warn('warm draws', e.message); } } mark('run:warmDraws');
+    Loading.set(0.99, 'Almost ready…'); await paint();
+    mark('run:ready'); Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter, idle ? { until: idle, onPress: requestLock } : undefined);
   } catch (e) { console.error('startRun failed', e); Loading.hide(true); G.phase = 'title'; showScreen('title'); }
   finally { runLoading = false; }
 }

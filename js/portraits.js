@@ -6,7 +6,8 @@
 //   const PT = new Portraits({ renderer, size: 128 })
 //   PT.get(person) -> url | null      PT.url(person) -> url or placeholder      PT.img(person, px, cls) -> '<img …>'
 //   PT.tick(max = 2)                  PT.renderNow(person) -> url (synchronous; tests)      PT.clear()
-//   PT.renderMany(people, budgetMs) -> [{ p, url }] (one atlas, one GPU readback; the boarding screen)
+//   PT.renderMany(people, budgetMs) -> [{ p, url }] (one atlas, one GPU readback)
+//   PT.renderManyAsync(people, budgetMs) -> { n, done } (the same, readback through a fence: the boarding screen draws the next batch meanwhile)
 import * as THREE from 'three';
 import { makeHuman, releaseHuman } from './humans.js';
 
@@ -52,8 +53,35 @@ export class Portraits {
    * Stops after `budgetMs` of CPU time or `max` faces (at least one is drawn). Returns one { p, url } per person it got to, in no particular order (url null when one failed), so out.length is how far into `list` it got.
    */
   renderMany(list, budgetMs = Infinity, max = Portraits.ATLAS * Portraits.ATLAS) {
-    const R = this.renderer, out = [], t0 = performance.now(); if (!R || typeof document === 'undefined') { for (const p of list.slice(0, max)) { const k = this.key(p); if (k != null) this.failed.add(k); out.push({ p, url: null }); } return out; }
-    this._setup(); const s = this.size, A = Portraits.ATLAS, rt = this.atlas, tiles = [];
+    const b = this._draw(list, budgetMs, max, 0); if (!b.tiles.length) return b.out;
+    const t2 = performance.now(); try { this.renderer.readRenderTargetPixels(b.rt, 0, 0, b.W, b.H, this.px); } catch (e) { return this._fail(b, e); } this._read(t2);
+    return this._finish(b, this.px);
+  }
+  /**
+   * The same, but the readback does not block: the batch is drawn now into one of two atlases and its pixels come back through a fence (WebGL2 pixel-pack
+   * buffer), so the caller can draw the next batch into the other atlas while the GPU is still busy (boarding: the GPU is still working through the world
+   * warm-up queued just before, js/main.js startRun). Returns { n, done }: n = how far into `list` it got (as renderMany's out.length), done resolves to the
+   * same { p, url } list renderMany returns. At most two batches in flight (one per atlas): await the previous done before starting a third.
+   */
+  renderManyAsync(list, budgetMs = Infinity, max = Portraits.ATLAS * Portraits.ATLAS) {
+    const R = this.renderer; if (!R?.readRenderTargetPixelsAsync || !R.capabilities?.isWebGL2) { const out = this.renderMany(list, budgetMs, max); return { n: out.length, done: Promise.resolve(out) }; }
+    const slot = this._slot = (this._slot ?? 1) ^ 1, b = this._draw(list, budgetMs, max, slot); if (!b.tiles.length) return { n: b.out.length, done: Promise.resolve(b.out) };
+    const px = slot ? (this.px2 = this.px2 || new Uint8Array(this.px.length)) : this.px, t2 = performance.now();
+    const done = R.readRenderTargetPixelsAsync(b.rt, 0, 0, b.W, b.H, px).then(() => { this._read(t2); return this._finish(b, px); }, (e) => this._fail(b, e));
+    return { n: b.out.length + b.tiles.length, done };
+  }
+  _read(t2) { const t3 = performance.now(); this.stats.read += t3 - t2; if (!this.stats.reads++) this.stats.read1 = t3 - t2; }   // (async: time from the request to the pixels, i.e. how long the GPU still had to work)
+  _fail(b, e) { console.warn('portrait batch failed', e); for (const t of b.tiles) if (!this.cache.has(t.k)) { this.failed.add(t.k); b.out.push({ p: t.p, url: null }); } return b.out; }
+  _finish(b, px) {
+    const t3 = performance.now();
+    for (const t of b.tiles) { const url = this._encode(px, b.W, t.x, t.y); this.cache.set(t.k, url); this.stats.rendered++; this._patch(t.k, url); b.out.push({ p: t.p, url }); }
+    this.stats.enc += performance.now() - t3; return b.out;
+  }
+  // draw up to `max` faces of `list` into tiles of atlas `slot` (no readback): { out (people done without a tile: cached / failed), tiles, rt, W, H }
+  _draw(list, budgetMs, max, slot) {
+    const R = this.renderer, out = [], t0 = performance.now(); if (!R || typeof document === 'undefined') { for (const p of list.slice(0, max)) { const k = this.key(p); if (k != null) this.failed.add(k); out.push({ p, url: null }); } return { out, tiles: [] }; }
+    this._setup(); const s = this.size, A = Portraits.ATLAS, tiles = [];
+    const rt = slot ? (this.atlas2 = this.atlas2 || (() => { const t = this.atlas.clone(); t.texture.colorSpace = THREE.SRGBColorSpace; return t; })()) : this.atlas;
     const prevT = R.getRenderTarget(), prevC = new THREE.Color(), prevA = R.getClearAlpha(); R.getClearColor(prevC); const prevAuto = R.autoClear, prevShadow = R.shadowMap.autoUpdate;
     R.shadowMap.autoUpdate = false; R.setClearColor(0x16202e, 1); R.autoClear = true;
     try {
@@ -77,15 +105,9 @@ export class Portraits {
         } catch (e) { console.warn('portrait failed', e); this.failed.add(k); out.push({ p, url: null }); }
         finally { if (g) { this.scene.remove(g); releaseHuman(g); g.traverse(o => { if (o.isMesh && o.material?.dispose && !o.material.userData?.shared && !this._keep(o.material)) o.material.dispose(); }); }   /* materials are per-human clones; geometry/textures stay shared with the cache (GL keeps anything a queued draw still uses alive) */ }
       }
-      if (tiles.length) {
-        const rows = Math.ceil(tiles.length / A), W = Math.min(tiles.length, A) * s /* only the used tiles: a single face reads back one tile */, t2 = performance.now(), full = A * s; rt.viewport.set(0, 0, full, full); rt.scissor.set(0, 0, full, full); rt.scissorTest = false;
-        R.readRenderTargetPixels(rt, 0, 0, W, rows * s, this.px); const t3 = performance.now(); this.stats.read += t3 - t2; if (!this.stats.reads++) this.stats.read1 = t3 - t2;
-        for (const t of tiles) { const url = this._encode(this.px, W, t.x, t.y); this.cache.set(t.k, url); this.stats.rendered++; this._patch(t.k, url); out.push({ p: t.p, url }); }
-        this.stats.enc += performance.now() - t3;
-      }
-    } catch (e) { console.warn('portrait batch failed', e); for (const t of tiles) if (!this.cache.has(t.k)) { this.failed.add(t.k); out.push({ p: t.p, url: null }); } }
-    finally { R.setRenderTarget(prevT); R.setClearColor(prevC, prevA); R.autoClear = prevAuto; R.shadowMap.autoUpdate = prevShadow; this.stats.ms += performance.now() - t0; }
-    return out;
+      const full = A * s; rt.viewport.set(0, 0, full, full); rt.scissor.set(0, 0, full, full); rt.scissorTest = false;
+    } finally { R.setRenderTarget(prevT); R.setClearColor(prevC, prevA); R.autoClear = prevAuto; R.shadowMap.autoUpdate = prevShadow; this.stats.ms += performance.now() - t0; }
+    return { out, tiles, rt, W: Math.min(tiles.length, A) * s /* only the used tiles: a single face reads back one tile */, H: Math.ceil(tiles.length / A) * s };
   }
   // Disposing the last material that uses a GL program deletes the program (three.js counts users), so every portrait used to compile and link its whole shader set
   // again (the portrait scene's four lights make programs of its own that no world material keeps alive): ~1 s a face on SwiftShader. One material per program is kept

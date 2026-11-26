@@ -4,7 +4,9 @@
 //   Loading.show(title, sub)       show the overlay with a fresh bar
 //   Loading.set(frac, status)      0..1 bar + status text (never goes backwards within one show())
 //   Loading.crew(url, name, role)  crossfade to a crew portrait + name (url null hides the card): the person being generated right now
-//   Loading.ready(label, onGo)     bar full: show an "enter" button; onGo() runs on click (a user gesture, so pointer lock works), then the overlay hides
+//   Loading.ready(label, onGo, { until, onPress })   bar full: show an "enter" button; onGo() runs on click (a user gesture, so pointer lock works), then the overlay hides.
+//                                  With `until` (a promise: work still finishing, e.g. the GPU warm-up), a click before it settles runs onPress() at once (the gesture: pointer
+//                                  lock) and keeps the overlay up ("Almost ready…") until it settles, then onGo()
 //   Loading.hide(instant)          hide now (instant = no fade; tests)
 //   paint()                        resolves after the browser has had a chance to paint (rAF + a timeout fallback so a hidden tab cannot stall it)
 const $ = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
@@ -27,10 +29,16 @@ export const Loading = {
     next.querySelector('img').src = url; next.querySelector('b').textContent = name; next.querySelector('span').textContent = role;
     next.classList.add('on'); prev.classList.remove('on');
   },
-  ready(label, onGo) {
+  ready(label, onGo, { until = null, onPress = null } = {}) {
     const el = $('boot'), b = $('boot-go'); if (!el || !b) { onGo?.(); return; }
+    let done = !until; until?.then(() => { done = true; });
     Loading.crew(null); Loading.set(1, 'Ready'); b.textContent = label; b.style.display = 'inline-block'; b.focus?.();
-    b.onclick = (e) => { e.stopPropagation(); b.onclick = null; Loading.hide(); onGo?.(); };
+    b.onclick = (e) => {
+      e.stopPropagation(); b.onclick = null;
+      if (done) { Loading.hide(); onGo?.(); return; }
+      onPress?.(); b.style.display = 'none'; $('boot-status').textContent = 'Almost ready…';   // still finishing (GPU warm-up): keep the overlay until it is done
+      until.then(() => { Loading.hide(); onGo?.(); });
+    };
   },
   hide(instant = false) { const el = $('boot'); if (!el) return; if (instant) el.classList.add('instant'); el.classList.remove('show'); },
   get visible() { return !!$('boot')?.classList.contains('show'); },
