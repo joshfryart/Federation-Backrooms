@@ -721,6 +721,12 @@ const nom = await page2.evaluate(async () => {
           const keyedOpen = dr.open > 0.5, keySecs = +(tk * 0.1).toFixed(1); for (let i = 0; i < 40; i++) w.slideDoors(0.1, dr.f.x + 8, dr.f.z, [], cb); const resealed = dr.open < 0.2 && !(dr.pried > 0);
           let pr2 = 0; for (let i = 0; i < 14; i++) pr2 = Math.max(pr2, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z);
           out.doors2.lockdown = { sealed, seal, keyedOpen, keySecs, resealed, key: heard.includes('key'), pried: pr2 >= 1 && dr.open > 0.5, mat: dr.mat, mats: [...new Set(w.doors.map(o => o.mat))] }; w.setDoorLock(false); } }
+      { // emergency lamps light the room in a blackout through the pooled panel lights (light count unchanged: no material recompiles)
+        const nL = () => { let k = 0; g.scene.traverse(o => { if (o.isLight) k++; }); return k; }, em = w.emerg?.[0], pa0 = w.powerAmt, pt0 = w.powerTarget, x0 = P.x, z0 = P.z;
+        if (em) { const n0 = nL(); P.x = em.x; P.z = em.z; w.powerAmt = 1; g.updatePanelLights(1);
+          w.powerAmt = 0; g.updatePanelLights(1); const dark = g.panelLights.map(l => ({ i: l.intensity, r: l.color.r, g: l.color.g, d: Math.hypot(l.position.x - em.x, l.position.z - em.z) }));
+          out.emergLight = { n0, n1: nL(), red: dark.filter(l => l.i > 1 && l.r > 0.9 && l.g < 0.3).length, near: dark.some(l => l.i > 1 && l.d < 0.5) }; }
+        w.powerAmt = pa0; w.powerTarget = pt0; P.x = x0; P.z = z0; g.updatePanelLights(1); }
       const c = w.clutter[0], n0 = w.clutter.length; out.clutter = { took: c ? w.takeClutter(c) : null, left: w.clutter.length === n0 - 1 };
       G.phase = 'play'; g.shipState.repair('computer'); g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
       const ppl = g.sim.onDeck(G.shipDeck + 1)[0]; if (ppl) { g.talkMenu({ person: ppl.person }); out.talk = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu(); }
@@ -772,6 +778,7 @@ console.log('nominal:', JSON.stringify(nom));
     ["n.doors2.sealed", () => n.doors2.sealed],
     ["n.doors2.blocked", () => n.doors2.blocked],
     ["n.doors2.pried", () => n.doors2.pried],
+    ["n.emergLight (blackout: pooled lights turn red at the nearest emergency lamps, light count unchanged)", () => { const E = n.emergLight; return !!E && E.n0 === E.n1 && E.red >= 1 && E.near; }],
     ["n.doors2.lockdown (red alert: seals, crew key through in ~1 s and it reseals, player pries)", () => { const L = n.doors2.lockdown; return !!L && L.sealed && L.keyedOpen && L.keySecs <= 1.6 && L.resealed && L.key && L.pried && ['std', 'heavy', 'light'].includes(L.mat); }],
     ["n.clutter.took", () => n.clutter.took],
     ["n.clutter.left", () => n.clutter.left],

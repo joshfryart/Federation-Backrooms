@@ -99,22 +99,30 @@ const decals = new Decals(scene);
 const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
 const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d0, 0, 10, 1.5); scene.add(l); return l; });
-let panelSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
+let panelSel = [], emergSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
+const EMERG_COL = new THREE.Color(0xff2a14), EMERG_I = 3.2, EMERG_R = 7;   // emergency lamp light in a blackout (world.emerg: lamp positions, js/world.js)
 function updatePanelLights(dt) {
   panelT -= dt;
   if (panelT <= 0 && world) {
     panelT = 0.2; const arr = [];
     for (const p of world.panels) { const dx = p.x - P.x, dz = p.z - P.z; arr.push([dx * dx + dz * dz, p]); }
     arr.sort((a, b) => a[0] - b[0]); panelSel = arr.slice(0, 3);
+    const em = []; for (const p of world.emerg || []) { const dx = p.x - P.x, dz = p.z - P.z; em.push([dx * dx + dz * dz, p]); }
+    em.sort((a, b) => a[0] - b[0]); emergSel = em.slice(0, 3);
   }
   const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0;
   scene.environmentIntensity = 0.3 * (0.04 + 0.96 * pa);
+  // the same three pooled lights stand in for the nearest emergency lamps once the power drops (never add / remove lights: a change in
+  // the light count recompiles every lit material, see the talk-stall note in TODO.md). Each slot takes whichever source is brighter.
+  const off = 1 - pa;
   panelLights.forEach((l, i) => {
-    const e = panelSel[i];
+    const e = panelSel[i], m = emergSel[i];
+    const pi = e ? 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3) : 0, ei = m ? EMERG_I * off : 0;
+    if (ei > pi) { l.position.set(m[1].x, m[1].y, m[1].z); l.color.copy(EMERG_COL); l.intensity = ei; l.distance = EMERG_R; return; }
     if (!e) { l.intensity = 0; return; }
-    l.position.set(e[1].x, e[1].y, e[1].z);
+    l.position.set(e[1].x, e[1].y, e[1].z); l.distance = 10;
     l.color.set(ship.light); if (e[1].col) l.color.multiply(e[1].col); l.color.lerp(ALERT_RED, al * 0.7);
-    l.intensity = 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3);
+    l.intensity = pi;
   });
   // fluorescent buzz, loudest right under a working panel
   if (panelSel[0]) { const d = Math.sqrt(panelSel[0][0]); sound.setBuzz(Math.max(0, 1 - d / 7) * pa * (panelSel[0][1].flick ? world.flickerF : 1)); }
@@ -2049,7 +2057,7 @@ const ready = (async () => {
   Loading.hide(TEST_MODE);
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), panelLights, updatePanelLights, get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'role', { get: () => G.role });   // { choice, billet, mission, miss } (js/role.js)
