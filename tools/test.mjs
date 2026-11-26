@@ -1004,9 +1004,18 @@ const rid = await page2.evaluate(async () => {
   out.player = G.player && G.player.voice ? G.player.short : null;
   // chance: ~35% of the times someone walks up to the car
   let hits = 0, N = 120; G.riderChance = 0.35; for (let i = 0; i < N; i++) { if (g.rollRider()) { hits++; g.leaveRider(); } G.lift.rider = null; } out.rate = +(hits / N).toFixed(2);
+  // the next deck is built during the ride, a stage per frame (js/main.js preDeckStep): it must be the same world as one built in one go at arrival. World
+  // builds also draw on Math.random (prop sizes, canvas noise, lazily made shared caches), so for this check each World gets its own seeded Math.random while
+  // it builds, and a throwaway build of the destination first fills the caches; then structure, placement and lights are compared.
+  const W = g.world.constructor, bs = W.prototype.buildStep, geos = (w) => { const s = new Set(); w.group.traverse(o => { if (o.geometry) s.add(o.geometry); }); return s; };
+  W.prototype.buildStep = function () { let a = this._rs ?? (this._rs = 12345); const r = Math.random; Math.random = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; this._rs = a; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; try { return bs.call(this); } finally { Math.random = r; } };
+  const fp = (w) => { w.group.updateMatrixWorld(true); const c = {}; let n = 0, px = 0; w.group.traverse(o => { n++; const k = o.type + ':' + (o.isInstancedMesh ? o.count : '') + ':' + (o.geometry?.attributes.position?.count ?? '') + ':' + (o.material?.type || '') + ':' + (o.isLight ? o.color.getHexString() + o.intensity : ''); c[k] = (c[k] || 0) + 1; const e = o.matrixWorld.elements; px += Math.round(e[12] * 100) + Math.round(e[13] * 100) * 7 + Math.round(e[14] * 100) * 3; }); return n + '/' + px + '/' + Object.entries(c).sort().map(x => x.join('=')).join('|'); };
+  out.pre = []; G.onPreDeck = (w, d) => { const f = new W(d, G.ship), a = fp(w), b = fp(f); f.dispose(geos(w)); const diff = (x, y) => { const X = new Set(x.split('|')), Y = new Set(y.split('|')); return [[...X].filter(k => !Y.has(k)).slice(0, 8), [...Y].filter(k => !X.has(k)).slice(0, 8)]; }; out.pre.push({ same: a === b, n: +a.split('/')[0], sig: a === b ? null : diff(a, b) }); };
+  const warmCaches = (to) => { const f = new W(G.shipDecks[to].data, G.ship), x = fp(f); f.dispose(geos(g.world)); return x; };
+  for (let i = 0; i < 60 && warmCaches(D - 1) !== warmCaches(D - 1); i++) await new Promise(r => setTimeout(r, 250));   // test pages start before every model has loaded: a build then changes as they arrive
   const ride = (to, midDest) => {
     G.riderChance = 1; G.lift.rider = null; const r = g.rollRider(true); if (!r) return { err: 'no rider' }; const inScene = !!r.mesh && g.scene.children.includes(r.mesh), who = r.person;
-    g.openLiftPanel(); if (G.phase !== 'select') return { err: 'panel', phase: G.phase }; const from = G.shipDeck, logN = G.liftLog.length; g.liftTo(to); if (G.phase !== 'ride') return { err: 'no ride' };
+    warmCaches(to); g.openLiftPanel(); if (G.phase !== 'select') return { err: 'panel', phase: G.phase }; const from = G.shipDeck, logN = G.liftLog.length; g.liftTo(to); if (G.phase !== 'ride') return { err: 'no ride' };
     if (midDest !== undefined) g.boardLift(who, g.destOf(midDest));
     const spoke = G.lift.said, rd = g.rider.dest, rsaid = g.rider.said; let n = 0, leftAt = null, leftRiding = false, meshGone = false; const subsBefore = document.getElementById('subs')?.children.length || 0;
     while (G.phase === 'ride' && n < 30 * 14) { tick(1); n++; if (leftAt === null && g.rider?.left) { leftAt = G.lift.disp; leftRiding = G.phase === 'ride'; meshGone = !g.rider.mesh; } }
@@ -1016,11 +1025,12 @@ const rid = await page2.evaluate(async () => {
   out.rides.push(ride(D - 1));          // rider picks their own stop (on the way or the same deck)
   out.rides.push(ride(0, D - 3));       // the way back up: rider's stop is mid-ride; they get out there, the player rides on
   out.rides.push(ride(D - 1, 3));
-  G.riderChance = 0; G.lift.rider = null; out.none = !g.rollRider(); return out;
+  G.riderChance = 0; G.lift.rider = null; out.none = !g.rollRider(); G.onPreDeck = null; W.prototype.buildStep = bs; out.preDecks = G.preDecks || 0; return out;
 });
 console.log('lift riders:', JSON.stringify(rid));
 { const o = rid, ok = o.player && o.rate > 0.2 && o.rate < 0.5 && o.rides.length === 3 && o.rides.every(r => !r.err && r.inScene && r.playerSaid && r.riderSaid && r.board && r.left && r.cleared && r.phase === 'play') && o.rides[1].leftRiding && o.rides[1].leftAt === o.rides[1].riderDest && o.rides[1].deck === 0 && o.rides[2].leftRiding && o.rides[2].deck === o.rides[2].to && o.none;
-  if (!ok) fail('NPC lift riders'); }
+  if (!ok) fail('NPC lift riders');
+  if (!(o.pre.length === 3 && o.pre.every(x => x.same && x.n > 100))) fail('lift: the deck built during the ride differs from one built at arrival ' + JSON.stringify(o.pre)); }
 });
 S('voices-html', 'voices', async (vpage) => {   // voices.html: the roster table, chips, say, department filter
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });

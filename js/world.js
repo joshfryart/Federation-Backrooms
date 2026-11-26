@@ -615,7 +615,7 @@ export function buildDecor(kind) { const m = kitMats(), geo = kitGeo(kind, DECOR
 // Scene construction from level data
 // ------------------------------------------------------------------
 export class World {
-  constructor(data, ship) {
+  constructor(data, ship, opts = {}) {
     this.d = data; this.ship = ship;
     this.W = data.W; this.H = data.H; this.grid = data.grid;
     this.group = new THREE.Group();
@@ -629,9 +629,24 @@ export class World {
     for (const r of data.rooms || []) if ((r.big || r.type === 'atrium') && TALL_TYPES.has(r.type)) for (let ty = r.y; ty < r.y + r.h; ty++) for (let tx = r.x; tx < r.x + r.w; tx++) if (data.room[ty]?.[tx] === r.type) this.tall[tx + ty * this.W] = 1;
     this.under = {};   // prop tiles you can walk under (catwalk decks): no collision below the deck
     this.tops = {}; this.propExt = {}; this.propHalf = TS * 0.36; this.tubeMouths = []; this.ladders = [];
-    OWN = this.own = [];
-    try { this._build(); this._details(); this._liminal(); this._dressing(); } finally { OWN = null; }
+    this.own = []; this._steps = [() => this._build(), () => this._details(), () => this._liminal(), () => this._dressing()]; this._it = null;
+    if (!opts.staged) this.buildStep();
   }
+  // one stage of the build (staged: the next deck is built a stage per frame during the lift ride, js/main.js preDeckStep); false once built.
+  // The stages read the level data and their own seeded generators (and Math.random, as before), so a staged world is the same as one built in one go
+  // (test lift-riders compares them).
+  // buildStep(ms): build for about ms (at least one piece: a stage, or a slice of _build up to its next yield; default: all of it); true while work is left.
+  buildStep(ms = Infinity) {
+    if (!this._steps) return false; const end = performance.now() + ms; OWN = this.own;
+    try {
+      do {
+        if (!this._it) { const f = this._steps.shift(); if (!f) break; const r = f(); if (r && typeof r.next === 'function') this._it = r; else continue; }
+        if (this._it.next().done) this._it = null;
+      } while (performance.now() < end);
+    } finally { OWN = null; }
+    if (!this._it && !this._steps.length) this._steps = null; return !!this._steps;
+  }
+  get built() { return !this._steps; }
 
   isTube(x, y) { return !!this.d.tubeAxis[x + y * this.W]; }
   tubeKind(x, y) { return this.d.tubeLevel[x + y * this.W]; }   // 'lo' | 'lad' | 'up' | undefined
@@ -771,7 +786,7 @@ export class World {
     }
   }
 
-  _build() {
+  *_build() {   // a generator: World.buildStep runs it in time slices (yield = a point where the build may pause until the next frame)
     const T = textures(); const d = this.d, ship = this.ship, W = this.W, H = this.H;
     const g = this.group;
     const rndv = mulberry32(d.deck * 977 + 13);
@@ -815,6 +830,7 @@ export class World {
       im.receiveShadow = true; g.add(im);
     }
     dummy.rotation.set(0, 0, 0);
+    yield;
     // ceiling: per-room variants (acoustic tile, riveted metal, slatted baffle, clinical light panel, felt coffers); corridors follow the hull class
     {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
@@ -834,6 +850,7 @@ export class World {
         g.add(im);
       }
     }
+    yield;
     // Jiffy tubes: the tube's own side walls, header/base blocks, ribs, conduit, amber guide strips, ladders and hatch frames
     if (d.tubes?.length) {
       const m = mats();
@@ -915,6 +932,7 @@ export class World {
       const pg = new THREE.CylinderGeometry(0.045, 0.045, TS, 8); pg.rotateX(Math.PI / 2); inst(pg, m.pipe, pipe);
       const st = inst(new THREE.BoxGeometry(0.03, 0.03, TS), amber, strip); if (st) st.castShadow = false;
     }
+    yield;
     // light panels (steady + flickering + dead)
     {
       const lightCol = new THREE.Color(ship.light).multiplyScalar(3.4);
@@ -949,6 +967,7 @@ export class World {
       if (fm) this.flickMat = fm;
       this.lightCol = lightCol;
     }
+    yield;
     // walls
     {
       // bulkhead variant per block: the room it faces decides (painted panel, padded, grille); corridors follow the hull class
@@ -992,6 +1011,7 @@ export class World {
         }
       }
     }
+    yield;
     // wall decorations on faces adjoining open tiles
     {
       const stripes = [], lcars = [], windows = [];
@@ -1042,6 +1062,7 @@ export class World {
       }
       dummy.rotation.set(0, 0, 0);
     }
+    yield;
     // props
     let morgueTray = false;
     for (const p of d.props) {
@@ -1068,7 +1089,9 @@ export class World {
         if (b[0] < -H - 0.01 || b[1] > H + 0.01 || b[2] < -H - 0.01 || b[3] > H + 0.01) this.propExt[p.tx + p.ty * this.W] = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[1] - b[0]) / 2, (b[3] - b[2]) / 2];   // [offset x, offset z, half x, half z]
       }
       m.traverse(o => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.receiveShadow = true; } if (o.name === 'spin') this.spin.push(o); if (o.name === 'core') this.core = o; });
+      yield;
     }
+    yield;
     // loose clutter from the ship inventory: small things on the floor near walls and on tables (look at one for its name; see nearestClutter in js/main.js)
     this.clutter = [];
     {
@@ -1085,6 +1108,7 @@ export class World {
       for (const kind in lists) { const l = lists[kind], r = buildInstanced(kind, l); if (!r) continue; l.forEach((c, i) => { c.rec.inst = { hide: () => r.hide(i) }; }); g.add(r.group); }   // generated clutter models (js/itemart.js)
       dummy.scale.set(1, 1, 1); dummy.rotation.set(0, 0, 0);
     }
+    yield;
     // lift
     {
       const lift = buildLift(ship.accent, d.deck + 1);
@@ -1668,8 +1692,8 @@ export class World {
     }
   }
 
-  dispose() {
-    this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  dispose(keep = null) {   // keep: geometries the next deck's (already built) world also uses, e.g. shared model instances: left on the GPU
+    this.group.traverse(o => { if (o.geometry && !keep?.has(o.geometry)) o.geometry.dispose(); });
     for (const t of this.own) t.dispose();   // per-deck canvas textures (signs, posters, stencils); shared ones simply re-upload on next use
   }
 }

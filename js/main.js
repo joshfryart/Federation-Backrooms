@@ -206,7 +206,7 @@ function updateHUD() {
 
 // ---------------- level loading ----------------
 function clearLevel() {
-  if (world) { scene.remove(world.group); world.dispose(); }
+  if (world) { scene.remove(world.group); world.dispose(preDeck ? geoSet(preDeck.world.group) : null); }   // geometries the next deck's prebuilt world shares (model instances) stay uploaded
   for (const g of gorns) { scene.remove(g.mesh); releaseHuman(g.mesh); }
   for (const e of ents) { scene.remove(e.mesh); releaseHuman(e.mesh); }   // bone textures (js/humans.js releaseHuman)
   for (const r of repairPts) if (r.obj) scene.remove(r.obj);
@@ -243,7 +243,7 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
+  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = takePreDeck(SD ? data : null) || new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); G.fogBase = ship.fogD; scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
@@ -1009,9 +1009,10 @@ function prewarmPrograms() {
 // frame on a new deck did ~50 of them (and the next frame ~50 more: the post chain alternates its two buffers every frame, compile warmed one) plus everything
 // off screen as it came into view (tools/decktime.mjs "first draws"). Frustum culling off, scissored to one pixel (raster is nothing; the frame's own
 // RenderPass clears the buffers), no shadow-map pass (its handful of depth programs are drawn on every deck). Crowd culling (perfcull.js) is not applied here.
-function warmDraws() {
+// skip: objects already drawn this way (the next deck's world, warmed during the lift ride: preDeckWarm) are hidden, only what is new is drawn.
+function warmDraws(skip = null) {
   const R = renderer, C = CFG.quality === 'high' ? post?.composer : null, tgts = C?.renderTarget1 ? [C.renderTarget1, C.renderTarget2] : [null];
-  const culled = [], off = (o) => { if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); } };
+  const culled = [], hid = [], off = (o) => { if (skip && o.visible && !o.children.length && skip.has(o)) { o.visible = false; hid.push(o); } if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); } };
   scene.traverse(off); vmScene.traverse(off);
   const prev = R.getRenderTarget(), sm = R.shadowMap, au = sm.autoUpdate, nu = sm.needsUpdate, ac = R.autoClear, sc = R.getScissor(new THREE.Vector4()), st = R.getScissorTest();
   sm.autoUpdate = false; sm.needsUpdate = false;
@@ -1023,9 +1024,41 @@ function warmDraws() {
       finally { if (t) { t.scissor.copy(ts); t.scissorTest = tt; } }
     }
   } finally {
-    for (const o of culled) o.frustumCulled = true;
+    for (const o of culled) o.frustumCulled = true; for (const o of hid) o.visible = true;
     R.autoClear = ac; sm.autoUpdate = au; sm.needsUpdate = nu; R.setRenderTarget(prev); R.setScissor(sc); R.setScissorTest(st);
   }
+}
+// ---- the next deck built during the lift ride (Systems Nominal). The arrival frame used to do it all: loadDeck's World build (~0.2-0.5 s CPU here) and
+// deckPrograms' warm-up of every object into both post buffers (uploads + first draws). Now each ride frame does one piece: the World is built ~8 ms at a
+// time (World.buildStep: the stages read the deck's data and their own seeded generators, so it is the same world as one built at arrival), then it is
+// swapped into the scene for a synchronous moment on two frames, to compile its programs, then to warm-draw it (never presented: the frame's render comes after the
+// swap back). At arrival loadDeck takes it (takePreDeck: any stage left is finished there) and deckPrograms only warm-draws what is new (bodies, items, car).
+// Everything else loadDeck does (bodies from the sim, haul, cards, sounds, the rider) still happens at arrival, in the same order.
+const PRE_DECK_MS = 8;   // World build per ride frame (it pauses at the next yield after this: one prop, or one block of walls / floors)
+let preDeck = null, preWarmed = null;   // { data, world, warm: WeakSet of objects drawn by preDeckWarm | null }; preWarmed: the set, for the next deckPrograms
+const geoSet = (g) => { const s = new Set(); g.traverse(o => { if (o.geometry) s.add(o.geometry); }); return s; };
+function dropPreDeck() { if (preDeck) { try { preDeck.world.dispose(); } catch (e) { } } preDeck = null; }
+function takePreDeck(data) {
+  const p = preDeck; preDeck = null; if (!p) return null;
+  if (!data || p.data !== data) { p.world.dispose(); return null; }
+  while (p.world.buildStep()); preWarmed = p.warm; G.preDecks = (G.preDecks || 0) + 1; G.onPreDeck?.(p.world, data); return p.world;   // onPreDeck: test hook (lift-riders compares it with a world built at arrival)
+}
+function preDeckStep(L) {
+  if (L.preFail || !NOM() || !G.shipDecks || !world) return; const SD = G.shipDecks[L.to]; if (!SD) return;
+  try {
+    if (preDeck && preDeck.data !== SD.data) dropPreDeck();
+    if (!preDeck) { const d = SD.data; d.flooded = false; d.visit = 1; d.loopRun = null; d.emptyRuns = null;   // what loadDeck sets on a Systems Nominal deck before its World
+      preDeck = { data: d, world: new World(d, G.ship, { staged: true }), warm: null, warmed: 0 }; return; }
+    if (preDeck.world.buildStep(PRE_DECK_MS)) return;
+    if (!TEST_MODE && preDeck.warmed < 2) preDeckWarm(preDeck.warmed++);   // one frame compiles its programs, the next draws it
+  } catch (e) { console.warn('pre-deck', e.message); dropPreDeck(); L.preFail = true; }
+}
+function preDeckWarm(k) {   // k 0: compile the programs, 1: draw it into both post buffers (warmDraws) and remember what was drawn
+  const p = preDeck, w = p.world, old = world.group, i = scene.children.indexOf(old); if (i < 0) return;
+  w.setFancy(CFG.quality === 'high');
+  scene.children[i] = w.group; w.group.parent = scene; old.parent = null;   // in place (same child order, no add/remove events), the same light count as at arrival
+  try { if (k === 0) prewarmPrograms(); else { warmDraws(); const warm = new WeakSet(); w.group.traverseVisible((o) => { if (o.isMesh || o.isPoints || o.isLine || o.isSprite) warm.add(o); }); p.warm = warm; } }
+  finally { scene.children[i] = old; old.parent = scene; w.group.parent = null; }
 }
 // resolves once the GPU has finished everything queued so far (a WebGL2 fence polled between tasks: never blocks the main thread); at most `capMs`
 function gpuIdle(capMs = 30000) {
@@ -1034,7 +1067,7 @@ function gpuIdle(capMs = 30000) {
 }
 // a deck changed mid-run (lift, ladder well, next deck): queue the new deck's programs in one go, so the driver compiles them together (in parallel where it has
 // KHR_parallel_shader_compile) instead of one stall per material as each first comes into view while walking the deck
-function deckPrograms() { if (!TEST_MODE) try { prewarmPrograms(); warmDraws(); G.talk?.warmDof?.(); } catch (e) { console.warn('compile', e.message); } }   // + the conversation's depth-of-field pass in both post buffers (js/talk.js warmDof)
+function deckPrograms() { const skip = preWarmed; preWarmed = null; if (!TEST_MODE) try { prewarmPrograms(); warmDraws(skip); G.talk?.warmDof?.(); } catch (e) { console.warn('compile', e.message); } }   // + the conversation's depth-of-field pass in both post buffers (js/talk.js warmDof)
 // Begin / retry: loading screen -> build the run (ship, crew, systems, deck 1: the heavy synchronous part) -> compile shaders -> render every crew portrait (so the radio, duty board and
 // wheel never render heads mid-play) -> an "Enter the ship" button (a click, so pointer lock is allowed). Nothing plays until all of it is done.
 let runLoading = false; const PORTRAIT_BATCH_MS = 120;   // crew portraits rendered per paint during boarding: keeps the bar and the face card moving several times a second
@@ -1982,6 +2015,7 @@ function liftStep(dt, t) {
     riderStep(dt);
     L.hum -= dt; if (L.hum <= 0) { L.hum = 0.5; sound.tone(58 + 4 * Math.sin(L.t), 0.65, 'sine', 0.06); }
     sh = 0.006 + (k < 0.12 || k > 0.88 ? 0.008 : 0);
+    if (k < 1) preDeckStep(L);   // the next deck, a piece per ride frame
     if (k >= 1) { if (L.rider) leaveRider(); $('liftui').className = ''; loadDeck(L.to + 1); deckPrograms(); G.phase = 'play'; sound.ding(); sound.thud(0.3); return; }
   }
   camera.position.set(P.x + (Math.random() - 0.5) * sh, P.y + P.eye + (Math.random() - 0.5) * sh * 1.5, P.z + (Math.random() - 0.5) * sh);
