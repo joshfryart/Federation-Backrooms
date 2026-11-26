@@ -412,6 +412,22 @@ console.log('liminal:', JSON.stringify(lim));
 if (!(lim.catwalk && lim.catwalk.y >= lim.catwalk.top - 0.05 && lim.catwalk.tall && lim.catwalk.under)) fail('liminal: catwalk climb / tall room / walk-under ' + JSON.stringify(lim.catwalk));
 if (!(lim.loop && lim.loop.loops === 2 && lim.loop.count === 2)) fail('liminal: corridor loop ' + JSON.stringify(lim.loop));
 });
+S('windows', 'madness', async (page) => {   // windows sit only on the hull edge (open space behind the bulkhead, gen.js inHull), every deck gets some, and the space shader (nebula + escort ship) renders
+const win = await page.evaluate(() => {
+  const g = __game; g.setQuality('low'); const out = { decks: 0, withWin: 0, wins: 0, inner: [], render: false };
+  for (let run = 0; run < 6; run++) { g.G.forceSeed = 6100 + run * 389; g.G.forceShip = (run * 3) % 10; g.newRun();
+    for (let n = 1; n <= 3; n++) { g.loadDeck(n); const w = g.world, d = w.d, inH = d.inHull || (() => true); out.decks++;
+      const ws = w.wallFaces.filter(f => f.win); out.wins += ws.length; if (ws.length) out.withWin++;
+      for (const f of ws) { let ext = !inH(f.tx, f.ty); for (let k = 1; k <= 3 && !ext; k++) { const bx = f.tx - f.dx * k, by = f.ty - f.dy * k, c = d.grid[by]?.[bx]; if (c === undefined || !inH(bx, by)) ext = true; else if (c !== 1) break; } if (!ext && out.inner.length < 4) out.inner.push([g.G.forceShip, n, f.tx, f.ty, f.dx, f.dy]); } } }
+  const w = g.world, f = w.wallFaces.find(f => f.win), P = g.P;
+  if (f) { P.x = (f.tx + f.dx + 0.5) * 2.5 + f.dx * 0.2; P.z = (f.ty + f.dy + 0.5) * 2.5 + f.dy * 0.2; P.yaw = Math.atan2(f.dx, f.dy); P.pitch = 0; g.G.phase = 'play'; g.step(0.05, 300); g.renderOnce(); out.render = true; }
+  return out;
+});
+console.log('windows:', JSON.stringify(win));
+if (win.inner.length) fail('windows: window on an inner wall (ship, deck, tx, ty, dx, dy) ' + JSON.stringify(win.inner));
+if (win.withWin < win.decks) fail(`windows: only ${win.withWin} / ${win.decks} decks have a window`);
+if (!win.render) fail('windows: no window to render');
+});
 S('tube-bends2', 'madness', async (page) => {   // a two-bend (S / U) ladder-free Jiffy tube is crawled end to end: ducks, stays inside the chain, comes out of the far mouth
 await installHelpers(page);
 const tb = await page.evaluate(async () => {

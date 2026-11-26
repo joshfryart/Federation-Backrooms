@@ -480,7 +480,8 @@ class Kit {
 }
 
 // what a window / the bridge viewscreen shows: a ray from the camera through each pixel hits a far star sphere, so stars shift with your position (parallax) and slowly turn;
-// a planet limb sits low on the horizon. speed > 1 gives the viewscreen its forward drift. SPACE_T.value is advanced by World.update.
+// a planet limb sits low on the horizon, a two-tone nebula band crosses part of the sky and an escort ship holds station off the bow (dark silhouette,
+// lit rim, running lights). speed > 1 gives the viewscreen its forward drift. SPACE_T.value is advanced by World.update.
 export const SPACE_T = { value: 0 };
 // what a doorway's leaves are made of (by the room it opens into): sets its open / close / seal / pry sounds (js/audio.js Sound.door)
 const HEAVY_DOOR = new Set(['engineering', 'cargo', 'shuttlebay', 'plant', 'workshop', 'brig', 'armory', 'airlock', 'datacore', 'stores', 'transporter']);
@@ -492,6 +493,19 @@ export function spaceMaterial(stars, speed = 1) {
     uniforms: { stars: { value: stars }, time: SPACE_T, speed: { value: speed } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * ' + '\n#ifdef USE_INSTANCING\n instanceMatrix * \n#endif\n vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: `uniform sampler2D stars; uniform float time, speed; varying vec3 vW;
+      float h3(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float n3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      float fbm(vec3 p){ float v = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { v += a * n3(p); p = p * 2.03 + 7.1; a *= 0.5; } return v; }
+      // a distant starship seen side-on: saucer, neck, secondary hull, two nacelles on pylons (2D, in the tangent plane around its bearing)
+      float shipMask(vec2 p){
+        float m = step(length(p / vec2(0.55, 0.11)), 1.0);
+        m = max(m, step(length((p - vec2(0.38, -0.2)) / vec2(0.42, 0.075)), 1.0));
+        m = max(m, step(abs(p.x - 0.12), 0.05) * step(abs(p.y + 0.1), 0.1));
+        m = max(m, step(abs(p.x - 0.7), 0.03) * step(abs(p.y + 0.02), 0.2));
+        m = max(m, step(abs(p.x - 0.86), 0.36) * step(abs(p.y - 0.2), 0.045));
+        return m; }
       void main(){
         vec3 d = normalize(vW - cameraPosition);
         float a = time * 0.004 * speed;
@@ -499,9 +513,35 @@ export function spaceMaterial(stars, speed = 1) {
         vec2 uv = vec2(atan(d.z, d.x) / 6.2832 * 3.0, asin(clamp(d.y, -1.0, 1.0)) / 3.1416 * 1.5 + 0.5);
         vec3 c = texture2D(stars, uv).rgb;
         c += texture2D(stars, uv * 2.7 + 0.31).rgb * 0.35;
+        // nebula: two-tone fbm clouds in a broad band across part of the sky, dimming the stars behind them a little
+        float band = smoothstep(0.75, 0.05, abs(dot(d, normalize(vec3(0.3, 0.9, -0.3))) - 0.1));
+        float n = fbm(d * 3.4 + vec3(0.0, time * 0.002, 0.0)), n2 = fbm(d * 7.0 + 3.0);
+        float neb = smoothstep(0.42, 0.85, n) * band;
+        vec3 nc = mix(vec3(0.32, 0.08, 0.36), vec3(0.06, 0.28, 0.42), smoothstep(0.3, 0.7, n2));
+        c = c * (1.0 - neb * 0.45) + nc * neb * (0.55 + 0.6 * n2);
         vec3 pc = normalize(vec3(0.55, -0.32, 0.77)); float pd = dot(d, pc);
         if (pd > 0.9) { float k = smoothstep(0.9, 0.903, pd); float lit = clamp(dot(normalize(d - pc * pd), normalize(vec3(-0.6, 0.7, 0.2))) * 0.5 + 0.55, 0.15, 1.0); vec3 pl = mix(vec3(0.10, 0.22, 0.42), vec3(0.45, 0.62, 0.78), lit) * (0.35 + 0.65 * lit); c = mix(c, pl, k); }
         else if (pd > 0.88) c += vec3(0.1, 0.25, 0.5) * smoothstep(0.88, 0.9, pd) * 0.6;
+        // the escort ship: holds station off the bow, bobbing slowly; dark hull with a lit upper rim, running lights and blue nacelle glow
+        float sb = time * 0.01;
+        vec3 sd = normalize(vec3(-0.78, 0.16 + 0.02 * sin(sb), -0.6 + 0.03 * sin(sb * 0.7)));
+        float sdd = dot(d, sd);
+        if (sdd > 0.94) {
+          vec3 t1 = normalize(cross(vec3(0.0, 1.0, 0.0), sd)), t2 = cross(sd, t1);
+          vec2 q = vec2(dot(d, t1), dot(d, t2)) / 0.14;
+          float m = shipMask(q);
+          if (m > 0.0) {
+            float rim = 1.0 - shipMask(q + vec2(0.0, 0.04));
+            vec3 hc = vec3(0.06, 0.065, 0.075) * (1.0 + 0.6 * smoothstep(-0.2, 0.2, q.y)) + vec3(0.3, 0.32, 0.36) * rim;
+            float nac = step(abs(q.x - 0.86), 0.36) * step(abs(q.y - 0.2), 0.045);
+            hc = mix(hc, vec3(0.25, 0.55, 1.2), nac * step(abs(q.y - 0.2), 0.018));
+            hc += vec3(0.9, 0.85, 0.6) * step(fract(q.x * 9.0), 0.18) * step(abs(q.y - 0.02), 0.012) * step(abs(q.x), 0.45);
+            c = hc;
+          }
+          float blink = step(0.5, fract(time * 0.8));
+          c += vec3(1.4, 0.15, 0.1) * blink * smoothstep(0.03, 0.0, length(q - vec2(-0.55, 0.0)));
+          c += vec3(0.15, 1.4, 0.3) * (1.0 - blink) * smoothstep(0.03, 0.0, length(q - vec2(1.22, 0.2)));
+        }
         gl_FragColor = vec4(c, 1.0);
       }`,
   });
@@ -950,7 +990,7 @@ export class World {
         const face = { tx: x, ty: y, dx, dy, px, pz, ry, room: roomT, wall: this.wallKind[x + y * W] }; this.wallFaces.push(face);   // .deco = something already hangs here
         if (this.grid[y + dy][x + dx] === 2) face.deco = true;   // a prop stands against this wall (gen.js wall placements): no fixture, search site or junction behind it
         if (roll < 0.18) { lcars.push(face.lc = { px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
-        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push(face.lc = { px, pz, ry }); face.deco = true; face.win = true; }
+        else if (this.hullEdge(x, y, dx, dy) && (roll < 0.55 || (roomT === 'bridge' && roll < 0.85))) { windows.push(face.lc = { px, pz, ry }); face.deco = true; face.win = true; }   // windows only where open space lies behind the bulkhead
       }
       // keep wall space for the systems' repair junctions (main.js placeRepairPoints) before any decoration claims it: on small decks the
       // decor passes used to take every free face and leave systems with no repair point on the deck. Spread out, room faces first; .jct faces stay bare.
@@ -1439,6 +1479,14 @@ export class World {
   // nearest sealed door within reach of (px, pz), or null
   sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0 || d.keyed > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
   // hold E at a sealed door: ~3 s to force it, then it stays open 15 s. Returns progress 0..1 (or -1 when nothing to pry)
+  // is the wall tile (x, y), seen from the open tile at (x+dx, y+dy), on the hull edge? Walk back through the bulkhead (up to 3 tiles):
+  // off the grid or out of the hull (gen.js inHull) first = open space behind it (a window may go here); an open tile first = an inner wall.
+  hullEdge(x, y, dx, dy) {
+    const inHull = this.d.inHull || (() => true);
+    if (!inHull(x, y)) return true;
+    for (let k = 1; k <= 3; k++) { const bx = x - dx * k, by = y - dy * k, c = this.grid[by]?.[bx]; if (c === undefined || !inHull(bx, by)) return true; if (c !== 1) return false; }
+    return false;
+  }
   pryDoor(px, pz, dt) { const d = this.sealedDoorNear(px, pz); if (!d) return -1; d.prying = true; d.pry = (d.pry || 0) + dt; if (d.pry >= 3) { d.pried = 15; d.pry = 0; return 1; } return d.pry / 3; }
 
   setLiftOpen(open, keepWalkable = false) {
