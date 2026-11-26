@@ -11,7 +11,7 @@
 // snapshotted into the export and restored on import. First load with no fb_save migrates the old keys. Local only: no network, no personal data.
 export const SAVE_KEY = 'fb_save', SAVE_VERSION = 1, BOARD_SIZE = 10, RUN_HISTORY = 40, MODES = ['nominal', 'madness'];
 const EXTRA_KEYS = ['fb_pace', 'fb_voicemode', 'fb_navtour'];
-const DEF_CFG = { sens: 1, vol: 0.8, quality: 'high', calm: false, caps: false, cb: false };
+const DEF_CFG = { sens: 1, vol: 0.8, quality: 'high', calm: false, caps: false, cb: false, ao: false };
 const DEF_META = { runs: 0, bestDeck: 0, kills: 0, wins: 0 };
 
 const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);

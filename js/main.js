@@ -19,6 +19,7 @@ import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js
 import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
+import { findLoopRun, loopCheck, findEmptyRuns } from './liminal.js';   // liminal set dressing (madness): impossible corridor, empty unlit stretches, sign shifts
 import { hash01, hash } from './clock.js';
 import { gameFor, rushNote, learnedStore } from './jobgames.js';   // job mini-games (chosen by what the job is) + first-use instruction cards (js/jobgame-ui.js)
 import { JobGameUI } from './jobgame-ui.js';
@@ -55,6 +56,7 @@ import { Talk } from './talk.js';   // Systems Nominal conversation close-up: E 
 import { Governor, LEVELS, applyLevel } from './perfgov.js';   // auto-quality ladder (dynamic resolution, shadow size, cones, Performance) + crowd draw culling (js/perfcull.js)
 import { cullCrowd, uncullCrowd, cullStats as cullStatsRef } from './perfcull.js';
 import { NavHUD } from './nav-hud.js';   // Systems Nominal navigation + visual HUD: pins, routes, minimap, compass, big map (M), schematic (js/nav.js, minimap.js)
+import { SMOKE_DEFS, smokeAlerts, smokeDeckOf, pickSourceRoom, densityAt, smokeEffects } from './smoke.js';   // per-deck / per-room alert smoke that hurts (js/smoke.js)
 import { BRIDGE_PARTY } from './comms.js';   // NPC schedules (abstract everywhere, bodies only on the player's deck)   // bridge comms + ship-wide alerts (js/alerts.js, comms.js, bridge.js, hud-comms.js)
 
 const $ = (id) => document.getElementById(id);
@@ -94,27 +96,35 @@ const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
 const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
 const smoke = new Particles(scene, 220, { size: 1.3, opacity: 0.2, gravity: 0.05, drag: 0.6 });   // alert smoke (fire / contamination / abandon): dark haze pooling under the ceiling near the player
-const SMOKE_COL = new THREE.Color(0x2a2724);
+const SMOKE_COL = new THREE.Color(0x2a2724), BADAIR_COL = new THREE.Color(0x4a5236);
 const decals = new Decals(scene);
 const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
 const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d0, 0, 10, 1.5); scene.add(l); return l; });
-let panelSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
+let panelSel = [], emergSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
+const EMERG_COL = new THREE.Color(0xff2a14), EMERG_I = 3.2, EMERG_R = 7;   // emergency lamp light in a blackout (world.emerg: lamp positions, js/world.js)
 function updatePanelLights(dt) {
   panelT -= dt;
   if (panelT <= 0 && world) {
     panelT = 0.2; const arr = [];
     for (const p of world.panels) { const dx = p.x - P.x, dz = p.z - P.z; arr.push([dx * dx + dz * dz, p]); }
     arr.sort((a, b) => a[0] - b[0]); panelSel = arr.slice(0, 3);
+    const em = []; for (const p of world.emerg || []) { const dx = p.x - P.x, dz = p.z - P.z; em.push([dx * dx + dz * dz, p]); }
+    em.sort((a, b) => a[0] - b[0]); emergSel = em.slice(0, 3);
   }
   const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0;
   scene.environmentIntensity = 0.3 * (0.04 + 0.96 * pa);
+  // the same three pooled lights stand in for the nearest emergency lamps once the power drops (never add / remove lights: a change in
+  // the light count recompiles every lit material, see the talk-stall note in TODO.md). Each slot takes whichever source is brighter.
+  const off = 1 - pa;
   panelLights.forEach((l, i) => {
-    const e = panelSel[i];
+    const e = panelSel[i], m = emergSel[i];
+    const pi = e ? 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3) : 0, ei = m ? EMERG_I * off : 0;
+    if (ei > pi) { l.position.set(m[1].x, m[1].y, m[1].z); l.color.copy(EMERG_COL); l.intensity = ei; l.distance = EMERG_R; return; }
     if (!e) { l.intensity = 0; return; }
-    l.position.set(e[1].x, e[1].y, e[1].z);
+    l.position.set(e[1].x, e[1].y, e[1].z); l.distance = e[1].dist || 10;   // tall-room panels carry their own range and intensity factor (js/rooms/_tall.js TALL_LIGHT)
     l.color.set(ship.light); if (e[1].col) l.color.multiply(e[1].col); l.color.lerp(ALERT_RED, al * 0.7);
-    l.intensity = 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3);
+    l.intensity = pi * (e[1].mul || 1);
   });
   // fluorescent buzz, loudest right under a working panel
   if (panelSel[0]) { const d = Math.sqrt(panelSel[0][0]); sound.setBuzz(Math.max(0, 1 - d / 7) * pa * (panelSel[0][1].flick ? world.flickerF : 1)); }
@@ -211,22 +221,15 @@ function saveDeckState() {
 }
 
 // impossible corridor (madness mode, deck 4+): the longest straight, enclosed corridor run sends you back to near its start (same lateral offset, same speed) the first two times you walk it end to end;
-// the third time it lets you through. liminal.run = { ax, fixed, a, b } in tile units along the axis.
-function findLoopRun(data) {
-  let best = null; const g = data.grid, W = data.W, H = data.H, open = (x, y) => g[y]?.[x] === 0 && !data.room[y]?.[x] && !data.tubeAxis?.[x + y * W];
-  for (let y = 1; y < H - 1; y++) { let x = 0; while (x < W) { if (!(open(x, y) && g[y - 1][x] === 1 && g[y + 1][x] === 1)) { x++; continue; } let e = x; while (open(e + 1, y) && g[y - 1][e + 1] === 1 && g[y + 1][e + 1] === 1) e++; if (e - x + 1 >= 5 && (!best || e - x > best.b - best.a)) best = { ax: 'x', fixed: y, a: x, b: e }; x = e + 1; } }
-  for (let x = 1; x < W - 1; x++) { let y = 0; while (y < H) { if (!(open(x, y) && g[y][x - 1] === 1 && g[y][x + 1] === 1)) { y++; continue; } let e = y; while (open(x, e + 1) && g[e + 1][x - 1] === 1 && g[e + 1][x + 1] === 1) e++; if (e - y + 1 >= 5 && (!best || e - y > best.b - best.a)) best = { ax: 'y', fixed: x, a: y, b: e }; y = e + 1; } }
-  return best;
-}
+// the third time it lets you through. Each loop changes the deck: its signs read differently (World.loopShift). Pure parts in js/liminal.js (findLoopRun / loopCheck / findEmptyRuns).
 function loopStep() {
   const L = G.liminal; if (!L || NOM() || G.phase !== 'play' || L.count >= 2) return;
   const [tx, ty] = world.tile(P.x, P.z), run = L.run, u = run.ax === 'x' ? tx : ty, v = run.ax === 'x' ? ty : tx, speed = run.ax === 'x' ? P.vx : P.vz;
-  if (v !== run.fixed || u < run.a || u > run.b || Math.abs(speed) < 0.5) { return; }
-  const dir = Math.sign(speed), atEnd = dir > 0 ? u >= run.b - 1 : u <= run.a + 1; if (!atEnd) { L.walked = dir; return; }
-  if (L.walked !== dir) return;                                   // only after really walking the run toward this end
-  const back = Math.min(3, run.b - run.a - 2), nu = dir > 0 ? run.a + back : run.b - back, [cx, cz] = world.center(run.ax === 'x' ? nu : run.fixed, run.ax === 'x' ? run.fixed : nu);
+  const nu = loopCheck(L, u, v, speed); if (nu == null) return;
+  const [cx, cz] = world.center(run.ax === 'x' ? nu : run.fixed, run.ax === 'x' ? run.fixed : nu);
   if (run.ax === 'x') P.x = cx + (P.x - world.center(tx, ty)[0]); else P.z = cz + (P.z - world.center(tx, ty)[1]);
-  if (run.ax === 'x') P.z = cz; else P.x = cx; L.count++; L.walked = 0;
+  if (run.ax === 'x') P.z = cz; else P.x = cx;
+  world.loopShift?.(L.count);
   if (L.count === 1) G.say('This corridor was shorter a moment ago.', 'warn'); caption('the lights flicker'); flash('#000', 0.5);
 }
 function loadDeck(n) {
@@ -239,9 +242,9 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
+  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
-  scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); scene.background = new THREE.Color(ship.fog);
+  scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); G.fogBase = ship.fogD; scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
 
@@ -833,7 +836,7 @@ function nomTick(dt) {
   const D = G.duty; if (!D) return;
   const d = world?.d; if (d) { const tx = Math.floor(P.x / TS), ty = Math.floor(P.z / TS); D.setPlace(G.shipDeck + 1, d.room?.[ty]?.[tx] || 'corridor'); }
   D.tick(dt); G.hud2?.update(dt); ambientBarks(dt); G.sites?.tick(dt); jobGoTick();
-  if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }
+  if (G.phases) { G.phases.tick(dt); const hz = G.phase === 'play' ? G.phases.hazard(G.shipDeck + 1, { zone: D.place.room === 'engineering' ? 'engineering' : '' }) : null; if (hz) { G.hp -= hz.rate * dt; $('danger').style.opacity = 0.5; if (!G.hazT || G.hazT < G.time - 8) { G.hazT = G.time; G.say(`Warning: ${hz.cause}. Get out!`, 'warn'); } if (G.hp <= 0) nomDie(hz.cause); } else if (G.phase === 'play' && G.hp < G.maxHp && !G.smoke?.fx?.dense) G.hp = Math.min(G.maxHp, G.hp + dt * 2); }   // no regen in dense smoke
   if (G.hud2 && G.phase === 'play') { const room = D.place.room, due = D.loops.find(l => l.state === 'due' && l.room === room) || D.tasks.find(t => t.state === 'active' && t.room === room); G.hud2.setHint(G.sites?.active ? G.sites.hint() : D.busy ? `Working: ${D.busy.loop.label}…` : G.jobGo ? `✦ ${G.jobGo.label}: go to the ${G.jobGo.where} — it starts when you get there · [G] guide` : (G.intro && (!due || due.task === G.intro.task)) ? introHint(dt) : (dutyHere() ? `[E] ${(dutyHere().label || dutyHere().task)}   ·   [J] rush / skip…` : '')); }
 }
 // the whole world pauses while any menu / wheel / panel / map / terminal / conversation is open (G.menuPause is set by the menus agent)
@@ -1073,7 +1076,7 @@ function die(by, line = null) {
 }
 
 // callbacks used by Gorn AI
-G.onEnemyStep = (g, d) => { if (d < 30) { if (d < 20) caption('footsteps', g.x, g.z); sound.thud(Math.max(0.04, 0.4 - d * 0.013)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
+G.onEnemyStep = (g, d) => { if (d < 30) { if (d < 20) caption('footsteps', g.x, g.z); sound.at(g.x, g.z, () => sound.thud(Math.max(0.04, 0.4 - d * 0.013)), !world.los(g.x, g.z, P.x, P.z)); if (d < 11) P.shake = Math.max(P.shake, (11 - d) / 11 * 0.35); } };
 // sound captions (accessibility): a short bracketed line with a direction arrow relative to where you face; throttled per text
 let capLast = {};
 function caption(text, x, z) {
@@ -1081,11 +1084,11 @@ function caption(text, x, z) {
   let dir = ''; if (x !== undefined) { const a = Math.atan2(-(x - P.x), -(z - P.z)) - P.yaw, d = Math.atan2(Math.sin(a), Math.cos(a)); dir = Math.abs(d) < 0.6 ? ' ↑' : Math.abs(d) > 2.5 ? ' ↓' : d > 0 ? ' ←' : ' →'; if (Math.hypot(x - P.x, z - P.z) > 18) dir += ' (far)'; }
   const el = $('caps'); if (!el) return; const li = document.createElement('div'); li.textContent = `[${text}]${dir}`; el.appendChild(li); while (el.children.length > 3) el.firstChild.remove(); setTimeout(() => li.remove(), 2800);
 }
-G.caption = caption;
+G.caption = caption; sound.onCaption = caption;   // enemy emitters (js/audio.js emitter) caption growls / tells / skitters through the same setting
 // distraction (madness mode): a noise made at (x, z) pulls hunters that are not chasing you to investigate that spot; the closer, the surer
 G.distract = (x, z, radius = 20) => {
   radius *= 1 + 0.3 * perk('noisemaker');
-  sound.clang?.(0.25); caption('clatter', x, z); const [tx, ty] = world.tile(x, z); if (world.grid[ty]?.[tx] !== 0) return 0; let n = 0;
+  sound.at(x, z, () => sound.clang?.(0.25)); caption('clatter', x, z); const [tx, ty] = world.tile(x, z); if (world.grid[ty]?.[tx] !== 0) return 0; let n = 0;
   for (const g of gorns) { if (!g.active || g.dead || ![S.PATROL, S.INVESTIGATE, S.SEARCH].includes(g.state) || !g.setTarget) continue; const d = Math.hypot(g.x - x, g.z - z); if (d > radius || (d > radius * 0.6 && Math.random() < 0.4)) continue; g.state = S.INVESTIGATE; g.timer = 7; g.setTarget(tx, ty); n++; }
   return n; };
 G.onEnemySpotted = (g) => { caption(g.name + ' roars', g.x, g.z); flash('#600', 0.35); G.say(g.name.toUpperCase() + ' SEES YOU — RUN', 'warn'); };
@@ -1148,8 +1151,9 @@ $('qsel').onchange = (e) => setQuality(e.target.value);
 { const cp = $('capson'), cb = $('cbmode'); document.body.classList.toggle('cb', !!CFG.cb); setMapPalette(!!CFG.cb);
   if (cp) { cp.checked = !!CFG.caps; cp.onchange = (e) => { CFG.caps = e.target.checked; saveCfg(); }; }
   if (cb) { cb.checked = !!CFG.cb; cb.onchange = (e) => { CFG.cb = e.target.checked; document.body.classList.toggle('cb', CFG.cb); setMapPalette(CFG.cb); saveCfg(); }; } }
-post.setCalm(CFG.calm);
+post.setCalm(CFG.calm); post.setAO(CFG.ao);
 { const jr = $('jgreset'); if (jr) jr.onclick = () => { G.jobgame?.store.reset(); jr.textContent = 'Tool instructions will show again'; }; }   // js/jobgame-ui.js: forget which tools were explained (CFG.learned)
+{ const ao = $('aoon'); if (ao) { ao.checked = !!CFG.ao; ao.onchange = (e) => { CFG.ao = e.target.checked; post.setAO(CFG.ao); saveCfg(); }; } }   // optional GTAO (High only, ladder rung 0: js/fx.js, js/perfgov.js)
 { const cl = $('calm'); if (cl) { cl.checked = !!CFG.calm; cl.onchange = (e) => { CFG.calm = e.target.checked; post.setCalm?.(CFG.calm); saveCfg(); }; } }
 $('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(G.player, 'Crew voice check.'); };
 $('vsel').value = voiceMode(); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
@@ -1212,10 +1216,21 @@ function climbWell(dir) {
   return true;
 }
 G.climbWell = climbWell;
+// a ship ladder up to a catwalk deck (tall rooms, js/rooms/_tall.js: lp.cw = the module's tile): a scripted 2.2 s mantle from the ladder to the deck's end
+// nearest it (the same script as E at the module itself). Coming down: walk off the deck edge.
+function climbCatwalkLadder(lp) {
+  const [cx, cz] = world.center(lp.tx, lp.ty), [mx, mz] = world.center(lp.cw[0], lp.cw[1]), top = world.topAt(lp.cw[0], lp.cw[1]);
+  if (!(top > 1) || Math.hypot(cx - P.x, cz - P.z) > 3.4) return false;
+  const ux = Math.sign(cx - mx), uz = Math.sign(cz - mz);   // from the module toward the ladder
+  P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: mx + ux * 0.8, z: mz + uz * 0.8, top, dx: 0, dz: 0, t: 0, dur: 2.2, exit: 0, fast: false };
+  G.say('You climb the ladder onto the catwalk.', 'good'); return true;
+}
+G.climbCatwalkLadder = climbCatwalkLadder;
 function interact() {
   if (P.hidden) { exitHide(); return; }
   if (NOM() && G.sites?.press()) return;   // E at a work site wins (js/worksite-ui.js); holding E there does the work
-  if (NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 4.2 && climbWell(keys.ShiftLeft || keys.ShiftRight ? -1 : 1)) return; }
+  if (NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && !lp.cw && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 4.2 && climbWell(keys.ShiftLeft || keys.ShiftRight ? -1 : 1)) return; }
+  if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && lp.cw && climbCatwalkLadder(lp)) return; }   // E at a catwalk's ship ladder (tall rooms): up its rungs to the deck's end
   if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(), top = lp && lp.kind === 'catwalk' ? world.topAt(lp.tx, lp.ty) : 0;   // E at a catwalk module: climb the ladder rungs up onto its deck (a scripted 1.8 s mantle; step off an edge to come down)
     if (top > 1 && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.4) { P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: (lp.tx + 0.5) * 2.5, z: (lp.ty + 0.5) * 2.5, top, dx: 0, dz: 0, t: 0, dur: 1.8, exit: 0, fast: false }; G.say('You climb onto the catwalk.', 'good'); return; } }
   if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && (P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft)) { enterHide(lp); return; } }
@@ -1336,7 +1351,7 @@ beamCone = (() => {
   const c = document.createElement('canvas'); c.width = 4; c.height = 64; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, '#fff'); gr.addColorStop(1, '#000'); g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
   const geo = new THREE.ConeGeometry(7, 15, 24, 1, true); geo.translate(0, -7.5, 0); geo.rotateX(Math.PI / 2);
   const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xfff1d0, transparent: true, opacity: 0.02, alphaMap: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  m.position.set(0.12, -0.1, 0); m.frustumCulled = false; camera.add(m); return m;
+  m.position.set(0.12, -0.1, 0); m.frustumCulled = false; m.userData.noAO = true; camera.add(m); return m;
 })();
 // first-person zapper: procedural sidearm + hand (js/actors.js makeViewmodel)
 let gunVM = null, gunKick = 0, muzzle = null, vm = null, hands = null;
@@ -1351,8 +1366,47 @@ G.testMode = TEST_MODE;
 let lastT = performance.now(), elapsed = 0; let acc = 0, mapT = 0, flickT = 0;
 // game timers: setTimeout normally; under the test clock (G.manual, tools/test.mjs) they wait for __game.advance() game time instead of the wall clock
 let manT = 0; const timers = [];
+// alert smoke (js/smoke.js): each smoking alert fills one source room on one deck (the alert's deck, else the deck you were on
+// when it was first seen) and creeps outward; abandon ship adds a thin harmless haze everywhere. Dense smoke (>= DENSE) makes
+// you cough, drains health (no regen), slows you and closes the fog in; crouching (smoke pools under the ceiling) and an
+// emergency breather help. Calm mode halves the fog and drops the cough shake; captions say "you cough" / "smoke".
+function smokeStep(dt) {
+  const S = G.smoke ||= { srcs: [], here: 0, fx: null, fog: 1, coughT: 0, sayT: -99 };
+  const al = NOM() && world ? smokeAlerts(G.comms?.alerts?.active?.()) : [], deckNo = G.shipDeck ?? 0;   // alert.deck is the 0-based ship deck index (the HUD / PA show deck + 1)
+  S.srcs = []; let haze = 0;
+  for (const a of al) {
+    const id = a.def.id, def = SMOKE_DEFS[id], age = G.comms.alerts.elapsed(a); if (def.haze) haze = Math.max(haze, def.haze * Math.min(1, age / 6));
+    if (smokeDeckOf(a, deckNo) !== deckNo) continue;   // smoke stays on its own deck
+    if (id === 'hull_breach' && G.breach?.deck === G.deck) { S.srcs.push({ id, kind: 'point', x: G.breach.x, z: G.breach.z, age, ts: TS }); continue; }
+    const key = `${G.runSeed}|${deckNo}|${id}|${a.seq}`; if (a.smokeKey !== key) { a.smokeKey = key; a.smokeRoom = pickSourceRoom(world.d.rooms, key); }
+    if (!a.smokeRoom) continue; const R = a.smokeRoom, [cx, cz] = world.center(R.x + (R.w >> 1), R.y + (R.h >> 1));
+    S.srcs.push({ id, kind: 'room', room: R, age, ts: TS, cx, cz });
+    if (!a.smokeSeen) { a.smokeSeen = 1; caption('smoke', cx, cz); }
+  }
+  const densAt = (x, z) => { const [tx, ty] = world.tile(x, z); let d = haze; for (const s of S.srcs) d = Math.max(d, densityAt(s, x, z, tx, ty)); return Math.min(1, d); };
+  const play = G.phase === 'play' && world;
+  S.here = play && (S.srcs.length || haze) ? densAt(P.x, P.z) * (P.crouch ? 0.7 : 1) : 0;
+  const hurt = Math.max(0, ...S.srcs.map(s => SMOKE_DEFS[s.id].hurt));
+  S.fx = smokeEffects(S.here, hurt, { breather: G.carry?.item === 'breather', calm: !!CFG.calm });
+  P.smokeSlow = S.fx.slow;
+  S.fog += (S.fx.fog - S.fog) * Math.min(1, dt * (CFG.calm ? 0.8 : 1.5)); if (scene.fog && G.fogBase) scene.fog.density = G.fogBase * S.fog;
+  if (play && S.fx.dense) {
+    G.hp -= S.fx.drain * dt;
+    if (G.time - S.sayT > 12) { S.sayT = G.time; G.say(G.carry?.item === 'breather' ? 'Thick smoke. The breather is keeping most of it out.' : 'Thick smoke — you can hardly breathe. Get low and get out.', 'warn'); }
+    if (S.fx.cough && (S.coughT -= dt) <= 0) { S.coughT = 1.6 + Math.random() * 2; sound.noise?.(0.13, 0.22, 650, 0.9, 'bandpass'); sound.noise?.(0.11, 0.18, 600, 0.9, 'bandpass', 0.2); caption('you cough'); if (!CFG.calm) P.shake = Math.max(P.shake, 0.12); }
+    if (G.hp <= 0) { if (NOM()) nomDie('smoke inhalation'); else G.hp = 1; }
+  } else S.coughT = Math.min(S.coughT, 0.4);
+  // particles: dark haze pooling under the ceiling, only where the smoke is (bad air is a paler green-grey)
+  if (play && (S.srcs.length || haze)) for (let k = 0, n = Math.random() < dt * 30 ? 2 : 0; k < n; k++) {
+    const a = Math.random() * 6.283, r = 2 + Math.random() * 12, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r, [tx, ty] = world.tile(x, z);
+    if (world.solid(tx, ty)) continue; const d = densAt(x, z); if (Math.random() > d * 1.3) continue;
+    const bad = S.srcs.length && S.srcs.every(s => s.id === 'contamination');
+    smoke.add(x, world.ceilAt(tx, ty) - 0.4 - d * Math.random() * 1.2, z, (Math.random() - 0.5) * 0.5, -0.05 - Math.random() * 0.1, (Math.random() - 0.5) * 0.5, bad ? BADAIR_COL : SMOKE_COL, 5 + Math.random() * 3);
+  }
+}
 function later(fn, ms) { if (G.manual) timers.push({ at: manT + ms / 1000, fn }); else setTimeout(fn, ms); }
 function step(dt, t) {
+  sound.setListener(P.x, P.z, P.yaw);   // positional audio: enemies / screams / footsteps pan and fade from here (js/audio.js)
   if (NOM() && G.menuPause) return;   // a menu / wheel / panel / map is open: the whole world holds still (js/menus.js keeps the UI alive)
   if (shot > 0) shot -= dt;
   if (invuln > 0) invuln -= dt;
@@ -1369,7 +1423,7 @@ function step(dt, t) {
   if (G.touchMove) { fx += G.touchMove.x; fz += G.touchMove.z; }   // js/touch.js: the on-screen move stick (analog direction)
   if (P.hidden) { fx = fz = 0; if (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || pressed.jump) exitHide(); }   // hiding: stand still; any move key steps out
   const moving = fx || fz;
-  P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1);   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
+  P.slow = (P.clung > 0 ? 0.4 : 1) * (P.cbSlow ?? 1) * (P.smokeSlow ?? 1);   // smokeSlow: dense alert smoke (smokeStep)   // cbSlow: holding / grabbed / restrained / staggered (js/grapple.js)
   movePlayer(dt, P, world, { fx, fz, sprint: !!(keys.ShiftLeft || keys.ShiftRight), crouch: !!(keys.KeyC || keys.ControlLeft), crouchPressed: pressed.crouch, jump: pressed.jump && !(P.clung > 0), grappleCancel: pressed.grappleCancel }, moveApi);
   pressed.jump = pressed.crouch = pressed.grappleCancel = false;
   updateRope(dt);
@@ -1452,7 +1506,7 @@ function step(dt, t) {
         if (H.standing && d < 9) e.mesh.rotation.y += da * Math.min(1, dt * 2.5);
         H.lookYaw += ((d < 7 ? Math.max(-0.9, Math.min(0.9, da)) : 0) - H.lookYaw) * Math.min(1, dt * 4);
         if (!e.fake) { liveFace(H, e.t, e.mesh.id); if (e.simmed) { fidgetStep(e, dt, d); wearStep(e, dt, d, G, world); } }   // impostors never blink
-        if (e.fake && d < 5) { e.tellT = (e.tellT ?? 2 + Math.random() * 3) - dt; if (e.tellT <= 0) { e.tellT = 3.5 + Math.random() * 3; sound.tell?.(); } }   // impostor tell: a faint wet tick, only heard up close
+        if (e.fake && d < 5) { e.tellT = (e.tellT ?? 2 + Math.random() * 3) - dt; if (e.tellT <= 0) { e.tellT = 3.5 + Math.random() * 3; sound.at(e.x, e.z, () => sound.tell?.()); caption('wet tick', e.x, e.z); } }   // impostor tell: a faint wet tick, only heard up close
         H.update(dt * (e.fake ? 0.82 : 1));
       } else { e.mesh.rotation.y += da * Math.min(1, dt * 2.5); animateCrew(e.mesh, e.t); }
     }
@@ -1470,7 +1524,7 @@ function step(dt, t) {
   if (NOM() && G.sites?.wants()) prompt = G.sites.hint();   // at a work site: E works the site (js/worksite-ui.js), not the clutter beside it
   if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
   if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
-  if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (lp && lp.kind === 'ship_ladder') prompt = `[E] Climb down to Deck ${G.shipDeck + 2 <= G.ship.decks ? G.shipDeck + 2 : G.shipDeck} · [Shift+E] up`; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
+  if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (lp && lp.kind === 'ship_ladder' && lp.cw) prompt = P.y < 0.5 ? '[E] Climb the ladder to the catwalk' : ''; else if (lp && lp.kind === 'ship_ladder') prompt = `[E] Climb down to Deck ${G.shipDeck + 2 <= G.ship.decks ? G.shipDeck + 2 : G.shipDeck} · [Shift+E] up`; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   if (!prompt && rp) prompt = `${SYS[rp.sys].name} — nominal`;   // status label last: a junction beside a fixture, clutter or terminal must not hide what [E] does there
   $('prompt').textContent = prompt;
@@ -1485,12 +1539,16 @@ function step(dt, t) {
   if (NOM()) G.nav?.frame(dt);   // route tick 0.12 s inside; minimap / compass 30 Hz; floor chevrons + beacon
 
   // environment flicker / lights
-  world.setDoorLock(NOM() && world.powerTarget === 0);   // blackout seals the doors; hold E to pry one open
+  // door locks: a blackout seals the doors (crew force them), a red alert locks them down (crew key through with their codes, js/world.js
+  // slideDoors); the player pries either with E. Not in the collapse (index >= 4): evacuation needs the doors
+  { const red = NOM() && !!G.comms?.alerts?.has('red') && !(G.phases?.index >= 4), mode = !NOM() ? false : world.powerTarget === 0 ? 'power' : red ? 'alert' : false;
+    if (mode === 'alert' && world.doorLock !== 'alert') { G.say('Red alert lockdown: doors are sealed. Crew key through; hold E to pry a door.', 'warn'); G.sealMsgT = 6; }
+    world.setDoorLock(mode); }
   { const sd = NOM() && keys.KeyE && P.grounded && !(P.clung > 0) ? world.pryDoor(P.x, P.z, dt) : -1;
-    if (sd >= 0) { noiseNow = Math.max(noiseNow, 7); G.pryT = (G.pryT || 0) - dt; if (G.pryT <= 0) { G.pryT = 0.5; sound.noise?.(0.2, 0.08, 400, 1, 'bandpass'); } if (sd >= 1) G.say('You force the door open.', 'good'); }
-    else if (NOM() && world.sealedDoorNear(P.x, P.z)) { if (!(G.sealMsgT > 0)) { G.say('Door sealed (no power). Hold E to pry it open.', 'warn'); G.sealMsgT = 6; } }
+    if (sd >= 0) { noiseNow = Math.max(noiseNow, 7); G.pryT = (G.pryT || 0) - dt; if (G.pryT <= 0) { G.pryT = 0.5; sound.pry?.(world.sealedDoorNear(P.x, P.z)?.mat); } if (sd >= 1) G.say('You force the door open.', 'good'); }
+    else if (NOM() && world.sealedDoorNear(P.x, P.z)) { if (!(G.sealMsgT > 0)) { G.say(world.doorLock === 'alert' ? 'Door sealed (red alert lockdown). Hold E to pry it open.' : 'Door sealed (no power). Hold E to pry it open.', 'warn'); G.sealMsgT = 6; } }
     if (G.sealMsgT > 0) G.sealMsgT -= dt; }
-  world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z, w: !!e.walk })), (d) => { if (d < 9) { sound.noise?.(0.14, Math.max(0.02, 0.1 - d * 0.01), 1800, 1, 'bandpass'); } });
+  { let n = 0; world.update(dt, t); world.slideDoors(dt, P.x, P.z, ents.filter(e => e.simmed).map(e => ({ x: e.x, z: e.z, w: !!e.walk })), (d, dr, kind) => { if (d < 12 && n++ < 3) sound.door?.(kind, dr.mat, d); }); }   // at most 3 door sounds a frame (a lockdown slams every door in earshot)
   lamp.position.set(P.x, 2.4, P.z);
   flickT -= dt;
   if (flickT <= 0) { flickT = 0.05 + Math.random() * 0.1; const bad = tension > 0.5 && Math.random() < 0.15; hemi.intensity = (bad ? 0.5 : 1.9 + (Math.random() < 0.02 ? -1.2 : 0)) * (0.03 + 0.97 * world.powerAmt); }
@@ -1518,10 +1576,7 @@ function step(dt, t) {
       if (d < 22) { for (let i = 0; i < 14; i++) sparks.add(sp.x, 1.1, sp.z, (Math.random() - 0.5) * 3, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3, SPARK, 0.5 + Math.random() * 0.5); if (d < 14) sound.zap(); }
     }
   }
-  { const top = G.comms?.alerts?.top?.(), id = top?.def?.id;   // smoke only under alerts that mean smoke; the closer to the player the denser
-    if (top && (id === 'fire' || id === 'contamination' || id === 'abandon_ship' || id === 'hull_breach') && world && Math.random() < dt * 16) {
-      const a = Math.random() * 6.283, r = 3 + Math.random() * 11, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r, [tx, ty] = world.tile(x, z);
-      if (!world.solid(tx, ty)) smoke.add(x, world.ceilAt(tx, ty) - 0.4, z, (Math.random() - 0.5) * 0.5, -0.05 - Math.random() * 0.1, (Math.random() - 0.5) * 0.5, SMOKE_COL, 5 + Math.random() * 3); } }
+  smokeStep(dt);
   // hull breach: while the alert is up a breach opens at one spot on the deck (seeded per deck): air rushes toward it, pulling you in and hurting inside 3 m.
   // Holding an emergency breather halves the damage; getting out of line of sight / > 14 m ends the pull. Cleared when the alert clears.
   { const top = G.comms?.alerts?.top?.(), on = !!top && top.def.id === 'hull_breach' && G.phase === 'play' && world;
@@ -1902,7 +1957,7 @@ function beginTurn(e) {
   G.director?.bump(0.2, 'someone turned');
   e.turning = 2.6; e.used = true; G.mad.pending = e; const H = e.mesh.userData.human, d = Math.hypot(e.x - P.x, e.z - P.z);
   if (H) { H.standing = false; H.play('hit_head', { loop: false, fade: 0.1 }); H.face({ JawDrop: 1, NoseWrinkler: 1, LeftBrowDown: 1, RightBrowDown: 1, UpperLipUp: 1 }); }
-  sound.shriek(Math.max(0.06, 0.35 - d * 0.008)); caption('scream', e.x, e.z); if (d < 9) P.shake = Math.max(P.shake, 0.25);
+  sound.at(e.x, e.z, () => sound.shriek(Math.max(0.06, 0.35 - d * 0.008))); caption('scream', e.x, e.z); if (d < 9) P.shake = Math.max(P.shake, 0.25);
   const who = `${e.person.short}, ${e.person.title}`;
   if (d < 14 && world.los(e.x, e.z, P.x, P.z)) G.say(`${who} clutches their head and starts to laugh…`, 'warn');
   else if (G.fx.comms < 2) G.say(garble(`Computer: Medical emergency — ${who}. Crew are advised to keep clear.`), 'warn');
@@ -1926,8 +1981,8 @@ function updateMadness(dt) {
 G.preyFor = (h) => { let best = null, bd = 1e9; for (const e of ents) { if (e.kind !== 'crew' || e.fake || e.turning !== undefined || e.dying) continue; const d = Math.hypot(e.x - h.x, e.z - h.z); if (d < bd) { bd = d; best = e; } } if (best && !best.id) best.id = Math.random(); return best; };
 G.killNpc = (e, by) => {
   e.dying = true; const d = Math.hypot(e.x - P.x, e.z - P.z), p = e.person;
-  bloodBurst(e.x, 1.2, e.z, 70, 3); decals.floor('blood0', e.x, e.z, 1.8, 1); sound.squelch();
-  if (d < 40) { sound.shriek(Math.max(0.04, 0.32 - d * 0.008)); G.director?.bump(d < 20 ? 0.25 : 0.12, 'crew killed'); }
+  bloodBurst(e.x, 1.2, e.z, 70, 3); decals.floor('blood0', e.x, e.z, 1.8, 1); sound.at(e.x, e.z, () => sound.squelch());
+  if (d < 40) { sound.at(e.x, e.z, () => sound.shriek(Math.max(0.04, 0.32 - d * 0.008))); caption('scream', e.x, e.z); G.director?.bump(d < 20 ? 0.25 : 0.12, 'crew killed'); }
   if (d < 20 && world.los(e.x, e.z, P.x, P.z)) G.say(`${by.person ? by.person.short : 'The madman'} tears into ${p ? p.short : 'a crewman'}!`, 'warn');
   else if (d < 40) G.say('A scream, somewhere close. Then nothing.', 'warn');
   scene.remove(e.mesh); ents.splice(ents.indexOf(e), 1);   // game time, not wall time: no timers here
@@ -2045,12 +2100,12 @@ const ready = (async () => {
   Loading.hide(TEST_MODE);
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), panelLights, updatePanelLights, get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'role', { get: () => G.role });   // { choice, billet, mission, miss } (js/role.js)
 Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
 Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact;   // conversation close-up (js/talk.js)
 titleBoard();
-mountSaveControls(document, SAVE, { onChange: () => { Object.assign(CFG, SAVE.cfg()); G.best = SAVE.best(); sound.vol = CFG.vol; sound.setVolume?.(CFG.vol); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality; $('calm').checked = !!CFG.calm; $('capson').checked = !!CFG.caps; $('cbmode').checked = !!CFG.cb; document.body.classList.toggle('cb', !!CFG.cb); document.body.classList.toggle('lc-calm', !!CFG.calm); post.setCalm?.(CFG.calm); titleBoard(); } });   // pause menu: export / import / reset save (js/save-ui.js)
+mountSaveControls(document, SAVE, { onChange: () => { Object.assign(CFG, SAVE.cfg()); G.best = SAVE.best(); sound.vol = CFG.vol; sound.setVolume?.(CFG.vol); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality; $('calm').checked = !!CFG.calm; if ($('aoon')) $('aoon').checked = !!CFG.ao; post.setAO?.(CFG.ao); $('capson').checked = !!CFG.caps; $('cbmode').checked = !!CFG.cb; document.body.classList.toggle('cb', !!CFG.cb); document.body.classList.toggle('lc-calm', !!CFG.calm); post.setCalm?.(CFG.calm); titleBoard(); } });   // pause menu: export / import / reset save (js/save-ui.js)
 frame();

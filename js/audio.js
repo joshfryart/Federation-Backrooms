@@ -1,4 +1,23 @@
 // Procedural WebAudio: no asset files needed.
+
+// Positional audio (enemies): where a sound at (x, z) sits for a listener at (lis.x, lis.z) facing lis.yaw (the player's yaw: forward is
+// (-sin yaw, -cos yaw), the same convention as the caption arrows in js/main.js). Pure, node-testable.
+//   d: metres; rel: bearing relative to facing (0 ahead, + left, +-PI behind); pan: -1 left .. +1 right; gain: distance falloff (1 within
+//   4 m, ~0.67 at 18 m, ~0.34 at 32 m; gentle, since most enemy calls already scale their volume by distance), x0.55 when occluded (no line of sight); cutoff: lowpass Hz (air absorption with distance, darker
+//   from behind, muffled through walls); heard: inside the caption range (26 m in the open, 16 m through walls).
+export const HEAR_R = 26, HEAR_R_OCC = 16;
+export function spatial(lis, x, z, occluded = false) {
+  const dx = x - lis.x, dz = z - lis.z, d = Math.hypot(dx, dz);
+  const a = Math.atan2(-dx, -dz) - (lis.yaw || 0), rel = Math.atan2(Math.sin(a), Math.cos(a));
+  const pan = d < 0.3 ? 0 : -Math.sin(rel) * 0.85 * Math.min(1, d / 1.5);   // right on top of you: centred
+  let gain = d <= 4 ? 1 : 1 / (1 + ((d - 4) / 20) ** 2), cutoff = Math.max(600, 16000 / (1 + d / 8));
+  if (Math.abs(rel) > Math.PI / 2) cutoff *= 0.65;   // head shadow: a little duller from behind
+  if (occluded) { gain *= 0.55; cutoff = Math.min(cutoff, 900); }
+  return { d, rel, pan, gain, cutoff, heard: d <= (occluded ? HEAR_R_OCC : HEAR_R) };
+}
+// sound-caption text per Sound method when it comes from an enemy emitter (js/main.js shows it with a direction arrow if captions are on)
+export const EMIT_CAPS = { growl: 'growl', mutter: 'muttering', whir: 'whirring', giggle: 'giggling', skitter: 'skittering', tell: 'wet tick', shriek: 'shriek', roar: 'roar', squelch: 'squelch', zap: 'crackle', step: 'scuff' };
+
 export class Sound {
   constructor() { this.ctx = null; this.muted = false; }
 
@@ -94,6 +113,37 @@ export class Sound {
   // thud() then schedule at their `delay` in seconds from the start of the render.
   static offline(ctx, { wet = 0.34, ir = 2.6 } = {}) { const s = new Sound(); s.ctx = ctx; s._bus(ctx, wet, ir); return s; }
 
+  // ---- positional audio ----
+  // the listener (the player): set once a frame from js/main.js step()
+  setListener(x, z, yaw) { this.lis = { x, z, yaw }; }
+  // play fn()'s tone() / noise() calls from (x, z): panned, distance-attenuated and lowpassed through one chain into the master bus.
+  // Returns the spatial() result (null with no listener). Captions do not need a context, so this also works muted / headless.
+  at(x, z, fn, occluded = false) {
+    const sp = this.lis ? spatial(this.lis, x, z, occluded) : null;
+    if (!this.ctx) return sp; if (!sp) { fn(); return sp; }
+    const ctx = this.ctx, pan = ctx.createStereoPanner(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+    pan.pan.value = sp.pan; lp.type = 'lowpass'; lp.frequency.value = sp.cutoff; lp.Q.value = 0.5; g.gain.value = sp.gain;
+    pan.connect(lp); lp.connect(g); g.connect(this.master);
+    const prev = this._dest; this._dest = pan; try { fn(); } finally { this._dest = prev; }
+    setTimeout(() => { try { pan.disconnect(); } catch (e) { /* gone */ } }, 4000);   // longest enemy sound is ~1.2 s; free the chain after
+    return sp;
+  }
+  // a stand-in for `sound` an enemy holds (js/enemies.js): every Sound method called through it plays from the source's current (x, z),
+  // occluded when src.w.los says there is no line of sight to the listener, and raises its EMIT_CAPS caption via onCaption(text, x, z)
+  // when it is in hearing range (main.js routes that to the Sound captions setting). Non-function properties read through.
+  emitter(src) {
+    const self = this;
+    return new Proxy(this, { get(t, k) {
+      const v = t[k]; if (typeof v !== 'function' || k === 'at' || k === 'emitter' || k === 'setListener') return v;
+      return (...a) => {
+        const L = self.lis, occ = !!(L && src.w?.los && !src.w.los(src.x, src.z, L.x, L.z));
+        const sp = self.at(src.x, src.z, () => v.apply(self, a), occ);
+        const cap = EMIT_CAPS[k]; if (cap && sp?.heard) self.onCaption?.(cap, src.x, src.z);
+        return sp;
+      };
+    } });
+  }
+
   setRoom(key) {
     if (!this.ctx || this.roomKey === key) return; this.roomKey = key; const a = Sound.ROOM_AMB[key], t = this.ctx.currentTime;
     this.roomAmb = a || null; this.roomT = 2 + Math.random() * 3;
@@ -144,7 +194,7 @@ export class Sound {
     const o = this.ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
     const g = this.ctx.createGain(); this._env(g, t, 0.01, dur, vol);
-    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+    o.connect(g); g.connect(this._dest || this.master); o.start(t); o.stop(t + dur + 0.05);
   }
 
   noise(dur, vol = 0.2, freq = 800, q = 1, type = 'bandpass', delay = 0) {
@@ -153,7 +203,7 @@ export class Sound {
     const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf;
     const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
     const g = this.ctx.createGain(); this._env(g, t, 0.005, dur, vol);
-    s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+    s.connect(f); f.connect(g); g.connect(this._dest || this.master); s.start(t, Math.random()); s.stop(t + dur + 0.05);
   }
 
   setMuffle(on) { if (!this.muffle || this.muffleOn === !!on) return; this.muffleOn = !!on; this.muffle.frequency.setTargetAtTime(on ? 700 : 20000, this.ctx.currentTime, 0.12); }
@@ -208,4 +258,23 @@ export class Sound {
   breath(vol = 0.12) { this.noise(0.45, vol, 900, 0.5, 'bandpass'); }
   setVolume(v) { if (this.master) this.master.gain.value = v; this.vol = v; }
   flick() { this.noise(0.05, 0.1, 3000, 2, 'highpass'); }
+  // sliding doors by material (js/world.js doorMaterial): 'std' pneumatic hiss, 'heavy' low rumbling blast door, 'light' quick high swish.
+  // kind: 'open' / 'close' (leaves move), 'seal' (a lock slams an open door shut and latches), 'key' (crew code chirp at a lockdown door),
+  // 'force' (crew wrench a dead door open). `dist` in metres fades it out by ~14 m
+  door(kind, mat = 'std', dist = 0) {
+    if (!this.ctx) return; const v = Math.max(0.015, 1 - dist / 14), N = (d, g, f, q, t, dl) => this.noise(d, g * v, f, q, t, dl), T = (f, d, ty, g, sl, dl) => this.tone(f, d, ty, g * v, sl, dl);
+    const heavy = mat === 'heavy', light = mat === 'light';
+    if (kind === 'open' || kind === 'close') {
+      const sh = kind === 'close';
+      if (heavy) { N(0.55, 0.11, sh ? 380 : 520, 0.7, 'lowpass'); T(62, 0.5, 'sawtooth', 0.05, sh ? -12 : 14); if (sh) this.thud(0.16 * v, 0.42); else N(0.08, 0.05, 1200, 2, 'bandpass'); }
+      else if (light) { N(0.1, 0.07, sh ? 2200 : 2700, 1.6, 'bandpass'); if (sh) N(0.03, 0.04, 3200, 3, 'bandpass', 0.09); }
+      else { N(0.16, 0.1, sh ? 1500 : 1800, 1, 'bandpass'); if (sh) this.thud(0.07 * v, 0.14); }
+    } else if (kind === 'seal') {   // fast close, hard stop, the lock bolts going home
+      N(0.12, heavy ? 0.14 : 0.1, heavy ? 600 : 1500, 1, 'bandpass'); this.thud((heavy ? 0.4 : light ? 0.16 : 0.26) * v, 0.1);
+      for (let i = 0; i < (heavy ? 3 : 2); i++) N(0.04, 0.07, 3000, 3, 'bandpass', 0.22 + i * 0.09); T(heavy ? 110 : 180, 0.12, 'square', 0.03, 0, 0.2);
+    } else if (kind === 'key') { T(1320, 0.06, 'square', 0.03); T(1760, 0.08, 'square', 0.03, 0, 0.08); N(0.05, 0.05, 2600, 3, 'bandpass', 0.2); }   // code accepted, bolts drawn
+    else if (kind === 'force') { N(0.5, 0.12, heavy ? 300 : light ? 900 : 550, 1.2, 'bandpass'); T(heavy ? 140 : 260, 0.45, 'sawtooth', 0.04, -60); }
+  }
+  // one grind of a door being pried by hand (repeated while E is held); bigger, lower and slower for heavy doors
+  pry(mat = 'std') { const heavy = mat === 'heavy', light = mat === 'light'; this.noise(0.2, 0.08, heavy ? 260 : light ? 700 : 400, 1, 'bandpass'); if (Math.random() < (heavy ? 0.5 : 0.3)) this.tone(heavy ? 90 : light ? 300 : 180, 0.18, 'triangle', 0.035, -30); }
 }

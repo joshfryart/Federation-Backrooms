@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/mess.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs mess`, look: `node tools/shot-room.mjs mess <seed>`.
 - Size: 3-5 tiles, big 7-9 (p 0.7, tall: pillars + catwalks); spawn weight 2; department services.
-- world.js today: wall pool ROOM_DECOR `menu, shelf, fountain, shelf`; FIT `shelf, locker`; floor `tile`; ceiling `ceilt`; walls `wallp`; light #ffd49a.
+- world.js today: wall pool ROOM_DECOR `menu, shelf, fountain, shelf`; FIT `shelf, locker`; floor `tile`; ceiling `ceilc`; walls `wallp`; light #ffd49a.
 
 ## Backlog (10 slots)
 

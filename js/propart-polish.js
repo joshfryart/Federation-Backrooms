@@ -504,15 +504,17 @@ function catwalk() {
     for (const x of [-1.22, -0.6, 0, 0.6, 1.22]) b.box(0.04, 1.1, 0.04, P.yellow, x, y, sz * 0.48);
     b.rod(P.yellow, 0.022, [-1.22, y + 1.1, sz * 0.48], [1.22, y + 1.1, sz * 0.48], 8); b.rod(P.yellow, 0.016, [-1.22, y + 0.55, sz * 0.48], [1.22, y + 0.55, sz * 0.48], 6); b.box(2.5, 0.12, 0.012, P.yellow, 0, y, sz * 0.5);
   }
-  return one(b, 'catwalk', 'engineering', { box: [-1.25, 1.25, -0.5, 0.5], size: [2.5, 3.7, 1.0], top: y, walkUnder: true, use: { deck: { x: 0, y, z: 0 } }, note: 'deck top 2.6 m: stands in tall rooms (world.TALL_H 5.6 m), climbed by grapple or ship_ladder; modules tile along x' });
+  return thinNoShadow(one(b, 'catwalk', 'engineering', { box: [-1.25, 1.25, -0.5, 0.5], size: [2.5, 3.7, 1.0], top: y, walkUnder: true, use: { deck: { x: 0, y, z: 0 } }, note: 'deck top 2.6 m: stands in tall rooms (world.TALL_H 5.6 m), climbed by grapple or ship_ladder; modules tile along x' }), [P.yellow, P.steel]);
 }
 function ship_ladder() {
   const P = mats(), b = new B(), top = 2.6, run = top / Math.tan(1.047);   // 60 degrees
   for (const sx of [-1, 1]) b.beam(P.steel, 0.05, 0.03, [sx * 0.25, 0, run - 0.2], [sx * 0.25, top, -0.2]);
   const n = 9; for (let i = 0; i <= n; i++) { const t = (i + 0.5) / (n + 1); b.box(0.5, 0.05, 0.12, P.grate, 0, top * t - 0.025, run - 0.2 - (run * t), 0); }
   for (const sx of [-1, 1]) { b.rod(P.yellow, 0.02, [sx * 0.3, 0.95, run - 0.6], [sx * 0.3, top + 1.0, -0.2], 6); }
-  return one(b, 'ship_ladder', 'engineering', { box: [-0.32, 0.32, -0.25, run], size: [0.6, top + 1.0, run + 0.2], use: { foot: { x: 0, z: run + 0.4, ry: PI }, top: { x: 0, y: top, z: -0.4 } }, note: 'top rail meets the catwalk edge at z -0.2' });
+  return thinNoShadow(one(b, 'ship_ladder', 'engineering', { box: [-0.32, 0.32, -0.25, run], size: [0.6, top + 1.0, run + 0.2], use: { foot: { x: 0, z: run + 0.4, ry: PI }, top: { x: 0, y: top, z: -0.4 } }, note: 'top rail meets the catwalk edge at z -0.2' }), [P.yellow]);
 }
+// tall-room shadow cost: the thin rails, rods and braces (8-sided cylinders, most of the triangles) cast no shadow; the grated deck, posts and stringers still do
+function thinNoShadow(g, mats) { g.traverse(o => { if (o.isMesh && mats.includes(o.material)) o.userData.noShadow = true; }); return g; }
 
 export const kinds = {
   briefing_table, platform_bed, workpod, maint_stand, cargo_pad, warpcore_detail, injector_crate, knee_mill, drill_press, scan_arch, specimen_tank,

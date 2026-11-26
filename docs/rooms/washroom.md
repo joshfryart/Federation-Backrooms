@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/washroom.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs washroom`, look: `node tools/shot-room.mjs washroom <seed>`.
 - Size: 3-3 tiles; spawn weight 0 (zone weights only); department services.
-- world.js today: wall pool ROOM_DECOR `mirror, fountain, shelf, kit`; FIT `kit, shelf`; floor `hex`; ceiling `ceilt`; walls `wallp`; light #f0fbff.
+- world.js today: wall pool ROOM_DECOR `mirror, fountain, shelf, kit`; FIT `kit, shelf`; floor `hex`; ceiling `ceilp`; walls `wallp`; light #f0fbff.
 
 ## Backlog (10 slots)
 

@@ -184,7 +184,7 @@ let hostEye = null;
 // ------------------------------------------------------------------
 export class Enemy {
   constructor(world, spawnTile, deck, delay, scene, sound, model) {
-    this.w = world; this.deck = deck; this.sound = sound; this.scene = scene;
+    this.w = world; this.deck = deck; this.sound = sound?.emitter ? sound.emitter(this) : sound; this.scene = scene;   // positional: plays from this enemy (js/audio.js emitter)
     this.model = model; this.mesh = model.mesh; this.mesh.visible = false; scene.add(this.mesh);
     const [cx, cz] = world.center(spawnTile[0], spawnTile[1]);
     this.x = cx; this.z = cz; this.yaw = Math.random() * 6.28;

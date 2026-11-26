@@ -19,8 +19,8 @@ Each slot: what exists, then open ideas. Ids are docs/asset-gaps.md rows. Mark a
 3. **Wall-fixture pool / weights**: (open)
 4. **Clutter**: (open)
 5. **Floor zones / markings**: (open)
-6. **Light colour / fixtures / emergency**: High-bay fixtures.
-7. **Ceiling features**: R-4 railings / ladders to the catwalks; gantry rails.
+6. **Light colour / fixtures / emergency**: High-bay fixtures. Done: the pooled panel light hangs at 5.0 m, range 14, x2.31 (`TALL_LIGHT`, `tallLightMul`) so the floor is lit like a normal room's; wall extensions / headers / catwalk rails cast no shadow.
+7. **Ceiling features**: R-4 railings / ladders to the catwalks; gantry rails. Done: one `ship_ladder` per hall at a catwalk's room-side end where a closed wall tile with a free tile in front exists (module + ladder pair placed first, `LADDER_PULL`); E climbs it (main.js `climbCatwalkLadder`). Open: gantry rails, NPCs on catwalks (see TODO.md §2).
 8. **Signage / placards**: (open)
 9. **Doorway treatment**: (open)
 10. **Wear / storytelling**: Pillar hazard bands scuffed.

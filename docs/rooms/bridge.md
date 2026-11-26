@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/bridge.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs bridge`, look: `node tools/shot-room.mjs bridge <seed>`.
 - Size: 5-5 tiles; spawn weight 1; department command.
-- world.js today: wall pool ROOM_DECOR `monitorB, monitorO, monitorB, comm`; FIT `locker, kit`; floor `carpet`; ceiling `ceilt`; walls `wallp`; light #bcd6ff.
+- world.js today: wall pool ROOM_DECOR `monitorB, monitorO, monitorB, comm`; FIT `locker, kit`; floor `carpet`; ceiling `ceilp`; walls `wallp`; light #bcd6ff.
 
 ## Backlog (10 slots)
 

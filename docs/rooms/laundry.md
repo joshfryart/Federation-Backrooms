@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/laundry.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs laundry`, look: `node tools/shot-room.mjs laundry <seed>`.
 - Size: 3-3 tiles; spawn weight 0 (zone weights only); department services.
-- world.js today: wall pool ROOM_DECOR `shelf, pipes, locker, hose`; FIT `shelf, locker`; floor `tile`; ceiling `ceilt`; walls `wallp`; light #f0f0e8.
+- world.js today: wall pool ROOM_DECOR `shelf, pipes, locker, hose`; FIT `shelf, locker`; floor `tile`; ceiling `ceilp`; walls `wallp`; light #f0f0e8.
 
 ## Backlog (10 slots)
 

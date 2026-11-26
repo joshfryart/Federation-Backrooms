@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { SEARCHABLE, clutterFor } from './items.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
+import { inRun, shiftedSign } from './liminal.js';   // madness liminal dressing: unlit runs, signs that change when the corridor loops
 import { tubeStep, tubeBoxes } from './tube.js';
+import { TALL_LIGHT, tallLightMul } from './rooms/_tall.js';   // tall-room panel light: hang height, range, intensity match (updatePanelLights in main.js)
+const TALL_MUL = tallLightMul();
 import { dressTable } from './rooms/index.js';   // per-room dressing hook: a room module's optional `dress` export overrides its row in the tables below (docs/rooms/README.md)
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -480,14 +483,32 @@ class Kit {
 }
 
 // what a window / the bridge viewscreen shows: a ray from the camera through each pixel hits a far star sphere, so stars shift with your position (parallax) and slowly turn;
-// a planet limb sits low on the horizon. speed > 1 gives the viewscreen its forward drift. SPACE_T.value is advanced by World.update.
+// a planet limb sits low on the horizon, a two-tone nebula band crosses part of the sky and an escort ship holds station off the bow (dark silhouette,
+// lit rim, running lights). speed > 1 gives the viewscreen its forward drift. SPACE_T.value is advanced by World.update.
 export const SPACE_T = { value: 0 };
+// what a doorway's leaves are made of (by the room it opens into): sets its open / close / seal / pry sounds (js/audio.js Sound.door)
+const HEAVY_DOOR = new Set(['engineering', 'cargo', 'shuttlebay', 'plant', 'workshop', 'brig', 'armory', 'airlock', 'datacore', 'stores', 'transporter']);
+const LIGHT_DOOR = new Set(['quarters', 'lounge', 'washroom', 'arboretum', 'holodeck', 'readyroom', 'gym', 'laundry', 'atrium', 'mess']);
+export const doorMaterial = (room) => HEAVY_DOOR.has(room) ? 'heavy' : LIGHT_DOOR.has(room) ? 'light' : 'std';
 export function spaceMaterial(stars, speed = 1) {
   stars.wrapS = stars.wrapT = THREE.RepeatWrapping;
   return new THREE.ShaderMaterial({
     uniforms: { stars: { value: stars }, time: SPACE_T, speed: { value: speed } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * ' + '\n#ifdef USE_INSTANCING\n instanceMatrix * \n#endif\n vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: `uniform sampler2D stars; uniform float time, speed; varying vec3 vW;
+      float h3(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float n3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      float fbm(vec3 p){ float v = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { v += a * n3(p); p = p * 2.03 + 7.1; a *= 0.5; } return v; }
+      // a distant starship seen side-on: saucer, neck, secondary hull, two nacelles on pylons (2D, in the tangent plane around its bearing)
+      float shipMask(vec2 p){
+        float m = step(length(p / vec2(0.55, 0.11)), 1.0);
+        m = max(m, step(length((p - vec2(0.38, -0.2)) / vec2(0.42, 0.075)), 1.0));
+        m = max(m, step(abs(p.x - 0.12), 0.05) * step(abs(p.y + 0.1), 0.1));
+        m = max(m, step(abs(p.x - 0.7), 0.03) * step(abs(p.y + 0.02), 0.2));
+        m = max(m, step(abs(p.x - 0.86), 0.36) * step(abs(p.y - 0.2), 0.045));
+        return m; }
       void main(){
         vec3 d = normalize(vW - cameraPosition);
         float a = time * 0.004 * speed;
@@ -495,9 +516,35 @@ export function spaceMaterial(stars, speed = 1) {
         vec2 uv = vec2(atan(d.z, d.x) / 6.2832 * 3.0, asin(clamp(d.y, -1.0, 1.0)) / 3.1416 * 1.5 + 0.5);
         vec3 c = texture2D(stars, uv).rgb;
         c += texture2D(stars, uv * 2.7 + 0.31).rgb * 0.35;
+        // nebula: two-tone fbm clouds in a broad band across part of the sky, dimming the stars behind them a little
+        float band = smoothstep(0.75, 0.05, abs(dot(d, normalize(vec3(0.3, 0.9, -0.3))) - 0.1));
+        float n = fbm(d * 3.4 + vec3(0.0, time * 0.002, 0.0)), n2 = fbm(d * 7.0 + 3.0);
+        float neb = smoothstep(0.42, 0.85, n) * band;
+        vec3 nc = mix(vec3(0.32, 0.08, 0.36), vec3(0.06, 0.28, 0.42), smoothstep(0.3, 0.7, n2));
+        c = c * (1.0 - neb * 0.45) + nc * neb * (0.55 + 0.6 * n2);
         vec3 pc = normalize(vec3(0.55, -0.32, 0.77)); float pd = dot(d, pc);
         if (pd > 0.9) { float k = smoothstep(0.9, 0.903, pd); float lit = clamp(dot(normalize(d - pc * pd), normalize(vec3(-0.6, 0.7, 0.2))) * 0.5 + 0.55, 0.15, 1.0); vec3 pl = mix(vec3(0.10, 0.22, 0.42), vec3(0.45, 0.62, 0.78), lit) * (0.35 + 0.65 * lit); c = mix(c, pl, k); }
         else if (pd > 0.88) c += vec3(0.1, 0.25, 0.5) * smoothstep(0.88, 0.9, pd) * 0.6;
+        // the escort ship: holds station off the bow, bobbing slowly; dark hull with a lit upper rim, running lights and blue nacelle glow
+        float sb = time * 0.01;
+        vec3 sd = normalize(vec3(-0.78, 0.16 + 0.02 * sin(sb), -0.6 + 0.03 * sin(sb * 0.7)));
+        float sdd = dot(d, sd);
+        if (sdd > 0.94) {
+          vec3 t1 = normalize(cross(vec3(0.0, 1.0, 0.0), sd)), t2 = cross(sd, t1);
+          vec2 q = vec2(dot(d, t1), dot(d, t2)) / 0.14;
+          float m = shipMask(q);
+          if (m > 0.0) {
+            float rim = 1.0 - shipMask(q + vec2(0.0, 0.04));
+            vec3 hc = vec3(0.06, 0.065, 0.075) * (1.0 + 0.6 * smoothstep(-0.2, 0.2, q.y)) + vec3(0.3, 0.32, 0.36) * rim;
+            float nac = step(abs(q.x - 0.86), 0.36) * step(abs(q.y - 0.2), 0.045);
+            hc = mix(hc, vec3(0.25, 0.55, 1.2), nac * step(abs(q.y - 0.2), 0.018));
+            hc += vec3(0.9, 0.85, 0.6) * step(fract(q.x * 9.0), 0.18) * step(abs(q.y - 0.02), 0.012) * step(abs(q.x), 0.45);
+            c = hc;
+          }
+          float blink = step(0.5, fract(time * 0.8));
+          c += vec3(1.4, 0.15, 0.1) * blink * smoothstep(0.03, 0.0, length(q - vec2(-0.55, 0.0)));
+          c += vec3(0.15, 1.4, 0.3) * (1.0 - blink) * smoothstep(0.03, 0.0, length(q - vec2(1.22, 0.2)));
+        }
         gl_FragColor = vec4(c, 1.0);
       }`,
   });
@@ -601,6 +648,13 @@ export class World {
 
   tile(x, z) { return [Math.floor(x / TS), Math.floor(z / TS)]; }
   center(tx, ty) { return [(tx + 0.5) * TS, (ty + 0.5) * TS]; }
+  // madness liminal dressing: a tile of the loop corridor or of an empty stretch (d.loopRun / d.emptyRuns, js/liminal.js) gets no light panel and no corridor sign
+  darkRun(tx, ty) { const d = this.d; return inRun(d.loopRun, tx, ty) || !!d.emptyRuns?.some(r => inRun(r, tx, ty)); }
+  // the k-th loop through the impossible corridor changes the deck: about 45 % of its signs (room and corridor) read something else, a different set each loop
+  loopShift(k) {
+    let n = 0; for (const s of this.signs || []) { const t = shiftedSign(s.text, s.tx, s.ty, this.d.deck, k); if (t === s.shown) continue; s.shown = t; s.m.material.map = this._signTex(t); s.m.material.needsUpdate = true; n++; }
+    this.loopShifts = k; return n;
+  }
   solid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.W || ty >= this.H || this.grid[ty][tx] !== 0; }
   solidAt(x, z) { const [tx, ty] = this.tile(x, z); return this.solid(tx, ty); }
   // parkour helpers: climbable prop height on a tile (Infinity = not climbable / not a prop)
@@ -761,19 +815,22 @@ export class World {
       im.receiveShadow = true; g.add(im);
     }
     dummy.rotation.set(0, 0, 0);
-    // ceiling: per-room variants (acoustic tile, riveted metal, slatted baffle); corridors follow the hull class
+    // ceiling: per-room variants (acoustic tile, riveted metal, slatted baffle, clinical light panel, felt coffers); corridors follow the hull class
     {
       const geo = new THREE.PlaneGeometry(TS, TS); geo.rotateX(Math.PI / 2);
-      const ck = (k) => T.d[k] ? k : 'ceil';
-      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg') };
+      const ck = (k) => T.d[k] ? k : T.d.ceilt ? 'ceilt' : 'ceil';
+      const CEIL_OF = { engineering: ck('ceilg'), transporter: ck('ceilg'), cargo: ck('ceilm'), shuttlebay: ck('ceilm'), jefferies: ck('ceilm'), brig: ck('ceilm'), armory: ck('ceilm'), stores: ck('ceilm'), airlock: ck('ceilm'), workshop: ck('ceilm'), plant: ck('ceilg'), datacore: ck('ceilg'),
+        bridge: ck('ceilp'), sickbay: ck('ceilp'), lab: ck('ceilp'), morgue: ck('ceilp'), washroom: ck('ceilp'), laundry: ck('ceilp'),
+        quarters: ck('ceilc'), lounge: ck('ceilc'), readyroom: ck('ceilc'), mess: ck('ceilc'), gym: ck('ceilc') };
       dressTable('ceil', CEIL_OF, { ck, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.ceil`
       const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
       const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
+      const CEIL_GAIN = { ceilt: 1.0, ceilp: 1.05, ceilc: 0.95 };   // tint gain per ceiling set (the clinical panel reads whiter, felt coffers warmer)
       for (const [kind, list] of Object.entries(byC)) {
         const dm = T.d[kind]; if (!dm) continue;
         const cm = new THREE.MeshStandardMaterial(dm.orm ? { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, aoMap: dm.rough, metalnessMap: dm.rough, roughness: 1, metalness: 1 } : { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, roughness: 1, metalness: 0 });
         const im = new THREE.InstancedMesh(geo, cm, list.length);
-        list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(kind === 'ceilt' ? 1.0 : 0.85)); });
+        list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(CEIL_GAIN[kind] || 0.85)); });
         g.add(im);
       }
     }
@@ -866,7 +923,7 @@ export class World {
       for (const [x, y] of open) {
         const r = d.room[y][x];
         if (r === 'jefferies') continue;   // tubes are lit only by their floor strips
-        if (d.loopRun && !r && (d.loopRun.ax === 'x' ? y === d.loopRun.fixed && x >= d.loopRun.a && x <= d.loopRun.b : x === d.loopRun.fixed && y >= d.loopRun.a && y <= d.loopRun.b)) continue;   // the looping corridor (main.js findLoopRun): a long unlit stretch
+        if (!r && this.darkRun(x, y)) continue;   // the looping corridor (js/liminal.js findLoopRun) and the empty stretches (findEmptyRuns): long unlit runs
         const lit = r ? true : ((x + y) % 2 === 0);
         if (!lit) continue;
         { const hz = Math.sin((x >> 2) * 91.7 + (y >> 2) * 17.3 + d.deck * 5.7) * 9871.3; if (!r && hz - Math.floor(hz) < 0.2) continue; } // pitch-black stretches
@@ -882,7 +939,8 @@ export class World {
           const ch = this.ceilAt(x, y); dummy.position.set((x + 0.5) * TS, ch - 0.02, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
           // room-specific light colour; corridor tubes vary a little in age (some yellowed, some dim)
           const r = d.room[y][x], col = new THREE.Color(ROOM_LIGHT[r] || 0xffffff); if (!r) col.lerp(new THREE.Color(0xffdfae), rndv() * 0.55).multiplyScalar(0.78 + rndv() * 0.22);
-          im.setColorAt(i, col); this.panels.push({ x: (x + 0.5) * TS, y: ch - 0.3, z: (y + 0.5) * TS, flick: name === 'flick', col, room: r });
+          const tall = this.isTall(x, y);   // high-bay panel: the pooled light hangs lower with a longer range and more intensity, so the floor 5.6 m down is lit like a normal room's (js/rooms/_tall.js TALL_LIGHT)
+          im.setColorAt(i, col); this.panels.push({ x: (x + 0.5) * TS, y: tall ? TALL_LIGHT.y : ch - 0.3, z: (y + 0.5) * TS, flick: name === 'flick', col, room: r, ...(tall ? { dist: TALL_LIGHT.dist, mul: TALL_MUL } : {}) });
         });
         g.add(im); return mat;
       };
@@ -916,7 +974,7 @@ export class World {
         if (ext.length) {
           const eg = new THREE.BoxGeometry(TS, TALL_H - WH, TS), ei = new THREE.InstancedMesh(eg, mat, ext.length);
           ext.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, (WH + TALL_H) / 2, (y + 0.5) * TS); dummy.updateMatrix(); ei.setMatrixAt(i, dummy.matrix); ei.setColorAt(i, base.clone().multiplyScalar(0.75)); });
-          ei.castShadow = true; ei.receiveShadow = true; g.add(ei);
+          ei.castShadow = false; ei.receiveShadow = true; g.add(ei);   // above 3.2 m: no shadow caster (the torch sits at eye height, so their shadow only ever falls on the ceiling); saves a full-perimeter draw in the shadow pass
         }
       }
       // headers: where a tall room opens onto a lower tile, close the gap above the lower ceiling
@@ -930,7 +988,7 @@ export class World {
           const hm = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.7) });
           const im_set = (m, i, d) => m.setMatrixAt(i, d.matrix); const hg = new THREE.BoxGeometry(1, 1, 1), hi = new THREE.InstancedMesh(hg, hm, hd.length);
           hd.forEach(([cx, cz, alongZ, lo], i) => { const h = TALL_H - lo; dummy.position.set(cx * TS, lo + h / 2, cz * TS); dummy.scale.set(alongZ ? 0.3 : TS, h, alongZ ? TS : 0.3); dummy.updateMatrix(); im_set(hi, i, dummy); });
-          dummy.scale.set(1, 1, 1); hi.castShadow = true; hi.receiveShadow = true; g.add(hi);
+          dummy.scale.set(1, 1, 1); hi.castShadow = false; hi.receiveShadow = true; g.add(hi);   // headers start at the lower ceiling: no shadow caster (as the wall extensions above)
         }
       }
     }
@@ -946,7 +1004,7 @@ export class World {
         const face = { tx: x, ty: y, dx, dy, px, pz, ry, room: roomT, wall: this.wallKind[x + y * W] }; this.wallFaces.push(face);   // .deco = something already hangs here
         if (this.grid[y + dy][x + dx] === 2) face.deco = true;   // a prop stands against this wall (gen.js wall placements): no fixture, search site or junction behind it
         if (roll < 0.18) { lcars.push(face.lc = { px, pz, ry, n: 1 + Math.floor(rndv() * 3) }); face.deco = true; }
-        else if (roll < 0.26 || (roomT === 'bridge' && roll < 0.6)) { windows.push(face.lc = { px, pz, ry }); face.deco = true; face.win = true; }
+        else if (this.hullEdge(x, y, dx, dy) && (roll < 0.55 || (roomT === 'bridge' && roll < 0.85))) { windows.push(face.lc = { px, pz, ry }); face.deco = true; face.win = true; }   // windows only where open space lies behind the bulkhead
       }
       // keep wall space for the systems' repair junctions (main.js placeRepairPoints) before any decoration claims it: on small decks the
       // decor passes used to take every free face and leave systems with no repair point on the deck. Spread out, room faces first; .jct faces stay bare.
@@ -991,6 +1049,7 @@ export class World {
       const [cx, cz] = this.center(p.tx, p.ty);
       m.position.set(cx, 0, cz); m.rotation.y = p.kind === 'viewscreen' ? 0 : p.rot;
       if (p.kind === 'viewscreen') { m.position.z -= TS * 0.35; }
+      if (p.off) { m.position.x += p.off[0]; m.position.z += p.off[1]; }   // shifted inside its tile (a catwalk ladder pulled to the deck's end, js/rooms/_tall.js)
       if (p.kind === 'bar' && p.wall) { const b = buildProp('barback'); b.position.z = -0.98; m.add(b); m.userData.box = [-1.12, 1.12, -1.25, 0.77]; }   // bar against a wall: the back bar between it and the wall
       if (p.kind === 'shuttle') {   // FLT-3: the shuttle sits on its cradle (raised by the pads' height) on a painted 4 m pad marking; collision covers the cradle's length
         const cr = buildPropArt('shuttle_cradle'), lift = cr.userData.use?.craftLift?.y ?? 0.25; for (const c of m.children) c.position.y += lift; m.userData.top += lift;
@@ -1004,6 +1063,7 @@ export class World {
       if (m.userData.box) {   // footprint wider than the default collision square: grow it (never shrink), rotated with the prop, kept inside the tile
         const [x0, x1, z0, z1] = m.userData.box, r = m.rotation.y, c = Math.cos(r), sn = Math.sin(r), H = this.propHalf, L = 1.15;
         const pts = [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].map(([lx, lz]) => [lx * c + lz * sn, -lx * sn + lz * c]);   // three.js rotation.y
+        const [fx, fz] = p.off || [0, 0]; for (const q of pts) { q[0] += fx; q[1] += fz; }
         const b = [Math.max(-L, Math.min(-H, ...pts.map(q => q[0]))), Math.min(L, Math.max(H, ...pts.map(q => q[0]))), Math.max(-L, Math.min(-H, ...pts.map(q => q[1]))), Math.min(L, Math.max(H, ...pts.map(q => q[1])))];
         if (b[0] < -H - 0.01 || b[1] > H + 0.01 || b[2] < -H - 0.01 || b[3] > H + 0.01) this.propExt[p.tx + p.ty * this.W] = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[1] - b[0]) / 2, (b[3] - b[2]) / 2];   // [offset x, offset z, half x, half z]
       }
@@ -1061,7 +1121,9 @@ export class World {
       text = mutate(f, text);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: sign(text, ship.accent), color: 0xdddddd }));
       m.scale.set(1, 0.3, 1); m.position.set(f.px + f.dx * 0.01, y, f.pz + f.dy * 0.01); m.rotation.y = f.ry; g.add(m); f.sign = true;
+      this.signs.push({ m, tx: f.tx, ty: f.ty, text, shown: text });
     };
+    this.signs = []; this._signTex = (text) => sign(text, ship.accent);   // World.loopShift relabels these
     for (const r of d.rooms) {
       const fs = this.wallFaces.filter(f => f.room === r.type && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h);
       if (fs.length) { const f = fs[Math.floor(rnd() * fs.length)]; place(f, ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
@@ -1080,7 +1142,7 @@ export class World {
       if (f) { const b = buildDirectory(d.rooms, { deck: d.deck + 1, here: { x: lx, y: ly }, accent: '#' + new THREE.Color(ship.accent).getHexString() }); b.position.set(f.px + f.dx * 0.01, 1.5, f.pz + f.dy * 0.01); b.rotation.y = f.ry; g.add(b); f.deco = true; this.directory = b; }
     }
     const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'MAINTENANCE\nDUCT ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TUBELIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
-    for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) place(f, corr[Math.floor(rnd() * corr.length)], 2.55, 1.2);
+    for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) { const t = corr[Math.floor(rnd() * corr.length)]; if (!this.darkRun(f.tx + f.dx, f.ty + f.dy)) place(f, t, 2.55, 1.2); }   // no signs in the dark runs (same draws either way)
     // --- handrails and floor light strips along walls
     {
       const rails = [], strips = [];
@@ -1144,7 +1206,7 @@ export class World {
       vents.forEach((v, i) => { dummy.position.set((v.x + 0.5) * TS, this.ceilAt(v.x, v.y) - 0.03, (v.y + 0.5) * TS); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
       g.add(im);
     }
-    this.vents = vents;
+    this.vents = vents; this.ceilBusy = new Set([...pipes, ...vents].map(v => v.x + ',' + v.y));   // tiles whose ceiling already carries a pipe / slat vent (fan vents keep off them)
     // --- floor markings: hazard tape at the lift, launch ring in shuttlebays
     const haz = canvasTex(128, (c, sz) => { c.fillStyle = '#e0b020'; c.fillRect(0, 0, sz, sz); c.fillStyle = '#111'; for (let i = -sz; i < sz * 2; i += 32) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 16, 0); c.lineTo(i + 16 - sz, sz); c.lineTo(i - sz, sz); c.fill(); } });
     const [ex, ey] = d.exit, [edx, edy] = d.exitDir; const [ecx, ecz] = this.center(ex, ey);
@@ -1234,7 +1296,7 @@ export class World {
         list.forEach((p, i) => { dummy.position.set(p.x, p.y + 0.3 - 1.1 + 0.2, p.z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, p.col); });
         im.frustumCulled = false; this.cones.add(im); return mat;
       };
-      this.cones = new THREE.Group(); g.add(this.cones);
+      this.cones = new THREE.Group(); this.cones.userData.noAO = true; g.add(this.cones);   // additive glow: kept out of the GTAO normal pass (js/fx.js)
       this.coneMat = mkCones(this.panels.filter(p => !p.flick)); this.coneFlickMat = mkCones(this.panels.filter(p => p.flick));
     }
     // --- a beacon at the end of the hall
@@ -1303,6 +1365,13 @@ export class World {
       const halo = inst(new THREE.PlaneGeometry(2.2, 1.7), this.emergHalo, list, (f, o) => onFace(f, o, Math.min(2.15, ceilOf(f) - 0.3), 0.012)); if (halo) halo.receiveShadow = false;
       this.emerg = list.map(f => ({ x: f.px + f.dx * 0.3, y: Math.min(2.15, ceilOf(f) - 0.3), z: f.pz + f.dy * 0.3 }));
     }
+    // --- wall vent fans (built with the ceiling ones further down): claim their faces before the fixture passes fill the room walls
+    const FAN_ROOMS = new Set(['engineering', 'plant', 'workshop', 'cargo', 'shuttlebay', 'laundry', 'datacore', 'stores', 'gym', 'washroom', 'mess', 'brig', 'armory', 'transporter']), fanFaces = [];
+    for (const f of faces) {
+      if (f.deco || f.win || f.sign || fanFaces.length >= 32 || ceilOf(f) < WH - 0.01) continue;
+      const p = f.room ? (FAN_ROOMS.has(f.room) ? 0.25 : 0) : 0.03; if (!p || hash(f.tx * 2.3 + f.dx, f.ty * 3.1 + f.dy) >= p) continue;
+      f.deco = true; fanFaces.push(f);
+    }
     // --- wall fixtures by room type; corridors get the odd extinguisher, comm panel, drinking fountain…
     {
       const byKind = {};
@@ -1354,7 +1423,7 @@ export class World {
       // sliding door leaves: two panels per doorway that part when someone walks up (World.slideDoors, driven by main.js)
       { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.roughness = 1; dm.metalness = 1; dm.color.set(0xb0b8c4); } }
         const hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
-        this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false }; }); }
+        this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false, mat: doorMaterial(f.room) }; }); }
     }
     // --- window frames with depth and a glass pane
     {
@@ -1400,6 +1469,40 @@ export class World {
       const [edx, edy] = d.exitDir; const spots = [{ x: d.start[0], y: d.start[1], ry: 0 }, { x: ex + edx, y: ey + edy, ry: Math.atan2(edx, edy) }].filter(s => d.grid[s.y]?.[s.x] === 0);
       inst(sg, decal(st, 0.42, accent.clone().lerp(new THREE.Color(0xffffff), 0.5)), spots, (s, o) => { o.position.set((s.x + 0.5) * TS, 0.0125, (s.y + 0.5) * TS); o.rotation.y = s.ry; });
     }
+    // --- vent fans: a square housing with a round shroud and a guard, five pitched blades that spin (World.update). On the wall of service rooms
+    // (and the odd corridor face) and in the ceiling, beside the light panel. They spin down in a blackout and when life support fails.
+    {
+      const housing = kitGeo('fan_housing', K => {
+        K.box(0.62, 0.62, 0.008, 0, 0, 0x101216);   // dark plenum behind the blades
+        for (const [w, h, x, y] of [[0.62, 0.05, 0, 0.285], [0.62, 0.05, 0, -0.285], [0.05, 0.52, 0.285, 0], [0.05, 0.52, -0.285, 0]]) K.box(w, h, 0.05, x, y, STEEL);
+        for (const [x, y] of [[0.27, 0.27], [-0.27, 0.27], [0.27, -0.27], [-0.27, -0.27]]) K.cyl(0.014, 0.012, x, y, 0x9aa0a8, 0.05, 'z', false, 6);
+        const ring = new THREE.TorusGeometry(0.255, 0.022, 6, 24); K._add(ring, 0, 0, 0.06, 0x3a3f47, false);
+        for (const y of [-0.16, -0.08, 0, 0.08, 0.16]) K.box(0.5 - Math.abs(y) * 1.2, 0.01, 0.01, 0, y, 0x6a7078, 0.115);   // front guard
+        K.box(0.01, 0.5, 0.01, 0, 0, 0x6a7078, 0.115);
+        K.box(0.018, 0.2, 0.05, 0, -0.14, 0x2a2d33, 0.008);   // motor strut
+      });
+      const blades = kitGeo('fan_blades', K => {
+        K.cyl(0.055, 0.05, 0, 0, 0x2a2d33, -0.025, 'z', false, 12); K.cyl(0.03, 0.012, 0, 0, YL, 0.025, 'z', false, 10);
+        for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2, b = new THREE.BoxGeometry(0.2, 0.075, 0.008); b.rotateX(0.45); b.translate(0.13, 0, 0); b.rotateZ(a); K._add(b, 0, 0, 0, 0x7d838c, false); }
+      });
+      const list = [], mk = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v3 = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+      for (const f of fanFaces) { e.set(0, f.ry, 0); list.push(mk.compose(v3.set(f.px, Math.min(2.5, ceilOf(f) - 0.5), f.pz), q.setFromEuler(e), one).clone()); }
+      const nWall = list.length;
+      for (const [x, y] of d.openTiles) {
+        if (list.length >= 72) break;
+        if (d.grid[y][x] !== 0 || this.isTube(x, y) || this.ceilBusy?.has(x + ',' + y)) continue; const r = d.room[y][x]; if (r === 'jefferies') continue;
+        const h = hash(x * 3.7 + 2, y * 1.9 + 5), p = r ? (FAN_ROOMS.has(r) ? 0.12 : 0.025) : 0.04; if (h >= p) continue;
+        const side = hash(x, y * 2.2 + 7) < 0.5 ? -1 : 1;   // beside the light panel, never under it
+        e.set(Math.PI / 2, 0, 0); list.push(mk.compose(v3.set((x + 0.5) * TS, this.ceilAt(x, y) - 0.004, (y + 0.5 + side * 0.32) * TS), q.setFromEuler(e), one).clone());
+      }
+      if (list.length) {
+        const hm = new THREE.InstancedMesh(housing.solid, m.kit, list.length), bm = new THREE.InstancedMesh(blades.solid, m.kit, list.length);
+        list.forEach((mt, i) => hm.setMatrixAt(i, mt)); hm.receiveShadow = true; g.add(hm);
+        const hub = new THREE.Matrix4().makeTranslation(0, 0, 0.075);
+        this.fans = { im: bm, base: list.map(mt => mt.clone().multiply(hub)), ang: list.map((_, i) => hash(i, 3.3) * 6.28), speed: list.map((_, i) => (i < nWall ? 6 : 4.5) + hash(i * 1.7, 9.1) * 4), spin: 1, nWall };
+        this._fanTick(0); bm.receiveShadow = true; g.add(bm);
+      }
+    }
     // --- ceiling: hanging cable loops, dropped ceiling tiles, light shafts under some vents
     {
       const cab = [], broken = [];
@@ -1426,13 +1529,29 @@ export class World {
     }
   }
 
+  _fanTick(dt) {
+    const F = this.fans, R = this._fanR || (this._fanR = new THREE.Matrix4()), M2 = this._fanM || (this._fanM = new THREE.Matrix4());
+    if (dt && F.spin < 0.002) return;
+    for (let i = 0; i < F.base.length; i++) { F.ang[i] = (F.ang[i] + dt * F.speed[i] * F.spin) % (Math.PI * 2); F.im.setMatrixAt(i, M2.multiplyMatrices(F.base[i], R.makeRotationZ(F.ang[i]))); }
+    F.im.instanceMatrix.needsUpdate = true;
+  }
   setFancy(on) { this.cones.visible = on; }
   setPower(on) { this.powerTarget = on ? 1 : 0; if (on) this.restoreT = 1.4; }
   setAlert(on) { this.alertTarget = on ? 1 : 0; }
-  setDoorLock(on) { if (this.doorLock === on) return; this.doorLock = on; if (!on && this.doors) for (const d of this.doors) d.pry = 0; }
+  // door lock mode: false (doors work), 'power' (blackout: walkers force a door after ~2.5 s, it then stays open 10 s) or 'alert' (red-alert
+  // lockdown: crew key a door with their codes in ~1 s and it reseals right behind them). `true` means 'power'. The player pries either (pryDoor)
+  setDoorLock(on) { on = on === true ? 'power' : on || false; if (this.doorLock === on) return; this.doorLock = on; if (this.doors) for (const d of this.doors) { d.pry = 0; d.npry = 0; d.keyed = 0; } }
   // nearest sealed door within reach of (px, pz), or null
-  sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
+  sealedDoorNear(px, pz, r = 1.7) { if (!this.doorLock || !this.doors) return null; let b = null, bd = r * r; for (const d of this.doors) { if (d.open > 0.5 || d.pried > 0 || d.keyed > 0) continue; const q = (d.f.x - px) ** 2 + (d.f.z - pz) ** 2; if (q < bd) { bd = q; b = d; } } return b; }
   // hold E at a sealed door: ~3 s to force it, then it stays open 15 s. Returns progress 0..1 (or -1 when nothing to pry)
+  // is the wall tile (x, y), seen from the open tile at (x+dx, y+dy), on the hull edge? Walk back through the bulkhead (up to 3 tiles):
+  // off the grid or out of the hull (gen.js inHull) first = open space behind it (a window may go here); an open tile first = an inner wall.
+  hullEdge(x, y, dx, dy) {
+    const inHull = this.d.inHull || (() => true);
+    if (!inHull(x, y)) return true;
+    for (let k = 1; k <= 3; k++) { const bx = x - dx * k, by = y - dy * k, c = this.grid[by]?.[bx]; if (c === undefined || !inHull(bx, by)) return true; if (c !== 1) return false; }
+    return false;
+  }
   pryDoor(px, pz, dt) { const d = this.sealedDoorNear(px, pz); if (!d) return -1; d.prying = true; d.pry = (d.pry || 0) + dt; if (d.pry >= 3) { d.pried = 15; d.pry = 0; return 1; } return d.pry / 3; }
 
   setLiftOpen(open, keepWalkable = false) {
@@ -1486,15 +1605,22 @@ export class World {
   // pick a piece of clutter up: hide its instance and drop it from the look list
   takeClutter(c) { if (c.gone) return false; c.gone = true; c.inst?.hide(); const i = this.clutter.indexOf(c); if (i >= 0) this.clutter.splice(i, 1); return true; }
   // doors part for the player (and anyone in `who`, [{x, z, w}]) within reach and close again behind them. Sealed doors (doorLock) stay shut
-  // for everyone; a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player pried)
-  slideDoors(dt, px, pz, who = [], onOpen = null) {
-    if (!this.doors) return; const k = Math.min(1, dt * 7);
+  // for everyone. In a blackout ('power') a walker (w) held up at one forces it after ~2.5 s (it then stays open 10 s, like a door the player
+  // pried); in a red-alert lockdown ('alert') a walker keys it open in ~1 s and it stays unsealed only while crew are in the doorway (+1.2 s).
+  // onDoor(dist, door, kind) for doors within 14 m: kind 'open' / 'close' (leaves start to move), 'seal' (the lock just shut an open door),
+  // 'key' (crew keyed a lockdown door), 'force' (crew forced a blackout door); door.mat says what it sounds like
+  slideDoors(dt, px, pz, who = [], onDoor = null) {
+    if (!this.doors) return; const k = Math.min(1, dt * 7), alert = this.doorLock === 'alert';
     for (const d of this.doors) {
-      if (d.pried > 0) d.pried -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
-      const dx = d.f.x - px, dz = d.f.z - pz; const sealed = this.doorLock && !(d.pried > 0); let near = !sealed && dx * dx + dz * dz < 2.7 * 2.7;
-      if (sealed && d.open < 0.5) { let at = false; for (const w of who) if (w.w) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.6 * 1.6) { at = true; break; } } d.npry = at ? (d.npry || 0) + dt : 0; if (d.npry > 2.5) { d.npry = 0; d.pried = 10; } }
+      if (d.pried > 0) d.pried -= dt; if (d.keyed > 0) d.keyed -= dt; if (d.pry > 0 && !d.prying) d.pry = Math.max(0, d.pry - dt * 0.5); d.prying = false;
+      const dx = d.f.x - px, dz = d.f.z - pz, dd = dx * dx + dz * dz, hear = dd < 14 * 14 && onDoor; let sealed = !!this.doorLock && !(d.pried > 0) && !(d.keyed > 0);
+      if (sealed && d.open < 0.5) { let at = false; for (const w of who) if (w.w) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.6 * 1.6) { at = true; break; } } d.npry = at ? (d.npry || 0) + dt : 0;
+        if (d.npry > (alert ? 1 : 2.5)) { d.npry = 0; if (alert) d.keyed = 1.2; else d.pried = 10; sealed = false; if (hear) onDoor(Math.sqrt(dd), d, alert ? 'key' : 'force'); } }
+      if (alert && d.keyed > 0) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 1.0) { d.keyed = Math.max(d.keyed, 1.2); break; } }   // held while crew are in the doorway (within 1 m of the leaves)
+      if (sealed && !d.sealed && d.open > 0.05 && hear) onDoor(Math.sqrt(dd), d, 'seal'); d.sealed = sealed;
+      let near = !sealed && dd < 2.7 * 2.7;
       if (!near && !sealed) for (const w of who) { const ex = d.f.x - w.x, ez = d.f.z - w.z; if (ex * ex + ez * ez < 2.1 * 2.1) { near = true; break; } }
-      if (near && !d.near && dx * dx + dz * dz < 14 * 14) onOpen?.(Math.hypot(dx, dz)); d.near = near;
+      if (near !== d.near && hear && !sealed) onDoor(Math.sqrt(dd), d, near ? 'open' : 'close'); d.near = near;   // a sealing door already said 'seal'
       const target = near ? 1 : 0; if (Math.abs(d.open - target) < 0.002) continue; d.open += (target - d.open) * k;
       const o = d.open * (d.hw - 0.04); d.L.position.z = -d.hw / 2 - o; d.R.position.z = d.hw / 2 + o;
     }
@@ -1532,6 +1658,7 @@ export class World {
     // emergency lamps: faint when all is well, beating on alert, steady and bright when the power is out
     if (this.emergMat) { const a = this.alertAmt, off = 1 - this.powerAmt, k = Math.max(0.1, off * 0.85, a * (0.35 + 0.9 * (0.5 + 0.5 * Math.sin(t * 6 + 1.5)))); this.emergMat.color.setRGB(2.6 * k, 0.2 * k, 0.12 * k); this.emergHalo.opacity = Math.min(0.55, k * 0.5); }
     if (M.kitGlow) M.kitGlow.color.setScalar(0.12 + 0.88 * this.powerAmt * (this.flickerF < 0.5 && Math.random() < 0.02 ? 0.6 : 1));
+    if (this.fans) { const L = lv('life'), k = this.powerAmt * (L >= 2 ? 0 : L === 1 ? 0.4 : 1); this.fans.spin += (k - this.fans.spin) * Math.min(1, dt * 0.7); this._fanTick(dt); }   // vent fans spin down in a blackout / with life support out
     if (this.shaftMat) { this.shaftMat.opacity = 0.05 * (0.45 + 0.55 * this.powerAmt); this.poolMat.opacity = 0.07 * (0.45 + 0.55 * this.powerAmt); }
     if (this.liftOpen || this.carMode) {
       const L = this.lift.getObjectByName('doorL'), R = this.lift.getObjectByName('doorR'), o = this.liftOpen ? 1.3 : 0.5, k = Math.min(1, dt * (this.carMode ? 3 : 2));

@@ -283,6 +283,35 @@ const SETS = {
       H[i] = h; A[i] = a; R[i] = r; M[i] = m;
     }
   } },
+  // clinical light-panel ceiling (bridge, sickbay, lab, morgue…): smooth enamelled plate, a recessed perforated diffuser square in the middle, flush seams
+  ceilp: { N: 512, mean: 0.84, contrast: 0.8, nStrength: 2.2, aoK: 6, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 6, 4, 111), sp = fbm(N, 3, 3, 113);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v), c = Math.max(Math.abs(u - 0.5), Math.abs(v - 0.5));
+      let h = 0.6 + (n[i] - 0.5) * 0.02, a = 0.88 + (n[i] - 0.5) * 0.04 - sstep(0.7, 0.88, sp[i]) * 0.06, r = 0.32 + (n[i] - 0.5) * 0.1, m = 0.05;
+      if (e < 0.01) { h = 0.25; a = 0.4; r = 0.7; }                                         // flush seam
+      else if (e < 0.03) { h = 0.6 - (0.03 - e) * 4; }                                     // rolled panel edge
+      else if (c < 0.27 && c > 0.25) { h = 0.38; a = 0.66; r = 0.5; m = 0.7; }             // diffuser frame (brushed steel)
+      else if (c < 0.25) {                                                                  // perforated diffuser: hex-packed pinholes
+        const gy = v * 48, row = Math.floor(gy), gx = u * 48 + (row % 2) * 0.5, d = Math.hypot(fract(gx) - 0.5, fract(gy) - 0.5);
+        h = 0.5; a = 0.95; r = 0.2; if (d < 0.22) { h = 0.36; a = 0.6; r = 0.6; }
+      }
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
+  // coffered acoustic ceiling (quarters, lounge, ready room, mess…): deep square coffers lined with felt, beams between them
+  ceilc: { N: 512, mean: 0.7, contrast: 0.95, nStrength: 3.0, aoK: 9, aoBake: 0.9, outR: 256, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 8, 4, 121), fib = fbm(N, 90, 2, 123), st = fbm(N, 3, 3, 127);
+    for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+      const i = py * N + px, u = px / N, v = py / N, cu = fract(u * 2), cv = fract(v * 2), e = Math.min(cu, 1 - cu, cv, 1 - cv);
+      let h, a, r = 0.9, m = 0;
+      if (e < 0.06) { h = 0.85; a = 0.78 + (n[i] - 0.5) * 0.06; r = 0.55; }                    // beam (painted)
+      else if (e < 0.12) { const t = (e - 0.06) / 0.06; h = 0.85 - t * 0.6; a = 0.7 - t * 0.12; r = 0.6; }   // splayed coffer wall
+      else { h = 0.25 + (fib[i] - 0.5) * 0.05; a = 0.6 + (fib[i] - 0.5) * 0.1 + (n[i] - 0.5) * 0.06; r = 0.95; }   // felt panel
+      a -= sstep(0.68, 0.86, st[i]) * 0.1;   // water / nicotine staining
+      H[i] = h; A[i] = a; R[i] = clamp(r); M[i] = m;
+    }
+  } },
   // door frames / lift surround: brushed steel, kick scuffs, bolt row
   trim: { N: 256, mean: 0.6, contrast: 1.0, nStrength: 2.4, aoK: 4, outR: 128, draw({ N, H, A, R, M }) {
     const br = vnoise(N, 2, 91, 200), n = fbm(N, 6, 3, 93);

@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/lab.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs lab`, look: `node tools/shot-room.mjs lab <seed>`.
 - Size: 3-5 tiles; spawn weight 0 (zone weights only); department sciences.
-- world.js today: wall pool ROOM_DECOR `monitorG, shelf, locker, medcab, monitorB`; FIT `medcab, shelf, locker`; floor `tile`; ceiling `ceilt`; walls `wallp`; light #e8f4ff; placards biological, cold, radiation.
+- world.js today: wall pool ROOM_DECOR `monitorG, shelf, locker, medcab, monitorB`; FIT `medcab, shelf, locker`; floor `tile`; ceiling `ceilp`; walls `wallp`; light #e8f4ff; placards biological, cold, radiation.
 
 ## Backlog (10 slots)
 

@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/quarters.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs quarters`, look: `node tools/shot-room.mjs quarters <seed>`.
 - Size: 3-3 tiles; spawn weight 3; department services.
-- world.js today: wall pool ROOM_DECOR `locker, picture, mirror, shelf, picture`; FIT `locker, shelf`; floor `carpet`; ceiling `ceilt`; walls `wallq`; light #ffc48c.
+- world.js today: wall pool ROOM_DECOR `locker, picture, mirror, shelf, picture`; FIT `locker, shelf`; floor `carpet`; ceiling `ceilc`; walls `wallq`; light #ffc48c.
 
 ## Backlog (10 slots)
 

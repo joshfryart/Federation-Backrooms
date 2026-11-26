@@ -130,6 +130,24 @@ console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tu
     if (g.chips.some(c => !(g.dist[(c.x ?? c[0]) + (c.y ?? c[1]) * g.W] >= 0))) bad++; }
   console.log(`liminal: ${n} decks, ${twins} with twin rooms, ${catwalks} catwalks, ${atria} atria, ${bad} with unreachable chips`); if (bad || !twins || !catwalks || !atria) fail('liminal / tall rooms');
 }
+{ // catwalk ship ladders (js/rooms/_tall.js): beside their module on the same wall, pulled to the deck's end, foot pointing away, room still walkable
+  const { generate: gen3 } = await import('../js/gen.js'); const { isTall, LADDER_PULL } = await import('../js/rooms/_tall.js'); let n = 0, rooms = 0, lads = 0, bad = [];
+  for (let d = 1; d < 9; d++) for (let s = 1; s <= 30; s++) { const g = gen3(d, s * 37, { weights: { atrium: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }); n++;
+    rooms += g.rooms.filter(isTall).length;
+    for (const p of g.props.filter(q => q.kind === 'ship_ladder' && q.cw)) { lads++;
+      const c = g.props.find(q => q.kind === 'catwalk' && q.tx === p.cw[0] && q.ty === p.cw[1]), ax = p.tx - p.cw[0], ay = p.ty - p.cw[1], room = g.rooms.find(r => p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h);
+      if (!c || Math.abs(ax) + Math.abs(ay) !== 1) bad.push(`d${d} s${s}: ladder ${p.tx},${p.ty} not beside its catwalk`);
+      else if (Math.abs(Math.sin(p.rot) - ax) > 1e-6 || Math.abs(Math.cos(p.rot) - ay) > 1e-6) bad.push(`d${d} s${s}: ladder foot does not point away from the catwalk`);
+      else if (Math.abs(p.off[0] + ax * LADDER_PULL) > 1e-9 || Math.abs(p.off[1] + ay * LADDER_PULL) > 1e-9) bad.push(`d${d} s${s}: ladder offset ${p.off}`);
+      else if (Math.abs(Math.cos(c.rot) * ax - Math.sin(c.rot) * ay) < 0.99) bad.push(`d${d} s${s}: ladder at the catwalk's railed side, not its end`);   // catwalk +x (its long axis, open ends) = (cos rot, -sin rot) in (x, z)
+      else if (!room || !isTall(room)) bad.push(`d${d} s${s}: ladder outside a tall room`);
+      if (g.rooms.filter(r => isTall(r) && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h).length !== 1) bad.push(`d${d} s${s}: ladder room`);
+    }
+    if (g.chips.some(c => !(g.dist[(c.x ?? c[0]) + (c.y ?? c[1]) * g.W] >= 0))) bad.push(`d${d} s${s}: unreachable chip`);
+    for (const r of g.rooms.filter(isTall)) if (g.props.filter(q => q.kind === 'ship_ladder' && q.cw && q.tx >= r.x && q.tx < r.x + r.w && q.ty >= r.y && q.ty < r.y + r.h).length > 1) bad.push(`d${d} s${s}: more than one catwalk ladder in a room`);
+  }
+  console.log(`catwalk ladders: ${lads} on ${n} decks (${rooms} tall rooms)`); if (!lads || bad.length) fail('catwalk ladders: ' + (bad.slice(0, 4).join('; ') || 'none placed'));
+}
 });
 S('ship-decks', null, async () => {   // every deck of every ship generates, ship-level rooms exist per shipPlan (js/gen.js in node)
 const shipTest = (() => {
@@ -219,7 +237,7 @@ S('pace-presets', null, async () => {   // First watch / Crunch / Standard scale
 });
 
 S('perf-governor', null, async () => {   // auto-quality ladder (js/perfgov.js): steps down in order, recovers with hysteresis, ignores spikes, honours a manual choice
-  const { Governor, LEVELS } = await imp('js/perfgov.js'), run = (g, ms, secs) => { let ch = []; for (let i = 0; i < secs * 1000 / ms; i++) { const r = g.tick(ms); if (r >= 0) ch.push(r); } return ch; };
+  const { Governor, LEVELS, applyLevel } = await imp('js/perfgov.js'), run = (g, ms, secs) => { let ch = []; for (let i = 0; i < secs * 1000 / ms; i++) { const r = g.tick(ms); if (r >= 0) ch.push(r); } return ch; };
   const r = {}; let g = new Governor();
   r.smooth = run(g, 16.7, 60).length;                                  // a healthy 60 fps machine never moves
   g = new Governor(); r.slow = run(g, 40, 40); r.slowEnd = g.level;     // steady 25 fps: walks down rung by rung to 3 (high at 55 %) and stops: 40 ms is under the 45 ms Performance bar
@@ -229,8 +247,9 @@ S('perf-governor', null, async () => {   // auto-quality ladder (js/perfgov.js):
   g = new Governor(); r.paused = [...Array(2000)].map(() => g.tick(100, false)).filter(x => x >= 0).length;   // not judged outside the world
   g.setManual('low'); r.pinned = [...Array(3000)].map(() => g.tick(10)).filter(x => x >= 0).length + '/' + g.level; g.setManual('high'); r.manualHigh = g.level + '/' + g.auto;
   g = new Governor(); const seq = []; for (let k = 0; k < 6; k++) { seq.push(...run(g, 40, 14), ...run(g, 12, 40)); } r.flaps = g.changes.filter(c => c[0] === 'down').length; r.upMul = g.upMul;   // load oscillating around the thresholds: recoveries back off, so downs stay few
+  const aoSeen = LEVELS.map(L => { let a = null; applyLevel(L, { post: { setScale() {}, allowAO(v) { a = v; } } }); return a; }); r.ao = aoSeen.join();   // optional GTAO (js/fx.js) is allowed on rung 0 only
   console.log('perf governor:', JSON.stringify(r));
-  const ok = r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones;
+  const ok = r.ao === 'true,' + LEVELS.slice(1).map(() => 'false').join() && r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones;
   if (!ok) fail('perf-governor ' + JSON.stringify(r));
 });
 // ---- browser ----
@@ -393,7 +412,8 @@ console.log('director repairer:', JSON.stringify(dir)); if (!(dir.repairer && di
 S('liminal', 'madness', async (page) => {   // tall rooms + catwalk climb (E at a module), walk-under collision, and the impossible corridor loop (two loops, then through)
 await installHelpers(page);
 const lim = await page.evaluate(async () => {
-  const g = __game; g.setQuality('low'); __T.hideEnemies(); const out = { catwalk: null, loop: null, scanned: 0, withCat: 0, withLoop: 0 };
+  const g = __game; g.setQuality('low'); __T.hideEnemies(); const out = { catwalk: null, loop: null, empty: null, scanned: 0, withCat: 0, withLoop: 0, withEmpty: 0 };
+  const lit = (w, r) => { const k = new Set(w.panels.map(p => Math.floor(p.x / 2.5) + ',' + Math.floor(p.z / 2.5))); let n = 0, t = 0; for (let u = r.a; u <= r.b; u++) { t++; if (k.has(r.ax === 'x' ? u + ',' + r.fixed : r.fixed + ',' + u)) n++; } return [n, t]; };   // light panels on a run's tiles
   for (let run = 0; run < 12 && !(out.catwalk && out.loop); run++) { g.G.forceSeed = 4000 + run * 977; g.G.forceShip = run % 10; g.newRun(); __T.hideEnemies();
     for (let n = 1; n <= 8 && !(out.catwalk && out.loop); n++) { g.loadDeck(n); __T.hideEnemies(); const w = g.world, P = g.P; out.scanned++; if (w.d.props.some(q => q.kind === 'catwalk')) out.withCat++; if (g.G.liminal) out.withLoop++;
       const cw = !out.catwalk && w.d.props.find(q => q.kind === 'catwalk');
@@ -401,16 +421,59 @@ const lim = await page.evaluate(async () => {
         if (spot) { P.x = spot[0]; P.z = spot[1]; P.y = 0; P.yaw = Math.atan2(-((cw.tx + 0.5) * 2.5 - P.x), -((cw.ty + 0.5) * 2.5 - P.z)); P.pitch = 0; g.G.phase = 'play'; g.step(0.05, 1);
           dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })); dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' })); for (let i = 0; i < 60; i++) { g.G.phase = 'play'; g.step(0.05, 2 + i * 0.05); }
           const q = { x: (cw.tx + 0.5) * 2.5, z: (cw.ty + 0.5) * 2.5, y: 0 }, x0 = q.x, z0 = q.z; w.resolve(q, 0.3);
-          out.catwalk = { top, y: +P.y.toFixed(2), tall: w.isTall(cw.tx, cw.ty) || w.ceilAt(cw.tx, cw.ty) > 3.3, under: Math.hypot(q.x - x0, q.z - z0) < 0.01 }; } }
+          out.catwalk = { top, y: +P.y.toFixed(2), tall: w.isTall(cw.tx, cw.ty) || w.ceilAt(cw.tx, cw.ty) > 3.3, under: Math.hypot(q.x - x0, q.z - z0) < 0.01 };
+          // the ship-ladder climb (main.js climbCatwalkLadder) from the same floor spot: a ladder record on the tile past the module's end toward the spot
+          P.x = spot[0]; P.z = spot[1]; P.y = 0; P.mode = 'walk'; P.mant = null; g.G.phase = 'play'; g.step(0.05, 6);
+          const ux = Math.sign(Math.round(spot[0] / 2.5 - 0.5) - cw.tx), uz = Math.sign(Math.round(spot[1] / 2.5 - 0.5) - cw.ty), lad = { kind: 'ship_ladder', tx: cw.tx + ux, ty: cw.ty + uz, cw: [cw.tx, cw.ty] };
+          const started = g.G.climbCatwalkLadder(lad); for (let i = 0; i < 70; i++) { g.G.phase = 'play'; g.step(0.05, 7 + i * 0.05); }
+          const [ptx, pty] = w.tile(P.x, P.z); out.ladderClimb = { started, y: +P.y.toFixed(2), onDeck: ptx === cw.tx && pty === cw.ty, far: g.G.climbCatwalkLadder({ ...lad, tx: cw.tx + ux * 3, ty: cw.ty + uz * 3 }) }; } }
+      if (w.d.emptyRuns?.length) { out.withEmpty++; if (!out.empty) { const c = w.d.emptyRuns.map(r => lit(w, r)); out.empty = { deck: n, runs: c.length, tiles: c.reduce((a, b) => a + b[1], 0), lit: c.reduce((a, b) => a + b[0], 0), panels: w.panels.length }; } }
       const L = g.G.liminal;
-      if (L && !out.loop) { const r = L.run, ctr = (u) => r.ax === 'x' ? w.center(u, r.fixed) : w.center(r.fixed, u), [x0, z0] = ctr(r.a + 1); P.x = x0; P.z = z0; P.y = 0; let loops = 0;
+      if (L && !out.loop) { const [litN, litT] = lit(w, L.run), before = w.signs.map(s => s.shown), sameRun = { ...L.run }; const r = L.run, ctr = (u) => r.ax === 'x' ? w.center(u, r.fixed) : w.center(r.fixed, u), [x0, z0] = ctr(r.a + 1); P.x = x0; P.z = z0; P.y = 0; let loops = 0;
         for (let i = 0; i < 400 && L.count < 3; i++) { const px = P.x, pz = P.z; g.G.phase = 'play'; if (r.ax === 'x') { P.x += 0.2; P.vx = 4; P.vz = 0; } else { P.z += 0.2; P.vz = 4; P.vx = 0; } g.step(0.05, 10 + i * 0.05); if ((r.ax === 'x' ? P.x - px : P.z - pz) < -0.5) loops++; if (i > 300 && loops >= 2) break; }
-        out.loop = { loops, count: L.count, len: r.b - r.a + 1 }; } } }
+        const after1 = w.signs.map(s => s.shown);
+        out.loop = { loops, count: L.count, len: r.b - r.a + 1, lit: litN, tiles: litT, signs: w.signs.length, changed: after1.filter((t, i) => t !== before[i]).length, shifts: w.loopShifts || 0, mapsOk: w.signs.every(s => s.m.material.map && s.m.material.map.image), runKept: JSON.stringify(L.run) === JSON.stringify(sameRun) }; } } }
   return out;
 });
 console.log('liminal:', JSON.stringify(lim));
 if (!(lim.catwalk && lim.catwalk.y >= lim.catwalk.top - 0.05 && lim.catwalk.tall && lim.catwalk.under)) fail('liminal: catwalk climb / tall room / walk-under ' + JSON.stringify(lim.catwalk));
+if (!(lim.ladderClimb && lim.ladderClimb.started && lim.ladderClimb.y >= 2.55 && lim.ladderClimb.onDeck && lim.ladderClimb.far === false)) fail('liminal: catwalk ladder climb ' + JSON.stringify(lim.ladderClimb));
+{ // a built catwalk ladder (gen deck 1 seed 333 has one): mesh pulled to the deck end, collision box follows it, tall-room panel lights carry the high-bay range / gain,
+  // the thin rails cast no shadow, and the wall extensions / headers above 3.2 m are not shadow casters
+  const b = await page.evaluate(async () => {
+    const { generate } = await import('./js/gen.js'), { World } = await import('./js/world.js'), { TALL_LIGHT, tallLightMul } = await import('./js/rooms/_tall.js');
+    const d = generate(1, 333, { weights: { atrium: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }), l = d.props.find(p => p.kind === 'ship_ladder' && p.cw); if (!l) return { none: true };
+    const w = new World(d, __game.G.ship), [cx, cz] = w.center(l.tx, l.ty); let mesh = null; w.group.traverse(o => { if (!mesh && o.name === 'ship_ladder' && o.parent?.name !== 'ship_ladder') mesh = o; });
+    const ext = w.propBox(l.tx, l.ty), ax = l.tx - l.cw[0], az = l.ty - l.cw[1], along = ax ? ext[0] : ext[1];
+    const tallP = w.panels.filter(p => w.isTall(Math.floor(p.x / 2.5), Math.floor(p.z / 2.5))), lowP = w.panels.filter(p => !w.isTall(Math.floor(p.x / 2.5), Math.floor(p.z / 2.5)));
+    let railShadow = 0, deckShadow = 0; w.group.traverse(o => { if (o.isMesh && o.parent?.parent?.name === 'catwalk') { if (o.castShadow) deckShadow++; else railShadow++; } });
+    let tallWallsCast = 0; w.group.traverse(o => { if (o.isInstancedMesh && o.geometry?.parameters?.height && Math.abs(o.geometry.parameters.height - (5.6 - 3.2)) < 1e-3 && o.castShadow) tallWallsCast++; });
+    const r = { mesh: !!mesh, dx: mesh ? +(mesh.position.x - cx).toFixed(3) : null, dz: mesh ? +(mesh.position.z - cz).toFixed(3) : null, off: l.off, along: +along.toFixed(3), ax, az,
+      tallPanels: tallP.length, tallOk: tallP.every(p => p.dist === TALL_LIGHT.dist && Math.abs(p.mul - tallLightMul()) < 1e-9 && p.y === TALL_LIGHT.y), lowOk: lowP.every(p => !p.dist && !p.mul), railShadow, deckShadow, tallWallsCast };
+    w.dispose?.(); return r;
+  });
+  console.log('catwalk ladder build:', JSON.stringify(b));
+  if (!(b.mesh && Math.abs(b.dx - b.off[0]) < 1e-6 && Math.abs(b.dz - b.off[1]) < 1e-6 && Math.sign(b.along) === -Math.sign(b.ax || b.az) && b.tallPanels > 0 && b.tallOk && b.lowOk && b.railShadow > 0 && b.deckShadow > 0 && b.tallWallsCast === 0)) fail('catwalk ladder build ' + JSON.stringify(b));
+}
 if (!(lim.loop && lim.loop.loops === 2 && lim.loop.count === 2)) fail('liminal: corridor loop ' + JSON.stringify(lim.loop));
+if (!(lim.loop && lim.loop.lit === 0 && lim.loop.shifts === 2 && lim.loop.signs > 0 && lim.loop.changed > 0 && lim.loop.mapsOk && lim.loop.runKept)) fail('liminal: loop corridor unlit / signs change when it loops ' + JSON.stringify(lim.loop));
+if (!(lim.empty && lim.empty.runs > 0 && lim.empty.tiles >= 4 && lim.empty.lit === 0 && lim.empty.panels > 0)) fail('liminal: empty unlit stretches ' + JSON.stringify(lim.empty));
+});
+S('windows', 'madness', async (page) => {   // windows sit only on the hull edge (open space behind the bulkhead, gen.js inHull), every deck gets some, and the space shader (nebula + escort ship) renders
+const win = await page.evaluate(() => {
+  const g = __game; g.setQuality('low'); const out = { decks: 0, withWin: 0, wins: 0, inner: [], render: false };
+  for (let run = 0; run < 6; run++) { g.G.forceSeed = 6100 + run * 389; g.G.forceShip = (run * 3) % 10; g.newRun();
+    for (let n = 1; n <= 3; n++) { g.loadDeck(n); const w = g.world, d = w.d, inH = d.inHull || (() => true); out.decks++;
+      const ws = w.wallFaces.filter(f => f.win); out.wins += ws.length; if (ws.length) out.withWin++;
+      for (const f of ws) { let ext = !inH(f.tx, f.ty); for (let k = 1; k <= 3 && !ext; k++) { const bx = f.tx - f.dx * k, by = f.ty - f.dy * k, c = d.grid[by]?.[bx]; if (c === undefined || !inH(bx, by)) ext = true; else if (c !== 1) break; } if (!ext && out.inner.length < 4) out.inner.push([g.G.forceShip, n, f.tx, f.ty, f.dx, f.dy]); } } }
+  const w = g.world, f = w.wallFaces.find(f => f.win), P = g.P;
+  if (f) { P.x = (f.tx + f.dx + 0.5) * 2.5 + f.dx * 0.2; P.z = (f.ty + f.dy + 0.5) * 2.5 + f.dy * 0.2; P.yaw = Math.atan2(f.dx, f.dy); P.pitch = 0; g.G.phase = 'play'; g.step(0.05, 300); g.renderOnce(); out.render = true; }
+  return out;
+});
+console.log('windows:', JSON.stringify(win));
+if (win.inner.length) fail('windows: window on an inner wall (ship, deck, tx, ty, dx, dy) ' + JSON.stringify(win.inner));
+if (win.withWin < win.decks) fail(`windows: only ${win.withWin} / ${win.decks} decks have a window`);
+if (!win.render) fail('windows: no window to render');
 });
 S('tube-bends2', 'madness', async (page) => {   // a two-bend (S / U) ladder-free Jiffy tube is crawled end to end: ducks, stays inside the chain, comes out of the far mouth
 await installHelpers(page);
@@ -476,7 +539,8 @@ const mech = await page.evaluate(async () => {
   // distraction: a patrolling hunter within range goes to investigate the noise
   const s2 = __T.standNear(h, 8); h.state = E.S.PATROL; h.active = true; const n = G.distract(P.x, P.z, 24); out.distract = { n, state: h.state, investigate: h.state === E.S.INVESTIGATE };
   // captions
-  g.CFG.caps = true; G.caption('test roar', P.x + 5, P.z); const capEl = document.getElementById('caps'); out.caption = capEl?.lastChild?.textContent || null; g.CFG.caps = false;
+  g.CFG.caps = true; G.caption('test roar', P.x + 5, P.z); const capEl = document.getElementById('caps'); out.caption = capEl?.lastChild?.textContent || null;
+  G.phase = 'play'; g.step(0.02, 50); h.x = P.x - 3; h.z = P.z; h.sound.giggle(0.1); out.emitCap = capEl?.lastChild?.textContent || null; out.emitter = typeof h.sound.at === 'function' && !!g.sound.lis; g.CFG.caps = false;   // positional emitter caption (js/audio.js)
   // career bonuses: milestones grant starting perks on the next madness run
   g.SAVE.setMeta({ runs: 9, bestDeck: 5, kills: 20, wins: 1 }); g.newRun(); out.meta = { perks: Object.keys(G.perks).sort(), bonus: (G.metaBonus || []).length }; g.SAVE.setMeta({});
   // hands: shown for parkour verbs, hidden otherwise
@@ -487,6 +551,7 @@ console.log('mechanics:', JSON.stringify(mech));
 if (mech.sightFar !== undefined && !(mech.sightFar === true && mech.hiddenFar === false && mech.hiddenNear === true && mech.hideR === 1.8 && mech.ghostR === 1)) fail('mechanics: hiding ' + JSON.stringify(mech));
 if (!(mech.distract?.n >= 1 && mech.distract.investigate)) fail('mechanics: distraction ' + JSON.stringify(mech.distract));
 if (!/^\[test roar\]/.test(mech.caption || '')) fail('mechanics: caption ' + JSON.stringify(mech.caption));
+if (!(mech.emitter && /^\[giggling\]/.test(mech.emitCap || ''))) fail('mechanics: enemy emitter caption ' + JSON.stringify({ c: mech.emitCap, e: mech.emitter }));
 if (!(mech.meta && ['boots', 'cell', 'hypo', 'legs'].every(p => mech.meta.perks.includes(p)) && mech.meta.bonus === 4)) fail('mechanics: career bonuses ' + JSON.stringify(mech.meta));
 if (!(mech.hands?.shown && mech.hands.hiddenAgain)) fail('mechanics: hands ' + JSON.stringify(mech.hands));
 });
@@ -504,6 +569,111 @@ const br = await page.evaluate(async () => {
 });
 console.log('breach:', JSON.stringify(br));
 if (!(br.breach && br.spot && br.pulled > 0.5 && br.hpLost > 1 && br.sealed)) fail('breach ' + JSON.stringify(br));
+});
+S('smoke-unit', null, async () => {   // alert smoke maths (js/smoke.js): per-deck pinning, per-room density falloff, effects incl. breather / calm
+  const M = await import('../js/smoke.js');
+  const a = { id: 'fire', def: { id: 'fire' }, deck: null }, b = { def: { id: 'fire' }, deck: 4 };
+  if (!(M.smokeDeckOf(a, 2) === 2 && M.smokeDeckOf(a, 5) === 2 && M.smokeDeckOf(b, 0) === 4)) fail('smoke-unit: deck pinning');
+  if (M.smokeAlerts([{ def: { id: 'red' } }, a]).length !== 1) fail('smoke-unit: only smoking alerts');
+  const rooms = [{ x: 2, y: 2, w: 4, h: 3, type: 'galley' }, { x: 10, y: 2, w: 3, h: 3, type: 'lab' }, { x: 0, y: 0, w: 1, h: 1, type: 'lift' }];
+  const r1 = M.pickSourceRoom(rooms, 'k1'); if (!r1 || r1.type === 'lift' || M.pickSourceRoom(rooms, 'k1') !== r1) fail('smoke-unit: stable source room');
+  const R = rooms[0], src = { id: 'fire', kind: 'room', room: R, age: 30, ts: 2.5 };
+  const inR = M.densityAt(src, 0, 0, 3, 3), near = M.densityAt(src, 0, 0, 8, 3), far = M.densityAt(src, 0, 0, 20, 3), young = M.densityAt({ ...src, age: 1 }, 0, 0, 3, 3);
+  if (!(inR >= M.DENSE && near < inR && near > 0 && far === 0 && young < inR)) fail('smoke-unit: density falloff ' + JSON.stringify({ inR, near, far, young }));
+  const e = M.smokeEffects(1, 3, {}), eb = M.smokeEffects(1, 3, { breather: true }), ec = M.smokeEffects(1, 3, { calm: true }), e0 = M.smokeEffects(0.2, 3, {});
+  if (!(e.dense && e.drain > 2 && e.slow < 0.8 && e.cough && eb.drain < e.drain / 2 && !eb.cough && ec.fog < e.fog && ec.fog > 1 && !e0.dense && e0.drain === 0 && e0.slow === 1)) fail('smoke-unit: effects ' + JSON.stringify({ e, eb, ec, e0 }));
+});
+S('liminal-unit', null, async () => {   // madness liminal dressing (js/liminal.js) on real madness decks: the loop corridor run, its loop state machine (2 loops then through, both ways), empty unlit stretches, sign shifts per loop
+  const LM = await import('../js/liminal.js'), { generate } = await import('../js/gen.js'), { SHIPS, deckOptions, shipDeckFor } = await import('../js/ships.js');
+  const bad = []; let decks = 0, withLoop = 0, withEmpty = 0, emptyRuns = 0, minLen = 99, maxLen = 0;
+  const walk = (run, dir) => {   // tile by tile along the run like the player (speed 4 along the axis), counting jumps back; true when it loops twice and then lets you out at the far end
+    const L = { run, count: 0, walked: 0 }; let u = dir > 0 ? run.a : run.b, jumps = 0, through = false;
+    for (let i = 0; i < 200; i++) { const nu = LM.loopCheck(L, u, run.fixed, 4 * dir); if (nu != null) { if ((nu - u) * dir >= 0 || nu < run.a || nu > run.b) return { bad: 'jump not backward / off the run' }; u = nu; jumps++; continue; } u += dir; if (u > run.b || u < run.a) { through = true; break; } }
+    const L2 = { run, count: 0, walked: 0 }, mid = (run.a + run.b) >> 1, slow = LM.loopCheck(L2, dir > 0 ? run.b : run.a, run.fixed, 0.2 * dir), side = LM.loopCheck(L2, mid, run.fixed + 1, 4 * dir);   // standing still / off the run: nothing
+    const L3 = { run, count: 0, walked: 0 }, spawnAtEnd = LM.loopCheck(L3, dir > 0 ? run.b : run.a, run.fixed, 4 * dir);   // arriving at the trigger end without walking the run toward it: no loop
+    return { jumps, through, count: L.count, idle: slow == null && side == null && spawnAtEnd == null };
+  };
+  for (const len of [5, 6, 9, 14]) for (const ax of ['x', 'y']) {   // synthetic decks: one enclosed straight corridor of `len` tiles between two rooms, so the loop machine is always exercised whatever the generator makes
+    const W = len + 6, H = 7, grid = [], room = []; for (let y = 0; y < H; y++) { grid.push(Array(W).fill(1)); room.push(Array(W).fill(null)); }
+    for (let y = 1; y <= 5; y++) for (const x of [1, 2, W - 3, W - 2]) { grid[y][x] = 0; room[y][x] = 'lab'; } for (let x = 3; x < W - 3; x++) grid[3][x] = 0;
+    const tr = (m) => ax === 'x' ? m : m[0].map((_, i) => m.map(r => r[i]));
+    const d = { grid: tr(grid), room: tr(room), W: ax === 'x' ? W : H, H: ax === 'x' ? H : W, tubeAxis: null }, r = LM.findLoopRun(d);
+    if (!r || r.ax !== ax || r.b - r.a + 1 !== len) { bad.push(`synthetic ${ax} ${len}: findLoopRun ` + JSON.stringify(r)); continue; }
+    for (const dir of [1, -1]) { const w = walk(r, dir); if (w.bad || w.jumps !== 2 || !w.through || !w.idle) bad.push(`synthetic ${ax} ${len} dir ${dir}: ` + JSON.stringify(w)); }
+    d.grid[ax === 'x' ? 2 : 5][ax === 'x' ? 5 : 2] = 0; const r2 = LM.findLoopRun(d); if (r2 && r2.b - r2.a + 1 >= len) bad.push(`synthetic ${ax} ${len}: a side opening still counts as enclosed`);
+  }
+  for (let s = 0; s < 30; s++) for (let n = 3; n <= 10; n++) {
+    const ship = SHIPS[s % SHIPS.length], seed = 1000 + s * 7717, d = generate(n - 1, seed + n * 7919, { ...deckOptions(ship, shipDeckFor(ship, n)), liminal: n >= 3 }); decks++;   // as js/main.js loadDeck builds a madness deck
+    const where = `ship ${ship.name} seed ${seed} deck ${n}`, open = (x, y) => d.grid[y]?.[x] === 0 && !d.room[y]?.[x] && !d.tubeAxis?.[x + y * d.W];
+    const loop = n >= 4 ? LM.findLoopRun(d) : null;
+    if (loop) { withLoop++; const len = loop.b - loop.a + 1; minLen = Math.min(minLen, len); maxLen = Math.max(maxLen, len);
+      for (const [x, y] of LM.runTiles(loop)) { const side = loop.ax === 'x' ? [[x, y - 1], [x, y + 1]] : [[x - 1, y], [x + 1, y]]; if (!open(x, y) || side.some(([a, b]) => d.grid[b]?.[a] !== 1)) { bad.push(where + ': loop run not an enclosed corridor at ' + [x, y]); break; } }
+      if (len < 5) bad.push(where + ': loop run shorter than 5');
+      for (const dir of [1, -1]) { const w = walk(loop, dir); if (w.bad || w.jumps !== 2 || w.count !== 2 || !w.through || !w.idle) bad.push(where + ` (len ${len}, dir ${dir}): loop walk ` + JSON.stringify(w)); } }
+    const empty = LM.findEmptyRuns(d, loop); if (empty.length) withEmpty++; emptyRuns += empty.length;
+    if (empty.length > 2) bad.push(where + ': more than 2 empty runs');
+    for (const r of empty) { const tl = LM.runTiles(r);
+      if (tl.length < 4) bad.push(where + ': empty run shorter than 4');
+      if (tl.some(([x, y]) => !open(x, y))) bad.push(where + ': empty run on a room / tube / prop / wall tile');
+      if (loop && tl.some(([x, y]) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => LM.inRun(loop, x + a, y + b)))) bad.push(where + ': empty run on or beside the loop run');
+      if (tl.some(([x, y]) => Math.abs(x - d.exit[0]) + Math.abs(y - d.exit[1]) <= 2)) bad.push(where + ': empty run next to the lift');
+      if (empty.some(o => o !== r && tl.some(([x, y]) => LM.runTiles(o).some(([a, b]) => Math.abs(x - a) + Math.abs(y - b) <= 1)))) bad.push(where + ': two empty runs touch'); }
+    if (JSON.stringify(LM.findEmptyRuns(d, loop)) !== JSON.stringify(empty)) bad.push(where + ': empty runs not stable');
+  }
+  // sign shifts: no change before a loop, stable per loop, different between loops, a fair share changes, never "changes" to the same text
+  const T = ['BRIDGE', 'SICKBAY', 'MESS\nHALL', 'DECK 3', 'TUBELIFT →']; let changed = [0, 0, 0], diff12 = 0, total = 0;
+  for (let tx = 0; tx < 40; tx++) for (let ty = 0; ty < 10; ty++) { const t = T[(tx + ty) % T.length]; total++;
+    if (LM.shiftedSign(t, tx, ty, 4, 0) !== t) bad.push('shiftedSign: changed with no loop');
+    const s1 = LM.shiftedSign(t, tx, ty, 4, 1), s2 = LM.shiftedSign(t, tx, ty, 4, 2); if (s1 !== LM.shiftedSign(t, tx, ty, 4, 1)) bad.push('shiftedSign: not stable');
+    if (s1 !== t) changed[1]++; if (s2 !== t) changed[2]++; if (s1 !== s2) diff12++; }
+  const share = changed[1] / total;
+  console.log(`liminal-unit: ${decks} madness decks, loop run on ${withLoop} (len ${minLen}-${maxLen}), empty stretches on ${withEmpty} (${emptyRuns} runs); signs changed after loop 1 ${(share * 100).toFixed(0)} %, loop 2 ${(changed[2] / total * 100).toFixed(0)} %, differ between loops ${diff12}`);
+  if (share < 0.3 || share > 0.6 || diff12 < total * 0.3) bad.push('shiftedSign: share ' + share.toFixed(2) + ' / diff ' + diff12);
+  if (!withLoop) bad.push(`no loop run on any of ${decks} decks`);   // rare on real hull-shaped decks (~3 % of deck 4+; long straight corridors mostly have doorways off them), see TODO.md
+  if (withEmpty < decks * 0.5) bad.push(`empty stretches on only ${withEmpty} of ${decks} decks`);
+  if (bad.length) fail('liminal-unit: ' + bad.slice(0, 6).join('; ') + (bad.length > 6 ? ` (+${bad.length - 6})` : ''));
+});
+S('audio-unit', null, async () => {   // positional audio for enemies (js/audio.js spatial / at / emitter): pan by bearing, falloff, occlusion, captions
+  const A = await import('../js/audio.js'), L = { x: 0, z: 0, yaw: 0 };   // facing -z (forward is (-sin yaw, -cos yaw))
+  const ahead = A.spatial(L, 0, -6), left = A.spatial(L, -6, 0), right = A.spatial(L, 6, 0), behind = A.spatial(L, 0, 6), far = A.spatial(L, 0, -30), occ = A.spatial(L, 0, -6, true);
+  if (!(Math.abs(ahead.pan) < 0.01 && left.pan < -0.7 && right.pan > 0.7 && behind.cutoff < ahead.cutoff)) fail('audio-unit: pan / head shadow ' + JSON.stringify({ ahead, left, right, behind }));
+  if (!(A.spatial(L, 0, -2).gain === 1 && far.gain < ahead.gain && far.cutoff < ahead.cutoff && occ.gain < ahead.gain && occ.cutoff <= 900)) fail('audio-unit: falloff / occlusion ' + JSON.stringify({ far, occ }));
+  const turned = A.spatial({ x: 0, z: 0, yaw: Math.PI / 2 }, -6, 0); if (Math.abs(turned.pan) > 0.01) fail('audio-unit: listener yaw ' + JSON.stringify(turned));   // turned to face -x: a sound at -x is ahead
+  if (!(A.spatial(L, 0, -20).heard && !A.spatial(L, 0, -20, true).heard && !A.spatial(L, 0, -40).heard)) fail('audio-unit: hearing range');
+  // emitter: captions with position (no AudioContext), not when out of range / through walls past 16 m
+  const s = new A.Sound(), caps = []; s.onCaption = (t, x, z) => caps.push([t, x, z]); s.setListener(0, 0, 0);
+  let clear = true; const src = { x: 5, z: 0, w: { los: () => clear } }, em = s.emitter(src);
+  em.growl(0.1); src.x = 40; em.growl(0.1); src.x = 20; clear = false; em.giggle(0.1); clear = true; em.giggle(0.1); em.stunned();
+  if (JSON.stringify(caps) !== JSON.stringify([['growl', 5, 0], ['giggling', 20, 0]])) fail('audio-unit: emitter captions ' + JSON.stringify(caps));
+  // routing: with a (mock) context, an emitter's tone() / noise() go through one panner -> lowpass -> gain chain into the master bus
+  const node = (kind) => { const n = { kind, outs: [], connect(o) { n.outs.push(o); return o; }, disconnect() { }, start() { }, stop() { } }; for (const p of ['gain', 'pan', 'frequency', 'Q']) n[p] = { value: 0, setValueAtTime() { }, exponentialRampToValueAtTime() { }, cancelScheduledValues() { }, setTargetAtTime() { } }; return n; };
+  const ctx = { currentTime: 0, createGain: () => node('gain'), createStereoPanner: () => node('pan'), createBiquadFilter: () => node('filter'), createOscillator: () => node('osc'), createBufferSource: () => node('buf') };
+  const s2 = new A.Sound(); s2.ctx = ctx; s2.master = node('master'); s2.setListener(0, 0, 0); let P = null; const mk = ctx.createStereoPanner, made = []; ctx.createStereoPanner = () => (P = mk()); const mg = ctx.createGain; ctx.createGain = () => { const n = mg(); made.push(n); return n; };
+  s2.emitter({ x: -6, z: 0 }).growl(0.1);
+  const lp = P?.outs[0], g = lp?.outs[0], fed = made.filter(n => n.outs.includes(P)).length;   // envelope gains of the growl's tone + noise feed the panner
+  if (!(P && P.pan.value < -0.7 && lp.kind === 'filter' && g.outs[0] === s2.master && fed === 2 && !s2._dest)) fail('audio-unit: chain ' + JSON.stringify({ pan: P?.pan.value, lp: lp?.kind, fed }));
+  s2.growl(0.1); if (s2._dest) fail('audio-unit: _dest leaked');
+});
+S('smoke-haze', 'nominal', async (page) => {   // a fire fills one room on the player's deck: dense there (cough caption, HP drain, slow, thicker fog), clear on other decks
+await installHelpers(page);
+const r = await page.evaluate(async () => {
+  const g = __game, G = g.G, P = g.P; g.G.forceShip = 0; g.newRun(); g.setQuality('low'); g.CFG.caps = true; document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); await new Promise(r => setTimeout(r, 300)); G.phase = 'play';
+  const A = G.comms.alerts, a = A.raise('fire', { scope: 'deck', deck: G.shipDeck }); for (let i = 0; i < 3; i++) { G.phase = 'play'; g.step(0.05, i * 0.05); }
+  const S = G.smoke, src = S.srcs[0]; if (!src) return { src: null };
+  A.t += 40;   // let the smoke build and spread
+  const w = g.world, R = src.room; let spot = null; for (let y = R.y; y < R.y + R.h && !spot; y++) for (let x = R.x; x < R.x + R.w; x++) { const [cx, cz] = w.center(x, y); if (!w.solidAt(cx, cz)) { spot = [cx, cz]; break; } }
+  if (!spot) return { src: true, spot: null };
+  P.x = spot[0]; P.z = spot[1]; G.hp = G.maxHp = 1000; const fog0 = G.fogBase; let slow = 1;
+  for (let i = 0; i < 60; i++) { G.phase = 'play'; g.step(0.05, 1 + i * 0.05); P.x = spot[0]; P.z = spot[1]; slow = Math.min(slow, P.smokeSlow); }
+  const caps = [...document.querySelectorAll('#caps div')].map(d => d.textContent).join('|');
+  const inRoom = { dens: +S.here.toFixed(2), hpLost: +(1000 - G.hp).toFixed(1), slow: +slow.toFixed(2), fog: +(w && g.scene.fog.density / fog0).toFixed(2), caps };
+  // another deck: the same alert is pinned to its own deck, so this deck stays clear
+  G.shipDeck = (G.shipDeck + 1) % 3; for (let i = 0; i < 3; i++) { G.phase = 'play'; g.step(0.05, 5 + i * 0.05); } const other = { srcs: G.smoke.srcs.length, dens: G.smoke.here };
+  A.clear('fire'); return { src: true, spot: true, inRoom, other };
+});
+console.log('smoke-haze:', JSON.stringify(r));
+const I = r.inRoom || {};
+if (!(r.src && r.spot && I.dens >= 0.45 && I.hpLost > 2 && I.slow < 0.9 && I.fog > 1.5 && /you cough/.test(I.caps) && r.other.srcs === 0 && r.other.dens === 0)) fail('smoke-haze ' + JSON.stringify(r));
 });
 S('ladder-well', 'nominal', async (page) => {   // the service ladder in a dead-end corridor climbs to the next deck (and back up with Shift)
 await installHelpers(page);
@@ -697,7 +867,20 @@ const nom = await page2.evaluate(async () => {
     { // sliding doors, clutter pick-up, terminal and talk menus
       const w = g.world, dr = w.doors?.[0]; out.doors2 = { n: w.doors?.length || 0 };
       if (dr) { w.setDoorLock(false);   // the phases ticked above can black the deck out (a power fault seals the doors, js/main.js step): start from powered doors, the seal is tested below
-        w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2;  w.setDoorLock(true); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.sealed = dr.open < 0.2; const q = { x: dr.f.x + (dr.f.ax ? 0.3 : 0), z: dr.f.z + (dr.f.ax ? 0 : 0.3), y: 0 }; w.resolve(q, 0.3); out.doors2.blocked = dr.f.ax ? q.x > dr.f.x + 0.3 : q.z > dr.f.z + 0.3; let pr = 0; for (let i = 0; i < 14; i++) pr = Math.max(pr, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.pried = pr >= 1 && dr.open > 0.5; w.setDoorLock(false); }
+        w.slideDoors(0.5, dr.f.x, dr.f.z); w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.open = dr.open > 0.5; w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); w.slideDoors(0.5, dr.f.x + 40, dr.f.z); out.doors2.shut = dr.open < 0.2;  w.setDoorLock(true); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.sealed = dr.open < 0.2; const q = { x: dr.f.x + (dr.f.ax ? 0.3 : 0), z: dr.f.z + (dr.f.ax ? 0 : 0.3), y: 0 }; w.resolve(q, 0.3); out.doors2.blocked = dr.f.ax ? q.x > dr.f.x + 0.3 : q.z > dr.f.z + 0.3; let pr = 0; for (let i = 0; i < 14; i++) pr = Math.max(pr, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); out.doors2.pried = pr >= 1 && dr.open > 0.5; w.setDoorLock(false);
+        { // red-alert lockdown ('alert'): seals like a blackout, a walker keys through in ~1 s (no 10 s forced-open window), it reseals behind them, the player pries it; sounds by material
+          dr.pried = 0; for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z); const heard = []; const cb = (dd, o, k) => { if (o === dr) heard.push(k); };
+          w.setDoorLock('alert'); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x + 8, dr.f.z, [], cb); const sealed = dr.open < 0.2, seal = heard.includes('seal');
+          const crew = [{ x: dr.f.x + (dr.f.ax ? 1.2 : 0), z: dr.f.z + (dr.f.ax ? 0 : 1.2), w: true }]; let tk = 0; for (; tk < 40 && dr.open < 0.5; tk++) w.slideDoors(0.1, dr.f.x + 8, dr.f.z, crew, cb);
+          const keyedOpen = dr.open > 0.5, keySecs = +(tk * 0.1).toFixed(1); for (let i = 0; i < 40; i++) w.slideDoors(0.1, dr.f.x + 8, dr.f.z, [], cb); const resealed = dr.open < 0.2 && !(dr.pried > 0);
+          let pr2 = 0; for (let i = 0; i < 14; i++) pr2 = Math.max(pr2, w.pryDoor(dr.f.x, dr.f.z, 0.25)); for (let i = 0; i < 6; i++) w.slideDoors(0.5, dr.f.x, dr.f.z);
+          out.doors2.lockdown = { sealed, seal, keyedOpen, keySecs, resealed, key: heard.includes('key'), pried: pr2 >= 1 && dr.open > 0.5, mat: dr.mat, mats: [...new Set(w.doors.map(o => o.mat))] }; w.setDoorLock(false); } }
+      { // emergency lamps light the room in a blackout through the pooled panel lights (light count unchanged: no material recompiles)
+        const nL = () => { let k = 0; g.scene.traverse(o => { if (o.isLight) k++; }); return k; }, em = w.emerg?.[0], pa0 = w.powerAmt, pt0 = w.powerTarget, x0 = P.x, z0 = P.z;
+        if (em) { const n0 = nL(); P.x = em.x; P.z = em.z; w.powerAmt = 1; g.updatePanelLights(1);
+          w.powerAmt = 0; g.updatePanelLights(1); const dark = g.panelLights.map(l => ({ i: l.intensity, r: l.color.r, g: l.color.g, d: Math.hypot(l.position.x - em.x, l.position.z - em.z) }));
+          out.emergLight = { n0, n1: nL(), red: dark.filter(l => l.i > 1 && l.r > 0.9 && l.g < 0.3).length, near: dark.some(l => l.i > 1 && l.d < 0.5) }; }
+        w.powerAmt = pa0; w.powerTarget = pt0; P.x = x0; P.z = z0; g.updatePanelLights(1); }
       const c = w.clutter[0], n0 = w.clutter.length; out.clutter = { took: c ? w.takeClutter(c) : null, left: w.clutter.length === n0 - 1 };
       G.phase = 'play'; g.shipState.repair('computer'); g.terminalMenu(); out.term = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu();
       const ppl = g.sim.onDeck(G.shipDeck + 1)[0]; if (ppl) { g.talkMenu({ person: ppl.person }); out.talk = { open: document.getElementById('bd-menu').classList.contains('show'), rows: document.querySelectorAll('#bd-menu .o').length }; g.hud2.closeMenu(); }
@@ -749,6 +932,8 @@ console.log('nominal:', JSON.stringify(nom));
     ["n.doors2.sealed", () => n.doors2.sealed],
     ["n.doors2.blocked", () => n.doors2.blocked],
     ["n.doors2.pried", () => n.doors2.pried],
+    ["n.emergLight (blackout: pooled lights turn red at the nearest emergency lamps, light count unchanged)", () => { const E = n.emergLight; return !!E && E.n0 === E.n1 && E.red >= 1 && E.near; }],
+    ["n.doors2.lockdown (red alert: seals, crew key through in ~1 s and it reseals, player pries)", () => { const L = n.doors2.lockdown; return !!L && L.sealed && L.keyedOpen && L.keySecs <= 1.6 && L.resealed && L.key && L.pried && ['std', 'heavy', 'light'].includes(L.mat); }],
     ["n.clutter.took", () => n.clutter.took],
     ["n.clutter.left", () => n.clutter.left],
     ["n.term.open", () => n.term.open],
@@ -880,11 +1065,15 @@ const smoke = (ship, seed) => async (page) => {
     let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
     out.bodies = g.ents.filter(e => e.simmed).length;
     const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
-    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1); g.setQuality('low');   // one high-quality frame through the post chain
+    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1);   // one high-quality frame through the post chain
+    { const lights = () => { let n = 0; g.scene.traverse(o => { if (o.isLight) n++; }); return n; }, gl = g.renderer.getContext(), cones = g.world.cones, l0 = lights(), dc0 = out.drawCalls;   // optional GTAO (js/fx.js): on, rung 0 only, no light added, glow kept out
+      g.post.setAO(true); gl.getError(); g.renderOnce(); out.ao = { on: g.post.ao.enabled, err: gl.getError(), calls: g.renderer.info.render.calls, base: dc0, lights: lights() - l0, conesVis: cones ? cones.visible : null, noAO: !!cones?.userData.noAO || !cones, stuck: g.post.ao._visibilityCache.length };
+      g.post.setScale(0.85); g.post.allowAO(false); out.ao.rung1 = g.post.ao.enabled; g.post.allowAO(true); g.post.setScale(1); g.post.setAO(false); out.ao.off = g.post.ao.enabled; }
+    g.setQuality('low');
     delete G.forceSeed; return out;
   }, { ship, seed });
   console.log('smoke:', JSON.stringify(r));
-  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
 S('touch', 'touch', (p) => touchBrowser(p, fail));   // js/touch.js on a phone profile (tools/test-touch.mjs)
 S('smoke', 'smoke', smoke(SHIP, null));

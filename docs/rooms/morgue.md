@@ -4,7 +4,7 @@
 
 - Module: `js/rooms/morgue.js` (`layout(ctx)`; optional `dress`). Check: `node tools/room-check.mjs morgue`, look: `node tools/shot-room.mjs morgue <seed>`.
 - Size: 3-3 tiles; spawn weight 0 (zone weights only); department medical.
-- world.js today: wall pool ROOM_DECOR `medcab, locker, monitorG, kit`; FIT `medcab, kit, locker`; floor `tile`; ceiling `ceilt`; walls `wallp`; light #cfe8ff; placards biological, cold.
+- world.js today: wall pool ROOM_DECOR `medcab, locker, monitorG, kit`; FIT `medcab, kit, locker`; floor `tile`; ceiling `ceilp`; walls `wallp`; light #cfe8ff; placards biological, cold.
 
 ## Backlog (10 slots)
 
