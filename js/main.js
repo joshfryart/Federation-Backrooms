@@ -19,6 +19,7 @@ import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js
 import { Director } from './director.js';
 import { loadItems, searchFixture, fixtureName, examineProp } from './items.js';
 import { mulberry32 } from './data.js';
+import { findLoopRun, loopCheck, findEmptyRuns } from './liminal.js';   // liminal set dressing (madness): impossible corridor, empty unlit stretches, sign shifts
 import { hash01, hash } from './clock.js';
 import { gameFor, rushNote, learnedStore } from './jobgames.js';   // job mini-games (chosen by what the job is) + first-use instruction cards (js/jobgame-ui.js)
 import { JobGameUI } from './jobgame-ui.js';
@@ -220,22 +221,15 @@ function saveDeckState() {
 }
 
 // impossible corridor (madness mode, deck 4+): the longest straight, enclosed corridor run sends you back to near its start (same lateral offset, same speed) the first two times you walk it end to end;
-// the third time it lets you through. liminal.run = { ax, fixed, a, b } in tile units along the axis.
-function findLoopRun(data) {
-  let best = null; const g = data.grid, W = data.W, H = data.H, open = (x, y) => g[y]?.[x] === 0 && !data.room[y]?.[x] && !data.tubeAxis?.[x + y * W];
-  for (let y = 1; y < H - 1; y++) { let x = 0; while (x < W) { if (!(open(x, y) && g[y - 1][x] === 1 && g[y + 1][x] === 1)) { x++; continue; } let e = x; while (open(e + 1, y) && g[y - 1][e + 1] === 1 && g[y + 1][e + 1] === 1) e++; if (e - x + 1 >= 5 && (!best || e - x > best.b - best.a)) best = { ax: 'x', fixed: y, a: x, b: e }; x = e + 1; } }
-  for (let x = 1; x < W - 1; x++) { let y = 0; while (y < H) { if (!(open(x, y) && g[y][x - 1] === 1 && g[y][x + 1] === 1)) { y++; continue; } let e = y; while (open(x, e + 1) && g[e + 1][x - 1] === 1 && g[e + 1][x + 1] === 1) e++; if (e - y + 1 >= 5 && (!best || e - y > best.b - best.a)) best = { ax: 'y', fixed: x, a: y, b: e }; y = e + 1; } }
-  return best;
-}
+// the third time it lets you through. Each loop changes the deck: its signs read differently (World.loopShift). Pure parts in js/liminal.js (findLoopRun / loopCheck / findEmptyRuns).
 function loopStep() {
   const L = G.liminal; if (!L || NOM() || G.phase !== 'play' || L.count >= 2) return;
   const [tx, ty] = world.tile(P.x, P.z), run = L.run, u = run.ax === 'x' ? tx : ty, v = run.ax === 'x' ? ty : tx, speed = run.ax === 'x' ? P.vx : P.vz;
-  if (v !== run.fixed || u < run.a || u > run.b || Math.abs(speed) < 0.5) { return; }
-  const dir = Math.sign(speed), atEnd = dir > 0 ? u >= run.b - 1 : u <= run.a + 1; if (!atEnd) { L.walked = dir; return; }
-  if (L.walked !== dir) return;                                   // only after really walking the run toward this end
-  const back = Math.min(3, run.b - run.a - 2), nu = dir > 0 ? run.a + back : run.b - back, [cx, cz] = world.center(run.ax === 'x' ? nu : run.fixed, run.ax === 'x' ? run.fixed : nu);
+  const nu = loopCheck(L, u, v, speed); if (nu == null) return;
+  const [cx, cz] = world.center(run.ax === 'x' ? nu : run.fixed, run.ax === 'x' ? run.fixed : nu);
   if (run.ax === 'x') P.x = cx + (P.x - world.center(tx, ty)[0]); else P.z = cz + (P.z - world.center(tx, ty)[1]);
-  if (run.ax === 'x') P.z = cz; else P.x = cx; L.count++; L.walked = 0;
+  if (run.ax === 'x') P.z = cz; else P.x = cx;
+  world.loopShift?.(L.count);
   if (L.count === 1) G.say('This corridor was shorter a moment ago.', 'warn'); caption('the lights flicker'); flash('#000', 0.5);
 }
 function loadDeck(n) {
@@ -248,7 +242,7 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
+  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); G.fogBase = ship.fogD; scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);

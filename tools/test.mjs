@@ -394,7 +394,8 @@ console.log('director repairer:', JSON.stringify(dir)); if (!(dir.repairer && di
 S('liminal', 'madness', async (page) => {   // tall rooms + catwalk climb (E at a module), walk-under collision, and the impossible corridor loop (two loops, then through)
 await installHelpers(page);
 const lim = await page.evaluate(async () => {
-  const g = __game; g.setQuality('low'); __T.hideEnemies(); const out = { catwalk: null, loop: null, scanned: 0, withCat: 0, withLoop: 0 };
+  const g = __game; g.setQuality('low'); __T.hideEnemies(); const out = { catwalk: null, loop: null, empty: null, scanned: 0, withCat: 0, withLoop: 0, withEmpty: 0 };
+  const lit = (w, r) => { const k = new Set(w.panels.map(p => Math.floor(p.x / 2.5) + ',' + Math.floor(p.z / 2.5))); let n = 0, t = 0; for (let u = r.a; u <= r.b; u++) { t++; if (k.has(r.ax === 'x' ? u + ',' + r.fixed : r.fixed + ',' + u)) n++; } return [n, t]; };   // light panels on a run's tiles
   for (let run = 0; run < 12 && !(out.catwalk && out.loop); run++) { g.G.forceSeed = 4000 + run * 977; g.G.forceShip = run % 10; g.newRun(); __T.hideEnemies();
     for (let n = 1; n <= 8 && !(out.catwalk && out.loop); n++) { g.loadDeck(n); __T.hideEnemies(); const w = g.world, P = g.P; out.scanned++; if (w.d.props.some(q => q.kind === 'catwalk')) out.withCat++; if (g.G.liminal) out.withLoop++;
       const cw = !out.catwalk && w.d.props.find(q => q.kind === 'catwalk');
@@ -403,15 +404,19 @@ const lim = await page.evaluate(async () => {
           dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })); dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' })); for (let i = 0; i < 60; i++) { g.G.phase = 'play'; g.step(0.05, 2 + i * 0.05); }
           const q = { x: (cw.tx + 0.5) * 2.5, z: (cw.ty + 0.5) * 2.5, y: 0 }, x0 = q.x, z0 = q.z; w.resolve(q, 0.3);
           out.catwalk = { top, y: +P.y.toFixed(2), tall: w.isTall(cw.tx, cw.ty) || w.ceilAt(cw.tx, cw.ty) > 3.3, under: Math.hypot(q.x - x0, q.z - z0) < 0.01 }; } }
+      if (w.d.emptyRuns?.length) { out.withEmpty++; if (!out.empty) { const c = w.d.emptyRuns.map(r => lit(w, r)); out.empty = { deck: n, runs: c.length, tiles: c.reduce((a, b) => a + b[1], 0), lit: c.reduce((a, b) => a + b[0], 0), panels: w.panels.length }; } }
       const L = g.G.liminal;
-      if (L && !out.loop) { const r = L.run, ctr = (u) => r.ax === 'x' ? w.center(u, r.fixed) : w.center(r.fixed, u), [x0, z0] = ctr(r.a + 1); P.x = x0; P.z = z0; P.y = 0; let loops = 0;
+      if (L && !out.loop) { const [litN, litT] = lit(w, L.run), before = w.signs.map(s => s.shown), sameRun = { ...L.run }; const r = L.run, ctr = (u) => r.ax === 'x' ? w.center(u, r.fixed) : w.center(r.fixed, u), [x0, z0] = ctr(r.a + 1); P.x = x0; P.z = z0; P.y = 0; let loops = 0;
         for (let i = 0; i < 400 && L.count < 3; i++) { const px = P.x, pz = P.z; g.G.phase = 'play'; if (r.ax === 'x') { P.x += 0.2; P.vx = 4; P.vz = 0; } else { P.z += 0.2; P.vz = 4; P.vx = 0; } g.step(0.05, 10 + i * 0.05); if ((r.ax === 'x' ? P.x - px : P.z - pz) < -0.5) loops++; if (i > 300 && loops >= 2) break; }
-        out.loop = { loops, count: L.count, len: r.b - r.a + 1 }; } } }
+        const after1 = w.signs.map(s => s.shown);
+        out.loop = { loops, count: L.count, len: r.b - r.a + 1, lit: litN, tiles: litT, signs: w.signs.length, changed: after1.filter((t, i) => t !== before[i]).length, shifts: w.loopShifts || 0, mapsOk: w.signs.every(s => s.m.material.map && s.m.material.map.image), runKept: JSON.stringify(L.run) === JSON.stringify(sameRun) }; } } }
   return out;
 });
 console.log('liminal:', JSON.stringify(lim));
 if (!(lim.catwalk && lim.catwalk.y >= lim.catwalk.top - 0.05 && lim.catwalk.tall && lim.catwalk.under)) fail('liminal: catwalk climb / tall room / walk-under ' + JSON.stringify(lim.catwalk));
 if (!(lim.loop && lim.loop.loops === 2 && lim.loop.count === 2)) fail('liminal: corridor loop ' + JSON.stringify(lim.loop));
+if (!(lim.loop && lim.loop.lit === 0 && lim.loop.shifts === 2 && lim.loop.signs > 0 && lim.loop.changed > 0 && lim.loop.mapsOk && lim.loop.runKept)) fail('liminal: loop corridor unlit / signs change when it loops ' + JSON.stringify(lim.loop));
+if (!(lim.empty && lim.empty.runs > 0 && lim.empty.tiles >= 4 && lim.empty.lit === 0 && lim.empty.panels > 0)) fail('liminal: empty unlit stretches ' + JSON.stringify(lim.empty));
 });
 S('windows', 'madness', async (page) => {   // windows sit only on the hull edge (open space behind the bulkhead, gen.js inHull), every deck gets some, and the space shader (nebula + escort ship) renders
 const win = await page.evaluate(() => {
@@ -536,6 +541,56 @@ S('smoke-unit', null, async () => {   // alert smoke maths (js/smoke.js): per-de
   if (!(inR >= M.DENSE && near < inR && near > 0 && far === 0 && young < inR)) fail('smoke-unit: density falloff ' + JSON.stringify({ inR, near, far, young }));
   const e = M.smokeEffects(1, 3, {}), eb = M.smokeEffects(1, 3, { breather: true }), ec = M.smokeEffects(1, 3, { calm: true }), e0 = M.smokeEffects(0.2, 3, {});
   if (!(e.dense && e.drain > 2 && e.slow < 0.8 && e.cough && eb.drain < e.drain / 2 && !eb.cough && ec.fog < e.fog && ec.fog > 1 && !e0.dense && e0.drain === 0 && e0.slow === 1)) fail('smoke-unit: effects ' + JSON.stringify({ e, eb, ec, e0 }));
+});
+S('liminal-unit', null, async () => {   // madness liminal dressing (js/liminal.js) on real madness decks: the loop corridor run, its loop state machine (2 loops then through, both ways), empty unlit stretches, sign shifts per loop
+  const LM = await import('../js/liminal.js'), { generate } = await import('../js/gen.js'), { SHIPS, deckOptions, shipDeckFor } = await import('../js/ships.js');
+  const bad = []; let decks = 0, withLoop = 0, withEmpty = 0, emptyRuns = 0, minLen = 99, maxLen = 0;
+  const walk = (run, dir) => {   // tile by tile along the run like the player (speed 4 along the axis), counting jumps back; true when it loops twice and then lets you out at the far end
+    const L = { run, count: 0, walked: 0 }; let u = dir > 0 ? run.a : run.b, jumps = 0, through = false;
+    for (let i = 0; i < 200; i++) { const nu = LM.loopCheck(L, u, run.fixed, 4 * dir); if (nu != null) { if ((nu - u) * dir >= 0 || nu < run.a || nu > run.b) return { bad: 'jump not backward / off the run' }; u = nu; jumps++; continue; } u += dir; if (u > run.b || u < run.a) { through = true; break; } }
+    const L2 = { run, count: 0, walked: 0 }, mid = (run.a + run.b) >> 1, slow = LM.loopCheck(L2, dir > 0 ? run.b : run.a, run.fixed, 0.2 * dir), side = LM.loopCheck(L2, mid, run.fixed + 1, 4 * dir);   // standing still / off the run: nothing
+    const L3 = { run, count: 0, walked: 0 }, spawnAtEnd = LM.loopCheck(L3, dir > 0 ? run.b : run.a, run.fixed, 4 * dir);   // arriving at the trigger end without walking the run toward it: no loop
+    return { jumps, through, count: L.count, idle: slow == null && side == null && spawnAtEnd == null };
+  };
+  for (const len of [5, 6, 9, 14]) for (const ax of ['x', 'y']) {   // synthetic decks: one enclosed straight corridor of `len` tiles between two rooms, so the loop machine is always exercised whatever the generator makes
+    const W = len + 6, H = 7, grid = [], room = []; for (let y = 0; y < H; y++) { grid.push(Array(W).fill(1)); room.push(Array(W).fill(null)); }
+    for (let y = 1; y <= 5; y++) for (const x of [1, 2, W - 3, W - 2]) { grid[y][x] = 0; room[y][x] = 'lab'; } for (let x = 3; x < W - 3; x++) grid[3][x] = 0;
+    const tr = (m) => ax === 'x' ? m : m[0].map((_, i) => m.map(r => r[i]));
+    const d = { grid: tr(grid), room: tr(room), W: ax === 'x' ? W : H, H: ax === 'x' ? H : W, tubeAxis: null }, r = LM.findLoopRun(d);
+    if (!r || r.ax !== ax || r.b - r.a + 1 !== len) { bad.push(`synthetic ${ax} ${len}: findLoopRun ` + JSON.stringify(r)); continue; }
+    for (const dir of [1, -1]) { const w = walk(r, dir); if (w.bad || w.jumps !== 2 || !w.through || !w.idle) bad.push(`synthetic ${ax} ${len} dir ${dir}: ` + JSON.stringify(w)); }
+    d.grid[ax === 'x' ? 2 : 5][ax === 'x' ? 5 : 2] = 0; const r2 = LM.findLoopRun(d); if (r2 && r2.b - r2.a + 1 >= len) bad.push(`synthetic ${ax} ${len}: a side opening still counts as enclosed`);
+  }
+  for (let s = 0; s < 30; s++) for (let n = 3; n <= 10; n++) {
+    const ship = SHIPS[s % SHIPS.length], seed = 1000 + s * 7717, d = generate(n - 1, seed + n * 7919, { ...deckOptions(ship, shipDeckFor(ship, n)), liminal: n >= 3 }); decks++;   // as js/main.js loadDeck builds a madness deck
+    const where = `ship ${ship.name} seed ${seed} deck ${n}`, open = (x, y) => d.grid[y]?.[x] === 0 && !d.room[y]?.[x] && !d.tubeAxis?.[x + y * d.W];
+    const loop = n >= 4 ? LM.findLoopRun(d) : null;
+    if (loop) { withLoop++; const len = loop.b - loop.a + 1; minLen = Math.min(minLen, len); maxLen = Math.max(maxLen, len);
+      for (const [x, y] of LM.runTiles(loop)) { const side = loop.ax === 'x' ? [[x, y - 1], [x, y + 1]] : [[x - 1, y], [x + 1, y]]; if (!open(x, y) || side.some(([a, b]) => d.grid[b]?.[a] !== 1)) { bad.push(where + ': loop run not an enclosed corridor at ' + [x, y]); break; } }
+      if (len < 5) bad.push(where + ': loop run shorter than 5');
+      for (const dir of [1, -1]) { const w = walk(loop, dir); if (w.bad || w.jumps !== 2 || w.count !== 2 || !w.through || !w.idle) bad.push(where + ` (len ${len}, dir ${dir}): loop walk ` + JSON.stringify(w)); } }
+    const empty = LM.findEmptyRuns(d, loop); if (empty.length) withEmpty++; emptyRuns += empty.length;
+    if (empty.length > 2) bad.push(where + ': more than 2 empty runs');
+    for (const r of empty) { const tl = LM.runTiles(r);
+      if (tl.length < 4) bad.push(where + ': empty run shorter than 4');
+      if (tl.some(([x, y]) => !open(x, y))) bad.push(where + ': empty run on a room / tube / prop / wall tile');
+      if (loop && tl.some(([x, y]) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => LM.inRun(loop, x + a, y + b)))) bad.push(where + ': empty run on or beside the loop run');
+      if (tl.some(([x, y]) => Math.abs(x - d.exit[0]) + Math.abs(y - d.exit[1]) <= 2)) bad.push(where + ': empty run next to the lift');
+      if (empty.some(o => o !== r && tl.some(([x, y]) => LM.runTiles(o).some(([a, b]) => Math.abs(x - a) + Math.abs(y - b) <= 1)))) bad.push(where + ': two empty runs touch'); }
+    if (JSON.stringify(LM.findEmptyRuns(d, loop)) !== JSON.stringify(empty)) bad.push(where + ': empty runs not stable');
+  }
+  // sign shifts: no change before a loop, stable per loop, different between loops, a fair share changes, never "changes" to the same text
+  const T = ['BRIDGE', 'SICKBAY', 'MESS\nHALL', 'DECK 3', 'TUBELIFT →']; let changed = [0, 0, 0], diff12 = 0, total = 0;
+  for (let tx = 0; tx < 40; tx++) for (let ty = 0; ty < 10; ty++) { const t = T[(tx + ty) % T.length]; total++;
+    if (LM.shiftedSign(t, tx, ty, 4, 0) !== t) bad.push('shiftedSign: changed with no loop');
+    const s1 = LM.shiftedSign(t, tx, ty, 4, 1), s2 = LM.shiftedSign(t, tx, ty, 4, 2); if (s1 !== LM.shiftedSign(t, tx, ty, 4, 1)) bad.push('shiftedSign: not stable');
+    if (s1 !== t) changed[1]++; if (s2 !== t) changed[2]++; if (s1 !== s2) diff12++; }
+  const share = changed[1] / total;
+  console.log(`liminal-unit: ${decks} madness decks, loop run on ${withLoop} (len ${minLen}-${maxLen}), empty stretches on ${withEmpty} (${emptyRuns} runs); signs changed after loop 1 ${(share * 100).toFixed(0)} %, loop 2 ${(changed[2] / total * 100).toFixed(0)} %, differ between loops ${diff12}`);
+  if (share < 0.3 || share > 0.6 || diff12 < total * 0.3) bad.push('shiftedSign: share ' + share.toFixed(2) + ' / diff ' + diff12);
+  if (!withLoop) bad.push(`no loop run on any of ${decks} decks`);   // rare on real hull-shaped decks (~3 % of deck 4+; long straight corridors mostly have doorways off them), see TODO.md
+  if (withEmpty < decks * 0.5) bad.push(`empty stretches on only ${withEmpty} of ${decks} decks`);
+  if (bad.length) fail('liminal-unit: ' + bad.slice(0, 6).join('; ') + (bad.length > 6 ? ` (+${bad.length - 6})` : ''));
 });
 S('audio-unit', null, async () => {   // positional audio for enemies (js/audio.js spatial / at / emitter): pan by bearing, falloff, occlusion, captions
   const A = await import('../js/audio.js'), L = { x: 0, z: 0, yaw: 0 };   // facing -z (forward is (-sin yaw, -cos yaw))

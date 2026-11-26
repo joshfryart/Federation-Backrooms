@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SEARCHABLE, clutterFor } from './items.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
+import { inRun, shiftedSign } from './liminal.js';   // madness liminal dressing: unlit runs, signs that change when the corridor loops
 import { tubeStep, tubeBoxes } from './tube.js';
 import { dressTable } from './rooms/index.js';   // per-room dressing hook: a room module's optional `dress` export overrides its row in the tables below (docs/rooms/README.md)
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
@@ -645,6 +646,13 @@ export class World {
 
   tile(x, z) { return [Math.floor(x / TS), Math.floor(z / TS)]; }
   center(tx, ty) { return [(tx + 0.5) * TS, (ty + 0.5) * TS]; }
+  // madness liminal dressing: a tile of the loop corridor or of an empty stretch (d.loopRun / d.emptyRuns, js/liminal.js) gets no light panel and no corridor sign
+  darkRun(tx, ty) { const d = this.d; return inRun(d.loopRun, tx, ty) || !!d.emptyRuns?.some(r => inRun(r, tx, ty)); }
+  // the k-th loop through the impossible corridor changes the deck: about 45 % of its signs (room and corridor) read something else, a different set each loop
+  loopShift(k) {
+    let n = 0; for (const s of this.signs || []) { const t = shiftedSign(s.text, s.tx, s.ty, this.d.deck, k); if (t === s.shown) continue; s.shown = t; s.m.material.map = this._signTex(t); s.m.material.needsUpdate = true; n++; }
+    this.loopShifts = k; return n;
+  }
   solid(tx, ty) { return tx < 0 || ty < 0 || tx >= this.W || ty >= this.H || this.grid[ty][tx] !== 0; }
   solidAt(x, z) { const [tx, ty] = this.tile(x, z); return this.solid(tx, ty); }
   // parkour helpers: climbable prop height on a tile (Infinity = not climbable / not a prop)
@@ -913,7 +921,7 @@ export class World {
       for (const [x, y] of open) {
         const r = d.room[y][x];
         if (r === 'jefferies') continue;   // tubes are lit only by their floor strips
-        if (d.loopRun && !r && (d.loopRun.ax === 'x' ? y === d.loopRun.fixed && x >= d.loopRun.a && x <= d.loopRun.b : x === d.loopRun.fixed && y >= d.loopRun.a && y <= d.loopRun.b)) continue;   // the looping corridor (main.js findLoopRun): a long unlit stretch
+        if (!r && this.darkRun(x, y)) continue;   // the looping corridor (js/liminal.js findLoopRun) and the empty stretches (findEmptyRuns): long unlit runs
         const lit = r ? true : ((x + y) % 2 === 0);
         if (!lit) continue;
         { const hz = Math.sin((x >> 2) * 91.7 + (y >> 2) * 17.3 + d.deck * 5.7) * 9871.3; if (!r && hz - Math.floor(hz) < 0.2) continue; } // pitch-black stretches
@@ -1108,7 +1116,9 @@ export class World {
       text = mutate(f, text);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: sign(text, ship.accent), color: 0xdddddd }));
       m.scale.set(1, 0.3, 1); m.position.set(f.px + f.dx * 0.01, y, f.pz + f.dy * 0.01); m.rotation.y = f.ry; g.add(m); f.sign = true;
+      this.signs.push({ m, tx: f.tx, ty: f.ty, text, shown: text });
     };
+    this.signs = []; this._signTex = (text) => sign(text, ship.accent);   // World.loopShift relabels these
     for (const r of d.rooms) {
       const fs = this.wallFaces.filter(f => f.room === r.type && f.tx + f.dx >= r.x && f.tx + f.dx < r.x + r.w && f.ty + f.dy >= r.y && f.ty + f.dy < r.y + r.h);
       if (fs.length) { const f = fs[Math.floor(rnd() * fs.length)]; place(f, ROOMS[r.type].label.toUpperCase().replace(' ', '\n'));
@@ -1127,7 +1137,7 @@ export class World {
       if (f) { const b = buildDirectory(d.rooms, { deck: d.deck + 1, here: { x: lx, y: ly }, accent: '#' + new THREE.Color(ship.accent).getHexString() }); b.position.set(f.px + f.dx * 0.01, 1.5, f.pz + f.dy * 0.01); b.rotation.y = f.ry; g.add(b); f.deco = true; this.directory = b; }
     }
     const corr = ['SECTION ' + (10 + Math.floor(rnd() * 40)) + '-' + 'ABCD'[Math.floor(rnd() * 4)], 'DECK ' + (d.deck + 1), 'MAINTENANCE\nDUCT ' + (1 + Math.floor(rnd() * 9)), 'EMERGENCY\nBULKHEAD', 'TUBELIFT →', '← AUX CONTROL', 'DO NOT\nENTER', 'RADIATION\nHAZARD'];
-    for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) place(f, corr[Math.floor(rnd() * corr.length)], 2.55, 1.2);
+    for (const f of this.wallFaces) if (!f.room && rnd() < 0.045) { const t = corr[Math.floor(rnd() * corr.length)]; if (!this.darkRun(f.tx + f.dx, f.ty + f.dy)) place(f, t, 2.55, 1.2); }   // no signs in the dark runs (same draws either way)
     // --- handrails and floor light strips along walls
     {
       const rails = [], strips = [];
