@@ -1,6 +1,6 @@
 // Load / run timing probe (headless Chromium, software GL: absolute numbers are slow, compare runs on one machine only).
 //   node tools/loadtime.mjs [--runs N] [--json out.json] [--no-play] [--boot-only] [--seed N] [--ship i]
-// Per run: page open -> title (boot) with the boot:* performance marks from js/main.js, Begin -> "Enter the ship" (boarding) with the run:* marks and the
+// Per run: page open -> title (boot) with the boot:* performance marks from js/main.js (boot:warm, the uniform prewarm, may land after the title), Begin -> "Enter the ship" (boarding) with the run:* marks and the
 // portrait stage totals (js/portraits.js stats), JS heap, requests / bytes, then a few seconds of play: rAF interval and the CPU time of frame() itself.
 // The game is opened WITHOUT ?test=1 (the real loading path: uniform prewarm, every crew portrait), with ?brief=0 so Enter goes straight to play.
 import { createServer } from 'node:http'; import { readFile, writeFile } from 'node:fs/promises'; import { createRequire } from 'node:module'; import { join, extname, dirname } from 'node:path'; import { fileURLToPath } from 'node:url';
@@ -33,7 +33,7 @@ for (let run = 0; run < RUNS; run++) {
   const boardWall = (Date.now() - t1) / 1000;
   const board = await page.evaluate(() => { const m = {}; const ms = performance.getEntriesByType('mark'), s = ms.find(e => e.name === 'run:start')?.startTime ?? 0; let prev = s;
     for (const e of ms.filter(e => e.name.startsWith('run:'))) { m[e.name] = +((e.startTime - prev) / 1000).toFixed(2); prev = e.startTime; }
-    const st = __game.G.portraits?.stats || {}; return { phases: m, portraits: { n: st.rendered, totalS: +(st.ms / 1000).toFixed(2), makeS: +(st.make / 1000).toFixed(2), drawS: +(st.draw / 1000).toFixed(2), readS: +(st.read / 1000).toFixed(2), encS: +(st.enc / 1000).toFixed(2) }, heapMB: +(performance.memory?.usedJSHeapSize / 1048576).toFixed(0), programs: __game.renderer.info.programs?.length, ship: __game.G.ship?.name, crew: __game.G.roster?.people.length }; });
+    const st = __game.G.portraits?.stats || {}; return { phases: m, portraits: { n: st.rendered, totalS: +(st.ms / 1000).toFixed(2), makeS: +(st.make / 1000).toFixed(2), drawS: +(st.draw / 1000).toFixed(2), readS: +(st.read / 1000).toFixed(2), firstReadS: +((st.read1 || 0) / 1000).toFixed(2), encS: +(st.enc / 1000).toFixed(2) }, heapMB: +(performance.memory?.usedJSHeapSize / 1048576).toFixed(0), programs: __game.renderer.info.programs?.length, ship: __game.G.ship?.name, crew: __game.G.roster?.people.length }; });
   let play = null;
   if (PLAY) {
     await page.click('#boot-go');
@@ -47,7 +47,7 @@ for (let run = 0; run < RUNS; run++) {
       await new Promise(res => { const tick = () => { const n = performance.now(); iv.push(n - last); last = n; if (n < end) raf(tick); else res(); }; raf(tick); });
       window.requestAnimationFrame = raf;
       const med = (a) => { const b = [...a].sort((x, y) => x - y); return +(b[Math.floor(b.length / 2)] || 0).toFixed(1); }, p95 = (a) => { const b = [...a].sort((x, y) => x - y); return +(b[Math.floor(b.length * 0.95)] || 0).toFixed(1); };
-      return { phase: G.phase, frames: iv.length, frameMedMs: med(iv), frameP95Ms: p95(iv), cpuMedMs: med(cpu), cpuP95Ms: p95(cpu), quality: g.CFG.quality, calls: R.info.render.calls, tris: R.info.render.triangles, heapMB: +(performance.memory?.usedJSHeapSize / 1048576).toFixed(0) };
+      return { phase: G.phase, frames: iv.length, frameMedMs: med(iv), frameP95Ms: p95(iv), cpuMedMs: med(cpu), cpuP95Ms: p95(cpu), quality: g.CFG.quality, calls: R.info.render.calls, tris: R.info.render.triangles, programs: R.info.programs?.length,   /* programs after ~8.5 s of play: more than at boarding = compiled mid-play */ heapMB: +(performance.memory?.usedJSHeapSize / 1048576).toFixed(0) };
     });
   }
   const r = { run, bootWallS: bootWall, boot, bootReq, boardWallS: boardWall, board, play };

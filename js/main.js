@@ -888,7 +888,7 @@ function switchPlayer(p) {
   const at = G.sim.where(p), old = G.player; old.isPlayer = false; p.isPlayer = true; G.player = p; G.sim.setPlayer(p); G.comms?.sim.setPlayer(p);
   const nd = new Duty({ player: p, roster: G.roster, clock: G.comms.clock, sim: G.sim, duties: DUTIES, shipState: G.shipState, say: G.duty.say, seed: G.runSeed, mission: G.mission, pace: G.pace }).inherit(G.duty); if (G.repair) { G.repair.duty = nd; G.repair.player = p; }
   G.duty = nd; G.phases.duty = nd; G.hud2.attach(nd); G.hp = G.maxHp; G.stamina = 100; G.hud2.hideEnd(); hideScreens(); fade(0);
-  loadDeck(Math.min(G.ship.decks, Math.max(1, at?.deckNo ?? 1))); G.phase = 'play'; requestLock(); G.say(`You are now ${p.full || p.short}, ${p.title}.`, 'good');
+  loadDeck(Math.min(G.ship.decks, Math.max(1, at?.deckNo ?? 1))); deckPrograms(); G.phase = 'play'; requestLock(); G.say(`You are now ${p.full || p.short}, ${p.title}.`, 'good');
 }
 
 
@@ -995,6 +995,17 @@ function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 
   if (opts.hold) { G.phase = 'loading'; return enter; }
   enter();
 }
+// Compile the deck's shader programs for the target the world is really drawn into. On High that is the post chain's linear HalfFloat buffer, not the canvas, and
+// three.js keys programs on the output colour space and tone mapping, so compiling against the canvas (as this used to) built a second, never-used set of ~30
+// programs while the real ones were still compiled on the first frame, and anything off screen then compiled mid-play when it first came into view.
+function prewarmPrograms() {
+  const prev = renderer.getRenderTarget(), tgt = CFG.quality === 'high' && post?.composer ? post.composer.readBuffer : null;
+  renderer.setRenderTarget(tgt);
+  try { renderer.compile(scene, camera); renderer.compile(vmScene, vmCam); } finally { renderer.setRenderTarget(prev); }
+}
+// a deck changed mid-run (lift, ladder well, next deck): queue the new deck's programs in one go, so the driver compiles them together (in parallel where it has
+// KHR_parallel_shader_compile) instead of one stall per material as each first comes into view while walking the deck
+function deckPrograms() { if (!TEST_MODE) try { prewarmPrograms(); } catch (e) { console.warn('compile', e.message); } }
 // Begin / retry: loading screen -> build the run (ship, crew, systems, deck 1: the heavy synchronous part) -> compile shaders -> render every crew portrait (so the radio, duty board and
 // wheel never render heads mid-play) -> an "Enter the ship" button (a click, so pointer lock is allowed). Nothing plays until all of it is done.
 let runLoading = false; const PORTRAIT_BATCH_MS = 120;   // crew portraits rendered per paint during boarding: keeps the bar and the face card moving several times a second
@@ -1002,19 +1013,19 @@ async function startRun() {
   if (runLoading || G.phase === 'loading') return; runLoading = true;
   try {
     document.exitPointerLock?.(); Loading.show('Boarding', NOM() ? 'Generating the ship, its crew and their schedules' : 'Generating the ship'); Loading.set(0.03, 'Preparing…'); await paint();
+    if (warmed && !TEST_MODE) { Loading.set(0.05, 'Tailoring uniforms…'); await warmed; }   // Begin pressed before the title-screen prewarm finished (ready())
     Loading.set(0.08, 'Generating the ship, crew and first deck…'); await paint();
     mark('run:start'); const enter = newRun({ hold: true }); mark('run:newRun');   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
     Loading.set(0.5, 'Compiling shaders…'); await paint();
-    try { world && renderer.compile(scene, camera); } catch (e) { console.warn('compile', e.message); } mark('run:compile');
+    try { world && prewarmPrograms(); } catch (e) { console.warn('compile', e.message); } mark('run:compile');
     if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } } mark('run:talkWarm');   // depth-of-field pass for the conversation close-up
     if (NOM() && G.menus && !TEST_MODE) {
       const list = G.menus.portraitOrder(), n = list.length;
       // in time-boxed batches, one paint per batch: a paint per face waits for a whole display frame each (91 faces >= 1.5 s at 60 Hz) while a face itself is a few ms
-      // once the first world frame is done. The last face of each batch fades in over the previous one.
+      // once the first world frame is done. Each batch is one atlas and one GPU readback (Portraits.renderMany). The last face of each batch fades in over the previous one.
       for (let i = 0; i < n;) {
-        const t0 = performance.now(); let shown = null;
-        do { const p = list[i++], url = G.portraits.renderNow(p); if (url) shown = [url, p]; } while (i < n && performance.now() - t0 < PORTRAIT_BATCH_MS);
-        Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i} / ${n}`); if (shown) Loading.crew(shown[0], shown[1].short || shown[1].full, shown[1].title); await paint();
+        const done = G.portraits.renderMany(list.slice(i), PORTRAIT_BATCH_MS); i += Math.max(1, done.length); const shown = done.filter(d => d.url).pop();
+        Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${Math.min(i, n)} / ${n}`); if (shown) Loading.crew(shown.url, shown.p.short || shown.p.full, shown.p.title); await paint();
       }
     }
     mark('run:portraits'); Loading.set(0.99, 'Almost ready…'); await paint();
@@ -1066,7 +1077,7 @@ function choosePerk(id) {
   if (id === 'hypo') { G.maxHp += 25; G.hp = Math.min(G.maxHp, G.hp + 25); }
   if (id === 'cell') { G.maxPhaser++; G.phaser++; }
   hideScreens(); fade(0, 600);
-  loadDeck(G.deck + 1); requestLock(); G.phase = 'play';
+  loadDeck(G.deck + 1); deckPrograms(); requestLock(); G.phase = 'play';
 }
 function fmtTime(s) { s |= 0; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
@@ -1217,7 +1228,7 @@ function climbWell(dir) {
   if (G.phase !== 'play' || !NOM() || !G.ship) return false; const D = G.ship.decks; let to = G.shipDeck + dir; if (to < 0 || to >= D) { to = G.shipDeck - dir; if (to < 0 || to >= D) return false; }
   if (!G.shipDecks?.[to]?.data?.ladderWell) { G.say('The ladder ends at a sealed hatch.', 'warn'); sound.denied?.(); return true; }   // the far deck has no ladder well
   const down = to > G.shipDeck; G.phase = 'lift'; sound.clang(0.3); fade(1, 500);
-  later(() => { loadDeck(to + 1); const w = world.d.ladderWell; if (w) { const [wx, wy, dx, dy] = w, [cx, cz] = world.center(wx + dx, wy + dy); P.x = cx; P.z = cz; P.vx = P.vz = 0; P.yaw = Math.atan2(dx, dy); P.pitch = 0; }
+  later(() => { loadDeck(to + 1); deckPrograms(); const w = world.d.ladderWell; if (w) { const [wx, wy, dx, dy] = w, [cx, cz] = world.center(wx + dx, wy + dy); P.x = cx; P.z = cz; P.vx = P.vz = 0; P.yaw = Math.atan2(dx, dy); P.pitch = 0; }
     G.phase = 'play'; fade(0, 500); G.say(`You climb ${down ? 'down' : 'up'} the service ladder to Deck ${to + 1}.`, 'good'); }, 700);
   return true;
 }
@@ -1930,7 +1941,7 @@ function liftStep(dt, t) {
     riderStep(dt);
     L.hum -= dt; if (L.hum <= 0) { L.hum = 0.5; sound.tone(58 + 4 * Math.sin(L.t), 0.65, 'sine', 0.06); }
     sh = 0.006 + (k < 0.12 || k > 0.88 ? 0.008 : 0);
-    if (k >= 1) { if (L.rider) leaveRider(); $('liftui').className = ''; loadDeck(L.to + 1); G.phase = 'play'; sound.ding(); sound.thud(0.3); return; }
+    if (k >= 1) { if (L.rider) leaveRider(); $('liftui').className = ''; loadDeck(L.to + 1); deckPrograms(); G.phase = 'play'; sound.ding(); sound.thud(0.3); return; }
   }
   camera.position.set(P.x + (Math.random() - 0.5) * sh, P.y + P.eye + (Math.random() - 0.5) * sh * 1.5, P.z + (Math.random() - 0.5) * sh);
   camera.rotation.order = 'YXZ'; camera.rotation.set(P.pitch + (Math.random() - 0.5) * sh * 0.5, P.yaw + (Math.random() - 0.5) * sh * 0.5, (Math.random() - 0.5) * sh * 0.4);
@@ -2105,9 +2116,10 @@ const ready = (async () => {
   const tex = loadTextures(undefined, () => bump(1, 'Loading textures…')).then(() => mark('boot:tex'));
   const [, , env] = await Promise.all([small, models, envP, tex]); mark('boot:assets');
   if (env) scene.environment = env; buildViewmodel();
-  warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true, onStep: (i, n) => Loading.set((bootDone + BOOT_W.warm * i / n) / BOOT_TOTAL, `Tailoring uniforms ${i} / ${n}`) });
-  if (!TEST_MODE) await warmed;   // tests await __game.warmed themselves
-  mark('boot:warm'); bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
+  // the uniform prewarm (~0.4 s of CPU in small steps) runs behind the title screen instead of before it: the title is opaque and draws nothing, so the steps
+  // land while the player reads it, and Begin waits for whatever is left (startRun). Tests await __game.warmed themselves.
+  warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true }); warmed.then(() => mark('boot:warm'));
+  bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
   Loading.hide(TEST_MODE); mark('boot:title');
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';

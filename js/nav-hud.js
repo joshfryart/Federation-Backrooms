@@ -175,7 +175,10 @@ export class NavHUD {
       const cm = [{ x: car.tx + 0.5, y: car.ty + 0.5, icon: 'lift', color: '#cfe1f3' }, ...this.markers.filter(m => !m.dest && m.item?.due).map(m => ({ x: m.x, y: m.y, icon: m.icon, color: m.color, frac: m.frac }))];
       if (ld) cm.push({ x: ld.x, y: ld.y, icon: ld.icon, color: ROUTE, main: true, txt: Math.round(this.route ? this.route.len * this.TS : 0) + 'm' });
       this.compass.draw({ yaw: this.P.yaw, px: f.x, py: f.y, markers: cm });
-      this.legend.classList.toggle('on', (G.time || 0) < 150); if (this.legend.classList.contains('on')) { const r = this.card.getBoundingClientRect(); this.legend.style.top = (r.bottom + 4) + 'px'; }
+      // the legend sits under the route card: measuring the card forces a style + layout pass, so it is measured only when the card's text or the window changes
+      // (and once a second in case anything else moved it), not on every 30 Hz redraw
+      const legOn = (G.time || 0) < 150; if (legOn !== this._legOn) { this._legOn = legOn; this.legend.classList.toggle('on', legOn); this._legKey = null; }
+      if (legOn) { const k = `${this.cardHTML}|${innerWidth}x${innerHeight}|${Math.floor(this.t)}`; if (k !== this._legKey) { this._legKey = k; const r = this.card.getBoundingClientRect(); this.legend.style.top = (r.bottom + 4) + 'px'; } }
     }
     w.setGuide?.(this.route, this.t, ld ? { tx: ld.tx, ty: ld.ty, key: ld.icon, canvas: this.beacon(ld.icon) } : null);
   }
