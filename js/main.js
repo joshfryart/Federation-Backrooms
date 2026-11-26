@@ -8,7 +8,7 @@ import { tubeStep } from './tube.js';
 import { Sound } from './audio.js';
 import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance, MODEL_FILES, PBR_SETS } from './assets.js';
-import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, dressCrew, prewarmOutfits } from './actors.js';
+import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, dressCrew, prewarmOutfits, outfitStats } from './actors.js';
 import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
@@ -1003,16 +1003,16 @@ async function startRun() {
   try {
     document.exitPointerLock?.(); Loading.show('Boarding', NOM() ? 'Generating the ship, its crew and their schedules' : 'Generating the ship'); Loading.set(0.03, 'Preparing…'); await paint();
     Loading.set(0.08, 'Generating the ship, crew and first deck…'); await paint();
-    const enter = newRun({ hold: true });   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
+    mark('run:start'); const enter = newRun({ hold: true }); mark('run:newRun');   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
     Loading.set(0.5, 'Compiling shaders…'); await paint();
-    try { world && renderer.compile(scene, camera); } catch (e) { console.warn('compile', e.message); }
-    if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } }   // depth-of-field pass for the conversation close-up
+    try { world && renderer.compile(scene, camera); } catch (e) { console.warn('compile', e.message); } mark('run:compile');
+    if (!TEST_MODE) { try { G.talk?.warm?.(); } catch (e) { console.warn('talk warm', e.message); } } mark('run:talkWarm');   // depth-of-field pass for the conversation close-up
     if (NOM() && G.menus && !TEST_MODE) {
       const list = G.menus.portraitOrder(), n = list.length;
       for (let i = 0; i < n; i++) { Loading.set(0.58 + 0.4 * (i / n), `Crew portraits ${i + 1} / ${n}`); const p = list[i], url = G.portraits.renderNow(p); if (url) Loading.crew(url, p.short || p.full, p.title); await paint(); }   // the face being rendered right now fades in over the last one
     }
-    Loading.set(0.99, 'Almost ready…'); await paint();
-    Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);
+    mark('run:portraits'); Loading.set(0.99, 'Almost ready…'); await paint();
+    mark('run:ready'); Loading.ready(NOM() ? 'Enter the ship' : 'Begin shift', enter);
   } catch (e) { console.error('startRun failed', e); Loading.hide(true); G.phase = 'title'; showScreen('title'); }
   finally { runLoading = false; }
 }
@@ -2054,7 +2054,7 @@ function frame() {
   if (G.talk?.active && G.phase !== 'talk') G.talk.abort();   // death / lift / end of watch took over mid-conversation: restore camera + speaker at once
   // auto-downgrade if the machine struggles
   { const lv = gov.tick(raw, G.phase === 'play'); if (lv >= 0) { const L = LEVELS[lv]; if (L.quality !== CFG.quality) { setQuality(L.quality, true); if (L.quality === 'low') G.say('Performance mode enabled (change in pause menu)', 'comp'); } else applyPerf(); } }   // js/perfgov.js: steps down / recovers with hysteresis
-  if (G.phase !== 'loading') render(dt, elapsed);   // the loading overlay is opaque: do not spend the GPU drawing behind it
+  if (G.phase !== 'loading' && !Loading.visible && !titleUp()) render(dt, elapsed);   // the loading overlay (boot and boarding) is opaque: do not spend the GPU drawing behind it (at boot that drawing starved the asset decode and uniform prewarm: ~11 s of a 19 s headless boot)
 }
 function tickWorld(dt, t) {   // what one frame does to the world, by phase (frame() and the test clock's advance())
   if (G.phase === 'play' && world) step(dt, t);
@@ -2063,9 +2063,11 @@ function tickWorld(dt, t) {   // what one frame does to the world, by phase (fra
   else if (G.phase === 'talk' && world) G.talk.step(dt, t);   // conversation close-up: only the speaker, the camera and the talk UI run (js/talk.js)
   else if (world) { world.update(dt, t); dust.update(dt, P.x, P.z, camera, P.torch); }
 }
+let titleEl = null; const titleUp = () => (titleEl || (titleEl = $('title')))?.classList.contains('show');   // the title screen is opaque (#title background #04060b): no drawing behind it either
+const renderStats = { n: 0, ms: 0 };   // frames drawn and main-thread ms spent submitting them (tools/loadtime.mjs)
 function render(dt, t) {
   if (perfWorld !== world) applyPerf();
-  cullCrowd(ents, camera, P.x, P.z); try { render1(dt, t); } finally { uncullCrowd(); }
+  const t0 = performance.now(); cullCrowd(ents, camera, P.x, P.z); try { render1(dt, t); } finally { uncullCrowd(); renderStats.n++; renderStats.ms += performance.now() - t0; }
 }
 function render1(dt, t) {
   if (CFG.quality === 'high') {
@@ -2085,22 +2087,25 @@ function runTimers(dt) { manT += dt; for (let i = 0; i < timers.length; i++) if 
 let warmed = null;   // duty-clothes prewarm (js/actors.js prewarmOutfits): tests await __game.warmed so no idle job lands mid-section
 // Boot: models, textures, lighting, crew data and the uniform prewarm, with a real progress bar on the loading screen (js/loading.js); the title only appears once all of it is done.
 const BOOT_W = { models: MODEL_FILES.length, tex: PBR_SETS.length, env: 3, small: 4, warm: 4 }, BOOT_TOTAL = Object.values(BOOT_W).reduce((a, b) => a + b, 0); let bootDone = 0;
+// performance marks for tools/loadtime.mjs (boot / boarding phase breakdown); cheap, no-op where the User Timing API is missing
+function mark(name) { try { performance.mark(name); } catch { /* old browsers */ } }
 const bump = (n, label) => { bootDone += n; Loading.set(bootDone / BOOT_TOTAL, label); };
 const ready = (async () => {
   Loading.show('Powering up', "The ship's systems are coming online"); Loading.set(0.01, 'Starting…');
-  const small = Promise.all([loadPersonas(), loadItems(), loadCommsData(), loadDuties()]).then(() => bump(BOOT_W.small, 'Crew files read'));
-  const models = loadModels(undefined, () => bump(1, 'Loading models…'));
-  const envP = loadEnv(renderer, 'lobby').then((e) => { bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
-  const tex = loadTextures(undefined, () => bump(1, 'Loading textures…'));
-  const [, , env] = await Promise.all([small, models, envP, tex]);
+  mark('boot:start');
+  const small = Promise.all([loadPersonas(), loadItems(), loadCommsData(), loadDuties()]).then(() => { mark('boot:small'); bump(BOOT_W.small, 'Crew files read'); });
+  const models = loadModels(undefined, () => bump(1, 'Loading models…')).then(() => mark('boot:models'));
+  const envP = loadEnv(renderer, 'lobby').then((e) => { mark('boot:env'); bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
+  const tex = loadTextures(undefined, () => bump(1, 'Loading textures…')).then(() => mark('boot:tex'));
+  const [, , env] = await Promise.all([small, models, envP, tex]); mark('boot:assets');
   if (env) scene.environment = env; buildViewmodel();
   warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true, onStep: (i, n) => Loading.set((bootDone + BOOT_W.warm * i / n) / BOOT_TOTAL, `Tailoring uniforms ${i} / ${n}`) });
   if (!TEST_MODE) await warmed;   // tests await __game.warmed themselves
-  bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
-  Loading.hide(TEST_MODE);
+  mark('boot:warm'); bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
+  Loading.hide(TEST_MODE); mark('boot:title');
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
-window.__game = { ready, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), panelLights, updatePanelLights, get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game = { ready, outfitStats, renderStats, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), panelLights, updatePanelLights, get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'role', { get: () => G.role });   // { choice, billet, mission, miss } (js/role.js)

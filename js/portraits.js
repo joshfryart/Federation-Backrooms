@@ -21,7 +21,7 @@ export function silhouette(p) {
 
 export class Portraits {
   constructor({ renderer = null, size = 128 } = {}) {
-    this.renderer = renderer; this.size = size; this.cache = new Map(); this.queue = []; this.failed = new Set(); this.stats = { rendered: 0, ms: 0 };
+    this.renderer = renderer; this.size = size; this.cache = new Map(); this.queue = []; this.failed = new Set(); this.stats = { rendered: 0, ms: 0, make: 0, draw: 0, read: 0, enc: 0 };   // ms totals per stage (tools/loadtime.mjs)
   }
   key(p) { return p?.id ?? p?.short ?? null; }
   get(p) { const k = this.key(p); if (k == null) return null; const u = this.cache.get(k); if (u) return u; if (!this.failed.has(k) && !this.queue.includes(p)) this.queue.push(p); return null; }
@@ -49,6 +49,7 @@ export class Portraits {
     const t0 = performance.now(); this._setup(); let g = null;
     try {
       g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false }); if (!g) { this.failed.add(k); return null; }
+      const t1 = performance.now(); this.stats.make += t1 - t0;
       const H = g.userData.human; H.play('idle', { fade: 0 }); H.mixer.update(0.4); H.face?.({ LeftUpperLidOpen: 0.2, RightUpperLidOpen: 0.2 });
       this.scene.add(g); g.updateMatrixWorld(true);
       const head = H.bones.Head, hp = new THREE.Vector3(); if (head) head.getWorldPosition(hp); else hp.set(0, (H.height || 1.7) - 0.12, 0);
@@ -59,11 +60,19 @@ export class Portraits {
       // render into our own target, keeping the renderer's state intact
       const prevT = R.getRenderTarget(), prevC = new THREE.Color(), prevA = R.getClearAlpha(); R.getClearColor(prevC); const prevAuto = R.autoClear, prevShadow = R.shadowMap.autoUpdate;
       R.shadowMap.autoUpdate = false; R.setRenderTarget(this.rt); R.setClearColor(0x16202e, 1); R.autoClear = true; R.clear(); R.render(this.scene, this.cam);
-      R.readRenderTargetPixels(this.rt, 0, 0, this.size, this.size, this.px);
+      const t2 = performance.now(); this.stats.draw += t2 - t1;
+      R.readRenderTargetPixels(this.rt, 0, 0, this.size, this.size, this.px); const t3 = performance.now(); this.stats.read += t3 - t2;
       R.setRenderTarget(prevT); R.setClearColor(prevC, prevA); R.autoClear = prevAuto; R.shadowMap.autoUpdate = prevShadow;
-      const url = this._encode(); this.cache.set(k, url); this.stats.rendered++; this._patch(k, url); return url;
+      const url = this._encode(); this.stats.enc += performance.now() - t3; this.cache.set(k, url); this.stats.rendered++; this._patch(k, url); return url;
     } catch (e) { console.warn('portrait failed', e); this.failed.add(k); return null; }
-    finally { if (g) { this.scene.remove(g); releaseHuman(g); g.traverse(o => { if (o.isMesh && o.material?.dispose) o.material.dispose(); }); }   /* materials are per-human clones; geometry/textures stay shared with the cache */ this.stats.ms += performance.now() - t0; }
+    finally { if (g) { this.scene.remove(g); releaseHuman(g); g.traverse(o => { if (o.isMesh && o.material?.dispose && !o.material.userData?.shared && !this._keep(o.material)) o.material.dispose(); }); }   /* materials are per-human clones; geometry/textures stay shared with the cache */ this.stats.ms += performance.now() - t0; }
+  }
+  // Disposing the last material that uses a GL program deletes the program (three.js counts users), so every portrait used to compile and link its whole shader set
+  // again (the portrait scene's four lights make programs of its own that no world material keeps alive): ~1 s a face on SwiftShader. One material per program is kept
+  // (never disposed, a few dozen at most), which keeps that program cached for the next face.
+  _keep(m) {
+    const prog = this.renderer?.properties?.get(m)?.currentProgram; if (!prog) return false; const k = prog.cacheKey ?? prog.id;
+    this.kept = this.kept || new Map(); if (this.kept.has(k)) return false; this.kept.set(k, m); return true;
   }
   // flip Y, grey-world white balance (half strength, sampled on the centre where the face is), soft vignette, then a data URL
   _encode() {
