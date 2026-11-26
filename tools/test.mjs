@@ -53,9 +53,10 @@ import { padBrowser } from './test-gamepad.mjs';   // gamepad: mocked navigator.
 import { jobgameTests, jobgameBrowser, jobsiteBrowser, jobmoduleBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
 import { saveTests, saveBrowser } from './test-save.mjs';   // versioned save, boards, export/import/reset (tools/test-save.mjs)
 import { touchTests, touchBrowser } from './test-touch.mjs';   // touch / mobile controls: stick, look drag, buttons, mini-game + room job by touch (tools/test-touch.mjs)
+import { lodTests } from './test-lod.mjs';   // crowd LOD simplifier + distance hysteresis (js/meshlod.js, tools/test-lod.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
-  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests], ['crowd-lod', lodTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {
@@ -1084,6 +1085,8 @@ const smoke = (ship, seed) => async (page) => {
     let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
     out.bodies = g.ents.filter(e => e.simmed).length;
     const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
+    await g.lodsSettled(); { const gs = []; g.ents.forEach(e => e.mesh?.userData.human && e.mesh.traverse(o => { if (o.isMesh) gs.push([o, o.geometry]); })); g.lodCfg.force = 2; g.renderOnce(); g.lodCfg.force = null;   // crowd LODs (js/meshlod.js): built in the worker, drawn, and the full meshes back after the draw
+      out.lod = { done: g.lodStats.done, failed: g.lodStats.failed, drawn: g.cullStats.lod[2], restored: gs.every(([o, geo]) => o.geometry === geo && !geo.userData.lodOf), smaller: Object.values(g.lodStats.tris).every(t => t[2] < t[1] && t[1] <= t[0]) }; }
     g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1);   // one high-quality frame through the post chain
     { const lights = () => { let n = 0; g.scene.traverse(o => { if (o.isLight) n++; }); return n; }, gl = g.renderer.getContext(), cones = g.world.cones, l0 = lights(), dc0 = out.drawCalls;   // optional GTAO (js/fx.js): on, rung 0 only, no light added, glow kept out
       g.post.setAO(true); gl.getError(); g.renderOnce(); out.ao = { on: g.post.ao.enabled, err: gl.getError(), calls: g.renderer.info.render.calls, base: dc0, lights: lights() - l0, conesVis: cones ? cones.visible : null, noAO: !!cones?.userData.noAO || !cones, stuck: g.post.ao._visibilityCache.length };
@@ -1092,7 +1095,7 @@ const smoke = (ship, seed) => async (page) => {
     delete G.forceSeed; return out;
   }, { ship, seed });
   console.log('smoke:', JSON.stringify(r));
-  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+  if (!(r.lod.done >= 10 && r.lod.failed === 0 && r.lod.restored && r.lod.smaller && (r.lod.drawn > 0 || r.cull.shown === 0) && r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
 S('touch', 'touch', (p) => touchBrowser(p, fail));   // js/touch.js on a phone profile (tools/test-touch.mjs)
 S('smoke', 'smoke', smoke(SHIP, null));
