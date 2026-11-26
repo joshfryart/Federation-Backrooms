@@ -122,9 +122,9 @@ function updatePanelLights(dt) {
     const pi = e ? 7.5 * pa * (e[1].flick ? world.flickerF : 1) * (1 - al * 0.3) : 0, ei = m ? EMERG_I * off : 0;
     if (ei > pi) { l.position.set(m[1].x, m[1].y, m[1].z); l.color.copy(EMERG_COL); l.intensity = ei; l.distance = EMERG_R; return; }
     if (!e) { l.intensity = 0; return; }
-    l.position.set(e[1].x, e[1].y, e[1].z); l.distance = 10;
+    l.position.set(e[1].x, e[1].y, e[1].z); l.distance = e[1].dist || 10;   // tall-room panels carry their own range and intensity factor (js/rooms/_tall.js TALL_LIGHT)
     l.color.set(ship.light); if (e[1].col) l.color.multiply(e[1].col); l.color.lerp(ALERT_RED, al * 0.7);
-    l.intensity = pi;
+    l.intensity = pi * (e[1].mul || 1);
   });
   // fluorescent buzz, loudest right under a working panel
   if (panelSel[0]) { const d = Math.sqrt(panelSel[0][0]); sound.setBuzz(Math.max(0, 1 - d / 7) * pa * (panelSel[0][1].flick ? world.flickerF : 1)); }
@@ -1216,10 +1216,21 @@ function climbWell(dir) {
   return true;
 }
 G.climbWell = climbWell;
+// a ship ladder up to a catwalk deck (tall rooms, js/rooms/_tall.js: lp.cw = the module's tile): a scripted 2.2 s mantle from the ladder to the deck's end
+// nearest it (the same script as E at the module itself). Coming down: walk off the deck edge.
+function climbCatwalkLadder(lp) {
+  const [cx, cz] = world.center(lp.tx, lp.ty), [mx, mz] = world.center(lp.cw[0], lp.cw[1]), top = world.topAt(lp.cw[0], lp.cw[1]);
+  if (!(top > 1) || Math.hypot(cx - P.x, cz - P.z) > 3.4) return false;
+  const ux = Math.sign(cx - mx), uz = Math.sign(cz - mz);   // from the module toward the ladder
+  P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: mx + ux * 0.8, z: mz + uz * 0.8, top, dx: 0, dz: 0, t: 0, dur: 2.2, exit: 0, fast: false };
+  G.say('You climb the ladder onto the catwalk.', 'good'); return true;
+}
+G.climbCatwalkLadder = climbCatwalkLadder;
 function interact() {
   if (P.hidden) { exitHide(); return; }
   if (NOM() && G.sites?.press()) return;   // E at a work site wins (js/worksite-ui.js); holding E there does the work
-  if (NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 4.2 && climbWell(keys.ShiftLeft || keys.ShiftRight ? -1 : 1)) return; }
+  if (NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && !lp.cw && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 4.2 && climbWell(keys.ShiftLeft || keys.ShiftRight ? -1 : 1)) return; }
+  if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(); if (lp && lp.kind === 'ship_ladder' && lp.cw && climbCatwalkLadder(lp)) return; }   // E at a catwalk's ship ladder (tall rooms): up its rungs to the deck's end
   if (G.phase === 'play' && P.y < 0.5 && !P.mant && P.mode !== 'mantle') { const lp = lookedPropObj(), top = lp && lp.kind === 'catwalk' ? world.topAt(lp.tx, lp.ty) : 0;   // E at a catwalk module: climb the ladder rungs up onto its deck (a scripted 1.8 s mantle; step off an edge to come down)
     if (top > 1 && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.4) { P.mode = 'mantle'; P.grap = null; P.mant = { x0: P.x, z0: P.z, y0: P.y, x: (lp.tx + 0.5) * 2.5, z: (lp.ty + 0.5) * 2.5, top, dx: 0, dz: 0, t: 0, dur: 1.8, exit: 0, fast: false }; G.say('You climb onto the catwalk.', 'good'); return; } }
   if (!NOM() && G.phase === 'play') { const lp = lookedPropObj(); if (lp && HIDE_KINDS.has(lp.kind) && Math.hypot((lp.tx + 0.5) * 2.5 - P.x, (lp.ty + 0.5) * 2.5 - P.z) < 3.2 && (P.crouch || P.mode === 'slide' || keys.KeyC || keys.ControlLeft)) { enterHide(lp); return; } }
@@ -1513,7 +1524,7 @@ function step(dt, t) {
   if (NOM() && G.sites?.wants()) prompt = G.sites.hint();   // at a work site: E works the site (js/worksite-ui.js), not the clutter beside it
   if (!prompt && NOM() && G.haul) prompt = G.haul.prompt();
   if (!prompt && NOM() && G.combat) prompt = G.combat.prompt();
-  if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (lp && lp.kind === 'ship_ladder') prompt = `[E] Climb down to Deck ${G.shipDeck + 2 <= G.ship.decks ? G.shipDeck + 2 : G.shipDeck} · [Shift+E] up`; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
+  if (!prompt && NOM() && G.hud2) { const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) prompt = '[E] Use terminal'; else if (lp && lp.kind === 'ship_ladder' && lp.cw) prompt = P.y < 0.5 ? '[E] Climb the ladder to the catwalk' : ''; else if (lp && lp.kind === 'ship_ladder') prompt = `[E] Climb down to Deck ${G.shipDeck + 2 <= G.ship.decks ? G.shipDeck + 2 : G.shipDeck} · [Shift+E] up`; else if (G.carry) prompt = `Carrying: ${G.carry.name} — [G] put it down`; }
   if (!prompt) { const c = nearestClutter(); if (c) prompt = (NOM() && G.hud2 && !G.carry ? '[E] Take ' : '') + (same(c.name, c.real) ? c.name : `${c.name} (${c.real})`); else { const lp = lookedProp(); if (lp) prompt = same(lp.name, lp.real) ? lp.name : `${lp.name} — ${lp.real}`; } }
   if (!prompt && rp) prompt = `${SYS[rp.sys].name} — nominal`;   // status label last: a junction beside a fixture, clutter or terminal must not hide what [E] does there
   $('prompt').textContent = prompt;

@@ -4,6 +4,8 @@ import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
 import { inRun, shiftedSign } from './liminal.js';   // madness liminal dressing: unlit runs, signs that change when the corridor loops
 import { tubeStep, tubeBoxes } from './tube.js';
+import { TALL_LIGHT, tallLightMul } from './rooms/_tall.js';   // tall-room panel light: hang height, range, intensity match (updatePanelLights in main.js)
+const TALL_MUL = tallLightMul();
 import { dressTable } from './rooms/index.js';   // per-room dressing hook: a room module's optional `dress` export overrides its row in the tables below (docs/rooms/README.md)
 import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -937,7 +939,8 @@ export class World {
           const ch = this.ceilAt(x, y); dummy.position.set((x + 0.5) * TS, ch - 0.02, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
           // room-specific light colour; corridor tubes vary a little in age (some yellowed, some dim)
           const r = d.room[y][x], col = new THREE.Color(ROOM_LIGHT[r] || 0xffffff); if (!r) col.lerp(new THREE.Color(0xffdfae), rndv() * 0.55).multiplyScalar(0.78 + rndv() * 0.22);
-          im.setColorAt(i, col); this.panels.push({ x: (x + 0.5) * TS, y: ch - 0.3, z: (y + 0.5) * TS, flick: name === 'flick', col, room: r });
+          const tall = this.isTall(x, y);   // high-bay panel: the pooled light hangs lower with a longer range and more intensity, so the floor 5.6 m down is lit like a normal room's (js/rooms/_tall.js TALL_LIGHT)
+          im.setColorAt(i, col); this.panels.push({ x: (x + 0.5) * TS, y: tall ? TALL_LIGHT.y : ch - 0.3, z: (y + 0.5) * TS, flick: name === 'flick', col, room: r, ...(tall ? { dist: TALL_LIGHT.dist, mul: TALL_MUL } : {}) });
         });
         g.add(im); return mat;
       };
@@ -971,7 +974,7 @@ export class World {
         if (ext.length) {
           const eg = new THREE.BoxGeometry(TS, TALL_H - WH, TS), ei = new THREE.InstancedMesh(eg, mat, ext.length);
           ext.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, (WH + TALL_H) / 2, (y + 0.5) * TS); dummy.updateMatrix(); ei.setMatrixAt(i, dummy.matrix); ei.setColorAt(i, base.clone().multiplyScalar(0.75)); });
-          ei.castShadow = true; ei.receiveShadow = true; g.add(ei);
+          ei.castShadow = false; ei.receiveShadow = true; g.add(ei);   // above 3.2 m: no shadow caster (the torch sits at eye height, so their shadow only ever falls on the ceiling); saves a full-perimeter draw in the shadow pass
         }
       }
       // headers: where a tall room opens onto a lower tile, close the gap above the lower ceiling
@@ -985,7 +988,7 @@ export class World {
           const hm = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.7) });
           const im_set = (m, i, d) => m.setMatrixAt(i, d.matrix); const hg = new THREE.BoxGeometry(1, 1, 1), hi = new THREE.InstancedMesh(hg, hm, hd.length);
           hd.forEach(([cx, cz, alongZ, lo], i) => { const h = TALL_H - lo; dummy.position.set(cx * TS, lo + h / 2, cz * TS); dummy.scale.set(alongZ ? 0.3 : TS, h, alongZ ? TS : 0.3); dummy.updateMatrix(); im_set(hi, i, dummy); });
-          dummy.scale.set(1, 1, 1); hi.castShadow = true; hi.receiveShadow = true; g.add(hi);
+          dummy.scale.set(1, 1, 1); hi.castShadow = false; hi.receiveShadow = true; g.add(hi);   // headers start at the lower ceiling: no shadow caster (as the wall extensions above)
         }
       }
     }
@@ -1046,6 +1049,7 @@ export class World {
       const [cx, cz] = this.center(p.tx, p.ty);
       m.position.set(cx, 0, cz); m.rotation.y = p.kind === 'viewscreen' ? 0 : p.rot;
       if (p.kind === 'viewscreen') { m.position.z -= TS * 0.35; }
+      if (p.off) { m.position.x += p.off[0]; m.position.z += p.off[1]; }   // shifted inside its tile (a catwalk ladder pulled to the deck's end, js/rooms/_tall.js)
       if (p.kind === 'bar' && p.wall) { const b = buildProp('barback'); b.position.z = -0.98; m.add(b); m.userData.box = [-1.12, 1.12, -1.25, 0.77]; }   // bar against a wall: the back bar between it and the wall
       if (p.kind === 'shuttle') {   // FLT-3: the shuttle sits on its cradle (raised by the pads' height) on a painted 4 m pad marking; collision covers the cradle's length
         const cr = buildPropArt('shuttle_cradle'), lift = cr.userData.use?.craftLift?.y ?? 0.25; for (const c of m.children) c.position.y += lift; m.userData.top += lift;
@@ -1059,6 +1063,7 @@ export class World {
       if (m.userData.box) {   // footprint wider than the default collision square: grow it (never shrink), rotated with the prop, kept inside the tile
         const [x0, x1, z0, z1] = m.userData.box, r = m.rotation.y, c = Math.cos(r), sn = Math.sin(r), H = this.propHalf, L = 1.15;
         const pts = [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].map(([lx, lz]) => [lx * c + lz * sn, -lx * sn + lz * c]);   // three.js rotation.y
+        const [fx, fz] = p.off || [0, 0]; for (const q of pts) { q[0] += fx; q[1] += fz; }
         const b = [Math.max(-L, Math.min(-H, ...pts.map(q => q[0]))), Math.min(L, Math.max(H, ...pts.map(q => q[0]))), Math.max(-L, Math.min(-H, ...pts.map(q => q[1]))), Math.min(L, Math.max(H, ...pts.map(q => q[1])))];
         if (b[0] < -H - 0.01 || b[1] > H + 0.01 || b[2] < -H - 0.01 || b[3] > H + 0.01) this.propExt[p.tx + p.ty * this.W] = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[1] - b[0]) / 2, (b[3] - b[2]) / 2];   // [offset x, offset z, half x, half z]
       }

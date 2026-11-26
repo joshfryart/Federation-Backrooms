@@ -130,6 +130,24 @@ console.log(`generator: ${gen.n} levels, ${gen.bad.length} unreachable, ${gen.tu
     if (g.chips.some(c => !(g.dist[(c.x ?? c[0]) + (c.y ?? c[1]) * g.W] >= 0))) bad++; }
   console.log(`liminal: ${n} decks, ${twins} with twin rooms, ${catwalks} catwalks, ${atria} atria, ${bad} with unreachable chips`); if (bad || !twins || !catwalks || !atria) fail('liminal / tall rooms');
 }
+{ // catwalk ship ladders (js/rooms/_tall.js): beside their module on the same wall, pulled to the deck's end, foot pointing away, room still walkable
+  const { generate: gen3 } = await import('../js/gen.js'); const { isTall, LADDER_PULL } = await import('../js/rooms/_tall.js'); let n = 0, rooms = 0, lads = 0, bad = [];
+  for (let d = 1; d < 9; d++) for (let s = 1; s <= 30; s++) { const g = gen3(d, s * 37, { weights: { atrium: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }); n++;
+    rooms += g.rooms.filter(isTall).length;
+    for (const p of g.props.filter(q => q.kind === 'ship_ladder' && q.cw)) { lads++;
+      const c = g.props.find(q => q.kind === 'catwalk' && q.tx === p.cw[0] && q.ty === p.cw[1]), ax = p.tx - p.cw[0], ay = p.ty - p.cw[1], room = g.rooms.find(r => p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h);
+      if (!c || Math.abs(ax) + Math.abs(ay) !== 1) bad.push(`d${d} s${s}: ladder ${p.tx},${p.ty} not beside its catwalk`);
+      else if (Math.abs(Math.sin(p.rot) - ax) > 1e-6 || Math.abs(Math.cos(p.rot) - ay) > 1e-6) bad.push(`d${d} s${s}: ladder foot does not point away from the catwalk`);
+      else if (Math.abs(p.off[0] + ax * LADDER_PULL) > 1e-9 || Math.abs(p.off[1] + ay * LADDER_PULL) > 1e-9) bad.push(`d${d} s${s}: ladder offset ${p.off}`);
+      else if (Math.abs(Math.cos(c.rot) * ax - Math.sin(c.rot) * ay) < 0.99) bad.push(`d${d} s${s}: ladder at the catwalk's railed side, not its end`);   // catwalk +x (its long axis, open ends) = (cos rot, -sin rot) in (x, z)
+      else if (!room || !isTall(room)) bad.push(`d${d} s${s}: ladder outside a tall room`);
+      if (g.rooms.filter(r => isTall(r) && p.tx >= r.x && p.tx < r.x + r.w && p.ty >= r.y && p.ty < r.y + r.h).length !== 1) bad.push(`d${d} s${s}: ladder room`);
+    }
+    if (g.chips.some(c => !(g.dist[(c.x ?? c[0]) + (c.y ?? c[1]) * g.W] >= 0))) bad.push(`d${d} s${s}: unreachable chip`);
+    for (const r of g.rooms.filter(isTall)) if (g.props.filter(q => q.kind === 'ship_ladder' && q.cw && q.tx >= r.x && q.tx < r.x + r.w && q.ty >= r.y && q.ty < r.y + r.h).length > 1) bad.push(`d${d} s${s}: more than one catwalk ladder in a room`);
+  }
+  console.log(`catwalk ladders: ${lads} on ${n} decks (${rooms} tall rooms)`); if (!lads || bad.length) fail('catwalk ladders: ' + (bad.slice(0, 4).join('; ') || 'none placed'));
+}
 });
 S('ship-decks', null, async () => {   // every deck of every ship generates, ship-level rooms exist per shipPlan (js/gen.js in node)
 const shipTest = (() => {
@@ -403,7 +421,12 @@ const lim = await page.evaluate(async () => {
         if (spot) { P.x = spot[0]; P.z = spot[1]; P.y = 0; P.yaw = Math.atan2(-((cw.tx + 0.5) * 2.5 - P.x), -((cw.ty + 0.5) * 2.5 - P.z)); P.pitch = 0; g.G.phase = 'play'; g.step(0.05, 1);
           dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' })); dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' })); for (let i = 0; i < 60; i++) { g.G.phase = 'play'; g.step(0.05, 2 + i * 0.05); }
           const q = { x: (cw.tx + 0.5) * 2.5, z: (cw.ty + 0.5) * 2.5, y: 0 }, x0 = q.x, z0 = q.z; w.resolve(q, 0.3);
-          out.catwalk = { top, y: +P.y.toFixed(2), tall: w.isTall(cw.tx, cw.ty) || w.ceilAt(cw.tx, cw.ty) > 3.3, under: Math.hypot(q.x - x0, q.z - z0) < 0.01 }; } }
+          out.catwalk = { top, y: +P.y.toFixed(2), tall: w.isTall(cw.tx, cw.ty) || w.ceilAt(cw.tx, cw.ty) > 3.3, under: Math.hypot(q.x - x0, q.z - z0) < 0.01 };
+          // the ship-ladder climb (main.js climbCatwalkLadder) from the same floor spot: a ladder record on the tile past the module's end toward the spot
+          P.x = spot[0]; P.z = spot[1]; P.y = 0; P.mode = 'walk'; P.mant = null; g.G.phase = 'play'; g.step(0.05, 6);
+          const ux = Math.sign(Math.round(spot[0] / 2.5 - 0.5) - cw.tx), uz = Math.sign(Math.round(spot[1] / 2.5 - 0.5) - cw.ty), lad = { kind: 'ship_ladder', tx: cw.tx + ux, ty: cw.ty + uz, cw: [cw.tx, cw.ty] };
+          const started = g.G.climbCatwalkLadder(lad); for (let i = 0; i < 70; i++) { g.G.phase = 'play'; g.step(0.05, 7 + i * 0.05); }
+          const [ptx, pty] = w.tile(P.x, P.z); out.ladderClimb = { started, y: +P.y.toFixed(2), onDeck: ptx === cw.tx && pty === cw.ty, far: g.G.climbCatwalkLadder({ ...lad, tx: cw.tx + ux * 3, ty: cw.ty + uz * 3 }) }; } }
       if (w.d.emptyRuns?.length) { out.withEmpty++; if (!out.empty) { const c = w.d.emptyRuns.map(r => lit(w, r)); out.empty = { deck: n, runs: c.length, tiles: c.reduce((a, b) => a + b[1], 0), lit: c.reduce((a, b) => a + b[0], 0), panels: w.panels.length }; } }
       const L = g.G.liminal;
       if (L && !out.loop) { const [litN, litT] = lit(w, L.run), before = w.signs.map(s => s.shown), sameRun = { ...L.run }; const r = L.run, ctr = (u) => r.ax === 'x' ? w.center(u, r.fixed) : w.center(r.fixed, u), [x0, z0] = ctr(r.a + 1); P.x = x0; P.z = z0; P.y = 0; let loops = 0;
@@ -414,6 +437,24 @@ const lim = await page.evaluate(async () => {
 });
 console.log('liminal:', JSON.stringify(lim));
 if (!(lim.catwalk && lim.catwalk.y >= lim.catwalk.top - 0.05 && lim.catwalk.tall && lim.catwalk.under)) fail('liminal: catwalk climb / tall room / walk-under ' + JSON.stringify(lim.catwalk));
+if (!(lim.ladderClimb && lim.ladderClimb.started && lim.ladderClimb.y >= 2.55 && lim.ladderClimb.onDeck && lim.ladderClimb.far === false)) fail('liminal: catwalk ladder climb ' + JSON.stringify(lim.ladderClimb));
+{ // a built catwalk ladder (gen deck 1 seed 333 has one): mesh pulled to the deck end, collision box follows it, tall-room panel lights carry the high-bay range / gain,
+  // the thin rails cast no shadow, and the wall extensions / headers above 3.2 m are not shadow casters
+  const b = await page.evaluate(async () => {
+    const { generate } = await import('./js/gen.js'), { World } = await import('./js/world.js'), { TALL_LIGHT, tallLightMul } = await import('./js/rooms/_tall.js');
+    const d = generate(1, 333, { weights: { atrium: 3, cargo: 2, engineering: 2, shuttlebay: 2 } }), l = d.props.find(p => p.kind === 'ship_ladder' && p.cw); if (!l) return { none: true };
+    const w = new World(d, __game.G.ship), [cx, cz] = w.center(l.tx, l.ty); let mesh = null; w.group.traverse(o => { if (!mesh && o.name === 'ship_ladder' && o.parent?.name !== 'ship_ladder') mesh = o; });
+    const ext = w.propBox(l.tx, l.ty), ax = l.tx - l.cw[0], az = l.ty - l.cw[1], along = ax ? ext[0] : ext[1];
+    const tallP = w.panels.filter(p => w.isTall(Math.floor(p.x / 2.5), Math.floor(p.z / 2.5))), lowP = w.panels.filter(p => !w.isTall(Math.floor(p.x / 2.5), Math.floor(p.z / 2.5)));
+    let railShadow = 0, deckShadow = 0; w.group.traverse(o => { if (o.isMesh && o.parent?.parent?.name === 'catwalk') { if (o.castShadow) deckShadow++; else railShadow++; } });
+    let tallWallsCast = 0; w.group.traverse(o => { if (o.isInstancedMesh && o.geometry?.parameters?.height && Math.abs(o.geometry.parameters.height - (5.6 - 3.2)) < 1e-3 && o.castShadow) tallWallsCast++; });
+    const r = { mesh: !!mesh, dx: mesh ? +(mesh.position.x - cx).toFixed(3) : null, dz: mesh ? +(mesh.position.z - cz).toFixed(3) : null, off: l.off, along: +along.toFixed(3), ax, az,
+      tallPanels: tallP.length, tallOk: tallP.every(p => p.dist === TALL_LIGHT.dist && Math.abs(p.mul - tallLightMul()) < 1e-9 && p.y === TALL_LIGHT.y), lowOk: lowP.every(p => !p.dist && !p.mul), railShadow, deckShadow, tallWallsCast };
+    w.dispose?.(); return r;
+  });
+  console.log('catwalk ladder build:', JSON.stringify(b));
+  if (!(b.mesh && Math.abs(b.dx - b.off[0]) < 1e-6 && Math.abs(b.dz - b.off[1]) < 1e-6 && Math.sign(b.along) === -Math.sign(b.ax || b.az) && b.tallPanels > 0 && b.tallOk && b.lowOk && b.railShadow > 0 && b.deckShadow > 0 && b.tallWallsCast === 0)) fail('catwalk ladder build ' + JSON.stringify(b));
+}
 if (!(lim.loop && lim.loop.loops === 2 && lim.loop.count === 2)) fail('liminal: corridor loop ' + JSON.stringify(lim.loop));
 if (!(lim.loop && lim.loop.lit === 0 && lim.loop.shifts === 2 && lim.loop.signs > 0 && lim.loop.changed > 0 && lim.loop.mapsOk && lim.loop.runKept)) fail('liminal: loop corridor unlit / signs change when it loops ' + JSON.stringify(lim.loop));
 if (!(lim.empty && lim.empty.runs > 0 && lim.empty.tiles >= 4 && lim.empty.lit === 0 && lim.empty.panels > 0)) fail('liminal: empty unlit stretches ' + JSON.stringify(lim.empty));
