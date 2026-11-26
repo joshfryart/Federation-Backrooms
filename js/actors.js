@@ -596,14 +596,15 @@ export function dressCrew(mesh, person) {
 // spawned mid-shift does not pay the 20-55 ms build (js/wearart.js caches per body kind and outfit). One combination per idle callback.
 // Each job runs on its own random stream (three's generateUUID draws Math.random for every clip / geometry it builds): a job that lands between
 // two awaits of a test (tools/test.mjs seeds Math.random) must not shift the game's stream. Returns a promise that resolves when all are built.
+export const outfitStats = { jobs: 0, ms: 0 };   // CPU time spent in the prewarm jobs themselves (tools/loadtime.mjs)
 export function prewarmOutfits(kinds = ['crew_m', 'crew_f', 'crew_f2', 'crew_heavy'], { eager = false, onStep = null } = {}) {   // eager: the loading screen is up, do not wait for idle time; onStep(done, total)
   const jobs = []; for (const k of kinds) { for (const o of ['coverall', 'scrubs', 'whites']) jobs.push([k, o, 0]); for (const hg of ['headset', 'mask']) jobs.push([k, hg, 1]); }
   const total = jobs.length;
   const idle = eager ? (f) => setTimeout(f, 0) : (f) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(f, { timeout: 300 }) : setTimeout(f, 30));
   let s = 0x2f6b1d; const own = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   return new Promise((done) => {
-    const next = () => { const j = jobs.shift(); onStep?.(total - jobs.length - (j ? 1 : 0), total); if (!j) return done(); const R = Math.random; Math.random = own;
-      try { const h = makeHuman({ kind: j[0], seed: 1, kit: false, shadow: false }); if (h) j[2] ? wearHeadgear(h, j[1]) : wearOutfit(h, j[1]); } catch (e) { console.warn('prewarmOutfits', j, e.message); } finally { Math.random = R; }
+    const next = () => { const j = jobs.shift(); onStep?.(total - jobs.length - (j ? 1 : 0), total); if (!j) return done(); const R = Math.random; Math.random = own; const t0 = performance.now();
+      try { const h = makeHuman({ kind: j[0], seed: 1, kit: false, shadow: false }); if (h) j[2] ? wearHeadgear(h, j[1]) : wearOutfit(h, j[1]); } catch (e) { console.warn('prewarmOutfits', j, e.message); } finally { Math.random = R; outfitStats.jobs++; outfitStats.ms += performance.now() - t0; }
       idle(next); };
     idle(next);
   });

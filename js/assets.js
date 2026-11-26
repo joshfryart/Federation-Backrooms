@@ -69,8 +69,16 @@ export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil', 'wallp', 'wal
 // generated sets pack ambient occlusion / roughness / metalness into the R / G / B channels of <name>_r.webp
 export const ORM_SETS = new Set(['wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'ceilp', 'ceilc', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime']);
 export function loadTextures(names = PBR_SETS, onEach = null) {   // onEach(name): called as each set finishes
-  const tl = new THREE.TextureLoader();
-  const one = (url, srgb) => new Promise(res => tl.load(url, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, () => res(null)));
+  // Decoded off the main thread into ImageBitmaps where the browser can (same test as three's GLTFLoader): an <img> texture is decoded on the main thread at its
+  // first GPU upload, ~15 ms per 512-1024 px map, i.e. mid-boarding and again as each new deck's surfaces first draw. The bitmap is flipped and left
+  // unpremultiplied / unconverted at decode time, which is what three's upload flags (flipY, no premultiply, no colour-space conversion) do for an <img>.
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '', saf = /^((?!chrome|android).)*safari/i.test(ua) ? +(ua.match(/Version\/(\d+)/)?.[1] ?? -1) : null, ff = ua.includes('Firefox') ? +(ua.match(/Firefox\/(\d+)/)?.[1] ?? -1) : null;
+  const bitmaps = typeof createImageBitmap !== 'undefined' && !(saf != null && saf < 17) && !(ff != null && ff < 98);
+  const bl = bitmaps ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }) : null, tl = new THREE.TextureLoader();
+  const done = (t, srgb) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const one = (url, srgb) => new Promise(res => bl
+    ? bl.load(url, (bmp) => { const t = new THREE.Texture(bmp); t.flipY = false; t.needsUpdate = true; res(done(t, srgb)); }, undefined, () => res(null))   // flipY already applied to the bitmap
+    : tl.load(url, t => res(done(t, srgb)), undefined, () => res(null)));
   return Promise.all(names.map(async n => {
     const [c, nm, r] = await Promise.all([one(`./assets/textures/${n}_c.webp`, true), one(`./assets/textures/${n}_n.webp`), one(`./assets/textures/${n}_r.webp`)]);
     if (c && nm && r) pbrSets[n] = { c, n: nm, r, orm: ORM_SETS.has(n) };

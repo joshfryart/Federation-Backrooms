@@ -184,6 +184,7 @@ export async function jobgameTests(fail) {
   //      to a proper result through the in-room host (js/jobs/host.js: sites from props / floor, a fetch point when its item is missing)
   { const X = await imp('js/jobs/index.js'), H = await imp('js/jobs/host.js'); out.modules = X.MODULES.length;
     ck(X.MODULES.length >= 30 && new Set(X.MODULES.map(m => m.id)).size === X.MODULES.length, 'job modules registered: ' + X.MODULES.length);
+    { const L = await imp('tools/jobcheck-lib.mjs'); ck(readFileSync(join(ROOT, 'js/jobs/index.js'), 'utf8') === L.bundleSource(L.listJobFiles()), 'js/jobs/index.js bundle matches the job files (run node tools/merge-jobs.mjs)'); }
     for (const m of X.MODULES) { const j = W.jobFor({ billet: m.job.billet, jtype: m.job.type, label: m.job.label, room: 'bridge', spot: 'console' }); ck(j?.type === 'job' && j.mod === m, `${m.job.label}: jobFor picks its module`); }
     ck(W.jobFor({ billet: 'nobody', jtype: 'loop', label: 'Ward rounds', room: 'sickbay', spot: 'biobed' })?.type === 'sites', 'no module: the old mapping');
     for (const m of X.MODULES.filter(m => m.host === 'room')) for (const seed of [1, 2, 3]) {

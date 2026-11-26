@@ -90,6 +90,8 @@ export function pinToBone(inner, boneName, obj) {
 // ---- uniform kit: fleet emblem (a four-point compass star in a ring — right breast), name plate (left breast), department shoulder
 // boards and a utility belt with buckle, pouch and canister. Geometry is fitted once per body type, in that body's native units. ----
 const kitGeo = {}, kitMat = { board: {}, plate: {} };
+// kit / pip / name-plate materials are cached and used by every body that wears them: flagged so a caller that throws one body away (js/portraits.js) does not dispose them
+const shared = (m) => { m.userData.shared = true; return m; };
 const paint = (g, r, gg, b) => { const n = g.attributes.position.count, c = new Float32Array(n * 3); for (let i = 0; i < n; i++) { c[i * 3] = r; c[i * 3 + 1] = gg; c[i * 3 + 2] = b; } g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g; };
 const flat = (g) => { const o = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(o.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) o.deleteAttribute(k); return o; };
 function starShape(R = 0.0125, r = 0.0036, k = 0.6) {   // long north-south points, shorter east-west
@@ -145,12 +147,12 @@ function plateMat(name) {
   if (key) { g.fillStyle = '#17150f'; g.textAlign = 'center'; g.textBaseline = 'middle'; let px = 20; g.font = `bold ${px}px Arial`; while (g.measureText(key).width > 114 && px > 9) g.font = `bold ${--px}px Arial`; g.fillText(key, 64, 17); }
   else { g.fillStyle = '#17150f'; g.fillRect(14, 10, 100, 4); g.fillRect(14, 19, 64, 3); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  return kitMat.plate[key] = new THREE.MeshStandardMaterial({ map: t, roughness: 0.45, metalness: 0.3, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.12 });
+  return kitMat.plate[key] = shared(new THREE.MeshStandardMaterial({ map: t, roughness: 0.45, metalness: 0.3, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.12 }));
 }
 function addKit(kind, inner, height, uniform, name) {
   const geo = fitKit(kind, inner, height); if (!pipMats) pipSetup();
-  kitMat.belt = kitMat.belt || new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35, side: THREE.DoubleSide });
-  const ck = uniform.getHex(), board = kitMat.board[ck] || (kitMat.board[ck] = new THREE.MeshStandardMaterial({ vertexColors: true, color: uniform.clone().lerp(new THREE.Color(0x101014), 0.55), roughness: 0.7, metalness: 0.2 }));
+  kitMat.belt = kitMat.belt || shared(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35, side: THREE.DoubleSide }));
+  const ck = uniform.getHex(), board = kitMat.board[ck] || (kitMat.board[ck] = shared(new THREE.MeshStandardMaterial({ vertexColors: true, color: uniform.clone().lerp(new THREE.Color(0x101014), 0.55), roughness: 0.7, metalness: 0.2 })));
   const put = (g, mat, bone) => { if (!g) return; const m = new THREE.Mesh(g, mat); m.castShadow = false; m.frustumCulled = false; inner.add(m); inner.updateMatrixWorld(true); inner.getObjectByName(bone)?.attach(m); };
   put(geo.gold, pipMats.gold, 'spine_03'); put(geo.plate, plateMat(name), 'spine_03'); put(geo.boards, board, 'spine_03'); put(geo.belt, kitMat.belt, 'pelvis');
 }
@@ -159,7 +161,7 @@ function addKit(kind, inner, height, uniform, name) {
 let pipGeo = null, pipMats = null;
 function pipSetup() {
   pipGeo = { disc: new THREE.CylinderGeometry(0.0062, 0.0062, 0.003, 14), rim: new THREE.TorusGeometry(0.0062, 0.0017, 6, 16) };
-  pipMats = { gold: new THREE.MeshStandardMaterial({ color: 0xe2b23a, metalness: 1, roughness: 0.22, emissive: 0x8a6510, emissiveIntensity: 0.9 }), dark: new THREE.MeshStandardMaterial({ color: 0x15161a, metalness: 0.6, roughness: 0.4 }) };
+  pipMats = { gold: shared(new THREE.MeshStandardMaterial({ color: 0xe2b23a, metalness: 1, roughness: 0.22, emissive: 0x8a6510, emissiveIntensity: 0.9 })), dark: shared(new THREE.MeshStandardMaterial({ color: 0x15161a, metalness: 0.6, roughness: 0.4 })) };
 }
 function addPips(inner, rank) {
   const [, solid, hollow] = RANKS[rank] || RANKS[0]; const n = solid + hollow; if (!n) return;
