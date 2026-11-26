@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
 // ---------------------------------------------------------------
 // Post-processing: bloom + film grain + chromatic aberration + vignette
@@ -42,6 +43,31 @@ const CompressShader = {
     vec3 comp(vec3 x){ return mix(x, 1.6 + log2(max(x, vec3(1.6)) / 1.6) * 0.45, step(vec3(1.6), x)); }
     void main(){ vec4 c = texture2D(tDiffuse, vUv); c.rgb = clamp(c.rgb, 0.0, 1000.0); c.rgb = comp(c.rgb); gl_FragColor = c; }`,
 };
+// Optional ground-truth ambient occlusion (High quality only, opt-in in the pause menu, and only on rung 0 of the js/perfgov.js ladder).
+// The stock GTAOPass re-renders the scene with a MeshNormalMaterial override to get depth + normals; two changes for this game:
+//  * glow geometry must not occlude: additive light cones, the torch beam, decals, smoke / dust / sparks are all transparent with depthWrite off,
+//    so with the override material they would write depth and cast AO halos.  Those (and anything flagged userData.noAO) are hidden for that pass.
+//  * the shadow map was already drawn by the main RenderPass this frame, so the normal pass must not redraw it (autoUpdate off for that render).
+// No light is added or removed (a changed light count recompiles every shader); the pass runs at AO_RES of the post chain's resolution.
+export const AO_RES = 0.5;
+export function aoExcluded(o) {
+  if (o.userData?.noAO || o.isSprite || o.isPoints || o.isLine) return true;
+  const m = o.material; if (!m) return false;
+  for (const x of Array.isArray(m) ? m : [m]) if (x.blending === THREE.AdditiveBlending || (x.transparent && x.depthWrite === false)) return true;
+  return false;
+}
+class GameGTAOPass extends GTAOPass {
+  setSize(w, h) { super.setSize(Math.max(1, Math.round(w * AO_RES)), Math.max(1, Math.round(h * AO_RES))); }
+  _overrideVisibility() {
+    const cache = this._visibilityCache;
+    const walk = (o) => { if (!o.visible) return; if (aoExcluded(o)) { o.visible = false; cache.push(o); return; } const c = o.children; for (let i = 0; i < c.length; i++) walk(c[i]); };
+    walk(this.scene);
+  }
+  render(renderer, writeBuffer, readBuffer, dt, mask) {
+    const sm = renderer.shadowMap, au = sm.autoUpdate; sm.autoUpdate = false;
+    try { super.render(renderer, writeBuffer, readBuffer, dt, mask); } finally { sm.autoUpdate = au; }
+  }
+}
 export class Post {
   constructor(renderer, scene, camera, overlay = null) {
     this.renderer = renderer; this.enabled = true;
@@ -49,6 +75,10 @@ export class Post {
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.composer.addPass(new RenderPass(scene, camera));
+    // AO goes between the world and the viewmodel overlay: the held tool is neither darkened nor casts AO onto the world
+    this.ao = new GameGTAOPass(scene, camera, Math.max(1, size.x * AO_RES), Math.max(1, size.y * AO_RES), undefined, { radius: 0.45, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12, distanceFallOff: 1 }, { radius: 6, samples: 12 });
+    this.ao.blendIntensity = 0.85; this.ao.enabled = false; this.aoWanted = false; this.aoAllowed = true;
+    this.composer.addPass(this.ao);
     if (overlay) { const vp = new RenderPass(overlay.scene, overlay.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); }   // first-person viewmodel
     this.composer.addPass(new ShaderPass(CompressShader));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.3, 0.5, 1.9);
@@ -61,6 +91,9 @@ export class Post {
   }
   // dynamic resolution (js/perfgov.js): the post chain renders at baseRatio * k and the final pass upscales onto the canvas
   setScale(k) { if (Math.abs(k - this.scale) < 1e-3) return; this.scale = k; this.composer.setPixelRatio(this.baseRatio * k) }
+  // AO runs only when the player asked for it (pause menu, CFG.ao) AND the perf ladder allows it (js/perfgov.js applyLevel: rung 0 only)
+  setAO(wanted) { this.aoWanted = !!wanted; this.ao.enabled = this.aoWanted && this.aoAllowed; }
+  allowAO(ok) { this.aoAllowed = !!ok; this.ao.enabled = this.aoWanted && this.aoAllowed; }
   setCalm(v) { this.final.uniforms.calm.value = v ? 1 : 0; }   // accessibility: no grain / scanline / wobble, weaker aberration
   setSize(w, h) { this.composer.setSize(w, h); this.final.uniforms.res.value.set(w, h); }
   render(dt, t, danger, hurt) {

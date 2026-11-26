@@ -1281,7 +1281,7 @@ export class World {
         list.forEach((p, i) => { dummy.position.set(p.x, p.y + 0.3 - 1.1 + 0.2, p.z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, p.col); });
         im.frustumCulled = false; this.cones.add(im); return mat;
       };
-      this.cones = new THREE.Group(); g.add(this.cones);
+      this.cones = new THREE.Group(); this.cones.userData.noAO = true; g.add(this.cones);   // additive glow: kept out of the GTAO normal pass (js/fx.js)
       this.coneMat = mkCones(this.panels.filter(p => !p.flick)); this.coneFlickMat = mkCones(this.panels.filter(p => p.flick));
     }
     // --- a beacon at the end of the hall

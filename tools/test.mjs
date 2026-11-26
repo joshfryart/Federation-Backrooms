@@ -219,7 +219,7 @@ S('pace-presets', null, async () => {   // First watch / Crunch / Standard scale
 });
 
 S('perf-governor', null, async () => {   // auto-quality ladder (js/perfgov.js): steps down in order, recovers with hysteresis, ignores spikes, honours a manual choice
-  const { Governor, LEVELS } = await imp('js/perfgov.js'), run = (g, ms, secs) => { let ch = []; for (let i = 0; i < secs * 1000 / ms; i++) { const r = g.tick(ms); if (r >= 0) ch.push(r); } return ch; };
+  const { Governor, LEVELS, applyLevel } = await imp('js/perfgov.js'), run = (g, ms, secs) => { let ch = []; for (let i = 0; i < secs * 1000 / ms; i++) { const r = g.tick(ms); if (r >= 0) ch.push(r); } return ch; };
   const r = {}; let g = new Governor();
   r.smooth = run(g, 16.7, 60).length;                                  // a healthy 60 fps machine never moves
   g = new Governor(); r.slow = run(g, 40, 40); r.slowEnd = g.level;     // steady 25 fps: walks down rung by rung to 3 (high at 55 %) and stops: 40 ms is under the 45 ms Performance bar
@@ -229,8 +229,9 @@ S('perf-governor', null, async () => {   // auto-quality ladder (js/perfgov.js):
   g = new Governor(); r.paused = [...Array(2000)].map(() => g.tick(100, false)).filter(x => x >= 0).length;   // not judged outside the world
   g.setManual('low'); r.pinned = [...Array(3000)].map(() => g.tick(10)).filter(x => x >= 0).length + '/' + g.level; g.setManual('high'); r.manualHigh = g.level + '/' + g.auto;
   g = new Governor(); const seq = []; for (let k = 0; k < 6; k++) { seq.push(...run(g, 40, 14), ...run(g, 12, 40)); } r.flaps = g.changes.filter(c => c[0] === 'down').length; r.upMul = g.upMul;   // load oscillating around the thresholds: recoveries back off, so downs stay few
+  const aoSeen = LEVELS.map(L => { let a = null; applyLevel(L, { post: { setScale() {}, allowAO(v) { a = v; } } }); return a; }); r.ao = aoSeen.join();   // optional GTAO (js/fx.js) is allowed on rung 0 only
   console.log('perf governor:', JSON.stringify(r));
-  const ok = r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones;
+  const ok = r.ao === 'true,' + LEVELS.slice(1).map(() => 'false').join() && r.smooth === 0 && r.slow.join() === '1,2,3' && r.slowEnd === 3 && r.vslow.join() === String(LEVELS.length - 1) && r.lv > 0 && r.recovEnd === 0 && r.spike === 0 && r.paused === 0 && r.pinned === '0/' + (LEVELS.length - 1) && r.manualHigh === '0/true' && r.upMul > 1 && LEVELS[0].scale === 1 && LEVELS[0].shadow === 1024 && LEVELS[0].cones;
   if (!ok) fail('perf-governor ' + JSON.stringify(r));
 });
 // ---- browser ----
@@ -968,11 +969,15 @@ const smoke = (ship, seed) => async (page) => {
     let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
     out.bodies = g.ents.filter(e => e.simmed).length;
     const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
-    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1); g.setQuality('low');   // one high-quality frame through the post chain
+    g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1);   // one high-quality frame through the post chain
+    { const lights = () => { let n = 0; g.scene.traverse(o => { if (o.isLight) n++; }); return n; }, gl = g.renderer.getContext(), cones = g.world.cones, l0 = lights(), dc0 = out.drawCalls;   // optional GTAO (js/fx.js): on, rung 0 only, no light added, glow kept out
+      g.post.setAO(true); gl.getError(); g.renderOnce(); out.ao = { on: g.post.ao.enabled, err: gl.getError(), calls: g.renderer.info.render.calls, base: dc0, lights: lights() - l0, conesVis: cones ? cones.visible : null, noAO: !!cones?.userData.noAO || !cones, stuck: g.post.ao._visibilityCache.length };
+      g.post.setScale(0.85); g.post.allowAO(false); out.ao.rung1 = g.post.ao.enabled; g.post.allowAO(true); g.post.setScale(1); g.post.setAO(false); out.ao.off = g.post.ao.enabled; }
+    g.setQuality('low');
     delete G.forceSeed; return out;
   }, { ship, seed });
   console.log('smoke:', JSON.stringify(r));
-  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
 S('touch', 'touch', (p) => touchBrowser(p, fail));   // js/touch.js on a phone profile (tools/test-touch.mjs)
 S('smoke', 'smoke', smoke(SHIP, null));

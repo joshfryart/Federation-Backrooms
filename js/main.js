@@ -1157,8 +1157,9 @@ $('qsel').onchange = (e) => setQuality(e.target.value);
 { const cp = $('capson'), cb = $('cbmode'); document.body.classList.toggle('cb', !!CFG.cb); setMapPalette(!!CFG.cb);
   if (cp) { cp.checked = !!CFG.caps; cp.onchange = (e) => { CFG.caps = e.target.checked; saveCfg(); }; }
   if (cb) { cb.checked = !!CFG.cb; cb.onchange = (e) => { CFG.cb = e.target.checked; document.body.classList.toggle('cb', CFG.cb); setMapPalette(CFG.cb); saveCfg(); }; } }
-post.setCalm(CFG.calm);
+post.setCalm(CFG.calm); post.setAO(CFG.ao);
 { const jr = $('jgreset'); if (jr) jr.onclick = () => { G.jobgame?.store.reset(); jr.textContent = 'Tool instructions will show again'; }; }   // js/jobgame-ui.js: forget which tools were explained (CFG.learned)
+{ const ao = $('aoon'); if (ao) { ao.checked = !!CFG.ao; ao.onchange = (e) => { CFG.ao = e.target.checked; post.setAO(CFG.ao); saveCfg(); }; } }   // optional GTAO (High only, ladder rung 0: js/fx.js, js/perfgov.js)
 { const cl = $('calm'); if (cl) { cl.checked = !!CFG.calm; cl.onchange = (e) => { CFG.calm = e.target.checked; post.setCalm?.(CFG.calm); saveCfg(); }; } }
 $('vsel').onchange = (e) => { setVoiceMode(e.target.value); if (G.player) speak(G.player, 'Crew voice check.'); };
 $('vsel').value = voiceMode(); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality;
@@ -1345,7 +1346,7 @@ beamCone = (() => {
   const c = document.createElement('canvas'); c.width = 4; c.height = 64; const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, '#fff'); gr.addColorStop(1, '#000'); g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
   const geo = new THREE.ConeGeometry(7, 15, 24, 1, true); geo.translate(0, -7.5, 0); geo.rotateX(Math.PI / 2);
   const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xfff1d0, transparent: true, opacity: 0.02, alphaMap: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  m.position.set(0.12, -0.1, 0); m.frustumCulled = false; camera.add(m); return m;
+  m.position.set(0.12, -0.1, 0); m.frustumCulled = false; m.userData.noAO = true; camera.add(m); return m;
 })();
 // first-person zapper: procedural sidearm + hand (js/actors.js makeViewmodel)
 let gunVM = null, gunKick = 0, muzzle = null, vm = null, hands = null;
@@ -2101,5 +2102,5 @@ Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.
 Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
 Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact;   // conversation close-up (js/talk.js)
 titleBoard();
-mountSaveControls(document, SAVE, { onChange: () => { Object.assign(CFG, SAVE.cfg()); G.best = SAVE.best(); sound.vol = CFG.vol; sound.setVolume?.(CFG.vol); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality; $('calm').checked = !!CFG.calm; $('capson').checked = !!CFG.caps; $('cbmode').checked = !!CFG.cb; document.body.classList.toggle('cb', !!CFG.cb); document.body.classList.toggle('lc-calm', !!CFG.calm); post.setCalm?.(CFG.calm); titleBoard(); } });   // pause menu: export / import / reset save (js/save-ui.js)
+mountSaveControls(document, SAVE, { onChange: () => { Object.assign(CFG, SAVE.cfg()); G.best = SAVE.best(); sound.vol = CFG.vol; sound.setVolume?.(CFG.vol); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality; $('calm').checked = !!CFG.calm; if ($('aoon')) $('aoon').checked = !!CFG.ao; post.setAO?.(CFG.ao); $('capson').checked = !!CFG.caps; $('cbmode').checked = !!CFG.cb; document.body.classList.toggle('cb', !!CFG.cb); document.body.classList.toggle('lc-calm', !!CFG.calm); post.setCalm?.(CFG.calm); titleBoard(); } });   // pause menu: export / import / reset save (js/save-ui.js)
 frame();
