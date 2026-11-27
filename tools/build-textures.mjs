@@ -2,6 +2,8 @@
 //
 //   node tools/build-textures.mjs --procedural [outDir] [name…]   generate the project's own tileable PBR sets
 //   node tools/build-textures.mjs <ambientCG dir> <outDir>          convert ambientCG (CC0) 1K-JPG sets
+//   node tools/build-textures.mjs --procedural [outDir] detail wear  only the two shared surface maps (detail_m / wear_m)
+//   node tools/build-textures.mjs --check [dir]                     cross-set grade / seam report
 //
 // Procedural sets are original work (no third-party source). Each set is built from one height field:
 //   <name>_c.webp  albedo, neutral grey (the game tints per ship / per room), cavity AO baked in
@@ -390,9 +392,62 @@ const SETS = {
 
 };
 
+// ---------------------------------------------------------------------------------------------------------
+// SURFACE MAPS — single packed images shared by every world surface (js/world.js envSurface), sampled in WORLD
+// space (dominant-axis plane, metres), so they are independent of each set's UVs and break up tile repetition.
+//   detail_m.webp  512 px = 0.5 m: tangent-space micro normal (OpenGL, +Y up). Close-up detail
+//                  where the 1-2.5 m sets are magnified past their texel size (orange-peel paint, fine scratches, pitting).
+//   wear_m.webp    512 px = 3.2 m: R = dirt (soft blotches + streaks), G = smudge / roughness offset (0.5 = none),
+//                  B = chip mask for edge wear (curvature-driven in the shader, so only rounded edges ever show it).
+// ---------------------------------------------------------------------------------------------------------
+async function surfaceMaps(OUT, only = []) {
+  const N = 512, want = (n) => !only.length || only.includes(n);
+  if (want('detail')) {
+    const op = fbm(N, 48, 3, 201, 0.55), pit = vnoise(N, 160, 203), H = new Float32Array(N * N), R = rng(205);
+    for (let i = 0; i < N * N; i++) H[i] = 0.5 + (op[i] - 0.5) * 0.55 - sstep(0.86, 0.97, pit[i]) * 0.35;
+    for (let k = 0; k < 70; k++) {   // fine scratches: short straight strokes at random angles (wrapping), slightly deeper in the middle
+      const x0 = R() * N, y0 = R() * N, a = R() * Math.PI, len = 20 + R() * 120, dep = 0.08 + R() * 0.14, ca = Math.cos(a), sa = Math.sin(a);
+      for (let s = 0; s < len; s += 0.5) { const px = Math.floor(x0 + ca * s + N) % N, py = Math.floor(y0 + sa * s + N) % N, w = Math.sin(Math.PI * s / len); H[py * N + px] -= dep * w; }
+    }
+    const nm = normalMap(blur(H, N, 1), N, 2.2), out = Buffer.alloc(N * N * 3);
+    for (let i = 0; i < N * N * 3; i++) out[i] = nm[i];   // a plain tangent-space normal map: also usable as a material's uv normalMap
+    await sharp(out, { raw: { width: N, height: N, channels: 3 } }).webp({ quality: 84, smartSubsample: true }).toFile(`${OUT}/detail_m.webp`);
+    console.log('surface map detail_m', `${N}px`);
+  }
+  if (want('wear')) {
+    const n = fbm(N, 4, 6, 211, 0.55), st = vnoise(N, 48, 213, 4), sm = fbm(N, 20, 3, 215), ch = fbm(N, 28, 4, 217, 0.6), out = Buffer.alloc(N * N * 3);
+    for (let i = 0; i < N * N; i++) {
+      const dirt = clamp(sstep(0.42, 0.78, n[i]) * 0.85 + sstep(0.62, 0.9, st[i]) * (0.3 + n[i] * 0.5)), smudge = 0.5 + (sstep(0.5, 0.8, sm[i]) - sstep(0.2, 0.35, sm[i]) * 0.4) * 0.5;
+      out[i * 3] = Math.round(dirt * 255); out[i * 3 + 1] = Math.round(clamp(smudge) * 255); out[i * 3 + 2] = Math.round(clamp(ch[i] * 1.25 - 0.12) * 255);
+    }
+    await sharp(out, { raw: { width: N, height: N, channels: 3 } }).webp({ quality: 80 }).toFile(`${OUT}/wear_m.webp`);
+    console.log('surface map wear_m', `${N}px`);
+  }
+}
+
 async function procedural(OUT = 'assets/textures', only = []) {
   await mkdir(OUT, { recursive: true });
   for (const [name, set] of Object.entries(SETS)) if (!only.length || only.includes(name)) await emit(name, set, OUT);
+  await surfaceMaps(OUT, only);
+}
+
+// ---- cross-set grade / seam check: node tools/build-textures.mjs --check [dir] ----
+// Per set: albedo mean / contrast (std) against the shared grade target, and the seam step (mean |left - right| and |top - bottom| edge-pixel
+// difference over the mean neighbouring-column difference): ~1 = seamless, >> 1 = a visible seam when tiled. Walls (wrapY false) skip the y seam.
+async function check(DIR = 'assets/textures') {
+  const { readdir } = await import('node:fs/promises');
+  const names = [...new Set((await readdir(DIR)).filter(f => f.endsWith('_c.webp')).map(f => f.slice(0, -7)))].sort();
+  console.log('set       size  mean  std   seamX seamY  (target mean / contrast from SETS; seam ~1 = seamless)');
+  for (const n of names) {
+    const { data, info } = await sharp(`${DIR}/${n}_c.webp`).greyscale().raw().toBuffer({ resolveWithObject: true }), W = info.width, Hh = info.height, ch = info.channels;
+    const px = (x, y) => data[(y * W + x) * ch] / 255; let s = 0, s2 = 0; for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) { const v = px(x, y); s += v; s2 += v * v; }
+    const mean = s / (W * Hh), std = Math.sqrt(Math.max(0, s2 / (W * Hh) - mean * mean));
+    let ex = 0, ix = 0, ey = 0, iy = 0; for (let y = 0; y < Hh; y++) { ex += Math.abs(px(0, y) - px(W - 1, y)); for (let x = 1; x < W; x++) ix += Math.abs(px(x, y) - px(x - 1, y)) / (W - 1); }   // seam step vs the mean step between any two neighbouring columns
+    for (let x = 0; x < W; x++) { ey += Math.abs(px(x, 0) - px(x, Hh - 1)); for (let y = 1; y < Hh; y++) iy += Math.abs(px(x, y) - px(x, y - 1)) / (Hh - 1); }
+    const set = SETS[n], sx = ex / Math.max(ix, Hh * 0.004), sy = set?.wrapY === false ? NaN : ey / Math.max(iy, W * 0.004), tgt = set ? ` (target ${set.mean ?? 0.72})` : ' (scan)';
+    const flag = (sx > 2.5 || sy > 2.5) ? '  <- seam' : (set && Math.abs(mean - (set.mean ?? 0.72)) > 0.06) ? '  <- off grade' : '';
+    console.log(`${n.padEnd(9)} ${String(W).padStart(4)}  ${mean.toFixed(2)}  ${std.toFixed(2)}  ${sx.toFixed(2).padStart(5)} ${Number.isNaN(sy) ? '  -  ' : sy.toFixed(2).padStart(5)}${tgt}${flag}`);
+  }
 }
 
 // ---- ambientCG conversion (albedo neutralised to grey, fixed mean, because the game tints surfaces) ----
@@ -411,5 +466,6 @@ async function convert(SRC, OUT) {
 
 const args = process.argv.slice(2);
 if (args[0] === '--procedural') await procedural(args[1], args.slice(2));
+else if (args[0] === '--check') await check(args[1]);
 else if (args.length >= 2) await convert(args[0], args[1]);
-else console.log('usage: node tools/build-textures.mjs --procedural [outDir] [name…]  |  node tools/build-textures.mjs <ambientCG dir> <outDir>');
+else console.log('usage: node tools/build-textures.mjs --procedural [outDir] [name…]  |  --check [dir]  |  node tools/build-textures.mjs <ambientCG dir> <outDir>');

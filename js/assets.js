@@ -79,10 +79,16 @@ export function loadTextures(names = PBR_SETS, onEach = null) {   // onEach(name
   const one = (url, srgb) => new Promise(res => bl
     ? bl.load(url, (bmp) => { const t = new THREE.Texture(bmp); t.flipY = false; t.needsUpdate = true; res(done(t, srgb)); }, undefined, () => res(null))   // flipY already applied to the bitmap
     : tl.load(url, t => res(done(t, srgb)), undefined, () => res(null)));
-  return Promise.all(names.map(async n => {
+  const sets = Promise.all(names.map(async n => {
     const [c, nm, r] = await Promise.all([one(`./assets/textures/${n}_c.webp`, true), one(`./assets/textures/${n}_n.webp`), one(`./assets/textures/${n}_r.webp`)]);
     if (c && nm && r) pbrSets[n] = { c, n: nm, r, orm: ORM_SETS.has(n) };
     onEach?.(n);
   }));
+  // shared packed surface maps (linear data, world-space sampled by js/world.js envSurface): detail_m = micro normal + height, wear_m = dirt / smudge / chip masks
+  const maps = Promise.all(SURFACE_MAPS.map(async n => { const t = await one(`./assets/textures/${n}_m.webp`); if (t) surfMaps[n] = t; }));
+  return Promise.all([sets, maps]);
 }
 export const pbr = (n) => pbrSets[n];
+const surfMaps = {};
+export const SURFACE_MAPS = ['detail', 'wear'];
+export const surfaceMap = (n) => surfMaps[n];
