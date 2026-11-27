@@ -38,15 +38,15 @@ function gMats() {
   // generated scute normal/roughness (assets/textures/scales_*) replaces the canvas bump when it loaded
   const gornSet = (m) => { if (!pbr('scales')) return m; m.bumpMap = null; return withSet(m, 'scales', 3, 3, 1.4); };
   gornMats = {
-    skin: gornSet(new THREE.MeshStandardMaterial({ color: 0x6f8040, map: scales, bumpMap: scales, bumpScale: 2.2, roughness: 0.52, metalness: 0.05 })),
-    belly: gornSet(new THREE.MeshStandardMaterial({ color: 0xb2a965, map: scales, bumpMap: scales, bumpScale: 1.5, roughness: 0.6 })),
+    skin: gornSet(new THREE.MeshStandardMaterial({ color: 0x6f8040, map: scales, bumpMap: scales, bumpScale: 2.6, roughness: 0.44, metalness: 0.08 })),
+    belly: gornSet(new THREE.MeshStandardMaterial({ color: 0xb2a965, map: scales, bumpMap: scales, bumpScale: 1.8, roughness: 0.5 })),
     dark: gornSet(new THREE.MeshStandardMaterial({ color: 0x3a4520, map: scales, bumpMap: scales, bumpScale: 2, roughness: 0.6 })),
-    eye: new THREE.MeshStandardMaterial({ color: 0xd88a10, emissive: 0xff7a08, emissiveIntensity: 0.55, roughness: 0.08, metalness: 0.0 }),
+    eye: new THREE.MeshStandardMaterial({ color: 0xd88a10, emissive: 0xff7a08, emissiveIntensity: 0.9, roughness: 0.08, metalness: 0.0 }),
     pupil: new THREE.MeshBasicMaterial({ color: 0x120a00 }),
-    tooth: new THREE.MeshStandardMaterial({ color: 0xe9e1c0, roughness: 0.3 }),
-    claw: new THREE.MeshStandardMaterial({ color: 0x25251f, roughness: 0.3, metalness: 0.2 }),
+    tooth: new THREE.MeshStandardMaterial({ color: 0xe9e1c0, roughness: 0.22, metalness: 0.05 }),
+    claw: new THREE.MeshStandardMaterial({ color: 0x2a2a24, roughness: 0.22, metalness: 0.45 }),
     mouth: new THREE.MeshStandardMaterial({ color: 0x5a1010, roughness: 0.3 }),
-    gore: new THREE.MeshStandardMaterial({ color: 0x5a0707, roughness: 0.12, metalness: 0.1 }),
+    gore: new THREE.MeshStandardMaterial({ color: 0x6a0808, roughness: 0.08, metalness: 0.15, emissive: 0x200000, emissiveIntensity: 0.5 }),
     lid: new THREE.MeshStandardMaterial({ color: 0xa9ad7c, roughness: 0.25, transparent: true, opacity: 0.92 }),
     tongue: new THREE.MeshStandardMaterial({ color: 0x7a2038, roughness: 0.25 }),
     scar: new THREE.MeshStandardMaterial({ color: 0xc7a58e, roughness: 0.45 }),
@@ -438,9 +438,9 @@ function spiderMats() {
   return spM = {
     skin: withSet(new THREE.MeshStandardMaterial({ color: 0x2a1418, roughness: 0.25, metalness: 0.1 }), 'flesh', 2, 2, 1.2),
     flesh: withSet(new THREE.MeshStandardMaterial({ color: 0xffffff, map: marks, roughness: 0.3 }), 'flesh', 1.5, 1.5, 1),
-    eye: new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 1.3, roughness: 0.1 }),
+    eye: new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 1.9, roughness: 0.1 }),
     fang: new THREE.MeshStandardMaterial({ color: 0xd8d0b0, roughness: 0.3 }),
-    joint: new THREE.MeshStandardMaterial({ color: 0x5a2228, roughness: 0.35 }),
+    joint: new THREE.MeshStandardMaterial({ color: 0x5a2228, roughness: 0.3, metalness: 0.05 }),
     geo: { up: cap(0.02, 0.3, 5), low: cap(0.015, 0.4, 5), tar: cap(0.011, 0.13, 4), claw: new THREE.ConeGeometry(0.014, 0.07, 5), knee: new THREE.SphereGeometry(0.03, 7, 5), bristle: new THREE.ConeGeometry(0.006, 0.07, 4) },
   };
 }
@@ -513,9 +513,9 @@ export function makeViewmodel(skin = 0xd9a47c, sleeve = 0xa3231c) {
     c.fillStyle = '#d8b21c'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; for (let x = -h; x < 30; x += 12) { c.beginPath(); c.moveTo(x, h); c.lineTo(x + 6, h); c.lineTo(x + 6 + h, 0); c.lineTo(x + h, 0); c.fill(); }
     c.fillStyle = '#d8b21c'; c.fillRect(30, 0, w, h); c.fillStyle = '#111'; c.font = 'bold 11px Arial'; c.fillText('STUN ONLY', 36, 13); c.font = '8px Arial'; c.fillText('MK-II · DO NOT LICK', 36, 25);
   });
-  const shell = new THREE.MeshStandardMaterial({ color: 0x3a3f48, map: wear, roughnessMap: wear, metalness: 0.75, roughness: 0.55 });
+  const shell = new THREE.MeshStandardMaterial({ color: 0x424852, map: wear, roughnessMap: wear, metalness: 0.8, roughness: 0.48 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x101216, metalness: 0.4, roughness: 0.6 });
-  const steel = new THREE.MeshStandardMaterial({ color: 0x8d949c, metalness: 1, roughness: 0.22 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x9aa2aa, metalness: 1, roughness: 0.18 });
   const grip = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.95 });
   const skinM = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6 });
   const cloth = new THREE.MeshStandardMaterial({ color: sleeve, roughness: 0.9 });

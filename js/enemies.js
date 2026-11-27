@@ -70,7 +70,7 @@ export const MODELS = {
 };
 // assimilation hardware bolted onto the suit: eye lens, cabling, tool arm
 function droneKit(mesh, H) {
-  const metal = new THREE.MeshStandardMaterial({ color: 0x1c2022, metalness: 0.9, roughness: 0.35 });
+  const metal = new THREE.MeshStandardMaterial({ color: 0x23282b, metalness: 0.92, roughness: 0.28 });
   const glow = new THREE.MeshBasicMaterial({ color: 0x50ff70 });
   const s = 1 / H.inner.scale.x; const add = (bone, m, x, y, z) => { m.position.set(x * s, y * s, z * s); m.scale.multiplyScalar(s); H.bones[bone]?.add(m); return m; };
   const head = new THREE.Group();
@@ -105,7 +105,7 @@ function droneKit(mesh, H) {
     tube([V(sp.x, sp.y - 0.07, back.z - 0.09), V(sp.x + sR * 0.03, (sp.y + pel.y) / 2, low.z - 0.07), V(pel.x, pel.y + 0.12, low.z - 0.015)], 0.011),
   ];
   for (let i = 0; i < 7; i++) { const r = new THREE.TorusGeometry(0.017, 0.004, 4, 8), k = i / 6, a = V(sp.x + sR * 0.09, sp.y + 0.1, back.z - 0.09).lerp(V(top.x - sR * 0.02, top.y + 0.02, back.z - 0.04), k); r.rotateX(Math.PI / 2 - 0.6); r.translate(a.x, a.y, a.z); hoses.push(r); }
-  const cab = new THREE.Mesh(mergeGeometries(hoses.map(g => { const o = g.index ? g.toNonIndexed() : g; return o; })), droneGeo.hose || (droneGeo.hose = new THREE.MeshStandardMaterial({ color: 0x0d0f10, metalness: 0.5, roughness: 0.4 }))); cab.castShadow = false; pinToBone(H.inner, 'spine_03', cab);
+  const cab = new THREE.Mesh(mergeGeometries(hoses.map(g => { const o = g.index ? g.toNonIndexed() : g; return o; })), droneGeo.hose || (droneGeo.hose = new THREE.MeshStandardMaterial({ color: 0x0d0f10, metalness: 0.6, roughness: 0.3 }))); cab.castShadow = false; pinToBone(H.inner, 'spine_03', cab);
   const port = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.02, 10), glow); port.rotation.x = Math.PI / 2; port.position.set(front.x, front.y, front.z + 0.012); pinToBone(H.inner, 'spine_03', port);
   // adaptive shield: only shows once it has learned the zapper's frequency
   const shM = new THREE.MeshBasicMaterial({ color: 0xffa030, wireframe: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -126,7 +126,7 @@ function droneTick(mesh, H, t, f) {
 // Slimeling: what is left of the disguise sloughs off — blobs swell out of the joints, strands hang from the hands and chin
 let slimeM = null, slimeGeo = null;
 function slimeKit(mesh, H) {
-  slimeM = slimeM || new THREE.MeshStandardMaterial({ color: 0x58b85a, roughness: 0.06, metalness: 0, emissive: 0x0c5a1c, emissiveIntensity: 0.7, transparent: true, opacity: 0.86 });
+  slimeM = slimeM || new THREE.MeshStandardMaterial({ color: 0x58b85a, roughness: 0.06, metalness: 0, emissive: 0x0c5a1c, emissiveIntensity: 0.95, transparent: true, opacity: 0.86 });
   slimeGeo = slimeGeo || { blob: new THREE.SphereGeometry(1, 10, 8), drip: (() => { const g = new THREE.ConeGeometry(0.011, 0.2, 6); g.rotateX(Math.PI); g.translate(0, -0.1, 0); return g; })(), bead: new THREE.SphereGeometry(0.014, 6, 5) };
   H.inner.updateMatrixWorld(true); const u = H.height / 1.75, blobs = [], drips = [], R = Math.random;
   const at = (bone, dx, dy, dz, r, sy = 1) => { const b = H.bones[bone] || H.inner.getObjectByName(bone); if (!b) return; const p = b.getWorldPosition(new THREE.Vector3()), m = new THREE.Mesh(slimeGeo.blob, slimeM); m.position.set(p.x + dx * u, p.y + dy * u, p.z + dz * u); const s = r * u; m.userData.s = [s, s * sy, s * (0.8 + R() * 0.3)]; m.scale.setScalar(0.001); m.castShadow = false; pinToBone(H.inner, bone, m); blobs.push(m); };
