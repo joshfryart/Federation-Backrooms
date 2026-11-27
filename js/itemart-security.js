@@ -44,6 +44,7 @@ def('patch_plate', 'hull patch plate', 'engineering', (g, M) => {
   g.add(rb(0.22, 0.026, 0.03, 0.008, M.gun, 0, 0.056, 0));                                                           // strongback
   for (const s of [-1, 1]) g.add(bx(0.022, 0.03, 0.026, M.gun, s * 0.07, 0.04, 0));
   g.add(cyz(0.012, 0.012, 0.1, M.rubber, 0, 0.082, 0, 8)); g.add(bx(0.022, 0.03, 0.022, M.gun, 0, 0.066, 0));         // T-handle grip
+  g.add(cy(0.022, 0.022, 0.008, M.alu, 0, 0.04, 0, 5));                                                              // centre boss
 }, { base: true });
 
 // ENG-9b split-sleeve pipe repair clamp: 0.15 m long x 0.11 m across, two half shells with flange lugs, two through-bolts with nuts, rubber gasket ends (lies on its side, axis z).
@@ -53,6 +54,7 @@ def('pipe_clamp', 'pipe repair clamp', 'engineering', (g, M) => {
   for (const s of [-1, 1]) g.add(rb(0.04, 0.026, 0.132, 0.006, M.gun, s * 0.062, 0.056, 0));                          // flange lugs at the seam
   for (const z of [-0.04, 0.04]) { g.add(cyx(0.0075, 0.0075, 0.17, M.alu, 0, 0.056, z, 6)); for (const s of [-1, 1]) g.add(cyx(0.014, 0.014, 0.012, M.gun, s * 0.088, 0.056, z, 6)); }   // bolts and hex heads
   g.add(bx(0.07, 0.003, 0.05, M.amber, 0, 0.1, 0));                                                                  // marker tag on the crown
+  g.add(bx(0.03, 0.02, 0.004, M.alu, 0.052, 0.07, 0.0));                                                             // serial plate
 }, { base: true });
 
 // ENG-9c seal gauge: hand-held differential manometer, body 0.08 x 0.15 x 0.04 m with a lit dial window and two ports, a pistol grip below, and a 0.3 m probe hose with a flat nozzle.
@@ -61,7 +63,7 @@ def('seal_gauge', 'seal gauge', 'engineering', (g, M) => {
   g.add(rb(0.026, 0.07, 0.034, 0.008, M.rubber, 0, -0.03, 0));                                                       // grip
   g.add(rb(0.08, 0.15, 0.04, 0.012, M.gun, 0, 0.1, 0)); g.add(rb(0.062, 0.06, 0.004, 0.004, M.dark, 0, 0.13, 0.021)); g.add(cy(0.022, 0.022, 0.004, M.gGreen, 0, 0.13, 0.024, 12).rotateX(PI / 2));
   g.add(bx(0.01, 0.036, 0.003, M.red, 0.0, 0.135, 0.0275).rotateZ(0.5)); g.add(bx(0.05, 0.012, 0.004, M.gAmber, 0, 0.085, 0.021));
-  for (const s of [-1, 1]) g.add(cy(0.008, 0.008, 0.03, M.steel, s * 0.02, 0.185, 0, 8)); g.add(bx(0.03, 0.014, 0.01, M.gCyan, 0, 0.05, 0.021));
+  for (const s of [-1, 1]) g.add(cy(0.008, 0.008, 0.03, M.steel, s * 0.02, 0.185, 0, 8)); g.add(bx(0.03, 0.014, 0.01, M.gCyan, 0, 0.05, 0.021)); g.add(bx(0.086, 0.016, 0.046, M.rubber, 0, 0.03, 0)); g.add(bx(0.02, 0.03, 0.01, M.dark, 0, 0.0, 0.02));
   const c = new THREE.CatmullRomCurve3([new THREE.Vector3(0.02, 0.2, 0), new THREE.Vector3(0.07, 0.22, 0.03), new THREE.Vector3(0.1, 0.12, 0.1), new THREE.Vector3(0.05, -0.02, 0.2), new THREE.Vector3(0.0, -0.05, 0.3)]);
   g.add(mesh(new THREE.TubeGeometry(c, 14, 0.0065, 5, false), hose()));                                              // probe hose
   g.add(rb(0.03, 0.008, 0.05, 0.003, M.steel, 0, -0.05, 0.325));                                                    // flat nozzle
@@ -73,6 +75,7 @@ def('breather', 'escape breather pouch', 'engineering', (g, M) => {
   g.add(rb(0.25, 0.07, 0.2, 0.026, O, 0, 0.035, 0)); g.add(rb(0.27, 0.012, 0.22, 0.005, M.amber, 0, 0.006, 0)); g.add(rb(0.27, 0.012, 0.22, 0.005, M.amber, 0, 0.064, 0));   // seam flanges
   g.add(rb(0.07, 0.006, 0.05, 0.003, M.red, 0.09, 0.078, -0.07)); g.add(rb(0.03, 0.01, 0.07, 0.004, M.red, 0.13, 0.04, -0.12));                                              // pull tab
   g.add(rb(0.2, 0.004, 0.035, 0.002, M.white, -0.0, 0.074, 0.02));                                                    // blank label band
+  g.add(bx(0.03, 0.008, 0.02, M.dark, 0.0, 0.074, 0.1));                                                             // tear notch
   g.add(tor(0.035, 0.005, M.rubber, -0.09, 0.074, 0.055, PI * 2, 4, 10).rotateX(PI / 2));                             // strap loop
 }, { base: true });
 
@@ -83,7 +86,7 @@ def('cuffs', 'restraint cuffs', 'security', (g, M) => {
     g.add(tor(0.034, 0.0068, G, s * 0.066, 0.0075, 0, PI * 2, 4, 14).rotateX(PI / 2));                               // ring (outer 82 mm)
     g.add(bx(0.02, 0.016, 0.014, M.gun, s * 0.066, 0.008, 0.039)); g.add(bx(0.008, 0.004, 0.006, M.steel, s * 0.066, 0.016, 0.04));   // lock boss and slot
   }
-  g.add(bx(0.06, 0.012, 0.016, G, 0, 0.007, 0)); for (const s of [-1, 1]) g.add(cy(0.006, 0.006, 0.014, M.steel, s * 0.027, 0.007, 0, 8)); g.add(bx(0.01, 0.004, 0.01, M.gAmber, 0, 0.015, 0));   // bar, hinge pins, status lamp
+  g.add(bx(0.06, 0.012, 0.016, G, 0, 0.007, 0)); for (const s of [-1, 1]) g.add(cy(0.006, 0.006, 0.014, M.steel, s * 0.027, 0.007, 0, 8)); g.add(bx(0.01, 0.004, 0.01, M.gAmber, 0, 0.015, 0)); for (const s of [-1, 1]) g.add(bx(0.012, 0.012, 0.012, M.steel, s * 0.066, 0.008, -0.04));   // bar, hinge pins, status lamp, release studs
 }, { base: true });
 
 export const KW_SECURITY = [

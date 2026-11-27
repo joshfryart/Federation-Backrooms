@@ -33,6 +33,8 @@ function cellfield() {
   // control pedestal outside the right post
   b.box(0.2, 1.3, 0.1, M.body, 1.06, 0, 0.55); b.box(0.16, 0.26, 0.012, M.dark, 1.06, 1.0, 0.65); b.box(0.12, 0.05, 0.012, M.greenLit, 1.06, 1.18, 0.662); b.sph(0.016, M.redLit, 1.1, 1.08, 0.667, 6);
   for (let i = 0; i < 3; i++) b.box(0.035, 0.03, 0.014, i === 1 ? M.amberLit : M.white, 1.0 + i * 0.05, 1.03, 0.66);
+  b.box(1.7, 0.012, 0.74, M.dark, 0, 0.395, -0.5); b.box(0.06, 0.03, 0.06, M.greenLit, -0.915, 2.07, z); b.box(0.06, 0.03, 0.06, M.greenLit, 0.915, 2.07, z);   // mattress seam, post status lamps
+  b.cyl(0.012, 0.012, 0.06, M.metal, -0.5, 0.98, -0.82, 8, PI / 2); b.box(0.22, 0.03, 0.14, M.dark, 1.06, 1.3, 0.55);                              // basin tap, pedestal cap
   const g = new THREE.Group(); g.add(b.done('cell'));
   return finish(g, 'cellfield', 'security', { box: [-0.95, 0.95, -0.9, 0.6], size: [2.3, 1.55, 2.07], field: fm, variant: 'cell', spots: [[0, 1.05, PI]], use: { emitter: { x: 0, z: 1.05, yaw: PI }, panel: { x: 1.06, z: 1.05, yaw: PI }, bunk: { x: 0, z: -0.5 } } });
 }
@@ -60,6 +62,7 @@ function chargerack() {
   // master gauge and isolator at eye height
   b.box(W - 0.08, 0.22, 0.03, M.top, 0, 1.54, D / 2 - 0.05); b.cyl(0.085, 0.085, 0.03, M.dark, -0.2, 1.57, D / 2 - 0.03, 16, PI / 2); b.cyl(0.07, 0.07, 0.006, scr('dial', th, 3, 128, 128), -0.2, 1.57, D / 2 - 0.012, 16, PI / 2);
   b.box(0.28, 0.1, 0.01, scr('readout', th, 5, 128, 64), 0.1, 1.58, D / 2 - 0.032); b.box(0.04, 0.04, 0.01, M.amberLit, 0.34, 1.62, D / 2 - 0.032); b.box(0.025, 0.1, 0.02, M.red, 0.34, 1.54, D / 2 - 0.03, 0, 0, 0.5);
+  b.box(0.3, 0.04, 0.006, M.hazard, 0.2, 1.7, D / 2 + 0.002); b.box(0.02, 0.5, 0.01, M.metal, W / 2 + 0.002, 0.9, -0.2);   // label strip, earth strap
   const g = new THREE.Group(); g.add(b.done('rack'));
   return finish(g, 'chargerack', 'security', { box: [-0.46, 0.46, -0.26, 0.26], size: [0.9, 0.5, 1.8], spots: [[0, 0.78, PI], [-0.3, 0.78, PI], [0.3, 0.78, PI]], use: { read: { x: -0.2, z: 0.78, yaw: PI }, swap: { x: 0.1, z: 0.78, yaw: PI }, shelves: [1, 2, 3, 4, 5].map(i => ({ y: 0.5 + (i - 1) * 0.235 })) } });
 }
@@ -85,6 +88,8 @@ function issuecounter() {
   // log tablet, scanner puck, status lamp
   b.box(0.3, 0.015, 0.2, M.dark, -0.3, 1.05, 0.25, -0.2); b.box(0.27, 0.004, 0.17, scr('screen', th, 51, 192, 128), -0.3, 1.066, 0.25, -0.2);
   b.cyl(0.05, 0.055, 0.02, M.plastic, 0.3, 1.05, 0.25, 12); b.cyl(0.03, 0.03, 0.06, M.greenLit, -0.72, 1.05, 0.28, 10);
+  b.box(1.5, 0.03, 0.03, M.rubber, 0, 1.0, -0.4); b.box(0.5, 0.06, 0.012, M.dark, 0, 1.55, -0.28); b.box(0.46, 0.012, 0.014, M.red, 0, 1.55, -0.272);   // customer-side bumper, blank placard over the hatch
+  b.box(0.03, 0.9, 0.02, M.dark, 0.7, 0.1, 0.31);                                                                                             // cable duct on the drawer bank
   const g = new THREE.Group(); g.add(b.done('counter'));
   return finish(g, 'issuecounter', 'security', { top: 1.05, box: [-0.78, 0.78, -0.4, 0.4], size: [1.56, 0.8, 2.1], spots: [[0, 0.75, PI], [-0.4, 0.75, PI], [0.4, 0.75, PI]], use: { staff: { x: 0, z: 0.75, yaw: PI }, hatch: { x: 0, y: 1.25, z: -0.25 }, customer: { x: 0, z: -0.85, yaw: 0 }, board: { x: 0.6, z: 0.75, yaw: PI } } });
 }

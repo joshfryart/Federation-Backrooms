@@ -26,21 +26,23 @@ export const DECOR_SEC = {
     // lever latch with a seal tag on a thread, status lamp on the top cap
     K.box(0.04, 0.2, 0.03, 0.04, 0.98, DK, 0.456).box(0.07, 0.03, 0.04, 0.04, 1.07, MT, 0.456).box(0.03, 0.05, 0.01, 0.05, 0.86, YL, 0.48).box(0.02, 0.02, 0.01, 0.55, 1.97, GG, 0.43, true);
     for (const sx of [-0.55, 0.55]) K.box(0.05, 0.14, 0.03, sx, 0.9, DK, 0.456);                                                              // hinges
+    // wear and stamping: scuffed kick band, a pressed stiffener panel on the solid door, a darker bumped left edge
+    K.box(1.14, 0.1, 0.006, 0, 0.1, 0x6c1a14, 0.456).box(0.4, 0.5, 0.004, 0.3, 0.55, 0xa02a20, 0.456).box(0.012, 1.4, 0.006, -0.57, 1.0, 0x7a1e18, 0.456);
   },
   emitterpost(K) {
     for (const sx of [-0.6, 0.6]) {
-      K.box(0.1, 2.2, 0.1, sx, 1.1, STEEL).box(0.16, 0.04, 0.16, sx, 0.02, DK).box(0.12, 0.06, 0.12, sx, 2.23, DK).box(0.04, 0.04, 0.006, sx, 2.3, GB, 0.0, true);
+      K.box(0.1, 2.2, 0.1, sx, 1.1, STEEL).box(0.16, 0.04, 0.16, sx, 0.02, YL).box(0.12, 0.06, 0.12, sx, 2.23, DK).box(0.04, 0.04, 0.006, sx, 2.3, GB, 0.0, true);
       for (let i = 0; i < 14; i++) K.box(0.03, 0.04, 0.04, sx - Math.sign(sx) * 0.055, 0.2 + i * 0.15, i === 6 ? GO : GB, 0.03, true);                // emitter studs on the inner faces
     }
     K.box(0.04, 0.04, 0.006, 0.0, 0.01, GB, 0.02, true);
   },
   camdome(K) {
-    K.box(0.22, 0.02, 0.2, 0, 3.17, STEEL, 0.0).box(0.06, 0.1, 0.06, 0, 3.07, DK, 0.06).box(0.1, 0.03, 0.1, 0, 3.0, DK, 0.04)
+    K.box(0.22, 0.02, 0.2, 0, 3.17, STEEL, 0.0).box(0.06, 0.1, 0.06, 0, 3.07, DK, 0.06).box(0.1, 0.03, 0.1, 0, 3.0, DK, 0.04).box(0.02, 0.04, 0.12, 0, 3.12, MT, 0.0)
       .cyl(0.06, 0.04, 0, 2.97, SMOKE, 0.04, 'y', false, 14).cyl(0.045, 0.03, 0, 2.99, SMOKE, 0.05, 'y', false, 14).cyl(0.025, 0.02, 0, 3.01, 0x05080a, 0.07, 'y', false, 10)
       .box(0.012, 0.012, 0.006, 0.05, 2.99, GR, 0.118, true);                                                                              // record lamp
   },
   badgereader(K) {
-    K.box(0.11, 0.16, 0.02, 0, 1.2, DK).box(0.09, 0.14, 0.026, 0, 1.2, 0x3a3f48, 0.02).cyl(0.026, 0.006, 0, 1.23, STEEL, 0.046, 'z', false, 14).box(0.06, 0.012, 0.006, 0, 1.15, GG, 0.046, true)
+    K.box(0.13, 0.18, 0.012, 0, 1.2, 0x15171b).box(0.11, 0.16, 0.02, 0, 1.2, DK).box(0.09, 0.14, 0.026, 0, 1.2, 0x3a3f48, 0.02).cyl(0.026, 0.006, 0, 1.23, STEEL, 0.046, 'z', false, 14).box(0.06, 0.012, 0.006, 0, 1.15, GG, 0.046, true)
       .box(0.05, 0.006, 0.01, 0, 1.12, 0x0a0b0d, 0.046).box(0.012, 0.012, 0.006, 0.035, 1.27, GR, 0.046, true);
   },
 };
