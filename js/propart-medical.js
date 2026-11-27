@@ -58,6 +58,8 @@ function mm() {
     o2: S({ color: 0xf4f4f0, roughness: 0.4 }), air: S({ color: 0x17181a, roughness: 0.4 }), vac: S({ color: 0xe3b812, roughness: 0.4 }),
     dial: scr(tex_dial(), 1.1), touch: scr(tex_touch()), cycle: scr(tex_cycle()), pump: scr(tex_pump()), flow: scr(tex_flow(), 1.0), bars: scr(tex_bars('c', '#38e8c0')),
     perf: S({ map: tex_perf(), roughness: 0.6, metalness: 0.6 }),
+    steelW: S({ color: 0xb9bec6, metalness: 0.7, roughness: 0.58 }), hazard: S({ color: 0xe3b812, roughness: 0.5 }), padB: S({ color: 0x4f7d9c, roughness: 0.42 }), padT: S({ color: 0x2f7f7a, roughness: 0.4 }), seam: S({ color: 0x2b4558, roughness: 0.8 }),
+    ledLit: S({ color: 0x103a22, emissive: 0x38ff8c, emissiveIntensity: 1.6, roughness: 0.4 }), ledRed: S({ color: 0x3a1008, emissive: 0xff3c2a, emissiveIntensity: 1.6, roughness: 0.4 }),
     holoGlow: new THREE.MeshBasicMaterial({ color: 0x6ad8ff, transparent: true, opacity: 0.85 }),
   };
 }
@@ -101,7 +103,8 @@ kinds.steriliser = (m, h) => {
   const M = mm(), g = new THREE.Group(); g.name = 'steriliser_bench';
   g.add(rb(1.4, 0.07, 0.62, 0.01, M.dark, 0, 0, 0)); g.add(rb(1.5, 0.78, 0.7, 0.015, M.steel, 0, 0.07, 0));
   for (const sx of [-1, 1]) {   // two doors with a vertical pull each
-    g.add(rb(0.7, 0.68, 0.02, 0.008, M.steelD, sx * 0.365, 0.12, 0.35)); g.add(cy(0.01, 0.01, 0.22, M.steel, sx * 0.1, 0.35, 0.385, 8));
+    g.add(rb(0.7, 0.68, 0.02, 0.008, M.steelW, sx * 0.365, 0.12, 0.35)); for (const y of [0.2, 0.7]) g.add(bx(0.022, 0.07, 0.026, M.steelD, sx * 0.71, y, 0.352));   // brushed, worn door leaves with two hinges each
+     g.add(cy(0.01, 0.01, 0.22, M.steel, sx * 0.1, 0.35, 0.385, 8));
     for (const y of [0.37, 0.53]) g.add(bx(0.014, 0.014, 0.03, M.steel, sx * 0.1, y, 0.368));
   }
   g.add(bx(0.01, 0.7, 0.006, M.dark, 0, 0.11, 0.352));
@@ -115,7 +118,7 @@ kinds.steriliser = (m, h) => {
   g.add(cyZ(0.052, 0.052, 0.02, M.steel, ax + 0.2, 1.25, 0.318, 14)); g.add(face(0.09, 0.09, M.dial, ax + 0.2, 1.25, 0.3285));
   g.add(rb(0.12, 0.07, 0.01, 0.003, M.dark, ax + 0.2, 1.04, 0.31)); g.add(face(0.1, 0.05, M.cycle, ax + 0.2, 1.075, 0.3165));
   g.add(cyZ(0.012, 0.012, 0.012, M.gGreen, ax + 0.15, 0.97, 0.316, 8)); g.add(cyZ(0.012, 0.012, 0.012, M.gAmber, ax + 0.2, 0.97, 0.316, 8)); g.add(cyZ(0.012, 0.012, 0.012, M.gRed, ax + 0.25, 0.97, 0.316, 8));
-  g.add(cy(0.02, 0.02, 0.1, M.steel, ax + 0.2, 1.38, -0.16, 8));
+  g.add(cy(0.02, 0.02, 0.1, M.steel, ax + 0.2, 1.38, -0.16, 8)); g.add(bx(0.54, 0.02, 0.004, M.hazard, ax, 0.905, 0.302));   // steam vent and a hazard band under the autoclave door
   // instrument tray (right): rim, a wrapped pack, a lidded drum and a spread of instruments
   const tx = 0.34; g.add(rb(0.44, 0.016, 0.32, 0.004, M.steel, tx, 0.9, 0.05)); for (const sz of [-1, 1]) g.add(bx(0.44, 0.022, 0.01, M.steel, tx, 0.9, 0.05 + sz * 0.155));
   for (const sx of [-1, 1]) g.add(bx(0.01, 0.022, 0.3, M.steel, tx + sx * 0.215, 0.9, 0.05));
@@ -134,11 +137,12 @@ kinds.surgical_table = (m, h) => {
   g.add(rb(0.6, 0.09, 1.0, 0.02, M.steelD, 0, 0, 0)); g.add(cy(0.2, 0.24, 0.05, M.steel, 0, 0.09, 0, 20)); g.add(cy(0.15, 0.15, 0.62, M.steel, 0, 0.14, 0, 18));
   for (const y of [0.3, 0.52]) g.add(cy(0.17, 0.17, 0.025, M.dark, 0, y, 0, 18));
   g.add(rb(0.4, 0.04, 0.9, 0.012, M.steel, 0, 0.78, 0));
-  const sect = (z0, len, rx, ctr) => { const s = grp(0, 0.82, z0); s.rotation.x = rx; s.add(rb(0.56, 0.04, len, 0.01, M.steel, 0, 0, ctr)); s.add(rb(0.55, 0.04, len - 0.01, 0.016, M.teal, 0, 0.04, ctr)); return s; };
+  const sect = (z0, len, rx, ctr) => { const s = grp(0, 0.82, z0); s.rotation.x = rx; s.add(rb(0.56, 0.04, len, 0.01, M.steel, 0, 0, ctr)); s.add(rb(0.55, 0.04, len - 0.01, 0.016, M.padT, 0, 0.04, ctr)); return s; };
+  g.add(rb(0.3, 0.05, 0.22, 0.02, M.padT, 0, 0.9, -0.78).rotateX(0.1));   // head rest
   g.add(sect(-0.5, 0.5, 0.1, -0.25)); g.add(sect(-0.5, 0.9, 0, 0.45)); g.add(sect(0.4, 0.6, 0.1, 0.3));   // head raised 0.1 rad, torso flat, legs lowered 0.1 rad
   for (const sx of [-1, 1]) {
     g.add(bx(0.02, 0.035, 1.15, M.steel, sx * 0.29, 0.80, -0.1));   // accessory rails
-    const ab = grp(sx * 0.29, 0.86, -0.32); ab.rotation.y = -sx * 0.32; ab.add(rb(0.5, 0.02, 0.2, 0.008, M.steel, sx * 0.25, 0, 0)); ab.add(rb(0.48, 0.03, 0.18, 0.012, M.teal, sx * 0.25, 0.02, 0)); g.add(ab);   // arm boards
+    const ab = grp(sx * 0.29, 0.86, -0.32); ab.rotation.y = -sx * 0.32; ab.add(rb(0.5, 0.02, 0.2, 0.008, M.steel, sx * 0.25, 0, 0)); ab.add(rb(0.48, 0.03, 0.18, 0.012, M.padT, sx * 0.25, 0.02, 0)); g.add(ab);   // arm boards
     g.add(rb(0.05, 0.075, 0.06, 0.01, M.steelD, sx * 0.29, 0.79, -0.32));
   }
   g.add(rb(0.28, 0.06, 0.16, 0.02, M.dark, 0.55, 0, 0.72)); g.add(bx(0.04, 0.01, 0.04, M.gGreen, 0.62, 0.06, 0.72)); g.add(bx(0.04, 0.01, 0.04, M.gAmber, 0.5, 0.06, 0.72));   // foot control
@@ -149,6 +153,7 @@ kinds.surgical_table = (m, h) => {
     const hd = grp(s * 0.36, 2.42, 0); hd.rotation.z = -s * 0.14;
     hd.add(cy(0.3, 0.3, 0.06, M.white, 0, -0.1, 0, 24)); hd.add(cy(0.15, 0.28, 0.05, M.white, 0, -0.05, 0, 24)); hd.add(cy(0.26, 0.26, 0.012, M.led, 0, -0.11, 0, 24));
     hd.add(tor(0.275, 0.011, M.steel, 0, -0.1, 0, PI * 2, 4, 24).rotateX(PI / 2)); hd.add(cy(0.028, 0.028, 0.08, M.steel, 0, -0.19, 0, 8)); hd.add(sph(0.03, M.steel, 0, -0.19, 0, 1, 0.7, 1, 8, 4));
+    hd.add(cy(0.02, 0.02, 0.1, M.steel, 0, -0.13, 0, 6).rotateZ(PI / 2)); hd.children[hd.children.length - 1].position.set(0, -0.13, 0);   // sterile handle grip on each head
     g.add(hd);
   }
   return finish(g, {
@@ -162,7 +167,9 @@ kinds.surgical_table = (m, h) => {
 kinds.med_dispenser = (m, h) => {
   const M = mm(), g = new THREE.Group(); g.name = 'med_dispenser';
   g.add(rb(0.76, 0.08, 0.56, 0.01, M.dark, 0, 0, 0)); g.add(rb(0.8, 1.0, 0.6, 0.02, M.white, 0, 0.08, 0)); g.add(rb(0.81, 0.045, 0.61, 0.008, M.green, 0, 0.86, 0));
-  g.add(rb(0.8, 0.22, 0.5, 0.02, M.white, 0, 1.08, -0.05));
+  g.add(rb(0.8, 0.22, 0.5, 0.02, M.white, 0, 1.08, -0.05)); g.add(bx(0.5, 0.012, 0.012, M.ledLit, 0, 1.295, 0.17));   // status light bar
+  for (let i = 0; i < 3; i++) g.add(bx(0.5, 0.01, 0.012, M.steelD, 0, 0.1 + i * 0.016 - 0.0, 0.302));   // kick-plate louvres
+
   const bez = rb(0.58, 0.2, 0.025, 0.006, M.dark, 0, 1.12, 0.215); bez.rotation.x = -0.5; g.add(bez); g.add(face(0.52, 0.16, M.touch, 0, 1.19, 0.227, -0.5));
   g.add(rb(0.09, 0.1, 0.02, 0.004, M.dark, 0.31, 1.13, 0.235));   // card reader beside the screen
   for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
@@ -182,13 +189,13 @@ kinds.med_dispenser = (m, h) => {
 kinds.exam_couch = (m, h) => {
   const M = mm(), g = new THREE.Group(); g.name = 'exam_couch';
   g.add(rb(0.46, 0.06, 1.0, 0.01, M.dark, 0, 0, 0.35)); g.add(rb(0.4, 0.46, 0.84, 0.02, M.white, 0, 0.06, 0.35));
-  g.add(rb(0.64, 0.04, 1.2, 0.01, M.steel, 0, 0.52, 0.35)); g.add(rb(0.65, 0.04, 1.2, 0.016, M.blue, 0, 0.56, 0.35)); g.add(bx(0.56, 0.004, 1.17, M.paper, 0, 0.6, 0.35));
+  g.add(rb(0.64, 0.04, 1.2, 0.01, M.steel, 0, 0.52, 0.35)); g.add(rb(0.65, 0.04, 1.2, 0.016, M.padB, 0, 0.56, 0.35)); g.add(bx(0.56, 0.003, 0.004, M.seam, 0, 0.6, 0.0)); g.add(bx(0.56, 0.004, 1.17, M.paper, 0, 0.6, 0.35));
   const hd = grp(0, 0.52, -0.25); hd.rotation.x = 0.52;   // head section: raised 30 degrees
-  hd.add(rb(0.64, 0.04, 0.7, 0.01, M.steel, 0, 0, -0.35)); hd.add(rb(0.65, 0.04, 0.7, 0.016, M.blue, 0, 0.04, -0.35)); hd.add(bx(0.56, 0.004, 0.68, M.paper, 0, 0.08, -0.35));
-  hd.add(cyX(0.065, 0.065, 0.58, M.paper, 0, 0.065, -0.77, 16)); hd.add(cyX(0.025, 0.025, 0.62, M.steelD, 0, 0.065, -0.77, 8));
+  hd.add(rb(0.64, 0.04, 0.7, 0.01, M.steel, 0, 0, -0.35)); hd.add(rb(0.65, 0.04, 0.7, 0.016, M.padB, 0, 0.04, -0.35)); hd.add(bx(0.56, 0.003, 0.004, M.seam, 0, 0.08, -0.35)); hd.add(bx(0.56, 0.004, 0.68, M.paper, 0, 0.08, -0.35));
+  hd.add(cyX(0.065, 0.065, 0.58, M.paper, 0, 0.065, -0.77, 12)); hd.add(cyX(0.025, 0.025, 0.62, M.steelD, 0, 0.065, -0.77, 8));
   for (const sx of [-1, 1]) hd.add(bx(0.02, 0.1, 0.03, M.steel, sx * 0.315, 0.02, -0.77));
   g.add(hd);
-  g.add(rod(0, 0.42, 0.0, 0, 0.56, -0.5, 0.016, M.steelD, 8));   // gas strut
+  g.add(rod(0, 0.42, 0.0, 0, 0.56, -0.5, 0.016, M.steelD, 8)); g.add(bx(0.03, 0.02, 0.16, M.dark, 0.33, 0.5, 0.65));   // height-lever pedal   // gas strut
   // two-step stool on the +x side
   const st = grp(0.66, 0, 0.35); st.rotation.y = PI / 2;
   st.add(rb(0.44, 0.16, 0.4, 0.015, M.dark, 0, 0, 0.0)); st.add(rb(0.44, 0.16, 0.2, 0.015, M.dark, 0, 0.16, -0.1)); st.add(bx(0.4, 0.008, 0.34, M.rubber, 0, 0.16, 0.02)); st.add(bx(0.4, 0.008, 0.16, M.rubber, 0, 0.32, -0.1));
@@ -212,7 +219,9 @@ kinds.autopsy_table = (m, h) => {
   T.add(bx(0.58, 0.006, 0.022, M.dark, 0, 0.04, 0.96)); T.add(bx(0.58, 0.006, 0.022, M.dark, 0, 0.04, -0.96)); T.add(bx(0.03, 0.006, 1.9, M.dark, 0, 0.04, 0));
   for (const sx of [-1, 1]) T.add(face(0.07, 1.6, M.perf, sx * 0.255, 0.0455, 0, -PI / 2));   // perforated downdraft strips
   T.add(cy(0.04, 0.04, 0.008, M.dark, 0, 0.04, 0.96, 14)); T.add(tor(0.042, 0.006, M.steel, 0, 0.046, 0.96, PI * 2, 4, 14).rotateX(PI / 2));
-  g.add(T); g.add(cy(0.03, 0.03, 0.72, M.steel, 0, 0.06, 0.98, 10)); g.add(cy(0.09, 0.09, 0.03, M.steelD, 0, 0, 0.98, 14));
+  g.add(T); g.add(rod(0, 0.07, 1.0, 0.12, 0.05, 1.1, 0.014, M.dark, 4)); g.add(rod(0.12, 0.05, 1.1, 0.26, 0.015, 1.14, 0.014, M.dark, 4)); g.add(cy(0.03, 0.03, 0.72, M.steel, 0, 0.06, 0.98, 10));   // waste hose to the floor drain
+  g.add(rb(0.34, 0.015, 0.2, 0.005, M.steelW, 0.7, 0.88, 0.0)); /* instrument shelf beside the sink */
+   g.add(cy(0.09, 0.09, 0.03, M.steelD, 0, 0, 0.98, 14));
   // sink pedestal at the head end, +x side
   const sx0 = 0.7, sz0 = -0.55; g.add(rb(0.42, 0.8, 0.5, 0.02, M.steel, sx0, 0, sz0)); g.add(rb(0.46, 0.04, 0.54, 0.01, M.steel, sx0, 0.8, sz0));
   g.add(cy(0.17, 0.17, 0.006, M.dark, sx0, 0.844, sz0, 18)); g.add(tor(0.17, 0.014, M.steel, sx0, 0.846, sz0, PI * 2, 4, 18).rotateX(PI / 2));
@@ -241,10 +250,12 @@ kinds.infusion_stand = (m, h) => {
     const a = i * PI * 2 / 5, c = Math.cos(a), s = Math.sin(a);
     const leg = rb(0.24, 0.026, 0.034, 0.008, M.steelD, c * 0.14, 0.05, s * 0.14); leg.rotation.y = -a; g.add(leg);
     g.add(cy(0.008, 0.008, 0.05, M.dark, c * 0.25, 0.04, s * 0.25, 6));
-    const w = cyZ(0.026, 0.026, 0.018, M.rubber, c * 0.25, 0.026, s * 0.25, 10); w.rotation.set(0, -a, 0); w.rotateX(PI / 2); g.add(w);
+    const w = cyZ(0.026, 0.026, 0.018, M.rubber, c * 0.25, 0.026, s * 0.25, 8); w.rotation.set(0, -a, 0); w.rotateX(PI / 2); g.add(w);
   }
   g.add(cy(0.0125, 0.0125, 1.42, M.steel, 0, 0.1, 0, 10)); g.add(cy(0.02, 0.02, 0.06, M.dark, 0, 1.4, 0, 10)); g.add(cy(0.01, 0.01, 0.56, M.steel, 0, 1.44, 0, 8));
-  g.add(cy(0.028, 0.028, 0.04, M.dark, 0, 1.96, 0, 10));
+  g.add(cy(0.028, 0.028, 0.04, M.dark, 0, 1.96, 0, 10)); g.add(cy(0.022, 0.022, 0.03, M.hazard, 0, 1.4 + 0.06, 0, 6));   // telescope lock collar
+  g.add(tube([[0.0, 1.0, -0.1], [0.0, 0.7, -0.12], [0.1, 0.3, -0.16], [0.18, 0.06, -0.2]], 0.004, M.dark, 6, 3));   // mains lead
+  g.add(bx(0.012, 0.012, 0.02, M.ledRed, 0.04, 1.0 + 0.17, 0.12));
   for (const r of [0, PI / 2]) { const b = cyX(0.008, 0.008, 0.44, M.steel, 0, 1.94, 0, 6); b.rotation.set(0, r, PI / 2); g.add(b); }
   const hooks = [[0.22, 0], [-0.22, 0], [0, 0.22], [0, -0.22]]; for (const [x, z] of hooks) g.add(tor(0.018, 0.0035, M.steel, x, 1.92, z, PI * 1.4, 4, 8).rotateY(Math.atan2(x, z)));
   const bag = (x, fm, fh) => {   // 0.15 x 0.25 m fluid bag, hanging from a hook, drip chamber and tube below
@@ -273,6 +284,7 @@ kinds.stretcher_rack = (m, h) => {
   for (const sx of [-1, 1]) { g.add(cy(0.014, 0.014, 1.08, M.steel, sx * 0.25, 0.7, z, 8)); g.add(cy(0.018, 0.018, 0.1, M.rubber, sx * 0.25, 1.78 - 0.02, z, 8)); g.add(cy(0.018, 0.018, 0.1, M.rubber, sx * 0.25, 0.64, z, 8)); }
   for (const y of [1.5, 1.2, 0.95]) { g.add(rb(0.5, 0.045, 0.072, 0.008, M.dark, 0, y, z)); g.add(rb(0.05, 0.035, 0.012, 0.004, M.steelD, 0.1, y + 0.005, z + 0.04)); }
   g.add(cyX(0.012, 0.012, 0.5, M.steel, 0, 1.78, z, 8)); g.add(cyX(0.012, 0.012, 0.5, M.steel, 0, 0.7, z, 8));
+  for (const sx of [-1, 1]) for (const y of [1.7, 0.74]) g.add(bx(0.014, 0.014, 0.008, M.brass, sx * 0.27, y, 0.022));   // plate screws
   g.add(rb(0.2, 0.14, 0.012, 0.004, M.green, 0, 1.92, 0.006)); g.add(rb(0.16, 0.1, 0.004, 0.002, M.white, 0, 1.94, 0.014));   // plain green marker plate with a blank card
   return finish(g, { mount: 'wall', size: [0.7, 2.1, 0.22], spots: { take: { pos: [0, 0, 0.75], ry: PI }, grab: { pos: [0, 1.25, 0.2] } }, item: 'stretcher' });
 };
@@ -287,7 +299,7 @@ kinds.holo_emitter = (m, h) => {
   p.add(cy(0.15, 0.15, 0.05, M.white, 0, -0.17, 0, 24)); p.add(cy(0.12, 0.15, 0.03, M.panel, 0, -0.14, 0, 24)); p.add(cy(0.14, 0.14, 0.012, M.dark, 0, -0.182, 0, 24));
   p.add(tor(0.148, 0.007, M.holoGlow, 0, -0.17, 0, PI * 2, 4, 24).rotateX(PI / 2));
   for (let i = 0; i < 6; i++) { const a = i * PI / 3; p.add(cy(0.022, 0.026, 0.014, M.steel, Math.cos(a) * 0.09, -0.196, Math.sin(a) * 0.09, 10)); p.add(cy(0.016, 0.016, 0.004, M.holoGlow, Math.cos(a) * 0.09, -0.2, Math.sin(a) * 0.09, 10)); }
-  p.add(cy(0.03, 0.03, 0.012, M.led, 0, -0.194, 0, 12));
+  p.add(cy(0.03, 0.03, 0.012, M.led, 0, -0.194, 0, 12)); for (const sx of [-1, 0, 1]) p.add(bx(0.01, 0.03, 0.12, M.steelD, sx * 0.04, -0.12, 0)); p.add(bx(0.016, 0.01, 0.016, M.gGreen, 0.12, -0.2, 0.06));   // heat-sink fins and a ready lamp
   g.add(p);
   return finish(g, { mount: 'ceiling', size: [0.32, 0.3, 0.32], projectFrom: [0, CEIL - 0.34, 0], spots: {} });
 };
@@ -297,10 +309,11 @@ kinds.gas_panel = (m, h) => {
   const M = mm(), g = new THREE.Group(); g.name = 'gas_panel'; const y = 1.4, z = 0.06;
   g.add(rb(1.2, 0.25, 0.06, 0.012, M.white, 0, y - 0.125, 0.03)); g.add(bx(1.14, 0.008, 0.008, M.steelD, 0, y + 0.1, z + 0.002)); g.add(bx(1.14, 0.008, 0.008, M.steelD, 0, y - 0.108, z + 0.002));
   const outlet = (x, ring, ring2) => { g.add(cyZ(0.05, 0.05, 0.02, M.steel, x, y, z + 0.01, 16)); g.add(cyZ(0.04, 0.04, 0.026, ring, x, y, z + 0.013, 16)); if (ring2) { g.add(cyZ(0.026, 0.026, 0.03, ring2, x, y, z + 0.015, 12)); } g.add(cyZ(0.015, 0.015, 0.032, M.dark, x, y, z + 0.016, 8)); g.add(bx(0.03, 0.012, 0.02, M.steelD, x, y - 0.075, z + 0.01)); };
+  for (const [x, c] of [[-0.5, M.o2], [-0.38, M.air], [-0.26, M.vac]]) g.add(bx(0.07, 0.012, 0.004, c, x, y - 0.1, z + 0.002));   // colour-coded legend bands
   outlet(-0.5, M.o2); outlet(-0.38, M.air, M.o2); outlet(-0.26, M.vac);
   for (const x of [-0.1, 0.02]) { g.add(rb(0.06, 0.2, 0.03, 0.006, M.dark, x, y - 0.1, z)); g.add(cy(0.014, 0.014, 0.14, M.flow ? M.glass : M.glass, x, y - 0.06, z + 0.02, 8)); g.add(face(0.02, 0.14, M.flow, x + 0.0, y + 0.01, z + 0.0365)); g.add(sph(0.007, M.gAmber, x, y + (x < 0 ? 0.0 : 0.04), z + 0.024, 1, 1, 1, 6, 4)); g.add(cyZ(0.018, 0.018, 0.02, M.steelD, x, y - 0.105, z + 0.024, 8)); }
   for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) { const x = 0.18 + c * 0.1, yy = y + (r ? 0.015 : -0.07); g.add(rb(0.075, 0.07, 0.02, 0.006, M.panel, x, yy, z)); g.add(bx(0.008, 0.026, 0.006, M.dark, x - 0.013, yy + 0.022, z + 0.012)); g.add(bx(0.008, 0.026, 0.006, M.dark, x + 0.013, yy + 0.022, z + 0.012)); g.add(bx(0.026, 0.006, 0.006, M.dark, x, yy + 0.01, z + 0.012)); }
-  g.add(cyZ(0.038, 0.038, 0.02, M.steelD, 0.5, y - 0.02, z + 0.01, 14)); g.add(cyZ(0.028, 0.03, 0.02, M.gRed, 0.5, y - 0.02, z + 0.028, 14)); g.add(bx(0.07, 0.01, 0.006, M.gGreen, 0.5, y - 0.1, z + 0.004));
+  g.add(cyZ(0.038, 0.038, 0.02, M.steelD, 0.5, y - 0.02, z + 0.01, 14)); g.add(cyZ(0.028, 0.03, 0.02, M.gRed, 0.5, y - 0.02, z + 0.028, 14)); g.add(bx(0.07, 0.01, 0.006, M.ledLit, 0.5, y - 0.1, z + 0.004)); for (const sx of [-1, 1]) g.add(bx(0.012, 0.25, 0.07, M.steelD, sx * 0.606, y - 0.25, 0.0));   // lit call button and end caps
   return finish(g, { mount: 'wall', size: [1.2, 0.25, 0.08], height: y, spots: { stand: { pos: [0, 0, 0.7], ry: PI }, outlets: { pos: [-0.38, y, z + 0.04] } } });
 };
 
@@ -318,7 +331,7 @@ kinds.morgue_tray = (m, h) => {
   g.add(sph(0.18, M.cloth, x, y + 0.1, zs(0.22), 1, 0.7, 1.4));
   g.add(rb(0.05, 0.003, 0.08, 0.002, M.paper, x + 0.02, y + 0.055, zs(1.0) + 0.04));   // blank toe tag
   g.add(rod(x + 0.03, y + 0.045, zs(0.97), x + 0.03, y + 0.058, zs(1.0) + 0.0, 0.002, M.dark, 3));
-  g.add(cy(0.01, 0.01, 0.01, M.gGreen, x + 0.2, y + 0.0, z0 - 0.02, 6));
+  g.add(cy(0.01, 0.01, 0.01, M.gGreen, x + 0.2, y + 0.0, z0 - 0.02, 6)); g.add(bx(0.2, 0.02, 0.02, M.steelD, x, y + 0.02, z0 - 0.02)); g.add(bx(0.38, 0.004, 0.004, M.paper, x, y + 0.13, zs(0.4)));   // pull handle and a sheet fold
   return finish(g, { mount: 'floor', addon: 'drawers', size: [0.5, 0.36, pull + 0.5], spots: { stand: { pos: [x, 0, z0 + pull + 0.35], ry: PI } }, lie: { pos: [x, y + 0.02, z0 + pull / 2], axis: 'z', headDir: -1 } });
 };
 
