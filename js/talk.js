@@ -36,9 +36,15 @@ export const TALK = {
   cps: 36,                     // subtitle typing speed
   replyDelay: 0.28,            // you pick -> they answer
   glance: [5, 9],              // thinking glance away every 5-9 s (0.8 s)
+  // the face key (the permanent talk PointLight, 0 outside a talk): off to screen-left of the face line (the side away from the camera's offset: short
+  // lighting, the far cheek lit, the near one in its own shade) and above, so it models the face against the deck's flat hemisphere + GI + overhead lamp fill
+  key: { i: 1.5, fwd: 0.5, side: 0.62, up: 0.3, ref: 0.26, max: 2.2 },   // ref / max: see keyFor
 };
 
 // ------------------------------------------------------------------------------------------------ maths (pure)
+/** key intensity for a speaker's skin albedo (THREE.Color, linear; or {r,g,b}): exposed for the face like a camera operator would, a darker face gets more
+ *  key (up to keyMax x) so it keeps its form against the room instead of sinking into it; fair skin (luminance >= keyRef) gets the base key */
+export function keyFor(c, K = TALK.key) { if (!c) return K.i; const L = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; return K.i * clamp(Math.sqrt(K.ref / Math.max(L, 1e-3)), 1, K.max); }
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const ease = (u) => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };   // smoothstep
 export const lerp = (a, b, k) => a + (b - a) * k;
@@ -391,7 +397,7 @@ export class Talk {
       UIHUB.ui?.open('talk', { close: () => this.end() });   // releases pointer lock on purpose: no pause screen, Esc pops this layer
       this.memo.trust0 = G.duty ? G.duty.trust(e.person) : 0.5; this.mood = moodOf({ trust: this.memo.trust0, stress: clamp((this.save.alert || 0) / 4, 0, 1) });   // the face until setupUI (refresh) has the full context
       if (this.c.vmScene) { this.vmWas = this.c.vmScene.visible; this.c.vmScene.visible = false; }
-      this.addLight(); this.setupDof();
+      this.addLight(H); this.setupDof();
       // the zoom starts now; the talk UI (intents, wheel SVG, plate, relationship meter) is built on the second zoom frame, once the first close-up frame is
       // on screen (tools/talktime.mjs: building it here, with a forced layout to start the fade-in, added 7-43 ms between E and that first frame).
       // #tk is display:block from here on but shows nothing until 'in' (bars off screen, vignette / plate / wheel at opacity 0).
@@ -553,7 +559,7 @@ export class Talk {
     cam.position.copy(s.pos).lerp(this._v.set(this.camPos.x, this.camPos.y, this.camPos.z), k); cam.quaternion.slerpQuaternions(s.quat, qT, k);
     const breath = 1 + TALK.breath * Math.sin(this.tt * Math.PI * 2 * TALK.breathHz); cam.fov = lerp(s.fov, TALK.fov * breath, k); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
     if (k >= 0.3 && !this._occ) this.occlude(fc, fr, aspect);
-    if (this.light) { const f = this.clear, r = fr.right; this.light.position.set(fc.x + f.x * 0.75 - r.x * 0.45, fc.y + 0.32, fc.z + f.z * 0.75 - r.z * 0.45); this.light.intensity = (this.lightI || 1.2) * k; }
+    if (this.light) { const f = this.clear, r = fr.right, L = TALK.key; this.light.position.set(fc.x + f.x * L.fwd - r.x * L.side, fc.y + L.up, fc.z + f.z * L.fwd - r.z * L.side); this.light.intensity = (this.lightI || L.i) * k; }
     if (this.dof) { const p = this._v.set(fc.x, fc.y, fc.z).project(cam); this.dof.uniforms.center.value.set((p.x + 1) / 2, (p.y + 1) / 2); this.dof.uniforms.aspect.value = aspect; this.dof.uniforms.amount.value = k; this.dof.enabled = k > 0.01 && this.c.CFG?.quality === 'high'; }
     const clk = this.G.comms?.clock?.format?.(); if (clk && this.dom) this.dom.clk.textContent = `SHIP TIME ${clk}`;
   }
@@ -576,8 +582,8 @@ export class Talk {
   }
   // The face light is created once and stays in the scene at intensity 0: three.js recompiles every lit material's shader whenever the scene's light count changes,
   // so adding it per conversation (and removing it again afterwards) stalled the game for a second or more, at the start and at the end of every talk.
-  ensureLight() { const T = this.c.THREE; if (this.light || !T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.light.position.set(0, -50, 0); this.lightI = 0.45; this.c.scene.add(this.light); }
-  addLight() { this.ensureLight(); this.lightI = 0.45; if (this.light) this.light.intensity = 0; this._occ = false; }
+  ensureLight() { const T = this.c.THREE; if (this.light || !T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.light.position.set(0, -50, 0); this.lightI = TALK.key.i; this.c.scene.add(this.light); }
+  addLight(H) { this.ensureLight(); this.lightI = keyFor(H?.mats?.body?.color); if (this.light) this.light.intensity = 0; this._occ = false; }
   /** compile the depth-of-field pass now (one throwaway composer frame with it enabled): the loading screen calls this so the first talk does not.
    *  { world: false }: the post passes only, the scene passes skipped (the boarding screen draws every object into both buffers itself, main.js warmDraws,
    *  so a full-resolution world raster here would add a whole frame of GPU time and no first draw); then drawn twice, as the composer's buffers swap roles

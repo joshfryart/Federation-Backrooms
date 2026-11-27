@@ -262,8 +262,9 @@ float sh_f(vec3 p){ return 0.5 * sh_n(p) + 0.25 * sh_n(p * 2.03 + 7.1) + 0.125 *
 `;
 // ---- per-material light response: wrap RE_Direct (three's per-light BRDF hook in lights_physical_pars_fragment) with an extra term. Same program count as before:
 // each of these replaces the program its material already had (one customProgramCacheKey per kind of material), nothing is added per person.
-const directHook = (fs, name, body) => fs.replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>
+const directHook = (fs, name, body, pre = '') => fs.replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>
 void RE_Direct_${name}( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+  ${pre}
   RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
   ${body}
 }
@@ -274,7 +275,16 @@ void RE_Direct_${name}( const in IncidentLight directLight, const in vec3 geomet
 const SKIN_SSS = `
   float ndl = dot( geometryNormal, directLight.direction );
   vec3 wrapW = vec3( 0.62, 0.3, 0.2 ), wrapL = clamp( ( vec3( ndl ) + wrapW ) / ( 1.0 + wrapW ), 0.0, 1.0 );
-  reflectedLight.directDiffuse += directLight.color * BRDF_Lambert( material.diffuseContribution ) * max( wrapL - max( ndl, 0.0 ), 0.0 ) * 0.85;`;
+  reflectedLight.directDiffuse += directLight.color * BRDF_Lambert( material.diffuseContribution ) * max( wrapL - max( ndl, 0.0 ), 0.0 ) * ( 0.85 - 0.6 * smoothstep( 0.0, 0.5, ndl ) );`;
+// (the wrap gain falls from 0.85 at the terminator to 0.25 on the lit side: the full gain there added up to +16% red on a half-lit cheek and flattened the
+// lower face in the talk close-up; the red bleed past the terminator, where it reads as skin, is unchanged)
+// skin ambient: the deck's indirect light (hemisphere + baked GI bounce + IBL) reaches a face almost evenly from every side, and in the talk close-up it was most
+// of the face's light (all nine lights off still left the face at ~65% of its brightness: the GI bounce alone), so the face had no form. A face is lit from
+// above far more than from below (brow, nose and chin shade what is under them): the indirect term is weighted by the world-space normal, full on surfaces
+// facing up, SKIN_AMB on surfaces facing down (uAmb.x), uAmb.y an overall scale (1). Same program: a uniform, no new defines.
+const SKIN_AMB = 0.3;
+const SKIN_AMBIENT = `#include <lights_fragment_end>
+  { vec3 nW = inverseTransformDirection( normal, viewMatrix ); reflectedLight.indirectDiffuse *= mix( uAmb.x, 1.0, smoothstep( -0.6, 0.85, nW.y ) ) * uAmb.y; }`;
 // eyes: a wet cornea over the eyeball. The eye mesh is nearly flat (its normals all face forward), so the cornea is shaded with a sphere normal around each
 // eyeball's centre (vEyeN, see eyeShader): a second, very sharp specular lobe per light (the material's own roughness spreads it too wide to read as a glint).
 const EYE_CORNEA = `
@@ -283,8 +293,12 @@ const EYE_CORNEA = `
   reflectedLight.directSpecular += directLight.color * nl * min( D_GGX( 0.07, nh ) * 0.03, 4.0 ) * uGlint;`;
 // hair: Kajiya-Kay strand highlights (two shifted lobes, the second tinted by the hair colour). The cards' own normals jump from card to card, so the highlight
 // uses a smooth "shell" normal (vHairN: out from the centre of the hair volume) and a strand direction that runs from the crown down and out (vHairT), both
-// skinned in hairShader: one continuous band over the head instead of a highlight per card. The material's GGX term stays for the broad sheen.
+// skinned in hairShader: one continuous band over the head instead of a highlight per card.
+// The material's own GGX lobe is kept at 35% of its strength (a little broad sheen): at roughness 0.7 it is a broad untinted haze over the whole crown (with the deck's overhead
+// lamp and panel lights it washed the top of the head out to a grey helmet), so the strand lobes below carry the highlight as one band.
+const HAIR_PRE = 'vec3 hairSpec0 = reflectedLight.directSpecular;';
 const HAIR_KK = `
+  reflectedLight.directSpecular = hairSpec0 + ( reflectedLight.directSpecular - hairSpec0 ) * 0.35;
   vec3 N = normalize( vHairN ), T = vHairT - N * dot( vHairT, N ); T = T / max( length( T ), 1e-4 );
   vec3 hD = normalize( directLight.direction + geometryViewDir );
   vec3 T1 = normalize( T - N * 0.12 ), T2 = normalize( T + N * 0.2 );
@@ -317,7 +331,7 @@ export function eyeShader(m, eyes, glint = 1) {
         // cap's apex, hence the downward offset; found by drawing the regions) so the lids never hide it; scaled by how lit the eye is so it never glows in the dark
         vec3 tg = normalize( normalize( vEyeF ) * 2.5 + normalize( vViewPosition ) + vec3( -0.22, -0.6, 0.0 ) );
         float lum = dot( reflectedLight.indirectDiffuse + reflectedLight.directDiffuse, vec3( 0.3, 0.59, 0.11 ) ) / max( dot( diffuseColor.rgb, vec3( 0.3, 0.59, 0.11 ) ), 0.05 );
-        reflectedLight.directSpecular += smoothstep( 0.9955, 0.9985, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 6.0, 0.05, 3.0 ) * uGlint; }`);
+        reflectedLight.directSpecular += smoothstep( 0.989, 0.9965, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 8.0, 0.1, 4.0 ) * uGlint; }`);   // ~2 px across at 960x540 in the talk close-up (it was a sub-pixel speck)
     giPatch(sh);
   };
   m.customProgramCacheKey = () => 'eye1'; m.needsUpdate = true; return u;
@@ -334,7 +348,7 @@ export function hairShader(m, { crown, centre }) {
             hd = ( skinMatrix * vec4( hd, 0.0 ) ).xyz; hn = ( skinMatrix * vec4( hn, 0.0 ) ).xyz;
           #endif
           vHairT = normalize( mat3( modelViewMatrix ) * hd ); vHairN = normalize( mat3( modelViewMatrix ) * hn ); }`);
-    sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairT; varying vec3 vHairN;'), 'Hair', HAIR_KK);
+    sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairT; varying vec3 vHairN;'), 'Hair', HAIR_KK, HAIR_PRE).replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  reflectedLight.indirectSpecular *= 0.5;   // the IBL sheen too (scene.environment ignores a material envMapIntensity)');
     giPatch(sh);
   };
   m.customProgramCacheKey = () => 'hair2'; m.needsUpdate = true; return u;
@@ -347,12 +361,12 @@ function clothMapsFor() {
   return (clothMaps = ownRandom(() => ({ n: rep(p.n), r: rep(p.r) })));   // private random stream: see blobMat
 }
 export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
-  const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale } };
+  const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale }, uAmb: { value: new THREE.Vector2(SKIN_AMB, 1) } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
     sh.fragmentShader = directHook(sh.fragmentShader, 'Skin', SKIN_SSS);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale; uniform vec2 uAmb;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
       .replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 q = vObj * 9.0 + uSeed;
         float mot = sh_f(q * 0.5), pore = sh_n(vObj * 260.0 + uSeed), freck = smoothstep(0.72, 0.8, sh_n(vObj * 70.0 + uSeed * 1.7));
@@ -374,7 +388,8 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
       { vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition); float hx = dFdx(gH), hy = dFdy(gH);
         vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1);
         vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad * 0.0012); }`)
-      .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0');
+      .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0')
+      .replace('#include <lights_fragment_end>', SKIN_AMBIENT);
     giPatch(sh);
   };
   m.customProgramCacheKey = () => 'skin2';
@@ -453,6 +468,11 @@ function blobMat() {
     x.putImageData(img, 0, 0); return new THREE.CanvasTexture(c); });
   return new THREE.MeshBasicMaterial({ color: 0x000000, map: blobTex, transparent: true, opacity: blobTex ? 0.85 : 0.38, depthWrite: false });
 }
+// Skin albedo in a plausible range: the palette's fair tones are 0.54 / 0.66 linear luminance (paper white is ~0.8), which under the deck's hemisphere + GI +
+// room lamp left nothing for shading to work with (a chalk-white, formless face in the talk close-up). Real skin runs ~0.05 (very dark) to ~0.4 (very fair):
+// above SKIN_KNEE the luminance is compressed (hue and saturation kept), so the fair tones stay in order but land at 0.32-0.40; mid and dark tones are untouched.
+const SKIN_KNEE = 0.26, SKIN_SLOPE = 0.35;
+export function skinAlbedo(c) { const L = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; if (L > SKIN_KNEE) c.multiplyScalar((SKIN_KNEE + (L - SKIN_KNEE) * SKIN_SLOPE) / L); return c; }
 // run fn with Math.random swapped for a private generator (for one-off allocations whose three.js uuids must not consume the page's seeded stream)
 function ownRandom(fn) { const R = Math.random; let s = 0x51ed27; Math.random = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; try { return fn(); } finally { Math.random = R; } }
 export function makeHuman(opts = {}) {
@@ -463,7 +483,7 @@ export function makeHuman(opts = {}) {
   const inf = info(kind); const inner = clone(src.scene);
   const g = new THREE.Group(); const height = opts.height || (kind === 'crew_m' ? 1.74 + rnd() * 0.1 : kind === 'crew_heavy' ? 1.92 + rnd() * 0.08 : kind === 'suit' ? 1.9 : 1.6 + rnd() * 0.12);
   inner.scale.setScalar(height / inf.height); g.add(inner);
-  const skin = new THREE.Color(opts.skin ?? pickOf(SKINS, rnd)); if (opts.pale) skin.lerp(new THREE.Color(0xb9b3a4), opts.pale);
+  const skin = skinAlbedo(new THREE.Color(opts.skin ?? pickOf(SKINS, rnd))); if (opts.pale) skin.lerp(new THREE.Color(0xb9b3a4), opts.pale);
   const hair = opts.hair || pickOf(HAIRS, rnd); const uniform = new THREE.Color(opts.uniform ?? pickOf(DIVISIONS, rnd));
   const style = opts.style ?? pickOf(['plain', 'plain', 'duty', 'duty', 'trim', 'yoke', 'trim-duty'], rnd);   // uniform variants (see styleGarment)
   const faces = []; const mats = {};
@@ -482,8 +502,10 @@ export function makeHuman(opts = {}) {
     else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); if (o.geometry.attributes.zone) styleGarment(m, style, uniform); }
     else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; eyeShader(m, NO_EYES, 0); }   // shares the eyes' program, glint off
     else if (name === 'tongue') eyeShader(m, eyesOf(kind), 0);   // shares the eyes' program, glint off
-    else if (name === 'eyes') { m.roughness = 0.08; eyeShader(m, eyesOf(kind)); if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
-    else if (name === 'teeth') { m.alphaTest = 0.5; }
+    else if (name === 'eyes') { m.roughness = 0.08; m.color.setScalar(0.82); eyeShader(m, eyesOf(kind));   // sclera ~0.7 albedo, not paper white (it read as glowing against the face)
+      if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
+    else if (name === 'teeth') { m.alphaTest = 0.5; m.color.setScalar(0.62); }   // teeth sit in the mouth's shade (nothing occludes them here): full white they glowed in the close-up, most of all on dark skin
+    else if (name === 'eyelashes') { m.color.copy(skin).multiplyScalar(0.18); m.roughness = 0.75; }   // the lash meshes are solid strips (no alpha card): near-black (the GLB's 0.012) they read as heavy eyeliner rings in the close-up; a deep shade of the skin keeps the lid line without the ink
     if (opts.tint) m.color.multiply(new THREE.Color(opts.tint));
   });
   if (!opts.material && kind !== 'suit' && opts.kit !== false) addKit(kind, inner, height, uniform, opts.name ?? per?.family ?? '');
