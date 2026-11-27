@@ -37,14 +37,16 @@ def('ladle', 'ladle', 'food', (g, M) => {
   const b = mesh(bowl(0.045, 14, 6), st, 0, 0.255, 0.0); g.add(b);                         // bowl centre y 0.255 (rim 0.21..0.30), opens +z
   g.add(tor(0.045, 0.0028, st, 0, 0.255, 0, PI * 2, 4, 16));                              // rolled rim
   g.add(cy(0.0075, 0.0075, 0.02, st, 0, 0.215, -0.012, 6));
+  g.add(cy(0.005, 0.005, 0.004, M.dark, 0, 0.0, 0.0115, 6));   // hang-tag stud
 });
 
 // ---- stock pot: 0.40 m dia x 0.35 m, two riveted loop handles, domed lid with a pull. Origin at the +x handle.
 def('stockpot', 'stock pot', 'food', (g, M) => {
   const st = pot2(M), p = new THREE.Group(); p.position.set(-0.225, -0.28, 0); g.add(p);
   p.add(lathe('pot', [[0.001, 0.0], [0.178, 0.0], [0.196, 0.014], [0.2, 0.05], [0.2, 0.34], [0.206, 0.346], [0.206, 0.354], [0.194, 0.354], [0.194, 0.03], [0.001, 0.03]], st, 0, 0, 0, 20));
-  p.add(cy(0.202, 0.202, 0.018, M.alu, 0, 0.0, 0, 20).translateY(0.044));                    // base band
+  p.add(cy(0.202, 0.202, 0.018, M.alu, 0, 0.0, 0, 16).translateY(0.044));                    // base band
   p.add(lathe('lid', [[0.001, 0.398], [0.03, 0.396], [0.14, 0.382], [0.2, 0.358], [0.212, 0.354], [0.212, 0.345], [0.19, 0.345]], st, 0, 0, 0, 20));   // lid dome sits on the rim
+  p.add(tor(0.2, 0.003, st, 0, 0.2, 0, PI * 2, 3, 10).rotateX(PI / 2));   // rolled stiffening ribs
   p.add(cy(0.014, 0.018, 0.03, M.rubber, 0, 0.405, 0, 10)); p.add(cy(0.026, 0.026, 0.008, M.dark, 0, 0.392, 0, 10));   // pull knob
   for (const sx of [-1, 1]) {
     const h = tor(0.04, 0.0085, st, sx * 0.205, 0.28, 0, PI, 4, 10); h.rotation.z = sx > 0 ? -PI / 2 : PI / 2; p.add(h);                   // loop handle

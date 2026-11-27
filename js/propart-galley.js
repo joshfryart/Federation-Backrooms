@@ -75,7 +75,7 @@ function mats() {
 
 // ------------------------------------------------------------------ geometry helpers (B and C take the FLOOR-side y; tube/sph are centred)
 const mesh = (g, m, x, y, z) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); return o; };
-const B = (w, h, d, m, x = 0, y = 0, z = 0, r = 0.008) => { r = Math.min(r, w / 2.02, h / 2.02, d / 2.02); return mesh(geo(`b${w}|${h}|${d}|${r}`, () => r < 0.002 ? new THREE.BoxGeometry(w, h, d) : new RoundedBoxGeometry(w, h, d, 1, r)), m, x, y + h / 2, z); };
+const B = (w, h, d, m, x = 0, y = 0, z = 0, r = 0.008) => { r = Math.min(r, w / 2.02, h / 2.02, d / 2.02); return mesh(geo(`b${w}|${h}|${d}|${r}`, () => r < 0.0025 ? new THREE.BoxGeometry(w, h, d) : new RoundedBoxGeometry(w, h, d, 1, r)), m, x, y + h / 2, z); };
 const C = (rt, rb, h, m, x = 0, y = 0, z = 0, seg = 14) => mesh(geo(`c${rt}|${rb}|${h}|${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg)), m, x, y + h / 2, z);
 const tube = (axis, len, r, m, x, y, z, seg = 8) => { const o = mesh(geo(`c${r}|${r}|${len}|${seg}`, () => new THREE.CylinderGeometry(r, r, len, seg)), m, x, y, z); if (axis === 'x') o.rotation.z = PI / 2; else if (axis === 'z') o.rotation.x = PI / 2; return o; };
 const L = (key, pts, m, x = 0, y = 0, z = 0, seg = 14) => mesh(geo(`l${key}|${seg}`, () => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), seg)), m, x, y, z);
@@ -122,6 +122,10 @@ function buildRange(withHood) {
     g.add(tube('x', 0.32, 0.013, M.chrome, x, 0.63, 0.47, 8)); for (const k of [-1, 1]) g.add(tube('z', 0.06, 0.008, M.chrome, x + k * 0.14, 0.63, 0.44, 6));
   }
   g.add(B(0.02, 0.58, 0.04, M.dark, 0, 0.12, 0.39, 0.002));
+  for (let i = 0; i < 5; i++) g.add(B(0.05, 0.012, 0.01, M.black, -0.2 + i * 0.1, 0.04, 0.4, 0.001));               // kick-plate vent slots
+  for (const sx of [-1, 1]) { g.add(B(0.4, 0.012, 0.01, M.dark, sx * 0.2, 0.7, 0.412, 0.002)); g.add(B(0.4, 0.012, 0.01, M.dark, sx * 0.2, 0.119, 0.412, 0.002)); }   // door gap lines
+  g.add(B(0.86, 0.008, 0.012, M.gAmber, 0, 0.66, 0.418, 0.002));                                                        // oven-hot strip under the handles
+  g.add(B(0.9, 0.012, 0.8, M.ss2, 0, 0.1 + 0.756, 0, 0.002));                                                           // top edge band
   // a stock pot (0.40 x 0.35) over the rear-left zones and a frying pan on the front-right zone, both stainless
   const pot = grp(L('rpot', [[0.001, 0], [0.19, 0], [0.2, 0.012], [0.2, 0.34], [0.206, 0.346], [0.206, 0.354], [0.194, 0.354], [0.194, 0.02], [0.001, 0.02]], M.ss2, 0, 0, 0, 20),
     L('rplid', [[0.001, 0.4], [0.03, 0.396], [0.14, 0.382], [0.2, 0.358], [0.212, 0.35], [0.19, 0.345]], M.ss2, 0, 0, 0, 20), C(0.014, 0.018, 0.026, M.rubber, 0, 0.4, 0, 8), T(0.04, 0.009, M.ss2, 0.222, 0.28, 0, PI, 4, 8).rotateZ(-PI / 2), T(0.04, 0.009, M.ss2, -0.222, 0.28, 0, PI, 4, 8).rotateZ(PI / 2));
@@ -146,6 +150,9 @@ function buildServery() {
   // diner-side doors with bar pulls, and a staff-side rear lip
   for (let i = 0; i < 3; i++) { const x = -0.74 + i * 0.74; g.add(B(0.68, 0.64, 0.012, M.ss2, x, 0.2, 0.392, 0.004)); g.add(tube('x', 0.2, 0.01, M.chrome, x, 0.7, 0.425, 6)); for (const k of [-1, 1]) g.add(tube('z', 0.03, 0.006, M.chrome, x + k * 0.09, 0.7, 0.405, 5)); }
   g.add(B(2.2, 0.025, 0.04, M.ss2, 0, 1.0, -0.38, 0.005));
+  for (const x of [-1.11, -0.37, 0.37]) g.add(B(0.012, 0.66, 0.014, M.dark, x + 0.0, 0.19, 0.394, 0.002));          // door gap lines
+  g.add(B(0.5, 0.03, 0.008, M.levels, 0.6, 0.8, 0.395, 0.001)); g.add(B(2.0, 0.008, 0.01, M.gCyan, 0, 0.115, 0.392, 0.001));   // menu display and under-lip light strip
+  for (let i = 0; i < 6; i++) g.add(B(0.06, 0.012, 0.01, M.black, -0.5 + i * 0.1, 0.085, 0.392, 0.001));              // kick vents
   // three inset wells: two lidded, the middle one open with food and a spoon
   const wx = [-0.8, -0.24, 0.32];
   wx.forEach((x, i) => {
@@ -183,15 +190,29 @@ function buildStool() { const M = mats(), g = new THREE.Group(); stoolParts(M, g
 // holodeck props (bench / lamp / stool kinds placed by js/rooms/holodeck.js and lounge.js): simple bolted bench, work lamp on a weighted base, plain stool
 function buildBench() {
   const M = mats(), g = new THREE.Group();
-  g.add(B(1.5, 0.06, 0.42, M.leather, 0, 0.42, 0, 0.006));
-  for (const x of [-0.62, 0.62]) { g.add(B(0.06, 0.42, 0.36, M.ss2, x, 0, 0, 0.004)); }
-  g.add(tube('x', 1.3, 0.02, M.chrome, 0, 0.14, 0, 8));
+  g.add(B(1.5, 0.07, 0.42, M.leather, 0, 0.4, 0, 0.026));                                    // padded cushion, soft rolled edge
+  g.add(B(1.46, 0.02, 0.38, M.dark, 0, 0.385, 0, 0.004));                                   // base board under the pad
+  g.add(B(1.38, 0.004, 0.006, M.black, 0, 0.472, 0.0, 0.001)); for (const x of [-0.46, 0, 0.46]) g.add(B(0.006, 0.004, 0.34, M.black, x, 0.472, 0, 0.001));   // piping and seam lines
+  g.add(B(1.5, 0.02, 0.02, M.brass, 0, 0.36, 0.2, 0.004)); g.add(B(1.5, 0.02, 0.02, M.brass, 0, 0.36, -0.2, 0.004));                                  // brass edge rails
+  for (const x of [-0.62, 0.62]) {
+    g.add(B(0.05, 0.36, 0.34, M.ss2, x, 0.02, 0, 0.004));                                    // side frame plate
+    g.add(B(0.07, 0.02, 0.4, M.dark, x, 0, 0, 0.004));                                       // floor foot
+    g.add(B(0.07, 0.03, 0.3, M.ss, x, 0.36, 0, 0.004));                                      // seat bracket
+    for (const z of [-0.14, 0.14]) g.add(C(0.01, 0.01, 0.008, M.chrome, x + (x > 0 ? -0.027 : 0.027), 0.2, z, 6).rotateZ(PI / 2));   // bolts
+  }
+  g.add(tube('x', 1.3, 0.02, M.chrome, 0, 0.14, 0, 8)); g.add(B(1.3, 0.01, 0.02, M.gCyan, 0, 0.345, 0.17, 0.001));   // foot rail, under-seat accent strip
   return bake(g, { top: 0.48, seat: 0.46, box: [-0.78, 0.78, -0.24, 0.24], spots: [[-0.4, 0.46, 0], [0.4, 0.46, 0]], size: [1.56, 0.48, 0.48] });
 }
 function buildWorkLamp() {
   const M = mats(), g = new THREE.Group();
-  g.add(C(0.14, 0.16, 0.03, M.ss2, 0, 0, 0, 16)); g.add(C(0.02, 0.02, 1.0, M.chrome, 0, 0.03, 0, 8)); g.add(C(0.12, 0.05, 0.14, M.dark, 0, 1.0, 0, 14)); g.add(C(0.07, 0.07, 0.02, M.gAmber, 0, 0.99, 0, 12));
-  return bake(g, { top: 1.14, box: [-0.16, 0.16, -0.16, 0.16], spots: [[0, 0.5, PI]], size: [0.32, 1.14, 0.32] });
+  g.add(C(0.14, 0.16, 0.03, M.ss2, 0, 0, 0, 18)); g.add(C(0.15, 0.15, 0.012, M.rubber, 0, 0, 0, 18)); g.add(C(0.07, 0.1, 0.04, M.dark, 0, 0.03, 0, 14));   // weighted base, rubber ring, boss
+  g.add(C(0.02, 0.02, 0.98, M.chrome, 0, 0.07, 0, 8)); g.add(C(0.026, 0.026, 0.05, M.dark, 0, 0.5, 0, 8)); g.add(B(0.03, 0.05, 0.02, M.black, 0.03, 0.42, 0, 0.004)); g.add(C(0.006, 0.006, 0.01, M.gGreen, 0.03, 0.47, 0.012, 6).rotateX(PI / 2));   // clamp collar, switch box, LED
+  g.add(T(0.05, 0.007, M.chrome, 0, 1.04, 0, PI * 2, 4, 12).rotateX(PI / 2));              // shade yoke ring
+  g.add(L('lampshade', [[0.04, 0.0], [0.11, 0.0], [0.12, 0.012], [0.07, 0.15], [0.04, 0.16]], M.dark, 0, 0.99, 0, 14)); g.add(C(0.105, 0.105, 0.008, M.gAmber, 0, 0.985, 0, 14));
+  g.add(C(0.045, 0.045, 0.02, M.black, 0, 1.15, 0, 10));
+  for (let i = 0; i < 4; i++) g.add(B(0.006, 0.05, 0.004, M.black, Math.sin(i * PI / 2) * 0.05, 1.04, Math.cos(i * PI / 2) * 0.05, 0.001));   // vent slits
+  g.add(T(0.09, 0.004, M.rubber, 0.09, 0.02, 0.1, PI * 1.2, 3, 8).rotateX(PI / 2));       // cable loop on the floor
+  return bake(g, { top: 1.14, box: [-0.16, 0.16, -0.16, 0.16], spots: [[0, 0.5, PI]], size: [0.32, 1.17, 0.32] });
 }
 
 function buildBar(withStools) {
@@ -239,7 +260,8 @@ function buildBin() {
   g.add(L('binlid', [[0.001, 0.46], [0.07, 0.455], [0.13, 0.43], [0.158, 0.395], [0.158, 0.378], [0.001, 0.378]], M.binlid, 0, 0, 0, 20)); g.add(C(0.02, 0.02, 0.012, M.dark, 0, 0.46, 0, 8));
   g.add(C(0.05, 0.05, 0.03, M.dark, 0, 0.35, -0.155, 8).rotateX(PI / 2)); g.add(T(0.151, 0.008, M.dark, 0, 0.375, 0, PI * 2, 4, 20).rotateX(PI / 2));   // rear hinge, rim ring
   g.add(B(0.12, 0.016, 0.1, M.rubber, 0, 0.02, 0.19, 0.005)); g.add(B(0.02, 0.02, 0.1, M.dark, 0, 0.03, 0.15, 0.003));                                    // pedal and arm
-  g.add(B(0.1, 0.012, 0.02, M.green, 0, 0.3, 0.151, 0.004));                                                                                             // recycling stripe
+  g.add(B(0.1, 0.012, 0.02, M.green, 0, 0.3, 0.151, 0.004));
+  g.add(T(0.03, 0.005, M.dark, 0, 0.3, 0.155, PI, 3, 8)); g.add(B(0.2, 0.006, 0.005, M.dark, 0, 0.18, 0.15, 0.001));   // carry grip, seam band                                                                                             // recycling stripe
   return bake(g, { top: 0.46, box: [-0.17, 0.17, -0.17, 0.17], use: { drop: { x: 0, z: 0.5, ry: PI } }, size: [0.31, 0.46, 0.38] });
 }
 
@@ -270,6 +292,7 @@ function buildDishwasher() {
   g.add(B(0.1, 0.05, 0.03, M.dark, 0.1 + 0.2, 1.14, 0.39, 0.004));
   g.add(B(0.3, 0.1, 0.3, M.ss2, 0.1, 1.5, 0, 0.008)); g.add(C(0.05, 0.05, 0.12, M.ss2, 0.1, 1.6, 0, 10));
   g.add(B(0.12, 0.02, 0.3, M.ss2, 0.1, 0.0, 0.0, 0.003));
+  g.add(B(0.66, 0.008, 0.01, M.dark, 0.1, 0.84, 0.378, 0.001)); g.add(B(0.66, 0.008, 0.01, M.dark, 0.1, 0.22, 0.378, 0.001)); g.add(B(0.26, 0.008, 0.01, M.gCyan, 0.1, 1.215, 0.392, 0.001));   // panel seams, display backlight
   return bake(g, { top: 0.86, box: [-1.15, 1.0, -0.38, 0.38], use: { load: { x: -0.6, z: 0.62, ry: PI }, unload: { x: 0.72, z: 0.62, ry: PI }, rinse: { x: -1.0, z: 0.62, ry: PI } }, spots: [[-0.6, 0.62, PI], [0.72, 0.62, PI]], size: [2.15, 1.72, 0.75] });
 }
 
