@@ -184,6 +184,7 @@ function hatch(K, ox, status = 'ready') {
   for (let k = 0; k < 4; k++) K.box(0.28, 0.03, 0.03, ox, cy - 0.06, MT, 0.2, false, k * PI / 4).box(0.04, 0.04, 0.05, ox + Math.cos(k * PI / 4) * 0.14, cy - 0.06 + Math.sin(k * PI / 4) * 0.14, DK, 0.2).box(0.04, 0.04, 0.05, ox - Math.cos(k * PI / 4) * 0.14, cy - 0.06 - Math.sin(k * PI / 4) * 0.14, DK, 0.2);   // wheel: four crossed spokes with rim studs
   K.box(0.22, 0.14, 0.06, ox, cy - 0.34, RD, 0.2).box(0.18, 0.1, 0.012, ox, cy - 0.34, 0xe8e0c8, 0.262).box(0.03, 0.03, 0.04, ox, cy - 0.34, YL, 0.27);   // pull handle under a red cover
   K.box(0.06, 0.06, 0.02, ox + 0.48, cy + 0.5, status === 'ready' ? GG : GR, 0.1, true).box(0.07, 0.07, 0.016, ox + 0.48, cy + 0.5, DK, 0.09);   // status lamp
+  K.box(0.7, 0.03, 0.012, ox, cy - 0.5, 0x181a1e, 0.1).box(0.05, 0.05, 0.014, ox - 0.42, cy - 0.18, 0x3a3e46, 0.11);                                    // scuffed kick strip on the door foot, wear patch
   K.box(0.5, 0.05, 0.008, ox, cy + 0.74, WHT, 0.02).box(0.46, 0.012, 0.004, ox, cy + 0.74, GRN, 0.028);                                      // blank placard above: lettering is painted by the sign pass
   for (const sx of [-1, 1]) K.box(0.05, 0.16, 0.04, ox + sx * 0.5, cy - 0.3, DK, 0.1);                                                           // two hinge blocks
 }
