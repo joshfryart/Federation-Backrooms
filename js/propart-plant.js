@@ -123,6 +123,8 @@ function pumpskid(m) {
   b.cyl(P.brass, 0.01, 0.09, 0.37, 0.62, 0.13, 'z', 6); b.gauge(P, 0.37, 0.62, 0.185, 0.62);
   // drain valve (lever) and a name plate on the volute
   b.cyl(P.brass, 0.014, 0.06, 0.37, 0.14, 0.0, 'y', 8); b.box(P.red, 0.07, 0.014, 0.014, 0.37, 0.115, 0.0);
+  // detail: volute name plate, anchor bolts through the drip-tray corners
+  b.box(P.steel, 0.07, 0.04, 0.006, 0.37, SY - 0.02, 0.201); for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(P.dark, 0.024, 0.016, 0.024, sx * 0.6, 0.044, sz * 0.2);
   b.done(g); g.userData.top = 0.7; g.userData.size = [1.3, 0.5, 0.7];
   g.userData.use = { read: new THREE.Vector3(0.5, SY, 0.9), gaugeSuction: new THREE.Vector3(0.585, SY, 0.205), gaugeDischarge: new THREE.Vector3(0.37, 0.62, 0.2), valve: new THREE.Vector3(0.485, 0.57, 0.15), motor: new THREE.Vector3(-0.3, 0.55, 0.3) };
   return g;
@@ -149,6 +151,8 @@ function heatexch(m) {
   b.cyl(P.brass, 0.01, 0.08, 0.2, CY + 0.0, SR + 0.04, 'z', 6); b.gauge(P, 0.2, CY, SR + 0.1, 0.55, 0.055);   // dial thermometer
   b.cyl(P.brass, 0.01, 0.08, -0.25, CY + 0.0, SR + 0.04, 'z', 6); b.gauge(P, -0.25, CY, SR + 0.1, 0.35, 0.055);
   b.box(P.steel, 0.2, 0.09, 0.006, 0.0, CY - 0.1, SR + 0.004);                                       // name plate
+  // detail: anchor bolts on the grout plate, lifting lugs on the shell
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(P.dark, 0.03, 0.02, 0.03, sx * 0.7, 0.06, sz * 0.2); for (const sx of [-1, 1]) b.box(P.galv, 0.04, 0.05, 0.02, sx * 0.3, CY + SR + 0.02, 0);
   b.done(g); g.userData.top = 1.12; g.userData.size = [2.0, 0.56, 1.12];
   g.userData.use = { read: new THREE.Vector3(0, 0.72, 0.9), gaugeHot: new THREE.Vector3(0.2, CY, SR + 0.13), gaugeCold: new THREE.Vector3(-0.25, CY, SR + 0.13), ventValve: new THREE.Vector3(0.2, 1.1, 0), drain: new THREE.Vector3(0, 0.45, 0.1) };
   return g;
@@ -177,6 +181,8 @@ function scrubber(m) {
   b.box(P.glowG, 0.04, 0.025, 0.01, 0.12, 1.47, 0.346); b.box(P.glowO, 0.04, 0.025, 0.01, 0.2, 1.47, 0.346); b.box(P.dark, 0.04, 0.025, 0.01, 0.28, 1.47, 0.346);
   b.box(P.galv, 0.7, 0.07, 0.6, 0, 0.1, 0.12); b.box(P.fabDark, 0.72, 0.1, 0.03, 0, 0.1, 0.43); b.box(P.steel, 0.3, 0.02, 0.03, 0, 0.12, 0.465); b.box(P.hazard, 0.84, 0.03, 0.02, 0, 0.065, 0.352);
   for (let i = 0; i < 6; i++) b.box(P.insul, 0.62, 0.008, 0.02, 0, 0.14, -0.12 + i * 0.07);      // pleated filter tray
+  // detail: kick-plate vent slots and roof lifting eyes
+  for (let i = 0; i < 4; i++) b.box(P.dark, 0.5, 0.014, 0.01, 0, 0.07 + i * 0.03, 0.352); for (const sx of [-1, 1]) b.box(P.steel, 0.05, 0.03, 0.03, sx * 0.3, 2.0, 0);
   b.done(g); g.userData.top = 2.0; g.userData.size = [0.9, 0.7, 2.0];
   g.userData.use = { read: new THREE.Vector3(0, 1.46, 0.8), gauge: new THREE.Vector3(-0.3, 1.46, 0.4), door: new THREE.Vector3(0, 0.9, 0.5), tray: new THREE.Vector3(0, 0.12, 0.6), fan: new THREE.Vector3(0, 1.7, 0.4) };
   return g;
@@ -207,6 +213,8 @@ function fieldgen(m, scheme = 'grav') {
   // helium lines drum -> compressor
   for (const [y, z] of [[0.5, -0.12], [0.62, 0.12]]) { b.cyl(P.pipe, 0.025, 0.55, 0.0, y, z, 'x', 8); b.cyl(P.pipe, 0.025, y - 0.2, -0.08, y / 2 + 0.1, z, 'y', 8); }
   b.cyl(P.hazard, 0.05, 0.08, 0.95, 1.06, -0.25, 'y', 10);     // pressure relief stack
+  // detail: floor anchor pads at the corners
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(P.hazard, 0.1, 0.012, 0.1, sx * 1.02, 0.006, sz * 0.7);
   b.done(g); g.userData.top = 1.5; g.userData.size = [2.2, 1.6, 1.55]; g.userData.scheme = scheme;
   g.userData.use = { read: new THREE.Vector3(0.72, 0.88, 0.8), panel: new THREE.Vector3(0.72, 0.88, 0.5), drumNorth: new THREE.Vector3(DX, 0.9, 0.9), coilRing: new THREE.Vector3(DX, 0.9, 0.7) };
   return g;
@@ -240,6 +248,8 @@ function fabricator(m) {
   b.box(P.fabDark, 0.34, 0.24, 0.07, -0.74, 1.3, 1.04, [-0.35, 0, 0]); b.plane(hmiMat(), 0.28, 0.17, -0.74, 1.31, 1.08 - 0.001); b.cyl(P.red, 0.025, 0.02, -0.62, 1.2, 1.09, 'z', 10);
   // status beacon tower on the roof (green / amber / red)
   b.cyl(P.dark, 0.04, 0.05, 0.62, 1.8 + 0.025, -0.3, 'y', 10); b.cyl(P.glowG, 0.04, 0.05, 0.62, 1.87, -0.3, 'y', 10); b.cyl(P.glowO, 0.04, 0.05, 0.62, 1.92, -0.3, 'y', 10); b.cyl(P.glowR, 0.04, 0.05, 0.62, 1.97, -0.3, 'y', 10);
+  // detail: roof louvre slots
+  for (let i = 0; i < 3; i++) b.box(P.dark, 0.5, 0.01, 0.025, -0.2, 1.806, -0.2 + i * 0.1);
   b.done(g); g.userData.top = 2.02; g.userData.size = [1.9, 1.0, 2.02];
   g.userData.use = { load: new THREE.Vector3(0.26, 0.0, 0.85), pendant: new THREE.Vector3(-0.74, 1.3, 1.25), hopper: new THREE.Vector3(1.1, 0.0, 0.5), inspect: new THREE.Vector3(0.26, 1.2, 0.7), beacon: new THREE.Vector3(0.62, 1.97, -0.3) };
   return g;
