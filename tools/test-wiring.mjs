@@ -37,10 +37,13 @@ export async function wiringBrowser(page, fail) {
     const THREE = await import('three'), { makeSurvivor } = await import('./js/humans.js'), { dressCrew } = await import('./js/actors.js'), { outfitFor } = await import('./js/wearart.js'), E = await import('./js/equipment.js'), { HH_ICON } = await import('./js/menus.js');
     G.forceShip = 0; g.newRun(); hide(); g.setQuality('low'); G.hp = G.maxHp = 1e6;
     // 1) clothes cache: after the load-time prewarm, dressing 17 crew costs next to nothing and shares geometry per body kind
-    { const cached = (await import('./js/wearart.js')).wearCacheSize();   // tools/test.mjs awaits __game.warmed before any section: no wall-clock polling here (an idle job landing mid-section shifted Math.random)
+    //    (asserted by counting: no garment is built while dressing them, and the median spawn stays cheap; one slow spawn is scheduler noise, not a cache miss:
+    //    the old `max < 15 ms` failed once at 25 ms on a busy box with every lookup a cache hit)
+    { const WA = await import('./js/wearart.js'), cached = WA.wearCacheSize(), st0 = { ...WA.wearCacheStats };   // tools/test.mjs awaits __game.warmed before any section: no wall-clock polling here (an idle job landing mid-section shifted Math.random)
       const ppl = g.roster.people.filter(p => outfitFor(p)).slice(0, 17), ms = [], meshes = []; for (const p of ppl) { const m = makeSurvivor(Math.random, p), t0 = performance.now(); dressCrew(m, p); ms.push(performance.now() - t0); meshes.push([p.body, m.userData.outfit]); }
+      const sorted = ms.slice().sort((a, b) => a - b), median = sorted[sorted.length >> 1] ?? 0;
       const geo = {}; let shared = 0; for (const [k, w] of meshes) { if (!w) continue; const key = k + w.id, gg = w.meshes[0].geometry; if (geo[key] === gg) shared++; geo[key] = gg; }
-      out.cache = { cached, n: ppl.length, total: +ms.reduce((a, b) => a + b, 0).toFixed(1), max: +Math.max(...ms).toFixed(1), dressed: meshes.filter(m => m[1]).length, shared }; }
+      out.cache = { cached, n: ppl.length, builds: WA.wearCacheStats.builds - st0.builds, hits: WA.wearCacheStats.hits - st0.hits, median: +median.toFixed(2), total: +ms.reduce((a, b) => a + b, 0).toFixed(1), max: +Math.max(...ms).toFixed(1), dressed: meshes.filter(m => m[1]).length, shared }; }
     // 2) repair points on every deck of two ships (the parkour check wants >= 20)
     { const pts = []; for (const si of [0, 5]) { G.forceShip = si; g.newRun(); hide(); for (let d = 0; d < G.shipDecks.length; d++) { g.loadDeck(d + 1); pts.push(g.repairPts.length); } } out.points = { min: Math.min(...pts), n: pts.length, mains: null }; }
     // 3) a deck with people, a bunk and (if any) a suit locker
@@ -79,7 +82,8 @@ export async function wiringBrowser(page, fail) {
   });
   console.log('wiring:', JSON.stringify(r));
   const ck = (c, m) => { if (!c) fail('wiring: ' + m + ' ' + JSON.stringify(r)); };
-  ck(r.cache.cached >= 20 && r.cache.dressed >= Math.min(10, r.cache.n) && r.cache.total < 40 && r.cache.max < 15 && r.cache.shared > 0, 'dressed crew spawn from the clothes cache');
+  console.log('wiring cache:', JSON.stringify(r.cache));
+  ck(r.cache.cached >= 20 && r.cache.dressed >= Math.min(10, r.cache.n) && r.cache.builds === 0 && r.cache.hits >= r.cache.dressed && r.cache.median < 3 && r.cache.shared > 0, 'dressed crew spawn from the clothes cache');
   ck(r.carts.every(([k, art, wh]) => art && wh === 4), 'art carts build');
   ck(r.points.min >= 20, 'repair points per deck >= 20');
   ck(!r.mask || (r.mask.on === r.mask.near && r.mask.after === 0), 'breathers on fire alert');

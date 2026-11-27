@@ -506,7 +506,10 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
     if (e.liftGo && out && !shut) { stay = false; slow = 0; atSpot = true; gx = car.x; gz = car.z; }   /* standing still facing the car, not squeezing through anyone */   // arrivals stepping out while a called group walks up: those further out stop where they are and go on once the doorway is clear, not back to the line (iteration 5 trace: 8 called people sent back for 5 s per arrival)
     const door = stay ? liftWaitSpots(car) : null, spots = door && (door.length ? door.concat(liftQueueSpots(car)) : door), nd = door?.length || 0;   // the 6 door spots first, then the line further back (iteration 4)
     if (spots?.length) {
-      const free = (q, i) => !ents.some(o => o !== e && o.kind === 'crew' && o.mesh && !o.board && (o.liftWait === i || Math.hypot(o.x - q[0], o.z - q[1]) < 0.5));   // nobody stands there or has claimed it
+      // nobody has claimed it or stands on it. Someone in the line on their way to their own place, or anyone walking past, does not take it: that
+      // took places from the people standing on them, who picked another one across the doorway, which took the next one's place as they passed...
+      // (test walk 'held by the player': places changed hands every few frames and two crossing walkers stood 0.16-0.3 m apart, seeds 4 / 13)
+      const free = (q, i) => !ents.some(o => o !== e && o.kind === 'crew' && o.mesh && !o.board && (o.liftWait === i || (o.liftWait == null && !(o.walk && (o.v || 0) > 0.1) && Math.hypot(o.x - q[0], o.z - q[1]) < 0.5)));
       const cost = (q, i) => i < nd ? Math.hypot(q[0] - e.x, q[1] - e.z) + i * 0.15 : 50 + i;   // the nearest door spot, else the front-most free place in the line
       let k = e.liftWait ?? -1; if (k < 0 || k >= spots.length || !free(spots[k], k) || (k >= nd && spots.some((q, i) => i < k && free(q, i)))) { k = -1; let bd = 1e9; spots.forEach((q, i) => { const dd = cost(q, i); if (dd < bd && free(q, i)) { bd = dd; k = i; } }); }   // in the line: move up when a place ahead frees
       if (k >= 0) { e.liftWait = k; liftWait = true; const [qx, qz] = spots[k], dq = Math.hypot(qx - e.x, qz - e.z); if (dq < 0.2) { gx = car.x; gz = car.z; slow = 0; atSpot = true; } else if (dq < 1.5 || world.los(e.x, e.z, qx, qz)) { gx = qx; gz = qz; slow = Math.max(0.05, Math.min(1, dq / 1.2)); }
@@ -515,8 +518,15 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
           [gx, gz] = pick || [qx, qz]; } }
     }
   }
-  if (held && w.vanish && car && (Math.hypot(e.x - car.x, e.z - car.z) < 1.3 || (!liftWait && !atSpot))) { const dc = Math.hypot(e.x - car.x, e.z - car.z);   // the player holds the car and this walker has no door spot / line place: never drift into the car, step out to the doorway side and wait there
-    if (dc < 1.6) { gx = car.x + car.dx * 2.6; gz = car.z + car.dy * 2.6; slow = 1; } else if (dc < 4.5) slow = Math.min(slow, 0.05); }
+  // the player holds the car: nobody waits in it. Whoever is in it (a boarder told to take the next one) or in its doorway steps straight out first,
+  // keeping their own side, until 1.7 m in front of it, and only then goes to their place (stepOut). Before, someone in a front corner of the car
+  // headed straight for a place in the line on the far side of the doors: they slid along the threshold inside the car, or, bearing right of the
+  // others crossing the doorway, back into it, and stood there for 10+ s (test walk 'held by the player', seeds 8 / 18)
+  if (held && w.vanish && car) { const ox = e.x - car.x, oz = e.z - car.z, dc = Math.hypot(ox, oz), fw = ox * car.dx + oz * car.dy, lat = -ox * car.dy + oz * car.dx;
+    if (dc < 1.3 || (tx === car.tx && ty === car.ty)) e.stepOut = true; else if (fw >= 1.7 || Math.abs(lat) >= 1.3) e.stepOut = false;
+    if (e.stepOut) { const l = Math.max(-0.7, Math.min(0.7, lat)); gx = car.x + car.dx * 2.6 - car.dy * l; gz = car.z + car.dy * 2.6 + car.dx * l; slow = 1; atSpot = false; }
+    else if (!liftWait && !atSpot) { if (dc < 1.6) { gx = car.x + car.dx * 2.6; gz = car.z + car.dy * 2.6; slow = 1; } else if (dc < 4.5) slow = Math.min(slow, 0.05); } }   // no door spot / line place: step out to the doorway side and wait there
+  else e.stepOut = false;
   if (!liftWait) { e.liftWait = null; e.waitT0 = null; } else e.waitT0 ??= G.time;   // waitT0: since when (simBodies holds back new arrivals once someone has waited 3 s)
   const doorWait = liftWait || (slow === 0.05 && w.vanish && toEnd < 2.4);
   if (!w.chk || G.time - w.chk.t > 4) { if (w.chk && !doorWait && toEnd > 0.6 && !tubeish && Math.hypot(e.x - w.chk.x, e.z - w.chk.z) < 0.3) e.ghost = 1.5; w.chk = { t: G.time, x: e.x, z: e.z }; }   // creeping (< 0.3 m in 4 s) behind someone who will not clear the way: squeeze past too, not only when stopped dead
@@ -524,7 +534,7 @@ function walkStep(e, dt, d) {   // true while still walking. Natural gait: eased
   const err = turnTo(gx, gz);
   e.pauseCool = (e.pauseCool || 0) - dt; if ((e.pauseT || 0) > 0) { e.pauseT -= dt; slow = Math.min(slow, 0.05); } else if (Math.abs(err) > 0.8 && e.v > 0.7 && e.pauseCool <= 0 && gt.pause > 0 && Math.random() < gt.pause * dt * 8) { e.pauseT = 0.5 + Math.random() * 0.8; e.pauseCool = 5; }
   const turnK = (Math.abs(err) > 1.2 && toEnd > 0.5) ? 0 : Math.max(0.25, Math.cos(Math.min(1.3, Math.abs(err)))), brake = Math.sqrt(2 * 1.5 * gt.accel * Math.max(0, toEnd - 0.04)) + 0.12;
-  let target = gt.v * slow * turnK * (e.climbing ? 0.4 : e.crawl ? 0.5 : vault ? 0.55 : 1); if (!w.vanish) target = Math.min(target, brake);
+  let target = gt.v * slow * turnK * (e.climbing ? 0.4 : e.crawl ? 0.5 : vault ? 0.55 : 1); if (!w.vanish) target = Math.min(target, brake, Math.abs(err) > 0.5 ? 0.15 + 2.6 * toEnd : 1e9);   // turning in at the end: slow enough that the capped turn rate can still point at the spot (a jogger arriving 0.1 m off the tile centre at ~1.1 m/s, a quarter of their 4.1 m/s, circled it for good: test walk 'walk to another room', seed 31)
   e.v = (e.v || 0); e.v += Math.max(-1.5 * gt.accel * dt, Math.min(gt.accel * dt, target - e.v));
   if (w.vanish && toEnd < 3.4 && G.lift) G.lift.npcT = 1;   // someone is walking up to the lift: the doors open for them too (carStep)
   if (toEnd < 0.05 && !w.vanish) return finish();

@@ -131,6 +131,10 @@ export function lodGeometries(THREE, geo, levels, opts) { return simplifyLevels(
 // Async: every geometry in `jobs` ([{ geo, levels, name, penalty }]) gets geo.userData.lods = [geo, lod1, lod2, ...] once the worker is done (the full mesh is
 // used until then, and for good if workers are unavailable).  Returns a promise; lodStats keeps count for tests / probes.
 export const lodStats = { queued: 0, done: 0, failed: 0, ms: 0, mainMs: 0, tris: {} };   // ms = worker CPU, mainMs = main-thread prep + compaction
+// three.js draws Math.random for every new geometry / attribute UUID. The worker's results land whenever it finishes (wall-clock), so compacting them
+// on the game's own Math.random shifted its stream by a varying number of draws between runs (a seeded test run was not reproducible: the walk
+// section's lift queue came out different on most runs of the same seed). The UUIDs come from this private generator instead.
+let ua = 0x2545f491; const uuidRandom = () => { ua = (ua + 0x6D2B79F5) >>> 0; let t = ua; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 let worker = null, wid = 0; const waiting = new Map(), all = [];
 function getWorker() {
   if (worker !== null) return worker;
@@ -145,7 +149,7 @@ export function requestLods(THREE, jobs) {
     const t0 = performance.now(), id = ++wid, pos = positions(geo), index = indexOf(geo), attrs = penaltyAttrs(geo, penalty); lodStats.queued++; lodStats.mainMs += performance.now() - t0;
     const p = new Promise(res => { waiting.set(id, (r) => {
       if (r.error || !r.idx) { lodStats.failed++; delete geo.userData.lodPending; return res(false); }
-      const t1 = performance.now(); geo.userData.lods = [geo, ...r.idx.map(ix => compactGeometry(THREE, geo, ix))]; delete geo.userData.lodPending; lodStats.done++; lodStats.ms += r.ms; lodStats.mainMs += performance.now() - t1;
+      const t1 = performance.now(), R = Math.random; Math.random = uuidRandom; try { geo.userData.lods = [geo, ...r.idx.map(ix => compactGeometry(THREE, geo, ix))]; } finally { Math.random = R; } delete geo.userData.lodPending; lodStats.done++; lodStats.ms += r.ms; lodStats.mainMs += performance.now() - t1;
       lodStats.tris[name || geo.name || id] = geo.userData.lods.map(g => g.index ? g.index.count / 3 : g.attributes.position.count / 3); res(true); }); });
     geo.userData.lodPending = p; W.postMessage({ id, pos, index, attrs, levels }, [pos.buffer, index.buffer]); return p;
   });

@@ -302,10 +302,11 @@ export function wearHeadgear(human, id, opts = {}) {
 // gets new SkinnedMeshes bound to its own bones (the inner scale is applied by the skeleton). Before: 15-100 ms per dressed body (rest-pose measure + build); after: well under 1 ms.
 const WEAR_CACHE = new Map();
 export const wearCacheSize = () => WEAR_CACHE.size;
+export const wearCacheStats = { hits: 0, builds: 0 };   // lookups served from the cache / garments built (tools/test-wiring.mjs: no build once the prewarm is done)
 function wornParts(human, key, make) {
   const H = human.userData.human; if (!H) return null; const ck = `${H.kind}|${key}`;
-  if (WEAR_CACHE.has(ck)) return WEAR_CACHE.get(ck);
-  const A = analyse(human); let e = null; const B = A && make(A);
+  if (WEAR_CACHE.has(ck)) { wearCacheStats.hits++; return WEAR_CACHE.get(ck); }
+  wearCacheStats.builds++; const A = analyse(human); let e = null; const B = A && make(A);
   if (B) {
     human.updateMatrixWorld(true); const toInner = new THREE.Matrix4().copy(H.inner.matrixWorld).invert().multiply(human.matrixWorld), back = toInner.clone().invert(), parts = [];
     for (const [list, mat] of [[B.cloth, MAT.cloth()], [B.trim, MAT.trim()], [B.glass, MAT.glass()]]) if (list.length) { const g = mergeGeometries(list, false); g.applyMatrix4(toInner); g.computeBoundingSphere(); parts.push({ geo: g, mat }); }
