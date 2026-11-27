@@ -13,6 +13,7 @@ import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, su
 import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
+import { GI, installGI, bindScene as giBindScene, giUse, giStep, giFrame, giDispose } from './gi.js';   // per-deck baked bounce light + contact occlusion, one shared shader hook (js/gi.js)
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js';
@@ -69,12 +70,13 @@ const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder a
   'Please remain calm. All decks are safe.', 'Hull breach detected. Sealing bulkheads.', 'Unable to locate captain.', 'Gravity plating offline in section 12.', 'Security teams respond to the cargo bay.', 'Self-destruct sequence: cancelled.', 'There are no lifeforms aboard.'];
 
 // ---------------- renderer ----------------
+installGI();   // before anything compiles: every built-in lit material gets the GI hook (same program count, js/gi.js)
 const canvas = $('view');
 // ?test=1 (tools/test.mjs pages): cheap renderer (no antialias, pixel ratio 1, no shadow maps). The gate's one high-quality smoke render loads without it.
 const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !TEST_MODE, powerPreference: 'high-performance' });
 renderer.setPixelRatio(TEST_MODE ? 1 : Math.min(window.devicePixelRatio, 1.5));
-const scene = new THREE.Scene();
+const scene = new THREE.Scene(); giBindScene(scene);   // GI only in the world scene
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 80);
 scene.add(camera);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi);
@@ -83,6 +85,7 @@ const torch = new THREE.SpotLight(0xfff6e0, 22, 30, 0.5, 0.65, 1.7); torch.posit
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
 renderer.shadowMap.enabled = !TEST_MODE; renderer.shadowMap.type = THREE.PCFShadowMap;
 torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.camera.near = 0.2; torch.shadow.camera.far = 30; torch.shadow.bias = -0.0004; torch.shadow.normalBias = 0.04;
+torch.shadow.radius = 2.5;   // r187 PCF is a 5-tap Vogel disk scaled by radius (a uniform: no recompile): soft torch shadow edges instead of 1-texel ones
 let post = null;
 // the first-person viewmodel lives in its own scene (own lights, drawn over the world) so it never clips walls or gets blown out by the torch
 const vmScene = new THREE.Scene(), vmCam = new THREE.PerspectiveCamera(55, 1, 0.01, 5);
@@ -92,7 +95,11 @@ const vmRim = new THREE.DirectionalLight(0xfff6e0, 0); vmRim.position.set(0.3, 0
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = vmCam.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); vmCam.updateProjectionMatrix(); post?.setSize(innerWidth, innerHeight); }
 addEventListener('resize', resize); resize();
 post = new Post(renderer, scene, camera, { scene: vmScene, camera: vmCam });
-{ const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.3; }
+// Reflections / IBL: the real HDRI (assets/env/lobby.exr, loadEnv in ready()) is set before anything is drawn. RoomEnvironment used to be baked here first, at
+// startup, as a placeholder the EXR then replaced (a PMREM bake on the main thread for nothing); now it is only the fallback when the EXR fails to load.
+scene.environmentIntensity = 0.3;
+const roomEnvFallback = () => { const pm = new THREE.PMREMGenerator(renderer); const t = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); return t; };
+
 const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
 const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
@@ -103,7 +110,7 @@ const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
 const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d0, 0, 10, 1.5); scene.add(l); return l; });
 let panelSel = [], emergSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
-const EMERG_COL = new THREE.Color(0xff2a14), EMERG_I = 3.2, EMERG_R = 7;   // emergency lamp light in a blackout (world.emerg: lamp positions, js/world.js)
+const EMERG_COL = new THREE.Color(0xff2a14), EMERG_I = 3.2, EMERG_R = 7, GI_COL = new THREE.Color();   // emergency lamp light in a blackout (world.emerg: lamp positions, js/world.js)
 function updatePanelLights(dt) {
   panelT -= dt;
   if (panelT <= 0 && world) {
@@ -115,6 +122,7 @@ function updatePanelLights(dt) {
   }
   const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0;
   scene.environmentIntensity = 0.3 * (0.04 + 0.96 * pa);
+  if (ship) { GI_COL.set(ship.light).lerp(ALERT_RED, al * 0.7); giFrame(GI_COL, pa * (0.85 + 0.15 * (world ? world.flickerF : 1))); }   // baked bounce follows the ship's light colour, power and alert
   // the same three pooled lights stand in for the nearest emergency lamps once the power drops (never add / remove lights: a change in
   // the light count recompiles every lit material, see the talk-stall note in TODO.md). Each slot takes whichever source is brighter.
   const off = 1 - pa;
@@ -151,6 +159,11 @@ const SAVE = createSave((() => { try { return localStorage; } catch (e) { return
 const CFG = SAVE.cfg();
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { SAVE.setCfg(CFG); }
+// GTAO (js/fx.js) on by default at ladder rung 0 (CFG.aoDef marks a settings blob that has seen the new default, so an explicit opt-out sticks), and cheaper:
+// 8 AO samples / 8 denoise taps instead of 12 / 12 (set before its first compile)
+const AO_DEFAULT = true;   // one switch: false puts GTAO back to opt-in (it is a second scene draw: tools/perf.mjs draw calls ~+85 % in software GL)
+if (AO_DEFAULT && !CFG.aoDef) { CFG.ao = true; CFG.aoDef = 1; }
+try { post.ao.updateGtaoMaterial({ samples: 8 }); post.ao.updatePdMaterial({ samples: 8 }); } catch (e) { console.warn('ao samples', e.message); }
 const gov = new Governor(); let perfWorld = null;
 const applyPerf = () => { perfWorld = world; applyLevel(gov.cfg, { post, torch, world }); };
 function setQuality(q, auto = false) {   // auto: the governor (js/perfgov.js) moved it: not saved, so the next session starts on High again
@@ -207,7 +220,7 @@ function updateHUD() {
 
 // ---------------- level loading ----------------
 function clearLevel() {
-  if (world) { scene.remove(world.group); world.dispose(preDeck ? geoSet(preDeck.world.group) : null); }   // geometries the next deck's prebuilt world shares (model instances) stay uploaded
+  if (world) { scene.remove(world.group); giDispose(world); world.dispose(preDeck ? geoSet(preDeck.world.group) : null); }   // geometries the next deck's prebuilt world shares (model instances) stay uploaded
   for (const g of gorns) { scene.remove(g.mesh); releaseHuman(g.mesh); }
   for (const e of ents) { scene.remove(e.mesh); releaseHuman(e.mesh); }   // bone textures (js/humans.js releaseHuman)
   for (const r of repairPts) if (r.obj) scene.remove(r.obj);
@@ -244,7 +257,7 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = takePreDeck(SD ? data : null) || new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
+  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = takePreDeck(SD ? data : null) || new World(data, ship); giUse(world, TS, renderer); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); G.fogBase = ship.fogD; scene.background = new THREE.Color(ship.fog);
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
@@ -1021,6 +1034,13 @@ function prewarmPrograms() {
 // off screen as it came into view (tools/decktime.mjs "first draws"). Frustum culling off, scissored to one pixel (raster is nothing; the frame's own
 // RenderPass clears the buffers), no shadow-map pass (its handful of depth programs are drawn on every deck). Crowd culling (perfcull.js) is not applied here.
 // skip: objects already drawn this way (the next deck's world, warmed during the lift ride: preDeckWarm) are hidden, only what is new is drawn.
+// GTAO (on by default at rung 0): its normal/depth pass draws every object again with a MeshNormalMaterial override (own programs per skinned / instanced /
+// morphed variant) and its AO / denoise / blend quads are programs of their own; draw the whole pass once, scissored to one pixel, with the rest of warmDraws.
+function warmAO(C) {
+  const ao = post.ao, tg = [ao.normalRenderTarget, ao.gtaoRenderTarget, ao.pdRenderTarget, C.renderTarget1, C.renderTarget2].filter(Boolean), keep = tg.map(t => [t.scissor.clone(), t.scissorTest]);
+  for (const t of tg) { t.scissor.set(0, 0, 1, 1); t.scissorTest = true; }
+  try { ao.render(renderer, C.renderTarget2, C.renderTarget1); } finally { tg.forEach((t, i) => { t.scissor.copy(keep[i][0]); t.scissorTest = keep[i][1]; }); }
+}
 function warmDraws(skip = null) {
   const R = renderer, C = CFG.quality === 'high' ? post?.composer : null, tgts = C?.renderTarget1 ? [C.renderTarget1, C.renderTarget2] : [null];
   const culled = [], hid = [], off = (o) => { if (skip && o.visible && !o.children.length && skip.has(o)) { o.visible = false; hid.push(o); } if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); } };
@@ -1034,6 +1054,7 @@ function warmDraws(skip = null) {
       try { R.autoClear = true; R.render(scene, camera); R.autoClear = false; R.clearDepth(); R.render(vmScene, vmCam); }
       finally { if (t) { t.scissor.copy(ts); t.scissorTest = tt; } }
     }
+    if (C && post.ao?.enabled) warmAO(C);
   } finally {
     for (const o of culled) o.frustumCulled = true; for (const o of hid) o.visible = true;
     R.autoClear = ac; sm.autoUpdate = au; sm.needsUpdate = nu; R.setRenderTarget(prev); R.setScissor(sc); R.setScissorTest(st);
@@ -1048,10 +1069,10 @@ function warmDraws(skip = null) {
 const PRE_DECK_MS = 8;   // World build per ride frame (it pauses at the next yield after this: one prop, or one block of walls / floors)
 let preDeck = null, preWarmed = null;   // { data, world, warm: WeakSet of objects drawn by preDeckWarm | null }; preWarmed: the set, for the next deckPrograms
 const geoSet = (g) => { const s = new Set(); g.traverse(o => { if (o.geometry) s.add(o.geometry); }); return s; };
-function dropPreDeck() { if (preDeck) { try { preDeck.world.dispose(); } catch (e) { } } preDeck = null; }
+function dropPreDeck() { if (preDeck) { try { giDispose(preDeck.world); preDeck.world.dispose(); } catch (e) { } } preDeck = null; }
 function takePreDeck(data) {
   const p = preDeck; preDeck = null; if (!p) return null;
-  if (!data || p.data !== data) { p.world.dispose(); return null; }
+  if (!data || p.data !== data) { giDispose(p.world); p.world.dispose(); return null; }
   while (p.world.buildStep()); preWarmed = p.warm; G.preDecks = (G.preDecks || 0) + 1; G.onPreDeck?.(p.world, data); return p.world;   // onPreDeck: test hook (lift-riders compares it with a world built at arrival)
 }
 function preDeckStep(L) {
@@ -1061,6 +1082,7 @@ function preDeckStep(L) {
     if (!preDeck) { const d = SD.data; d.flooded = false; d.visit = 1; d.loopRun = null; d.emptyRuns = null;   // what loadDeck sets on a Systems Nominal deck before its World
       preDeck = { data: d, world: new World(d, G.ship, { staged: true }), warm: null, warmed: 0 }; return; }
     if (preDeck.world.buildStep(PRE_DECK_MS)) return;
+    if (giStep(preDeck.world, TS, PRE_DECK_MS)) return;   // then its GI bake (js/gi.js), same budget per frame
     if (!TEST_MODE && preDeck.warmed < 2) preDeckWarm(preDeck.warmed++);   // one frame compiles its programs, the next draws it
   } catch (e) { console.warn('pre-deck', e.message); dropPreDeck(); L.preFail = true; }
 }
@@ -2201,7 +2223,7 @@ const ready = (async () => {
   const envP = loadEnv(renderer, 'lobby').then((e) => { mark('boot:env'); bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
   const tex = loadTextures(undefined, () => bump(1, 'Loading textures…')).then(() => mark('boot:tex'));
   const [, , env] = await Promise.all([small, models, envP, tex]); mark('boot:assets');
-  if (env) scene.environment = env; buildViewmodel();
+  scene.environment = env || roomEnvFallback(); if (!env) console.warn('lobby.exr did not load: RoomEnvironment fallback'); buildViewmodel();
   // the uniform prewarm (~0.4 s of CPU in small steps) runs behind the title screen instead of before it: the title is opaque and draws nothing, so the steps
   // land while the player reads it, and Begin waits for whatever is left (startRun). Tests await __game.warmed themselves.
   warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true }); warmed.then(() => mark('boot:warm'));
