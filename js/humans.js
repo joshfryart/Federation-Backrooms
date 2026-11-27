@@ -6,6 +6,7 @@ import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { has, get } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { requestLods } from './meshlod.js';
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -47,7 +48,21 @@ function info(kind) {
     for (let i = 0; i < n; i++) { let l = 0, c = 0, y = 0, tot = 0; for (let k = 0; k < 4; k++) { const wk = sw.getComponent(i, k), b = si.getComponent(i, k); tot += wk; if (isLeg[b]) l += wk; if (isCuff[b]) c += wk; if (isYoke[b]) y += wk; } tot = tot || 1; z[i * 3] = l / tot; z[i * 3 + 1] = c / tot; z[i * 3 + 2] = y / tot; }
     g.setAttribute('zone', new THREE.BufferAttribute(z, 3));
   });
-  return meta[kind] = { height: box.max.y - box.min.y, clips };
+  const height = box.max.y - box.min.y; queueLods(kind, src.scene, height);
+  return meta[kind] = { height, clips };
+}
+// ---- crowd LODs (js/meshlod.js, swapped per frame by js/perfcull.js): two decimated copies of the body, teeth, hair and garments of each
+// body kind, built in a worker once the colour / zone attributes above exist (every clone shares the source geometry, so they all get them).
+// maxError is in metres (the mean distance the simplified surface may drift; a skin-weight difference counts as |dw| x LOD_LEVER m, a
+// face-morph difference as itself, see meshlod.js penaltyAttrs); LOD1 is used from ~5 m, LOD2 from ~10 m (meshlod.js LOD_NEAR / LOD_FAR),
+// where 3 mm / 8 mm are about half a pixel at 1080p / 75 deg.  Small meshes (eyes, brows, lashes, tongue) are left alone.
+export const LOD_LEVELS = [{ ratio: 0.5, maxError: 0.003 }, { ratio: 0.22, maxError: 0.008 }];
+const LOD_MIN_TRIS = 1000, LOD_LEVER = 0.03, KIND_H = { crew_m: 1.79, crew_f: 1.66, crew_f2: 1.66, crew_heavy: 1.96, suit: 1.9 };
+function queueLods(kind, root, nativeH) {
+  if (typeof Worker === 'undefined') return; const k = nativeH / (KIND_H[kind] || 1.75), jobs = [];   // metres -> model units
+  root.traverse(o => { if (!o.isSkinnedMesh) return; const g = o.geometry, tris = g.index ? g.index.count / 3 : g.attributes.position.count / 3; if (tris < LOD_MIN_TRIS) return;
+    jobs.push({ geo: g, name: kind + ':' + (o.material.name || o.name), levels: LOD_LEVELS.map(L => ({ ratio: L.ratio, maxError: L.maxError * k })), penalty: { lever: LOD_LEVER * k } }); });
+  if (jobs.length) requestLods(THREE, jobs);
 }
 
 

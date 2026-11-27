@@ -108,6 +108,7 @@ export async function talkBrowser(page, fail) {
     const k0 = clocks(), mx0 = H.mixer.time; frame(45);
     const hp = H.bones.Head.getWorldPosition(cam.position.clone()), k1 = clocks();
     out.cam = { d: +cam.position.distanceTo(hp).toFixed(2), fov: +cam.fov.toFixed(1), moved: +cam.position.distanceTo(c0.p).toFixed(2) };
+    { const st = g.cullStats.lod; g.renderOnce(); out.lodTalk = [...st]; }   // the close-up draws everyone at full detail (crowd LODs, js/perfcull.js)
     out.frozen = { same: JSON.stringify(k0) === JSON.stringify(k1), k0, k1, others: others.every(([o, x, z, m]) => o.mesh.position.x === x && o.mesh.position.z === z && (m === undefined || o.mesh.userData.human.mixer.time === m)), speaker: +(H.mixer.time - mx0).toFixed(2) };
     out.hud = { minimap: getComputedStyle(document.getElementById('minimap')).visibility, tk: document.getElementById('tk').classList.contains('on'), segs: document.querySelectorAll('#tk .wseg').length, plate: document.querySelector('#tk .plate h1').textContent.includes(pr.family), portrait: !!document.querySelector('#tk .plate img').getAttribute('src') };
     out.opener = (document.querySelector('#tk .subt .tx').textContent || '').length > 0;
@@ -138,6 +139,7 @@ export async function talkBrowser(page, fail) {
   if (r.err) { fail('talk browser: ' + r.err); return; }
   ck(r.enter.phase === 'talk' && r.enter.layer && r.enter.frozen && r.enter.body && !r.enter.fallback, 'E on a crew member enters phase talk as a ui layer (world paused, HUD hidden)');
   ck(r.cam.d < 1.2 && r.cam.fov < 45 && r.cam.moved > 0.05, 'camera moves close to the head and the FOV narrows');
+  ck(r.lodTalk && r.lodTalk[0] > 0 && r.lodTalk[1] === 0 && r.lodTalk[2] === 0, 'talk close-up draws everyone at LOD 0 ' + JSON.stringify(r.lodTalk));
   ck(r.frozen.same && r.frozen.others, 'sim / duty / clock / phases / repair / other NPCs do not advance during talk ' + JSON.stringify([r.frozen.k0, r.frozen.k1]));
   ck(r.frozen.speaker > 1, 'the speaker keeps animating');
   ck(r.hud.minimap === 'hidden' && r.hud.tk && r.hud.segs === 8 && r.hud.plate && r.hud.portrait, 'talk HUD: plate with portrait, 8-icon wheel; minimap hidden');

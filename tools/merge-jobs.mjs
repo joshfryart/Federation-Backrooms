@@ -2,9 +2,9 @@
 // (near-duplicate mechanics) between any two modules or with the old shared mechanics, then writes js/jobs/index.js (every module bundled into
 // that one file, so the browser and node load the same registry in one request). Run after merging a batch of authored modules:
 //   node tools/merge-jobs.mjs            check + write js/jobs/index.js
-//   node tools/merge-jobs.mjs --check    check only (exit 1 on a collision)
+//   node tools/merge-jobs.mjs --check    check only: exit 1 on a collision or when js/jobs/index.js is stale (does not match the job files; CI runs this)
 // Full validation (auto-play etc.) of a batch is tools/check-jobs.mjs; this tool only needs the modules to import.
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { listJobFiles, imp, nearDup, BASE, JOBDIR, catalogue, bundleSource } from './jobcheck-lib.mjs';
 
@@ -20,8 +20,7 @@ for (const { m, file } of mods) {
 }
 for (let i = 0; i < mods.length; i++) for (let j = i + 1; j < mods.length; j++) { const d = nearDup(mods[i].m.fingerprint, mods[j].m.fingerprint); if (d) errs.push(`fingerprint collision: ${mods[i].file} vs ${mods[j].file} (${d})`); }
 if (errs.length) { console.log('merge refused:\n  - ' + errs.join('\n  - ')); process.exit(1); }
-if (!process.argv.includes('--check')) {
-  const src = bundleSource(mods.map(({ file }) => join(JOBDIR, file)));   // one file, every module inlined (tools/jobcheck-lib.mjs bundleSource)
-  writeFileSync(join(JOBDIR, 'index.js'), src);
-}
+const src = bundleSource(mods.map(({ file }) => join(JOBDIR, file)));   // one file, every module inlined (tools/jobcheck-lib.mjs bundleSource)
+if (!process.argv.includes('--check')) writeFileSync(join(JOBDIR, 'index.js'), src);
+else if (readFileSync(join(JOBDIR, 'index.js'), 'utf8') !== src) { console.log('js/jobs/index.js is stale: it does not match the job files (run node tools/merge-jobs.mjs and commit the result)'); process.exit(1); }
 console.log(`${mods.length} job modules, no collisions${process.argv.includes('--check') ? '' : ' — wrote js/jobs/index.js'}`);

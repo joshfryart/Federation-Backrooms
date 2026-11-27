@@ -4,6 +4,7 @@
 // The game is opened through the real loading path (no ?test=1), Enter is clicked, a few seconds of real play settle, then the probe switches to the test clock
 // (G.manual) and rides the lift for real: phase 'select' -> liftTo(deck) -> frames driven by hand until the car arrives (liftStep: loadDeck + deckPrograms) and
 // --after frames more on the new deck. Each frame = __game.advance(dt) + menus.frame + __game.renderOnce() + a 1-pixel readPixels (waits for the GPU process).
+// Ride frames: every frame's step ms is kept (the next deck is built a piece per ride frame, js/main.js preDeckStep), drawn ones are every 10th.
 // Rides (--rides, ship deck indices, default 2,4,0,2): new decks first, then back to decks already seen (does a revisit still compile / first-draw anything?).
 // Per frame: step / ui / render / sync / wall ms, new three.js programs, textures, geometries, GL compile / link / status / texture upload / bufferData time,
 // and FIRST DRAWS: (program, framebuffer) pairs drawn for the first time since the page opened (renderer.compile() only builds programs; ANGLE D3D11 / Metal /
@@ -58,14 +59,14 @@ async function ride(page, to) {
   await page.evaluate(() => window.gc?.());
   const s = await page.evaluate((to) => { const g = __game, G = g.G; if (G.phase !== 'play' || !g.world?.car) return { err: 'not in play / no car: ' + G.phase }; G.phase = 'select'; G.lift.state = 'select'; g.liftTo(to); return { from: G.lift.from, to, dur: +G.lift.dur.toFixed(2), phase: G.phase }; }, to);
   if (s.err || s.phase !== 'ride') return { to, err: s.err || 'no ride: ' + s.phase };
-  log('ride ->', to, JSON.stringify(s)); const rideF = []; let arrival = null, after = [];
-  for (let i = 0; i < 400; i++) { const f = await frame(i % 10 === 0 || await near()); log('  frame', f.ph, f.wall, 'ms'); if (f.ph === 'ride>play') { arrival = f; break; } if (f.draw) rideF.push(f); }
+  log('ride ->', to, JSON.stringify(s)); const rideF = [], rideAll = []; let arrival = null, after = [];
+  for (let i = 0; i < 400; i++) { const f = await frame(i % 10 === 0 || await near()); log('  frame', f.ph, f.wall, 'ms'); if (f.ph === 'ride>play') { arrival = f; break; } if (f.draw) rideF.push(f); rideAll.push(f); }
   if (!arrival) return { to, err: 'never arrived' };
   for (let i = 0; i < AFTER; i++) after.push(await frame());
   // what the warm-up itself costs once everything is uploaded and drawn (js/main.js warmDraws: every object, both post buffers, one pixel): CPU submit + GPU sync
   const warm = await page.evaluate(() => { const g = __game, gl = g.renderer.getContext(); if (!g.warmDraws) return null; const t0 = performance.now(); g.warmDraws(); const t1 = performance.now(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4)); return { cpu: +(t1 - t0).toFixed(1), sync: +(performance.now() - t1).toFixed(1) }; });
   const avg = (a, k) => +(a.reduce((s, x) => s + x[k], 0) / Math.max(1, a.length)).toFixed(0), sum = (a, k) => a.reduce((s, x) => s + x[k], 0);
-  return { ...s, baseWall: avg(base, 'wall'), rideFrames: rideF.length, rideWall: avg(rideF, 'wall'), rideFirst: sum(rideF, 'first'), rideProg: sum(rideF, 'prog'), rideTex: sum(rideF, 'tex'), rideMaxWall: Math.max(...rideF.map(f => f.wall)),
+  return { ...s, baseWall: avg(base, 'wall'), rideFrames: rideF.length, rideWall: avg(rideF, 'wall'), rideFirst: sum(rideF, 'first'), rideProg: sum(rideF, 'prog'), rideTex: sum(rideF, 'tex'), rideMaxWall: Math.max(...rideF.map(f => f.wall)), rideStepMax: Math.max(...rideAll.map(f => f.step)), rideStepSum: +sum(rideAll, 'step').toFixed(0), rideSteps: rideAll.map(f => f.step).filter(v => v > 10),
     rideLast: rideF.slice(-3), arrival, after, afterFirst: sum(after, 'first'), afterProg: sum(after, 'prog'), afterTex: sum(after, 'tex'), after1Wall: after[0]?.wall, warm, afterWall: avg(after.slice(1), 'wall') };
 }
 
@@ -90,7 +91,7 @@ for (let r = 0; r < RUNS; r++) {
     if (to >= settled.decks) continue;
     const x = await ride(page, to); rides.push(x);
     if (x.err) { console.log('ride ->', to, 'ERR', x.err); continue; }
-    console.log(`\n== ride ${x.from} -> ${x.to} (${x.dur} s, ${x.rideFrames} frames drawn): base ${x.baseWall} ms, ride ${x.rideWall} ms (max ${x.rideMaxWall}; first draws ${x.rideFirst}, programs ${x.rideProg}, textures ${x.rideTex})`);
+    console.log(`\n== ride ${x.from} -> ${x.to} (${x.dur} s, ${x.rideFrames} frames drawn): base ${x.baseWall} ms, ride ${x.rideWall} ms (max ${x.rideMaxWall}; step max ${x.rideStepMax} ms, steps > 10 ms ${JSON.stringify(x.rideSteps)}, all ride steps ${x.rideStepSum} ms; first draws ${x.rideFirst}, programs ${x.rideProg}, textures ${x.rideTex})`);
     console.log(`   ARRIVAL wall ${x.arrival.wall} ms (step ${x.arrival.step}, ui ${x.arrival.ui}, render ${x.arrival.render}, sync ${x.arrival.sync})  first draws ${x.arrival.first}  new programs ${x.arrival.prog}  textures ${x.arrival.tex}  geometries ${x.arrival.geo}  gl ${JSON.stringify(x.arrival.gl)}`);
     console.log(`   after: frame 1 ${x.after1Wall} ms, then avg ${x.afterWall} ms; first draws ${x.afterFirst}, programs ${x.afterProg}, textures ${x.afterTex}; warm-up again (all uploaded): ${JSON.stringify(x.warm)}`);
     for (const f of [...x.rideLast, x.arrival, ...x.after]) console.log('    ', JSON.stringify({ ph: f.ph, wall: f.wall, step: f.step, render: f.render, sync: f.sync, first: f.first, prog: f.prog, tex: f.tex, geo: f.geo, glMs: f.glMs, gl: f.gl, calls: f.calls, names: f.names, firstNames: f.firstNames }));
@@ -111,6 +112,6 @@ for (let r = 0; r < RUNS; r++) {
   results.push({ run: r, wallS: (Date.now() - t0) / 1000, settled, rides, real }); await browser.close();
 }
 if (RUNS > 1) for (let i = 0; i < RIDES.length; i++) { const xs = results.map(r => r.rides[i]).filter(x => x && !x.err); if (!xs.length) continue; const a = (f) => +(xs.reduce((s, x) => s + f(x), 0) / xs.length).toFixed(0);
-  console.log(`AVG ride ${i} -> ${RIDES[i]}: arrival wall ${a(x => x.arrival.wall)} ms (step ${a(x => x.arrival.step)}, render ${a(x => x.arrival.render)}, sync ${a(x => x.arrival.sync)}), first draws ${a(x => x.arrival.first)}, programs ${a(x => x.arrival.prog)}, after1 ${a(x => x.after1Wall)} ms, after ${a(x => x.afterWall)} ms, base ${a(x => x.baseWall)} ms, ride ${a(x => x.rideWall)} ms`); }
+  console.log(`AVG ride ${i} -> ${RIDES[i]}: arrival wall ${a(x => x.arrival.wall)} ms (step ${a(x => x.arrival.step)}, render ${a(x => x.arrival.render)}, sync ${a(x => x.arrival.sync)}), first draws ${a(x => x.arrival.first)}, programs ${a(x => x.arrival.prog)}, after1 ${a(x => x.after1Wall)} ms, after ${a(x => x.afterWall)} ms, base ${a(x => x.baseWall)} ms, ride ${a(x => x.rideWall)} ms (max ${a(x => x.rideMaxWall)}, step max ${a(x => x.rideStepMax)})`); }
 if (OUT) await writeFile(OUT, JSON.stringify(results, null, 1));
 server.close();

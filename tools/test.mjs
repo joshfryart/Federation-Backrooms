@@ -1,5 +1,6 @@
-// Headless test suite:  node tools/test.mjs [--gate] [--only a,b] [--seed N] [--ship i] [--list]   (needs `playwright` + Chromium; starts its own static server)
+// Headless test suite:  node tools/test.mjs [--node | --gate] [--only a,b] [--seed N] [--ship i] [--list]   (needs `playwright` + its Chromium (new headless, `npx playwright install chromium`); starts its own static server)
 //   full (default)  every section: node-only checks, then the browser sections page by page (one live page at a time), then the seed-set smoke
+//   --node          the node-only sections only (no browser is launched; CI's node job)
 //   --gate          the node-only sections + one browser smoke (load, newRun, 300 test-clock frames, lift one deck down, one high-quality render); target < 2 min
 //   --only a,b      just these sections (names: --list); a browser section runs on a fresh page of its kind
 //   --seed N        Math.random seed for every page (env TEST_SEED; default 1); each browser section re-seeds from (N, its name) before it runs,
@@ -22,7 +23,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'), imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
 const argv = process.argv.slice(2), arg = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : (argv[i + 1] ?? d); };
-const SEED = +(arg('seed', process.env.TEST_SEED ?? 1)) >>> 0, SHIP = arg('ship', null) == null ? null : +arg('ship'), GATE = argv.includes('--gate'), ONLY = arg('only', null) ? String(arg('only')).split(',') : null;
+const SEED = +(arg('seed', process.env.TEST_SEED ?? 1)) >>> 0, SHIP = arg('ship', null) == null ? null : +arg('ship'), GATE = argv.includes('--gate'), NODE = argv.includes('--node'), ONLY = arg('only', null) ? String(arg('only')).split(',') : null;
 // seed set for the full run's smoke (tools/seed-scan.mjs: smallest deck, a ring / twin hull, a large hull): [ship index, run seed]
 const SEED_SET = [[3, 56], [4, 2], [2, 7]];
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.webp': 'image/webp', '.exr': 'application/octet-stream', '.css': 'text/css', '.json': 'application/json' };
@@ -53,9 +54,10 @@ import { padBrowser } from './test-gamepad.mjs';   // gamepad: mocked navigator.
 import { jobgameTests, jobgameBrowser, jobsiteBrowser, jobmoduleBrowser } from './test-jobgames.mjs';   // job mini-games + first-use tool instructions (tools/test-jobgames.mjs)
 import { saveTests, saveBrowser } from './test-save.mjs';   // versioned save, boards, export/import/reset (tools/test-save.mjs)
 import { touchTests, touchBrowser } from './test-touch.mjs';   // touch / mobile controls: stick, look drag, buttons, mini-game + room job by touch (tools/test-touch.mjs)
+import { lodTests } from './test-lod.mjs';   // crowd LOD simplifier + distance hysteresis (js/meshlod.js, tools/test-lod.mjs)
 import { installHelpers } from './test-helpers.mjs';   // in-page __T helpers: standNear / openSideOf / nearestProp / farFrom / clearSite / hideEnemies / quiet / arena (tools/test-helpers.mjs)
 for (const [n, f] of [['comms', commsUnit], ['sim', simTests], ['walk-unit', walkTests], ['duty', dutyTests], ['social', socialTests], ['gait', gaitTests], ['movement', movementTests],
-  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests]]) S(n, null, () => f(fail));
+  ['equipment-unit', equipmentTests], ['repair-unit', repairTests], ['role', roleTests], ['handhelds-unit', handheldTests], ['nav-unit', navTests], ['ui-unit', uiTests], ['talk-unit', talkTests], ['combat-unit', combatTests], ['wiring-unit', wiringTests], ['jobgames-unit', jobgameTests], ['save-unit', saveTests], ['touch-unit', touchTests], ['crowd-lod', lodTests]]) S(n, null, () => f(fail));
 
 // room layouts with the art-batch props (js/gen.js, docs/propart-integration.md): each room type gets its new furniture often enough, props stay reachable
 S('room-props', null, async () => {
@@ -259,13 +261,29 @@ const server = createServer(async (req, res) => {
   catch { res.writeHead(404); res.end(); }
 }).listen(0);
 const port = server.address().port; let browser = null;
+// Chromium's own memory (Linux only, /proc): VmRSS summed over the browser's processes (SystemInfo.getProcessInfo), sampled every second so each section
+// line and the summary show the peak. The page JS heap alone hides native growth (e.g. the headless-shell pointer-lock input flood, see openPage).
+let rssCdp = null, rssBusy = false, rssPeak = 0, rssSecPeak = 0;
+const chromeRss = async () => {
+  if (!browser || process.platform !== 'linux') return null;
+  try { rssCdp ||= await browser.newBrowserCDPSession(); const { processInfo } = await rssCdp.send('SystemInfo.getProcessInfo'); let kb = 0;
+    for (const p of processInfo) { try { kb += +readFileSync(`/proc/${p.id}/status`, 'utf8').match(/VmRSS:\s+(\d+)/)[1]; } catch { /* exited */ } }
+    return kb / 1024; } catch { rssCdp = null; return null; }
+};
+const rssTick = async () => { if (rssBusy) return; rssBusy = true; const r = await chromeRss(); rssBusy = false; if (r != null) { rssPeak = Math.max(rssPeak, r); rssSecPeak = Math.max(rssSecPeak, r); } return r; };
+setInterval(rssTick, 1000).unref();
 const strSeed = (s) => { let h = SEED ^ 0x9e3779b9; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0; return h >>> 0; };
 // one browser for the whole run; ONE live page at a time (each page is its own renderer process, closed once its sections are done: every newRun() builds a ship).
 // Page load + game ready get a generous timeout and ONE retry on a fresh page (logged as RETRY): a slow or crashed load is not a test result.
 // Nothing else is retried here: a section that fails, fails.
 const gameReady = async (p) => p.evaluate(async ({ ship, manual }) => { await __game.ready; await __game.warmed; __game.setQuality('low'); __game.G.manual = manual; if (ship != null) Object.defineProperty(__game.G, 'forceShip', { get: () => ship, set: () => { }, configurable: true }); }, { ship: SHIP, manual: !process.env.TEST_REALTIME });   // TEST_REALTIME=1: the old wall-clock frame loop (diagnostics only)
 const openPage = async (path, tag = '', viewport = { width: 320, height: 180 }, ready = gameReady) => {
-  if (!browser) browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required'] });   // a running AudioContext: in a suspended one (no user gesture) every scheduled sound node stays alive, gigabytes over a run
+  // channel 'chromium' = Chromium's new headless mode, not the default chrome-headless-shell. In the headless shell an active pointer lock (the game takes
+  // one on newRun / resume / E) makes the browser send the renderer ~45k synthetic input events a second (blink.mojom.WidgetInputHandler, 568 B each)
+  // for as long as the lock is held: browser + renderer RSS grew ~0.5-1 GB every few seconds while the page JS heap stayed ~100 MB, peaks 4.5-6.5 GB
+  // per run, OOM kills on smaller machines, and lock / unlock pauses mid-section. New headless holds the same lock without the flood.
+  // TEST_CHANNEL=shell brings back the headless shell (comparison only).
+  if (!browser) browser = await chromium.launch({ ...(process.env.TEST_CHANNEL === 'shell' ? {} : { channel: process.env.TEST_CHANNEL || 'chromium' }), args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required'] });   // a running AudioContext: in a suspended one (no user gesture) every scheduled sound node stays alive, gigabytes over a run
   for (let attempt = 1; ; attempt++) {
     const p = await browser.newPage(viewport.device ? { ...viewport.device, deviceScaleFactor: 1 } : { viewport });   // viewport.device: a Playwright device profile (touch page) p.setDefaultTimeout(120000); p.setDefaultNavigationTimeout(120000);
     await p.addInitScript((seed) => { window.__seedRandom = (s) => { let a = s >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }; window.__seedRandom(seed); }, SEED);   // Math.random seeded (the generator of tools/soak-walk.mjs); __seedRandom re-seeds per section
@@ -1004,9 +1022,18 @@ const rid = await page2.evaluate(async () => {
   out.player = G.player && G.player.voice ? G.player.short : null;
   // chance: ~35% of the times someone walks up to the car
   let hits = 0, N = 120; G.riderChance = 0.35; for (let i = 0; i < N; i++) { if (g.rollRider()) { hits++; g.leaveRider(); } G.lift.rider = null; } out.rate = +(hits / N).toFixed(2);
+  // the next deck is built during the ride, a stage per frame (js/main.js preDeckStep): it must be the same world as one built in one go at arrival. World
+  // builds also draw on Math.random (prop sizes, canvas noise, lazily made shared caches), so for this check each World gets its own seeded Math.random while
+  // it builds, and a throwaway build of the destination first fills the caches; then structure, placement and lights are compared.
+  const W = g.world.constructor, bs = W.prototype.buildStep, geos = (w) => { const s = new Set(); w.group.traverse(o => { if (o.geometry) s.add(o.geometry); }); return s; };
+  W.prototype.buildStep = function () { let a = this._rs ?? (this._rs = 12345); const r = Math.random; Math.random = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; this._rs = a; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; try { return bs.call(this); } finally { Math.random = r; } };
+  const fp = (w) => { w.group.updateMatrixWorld(true); const c = {}; let n = 0, px = 0; w.group.traverse(o => { n++; const k = o.type + ':' + (o.isInstancedMesh ? o.count : '') + ':' + (o.geometry?.attributes.position?.count ?? '') + ':' + (o.material?.type || '') + ':' + (o.isLight ? o.color.getHexString() + o.intensity : ''); c[k] = (c[k] || 0) + 1; const e = o.matrixWorld.elements; px += Math.round(e[12] * 100) + Math.round(e[13] * 100) * 7 + Math.round(e[14] * 100) * 3; }); return n + '/' + px + '/' + Object.entries(c).sort().map(x => x.join('=')).join('|'); };
+  out.pre = []; G.onPreDeck = (w, d) => { const f = new W(d, G.ship), a = fp(w), b = fp(f); f.dispose(geos(w)); const diff = (x, y) => { const X = new Set(x.split('|')), Y = new Set(y.split('|')); return [[...X].filter(k => !Y.has(k)).slice(0, 8), [...Y].filter(k => !X.has(k)).slice(0, 8)]; }; out.pre.push({ same: a === b, n: +a.split('/')[0], sig: a === b ? null : diff(a, b) }); };
+  const warmCaches = (to) => { const f = new W(G.shipDecks[to].data, G.ship), x = fp(f); f.dispose(geos(g.world)); return x; };
+  for (let i = 0; i < 60 && warmCaches(D - 1) !== warmCaches(D - 1); i++) await new Promise(r => setTimeout(r, 250));   // test pages start before every model has loaded: a build then changes as they arrive
   const ride = (to, midDest) => {
     G.riderChance = 1; G.lift.rider = null; const r = g.rollRider(true); if (!r) return { err: 'no rider' }; const inScene = !!r.mesh && g.scene.children.includes(r.mesh), who = r.person;
-    g.openLiftPanel(); if (G.phase !== 'select') return { err: 'panel', phase: G.phase }; const from = G.shipDeck, logN = G.liftLog.length; g.liftTo(to); if (G.phase !== 'ride') return { err: 'no ride' };
+    warmCaches(to); g.openLiftPanel(); if (G.phase !== 'select') return { err: 'panel', phase: G.phase }; const from = G.shipDeck, logN = G.liftLog.length; g.liftTo(to); if (G.phase !== 'ride') return { err: 'no ride' };
     if (midDest !== undefined) g.boardLift(who, g.destOf(midDest));
     const spoke = G.lift.said, rd = g.rider.dest, rsaid = g.rider.said; let n = 0, leftAt = null, leftRiding = false, meshGone = false; const subsBefore = document.getElementById('subs')?.children.length || 0;
     while (G.phase === 'ride' && n < 30 * 14) { tick(1); n++; if (leftAt === null && g.rider?.left) { leftAt = G.lift.disp; leftRiding = G.phase === 'ride'; meshGone = !g.rider.mesh; } }
@@ -1016,11 +1043,12 @@ const rid = await page2.evaluate(async () => {
   out.rides.push(ride(D - 1));          // rider picks their own stop (on the way or the same deck)
   out.rides.push(ride(0, D - 3));       // the way back up: rider's stop is mid-ride; they get out there, the player rides on
   out.rides.push(ride(D - 1, 3));
-  G.riderChance = 0; G.lift.rider = null; out.none = !g.rollRider(); return out;
+  G.riderChance = 0; G.lift.rider = null; out.none = !g.rollRider(); G.onPreDeck = null; W.prototype.buildStep = bs; out.preDecks = G.preDecks || 0; return out;
 });
 console.log('lift riders:', JSON.stringify(rid));
 { const o = rid, ok = o.player && o.rate > 0.2 && o.rate < 0.5 && o.rides.length === 3 && o.rides.every(r => !r.err && r.inScene && r.playerSaid && r.riderSaid && r.board && r.left && r.cleared && r.phase === 'play') && o.rides[1].leftRiding && o.rides[1].leftAt === o.rides[1].riderDest && o.rides[1].deck === 0 && o.rides[2].leftRiding && o.rides[2].deck === o.rides[2].to && o.none;
-  if (!ok) fail('NPC lift riders'); }
+  if (!ok) fail('NPC lift riders');
+  if (!(o.pre.length === 3 && o.pre.every(x => x.same && x.n > 100))) fail('lift: the deck built during the ride differs from one built at arrival ' + JSON.stringify(o.pre)); }
 });
 S('voices-html', 'voices', async (vpage) => {   // voices.html: the roster table, chips, say, department filter
 const vp = await vpage.evaluate(async () => { const rows = document.querySelectorAll('#rows tr').length, chips = document.querySelectorAll('.chip').length; document.querySelector('[data-say]').click(); await new Promise(r => setTimeout(r, 200)); const said = document.querySelector('.said').textContent; document.querySelector('#dept').value = 'engineering'; document.querySelector('#dept').dispatchEvent(new Event('input')); const eng = document.querySelectorAll('#rows tr').length; return { rows, chips, said, eng, total: window.__voices.roster.people.length }; });
@@ -1074,6 +1102,8 @@ const smoke = (ship, seed) => async (page) => {
     let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
     out.bodies = g.ents.filter(e => e.simmed).length;
     const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
+    await g.lodsSettled(); { const gs = []; g.ents.forEach(e => e.mesh?.userData.human && e.mesh.traverse(o => { if (o.isMesh) gs.push([o, o.geometry]); })); g.lodCfg.force = 2; g.renderOnce(); g.lodCfg.force = null;   // crowd LODs (js/meshlod.js): built in the worker, drawn, and the full meshes back after the draw
+      out.lod = { done: g.lodStats.done, failed: g.lodStats.failed, drawn: g.cullStats.lod[2], restored: gs.every(([o, geo]) => o.geometry === geo && !geo.userData.lodOf), smaller: Object.values(g.lodStats.tris).every(t => t[2] < t[1] && t[1] <= t[0]) }; }
     g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1);   // one high-quality frame through the post chain
     { const lights = () => { let n = 0; g.scene.traverse(o => { if (o.isLight) n++; }); return n; }, gl = g.renderer.getContext(), cones = g.world.cones, l0 = lights(), dc0 = out.drawCalls;   // optional GTAO (js/fx.js): on, rung 0 only, no light added, glow kept out
       g.post.setAO(true); gl.getError(); g.renderOnce(); out.ao = { on: g.post.ao.enabled, err: gl.getError(), calls: g.renderer.info.render.calls, base: dc0, lights: lights() - l0, conesVis: cones ? cones.visible : null, noAO: !!cones?.userData.noAO || !cones, stuck: g.post.ao._visibilityCache.length };
@@ -1082,7 +1112,7 @@ const smoke = (ship, seed) => async (page) => {
     delete G.forceSeed; return out;
   }, { ship, seed });
   console.log('smoke:', JSON.stringify(r));
-  if (!(r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+  if (!(r.lod.done >= 10 && r.lod.failed === 0 && r.lod.restored && r.lod.smaller && (r.lod.drawn > 0 || r.cull.shown === 0) && r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
 S('touch', 'touch', (p) => touchBrowser(p, fail));   // js/touch.js on a phone profile (tools/test-touch.mjs)
 S('smoke', 'smoke', smoke(SHIP, null));
@@ -1090,9 +1120,9 @@ for (const [i, [ship, seed]] of SEED_SET.entries()) S('smoke-set' + i, 'smoke', 
 
 // ---- runner ----
 if (argv.includes('--list')) { console.log(sections.map(s => `${s.name}${s.page ? ' [' + s.page + ']' : ' [node]'}`).join('\n')); process.exit(0); }
-const pick = ONLY ? sections.filter(s => ONLY.includes(s.name)) : GATE ? sections.filter(s => !s.page || s.name === 'smoke') : sections.filter(s => s.name !== 'smoke');
+const pick = ONLY ? sections.filter(s => ONLY.includes(s.name)) : NODE ? sections.filter(s => !s.page) : GATE ? sections.filter(s => !s.page || s.name === 'smoke') : sections.filter(s => s.name !== 'smoke');
 if (ONLY) for (const n of ONLY) if (!sections.some(s => s.name === n)) { console.log(`no section '${n}' (--list)`); process.exit(2); }
-console.log(`test: ${ONLY ? 'only ' + ONLY.join(',') : GATE ? 'gate' : 'full'}, seed ${SEED}${SHIP != null ? ', ship ' + SHIP : ''}, ${pick.length} sections`);
+console.log(`test: ${ONLY ? 'only ' + ONLY.join(',') : NODE ? 'node' : GATE ? 'gate' : 'full'}, seed ${SEED}${SHIP != null ? ', ship ' + SHIP : ''}, ${pick.length} sections`);
 const T0 = Date.now(), times = []; let page = null, pageKind = null;
 const mb = (b) => (b / 1048576).toFixed(0);
 const snap = (p) => p.evaluate(() => (window.gc?.(), { ship: __game.G.ship?.name, runSeed: __game.G.runSeed, deck: __game.G.shipDeck, heap: performance.memory?.usedJSHeapSize, gl: [__game.renderer.info.programs?.length, __game.renderer.info.memory.textures, __game.renderer.info.memory.geometries] }));
@@ -1105,12 +1135,13 @@ for (const sec of pick) {
   if (threw) { fail(`${sec.name} threw: ${String(threw.message || threw).split('\n')[0]}`); if (page) await page.close().catch(() => { }); page = null; pageKind = null; }   // a crashed / wedged page: the next section opens a fresh one
   if (secFails && curPage) console.log(where());
   if (errors.length > e0) console.log(`  page errors in ${sec.name}: ${[...new Set(errors.slice(e0))].slice(0, 3).join(' | ').slice(0, 400)}`);
-  const ms = Date.now() - t0; times.push([sec.name, ms]);
-  console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, ${game ? `ship=${ctx.ship ?? '-'} seed=${ctx.runSeed ?? '-'} deck=${ctx.deck ?? '-'}, ` : ''}heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB`);
+  const ms = Date.now() - t0; times.push([sec.name, ms]); const rss = sec.page ? await rssTick() : null;
+  console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, ${game ? `ship=${ctx.ship ?? '-'} seed=${ctx.runSeed ?? '-'} deck=${ctx.deck ?? '-'}, ` : ''}heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB${rss != null ? `, chromium RSS ${rss.toFixed(0)} MB (section peak ${rssSecPeak.toFixed(0)})` : ''}`);
+  rssSecPeak = 0;
 }
 if (page) await page.close().catch(() => { });
 const tot = (Date.now() - T0) / 1000, slow = times.slice().sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, ms]) => `${n} ${(ms / 1000).toFixed(1)}`).join(', ');
-console.log(`time: ${tot.toFixed(1)} s total (node ${(times.filter(([n]) => !sections.find(s => s.name === n).page).reduce((a, [, ms]) => a + ms, 0) / 1000).toFixed(1)} s); slowest: ${slow}`);
+console.log(`${rssPeak ? `chromium RSS peak ${rssPeak.toFixed(0)} MB; ` : ''}time: ${tot.toFixed(1)} s total (node ${(times.filter(([n]) => !sections.find(s => s.name === n).page).reduce((a, [, ms]) => a + ms, 0) / 1000).toFixed(1)} s); slowest: ${slow}`);
 cur = 'page-errors'; curPage = null; ctx = {};
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 if (browser) await browser.close(); server.close();
