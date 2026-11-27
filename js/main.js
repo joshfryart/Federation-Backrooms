@@ -159,11 +159,8 @@ const SAVE = createSave((() => { try { return localStorage; } catch (e) { return
 const CFG = SAVE.cfg();
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { SAVE.setCfg(CFG); }
-// GTAO (js/fx.js) on by default at ladder rung 0 (CFG.aoDef marks a settings blob that has seen the new default, so an explicit opt-out sticks), and cheaper:
-// 8 AO samples / 8 denoise taps instead of 12 / 12 (set before its first compile)
-const AO_DEFAULT = true;   // one switch: false puts GTAO back to opt-in (it is a second scene draw: tools/perf.mjs draw calls ~+85 % in software GL)
-if (AO_DEFAULT && !CFG.aoDef) { CFG.ao = true; CFG.aoDef = 1; }
-try { post.ao.updateGtaoMaterial({ samples: 8 }); post.ao.updatePdMaterial({ samples: 8 }); } catch (e) { console.warn('ao samples', e.message); }
+// GTAO stays opt-in (pause menu): on by default it doubled draw calls in software GL (tools/perf.mjs 337 -> 626) and went over the programs budget.
+// Its sample counts (8 / 8) live in js/fx.js.
 const gov = new Governor(); let perfWorld = null;
 const applyPerf = () => { perfWorld = world; applyLevel(gov.cfg, { post, torch, world }); };
 function setQuality(q, auto = false) {   // auto: the governor (js/perfgov.js) moved it: not saved, so the next session starts on High again
@@ -260,6 +257,7 @@ function loadDeck(n) {
   G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = takePreDeck(SD ? data : null) || new World(data, ship); giUse(world, TS, renderer); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); G.fogBase = ship.fogD; scene.background = new THREE.Color(ship.fog);
+  post?.setGradeFor(ship, null, { instant: true, mode: G.mode });   // js/fx.js grade: snap to the hull's grade, no blend across the lift doors
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
 
@@ -1034,7 +1032,7 @@ function prewarmPrograms() {
 // off screen as it came into view (tools/decktime.mjs "first draws"). Frustum culling off, scissored to one pixel (raster is nothing; the frame's own
 // RenderPass clears the buffers), no shadow-map pass (its handful of depth programs are drawn on every deck). Crowd culling (perfcull.js) is not applied here.
 // skip: objects already drawn this way (the next deck's world, warmed during the lift ride: preDeckWarm) are hidden, only what is new is drawn.
-// GTAO (on by default at rung 0): its normal/depth pass draws every object again with a MeshNormalMaterial override (own programs per skinned / instanced /
+// GTAO (opt-in, rung 0 only): its normal/depth pass draws every object again with a MeshNormalMaterial override (own programs per skinned / instanced /
 // morphed variant) and its AO / denoise / blend quads are programs of their own; draw the whole pass once, scissored to one pixel, with the rest of warmDraws.
 function warmAO(C) {
   const ao = post.ao, tg = [ao.normalRenderTarget, ao.gtaoRenderTarget, ao.pdRenderTarget, C.renderTarget1, C.renderTarget2].filter(Boolean), keep = tg.map(t => [t.scissor.clone(), t.scissorTest]);
@@ -2197,6 +2195,7 @@ function render(dt, t) {
 function render1(dt, t) {
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
+    if (world && ship && G.phase !== 'talk') post.gradeAt(world, P.x, P.z, ship, { mode: G.mode });   // js/fx.js GRADES: hull class + room type (0.8 s blend, room looked up <= 4x/s)
     post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
   } else { renderer.render(scene, camera); renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true; }
 }
@@ -2232,6 +2231,7 @@ const ready = (async () => {
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, outfitStats, renderStats, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, lodCfg, lodStats, lodsSettled, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), panelLights, updatePanelLights, get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game.GI = GI;   // js/gi.js shared uniforms (tools/test.mjs smoke)
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'role', { get: () => G.role });   // { choice, billet, mission, miss } (js/role.js)

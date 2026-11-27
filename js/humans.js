@@ -7,6 +7,7 @@ import { has, get, pbr } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLods } from './meshlod.js';
+import { giPatch } from './gi.js';   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -317,6 +318,7 @@ export function eyeShader(m, eyes, glint = 1) {
         vec3 tg = normalize( normalize( vEyeF ) * 2.5 + normalize( vViewPosition ) + vec3( -0.22, -0.6, 0.0 ) );
         float lum = dot( reflectedLight.indirectDiffuse + reflectedLight.directDiffuse, vec3( 0.3, 0.59, 0.11 ) ) / max( dot( diffuseColor.rgb, vec3( 0.3, 0.59, 0.11 ) ), 0.05 );
         reflectedLight.directSpecular += smoothstep( 0.9955, 0.9985, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 6.0, 0.05, 3.0 ) * uGlint; }`);
+    giPatch(sh);
   };
   m.customProgramCacheKey = () => 'eye1'; m.needsUpdate = true; return u;
 }
@@ -333,6 +335,7 @@ export function hairShader(m, { crown, centre }) {
           #endif
           vHairT = normalize( mat3( modelViewMatrix ) * hd ); vHairN = normalize( mat3( modelViewMatrix ) * hn ); }`);
     sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairT; varying vec3 vHairN;'), 'Hair', HAIR_KK);
+    giPatch(sh);
   };
   m.customProgramCacheKey = () => 'hair2'; m.needsUpdate = true; return u;
 }
@@ -372,6 +375,7 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
         vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1);
         vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad * 0.0012); }`)
       .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0');
+    giPatch(sh);
   };
   m.customProgramCacheKey = () => 'skin2';
   m.needsUpdate = true;
@@ -401,6 +405,7 @@ function styleGarment(m, style, uniform) {
     sh.fragmentShader = directHook(sh.fragmentShader, 'Cloth', CLOTH_FUZZ).replace('#include <lights_fragment_end>', FUZZ_AMBIENT)
       .replace('#include <common>', '#include <common>\nvarying vec3 vZone; uniform vec3 uStyleMix, uTrim, uDark;')
       .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.2, 0.5, vZone.x) * uStyleMix.x);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uTrim, smoothstep(0.3, 0.6, vZone.y) * uStyleMix.y);\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.35, 0.65, vZone.z) * uStyleMix.z);');
+    giPatch(sh);
   };
   m.customProgramCacheKey = () => 'garstyle2'; m.needsUpdate = true;
 }

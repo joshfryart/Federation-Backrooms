@@ -1098,13 +1098,14 @@ console.log('pace/repair:', JSON.stringify(rep));
 const smoke = (ship, seed) => async (page) => {
   const r = await page.evaluate(async ({ ship, seed }) => {
     const g = __game, G = g.G; if (ship != null) G.forceShip = ship; if (seed != null) G.forceSeed = seed; g.newRun(); g.setQuality('low'); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.hp = G.maxHp = 1e6; G.phase = 'play';
-    const out = { ship: G.ship.name, runSeed: G.runSeed, decks: G.ship.decks, open: g.world.d.openTiles.length };
+    const out = { ship: G.ship.name, runSeed: G.runSeed, decks: G.ship.decks, open: g.world.d.openTiles.length }; { let n = 0; g.scene.traverse(o => { if (o.isLight) n++; }); out.lights0 = n; }
     let t = 0; for (let i = 0; i < 300; i++) { t += 1 / 30; G.phase = 'play'; g.advance(1 / 30, t); }
     out.bodies = g.ents.filter(e => e.simmed).length;
     const from = G.shipDeck; g.openLiftPanel(); out.panel = G.phase; if (G.phase === 'select') { g.liftTo(from + 1); let n = 0; for (; n < 30 * 12 && G.phase === 'ride'; n++) { t += 1 / 30; g.advance(1 / 30, t); } out.ride = { secs: +(n / 30).toFixed(1), to: G.shipDeck, phase: G.phase }; }
     await g.lodsSettled(); { const gs = []; g.ents.forEach(e => e.mesh?.userData.human && e.mesh.traverse(o => { if (o.isMesh) gs.push([o, o.geometry]); })); g.lodCfg.force = 2; g.renderOnce(); g.lodCfg.force = null;   // crowd LODs (js/meshlod.js): built in the worker, drawn, and the full meshes back after the draw
       out.lod = { done: g.lodStats.done, failed: g.lodStats.failed, drawn: g.cullStats.lod[2], restored: gs.every(([o, geo]) => o.geometry === geo && !geo.userData.lodOf), smaller: Object.values(g.lodStats.tris).every(t => t[2] < t[1] && t[1] <= t[0]) }; }
     g.setQuality('high'); g.renderOnce(); out.drawCalls = g.renderer.info.render.calls; out.cull = { ...g.cullStats }; out.humans = g.ents.filter(e => e.mesh?.userData.human).length; out.stuckHidden = g.ents.filter(e => e.mesh?.userData._culled).length; g.post.setScale(0.7); g.renderOnce(); out.scaled = g.post.scale; g.post.setScale(1);   // one high-quality frame through the post chain
+    { let n = 0; g.scene.traverse(o => { if (o.isLight) n++; }); out.gi = { set: !!g.world.gi, off: g.GI?.u.giAmt.value.x, lights: n }; }   // baked deck GI (js/gi.js): built on loadDeck, on only inside the world scene's render
     { const lights = () => { let n = 0; g.scene.traverse(o => { if (o.isLight) n++; }); return n; }, gl = g.renderer.getContext(), cones = g.world.cones, l0 = lights(), dc0 = out.drawCalls;   // optional GTAO (js/fx.js): on, rung 0 only, no light added, glow kept out
       g.post.setAO(true); gl.getError(); g.renderOnce(); out.ao = { on: g.post.ao.enabled, err: gl.getError(), calls: g.renderer.info.render.calls, base: dc0, lights: lights() - l0, conesVis: cones ? cones.visible : null, noAO: !!cones?.userData.noAO || !cones, stuck: g.post.ao._visibilityCache.length };
       g.post.setScale(0.85); g.post.allowAO(false); out.ao.rung1 = g.post.ao.enabled; g.post.allowAO(true); g.post.setScale(1); g.post.setAO(false); out.ao.off = g.post.ao.enabled; }
@@ -1112,7 +1113,7 @@ const smoke = (ship, seed) => async (page) => {
     delete G.forceSeed; return out;
   }, { ship, seed });
   console.log('smoke:', JSON.stringify(r));
-  if (!(r.lod.done >= 10 && r.lod.failed === 0 && r.lod.restored && r.lod.smaller && (r.lod.drawn > 0 || r.cull.shown === 0) && r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
+  if (!(r.lod.done >= 10 && r.lod.failed === 0 && r.lod.restored && r.lod.smaller && (r.lod.drawn > 0 || r.cull.shown === 0) && r.panel === 'select' && r.ride && r.ride.to === 1 && r.ride.phase === 'play' && r.drawCalls > 0 && r.cull.hidden + r.cull.shown <= r.humans && r.stuckHidden === 0 && r.scaled === 0.7 && r.ao.on && r.ao.err === 0 && r.ao.lights === 0 && r.ao.noAO && r.ao.stuck === 0 && r.ao.conesVis !== false && !r.ao.rung1 && !r.ao.off && r.gi.set && r.gi.off === 0 && r.gi.lights === r.lights0)) fail('smoke: load / 300 frames / lift one deck down / render ' + JSON.stringify(r));
 };
 S('touch', 'touch', (p) => touchBrowser(p, fail));   // js/touch.js on a phone profile (tools/test-touch.mjs)
 S('smoke', 'smoke', smoke(SHIP, null));

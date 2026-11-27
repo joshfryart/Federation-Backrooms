@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { giPatch } from './gi.js';
 import { SEARCHABLE, clutterFor } from './items.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
@@ -215,6 +216,7 @@ function envCompile(sh) {
     normal = normalize( normal + ( viewMatrix * vec4( eO, 0.0 ) ).xyz * eF * 0.3 );
   }
 }`);
+  giPatch(sh);   // keep the baked deck GI (js/gi.js) on these: this onBeforeCompile replaces the shared prototype hook
 }
 function envSurface(mat, { detail = 0.5, grime = 0.5, wear = 0 } = {}) {
   const dt = surfaceMap('detail'), wt = surfaceMap('wear'); if (!dt || !wt || !mat?.isMeshStandardMaterial || mat.userData.envU) return mat;

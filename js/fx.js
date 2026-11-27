@@ -216,7 +216,7 @@ export class Post {
     this.composer = new EffectComposer(renderer, rt);
     const wp = new RenderPass(scene, camera); this.composer.addPass(wp); this.scenePasses = [wp];   // the passes that draw a scene (world, viewmodel): Talk.warm can skip them
     // AO goes between the world and the viewmodel overlay: the held tool is neither darkened nor casts AO onto the world
-    this.ao = new GameGTAOPass(scene, camera, Math.max(1, size.x * AO_RES), Math.max(1, size.y * AO_RES), undefined, { radius: 0.45, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 12, distanceFallOff: 1 }, { radius: 6, samples: 12 });
+    this.ao = new GameGTAOPass(scene, camera, Math.max(1, size.x * AO_RES), Math.max(1, size.y * AO_RES), undefined, { radius: 0.45, distanceExponent: 1.5, thickness: 1, scale: 1, samples: 8, distanceFallOff: 1 }, { radius: 6, samples: 8 });
     this.ao.blendIntensity = 0.85; this.ao.enabled = false; this.aoWanted = false; this.aoAllowed = true;
     this.composer.addPass(this.ao);
     if (overlay) { const vp = new RenderPass(overlay.scene, overlay.camera); vp.clear = false; vp.clearDepth = true; this.composer.addPass(vp); this.scenePasses.push(vp); }   // first-person viewmodel

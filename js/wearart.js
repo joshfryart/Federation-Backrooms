@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toBones, sample as sampleGesture } from './movement.js';
 import { pbr } from './assets.js';
+import { giPatch } from './gi.js';
 
 const PI = Math.PI;
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -153,7 +154,7 @@ void RE_Direct_Wear( const in IncidentLight directLight, const in vec3 geometryP
   { vec3 dpx = dFdx( -vViewPosition ), dpy = dFdy( -vViewPosition ); float hx = dFdx( wS.x ), hy = dFdy( wS.x );
     vec3 r1 = cross( dpy, normal ), r2 = cross( normal, dpx ); float det = dot( dpx, r1 );
     vec3 grad = sign( det ) * ( hx * r1 + hy * r2 ); normal = normalize( abs( det ) * normal - grad * 0.0025 ); }`);
-    sh.fragmentShader = fs;
+    sh.fragmentShader = fs; giPatch(sh);
   };
   m.customProgramCacheKey = () => tex ? 'wear2' : 'wear2n'; m.needsUpdate = true; return m;
 }

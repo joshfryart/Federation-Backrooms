@@ -52,7 +52,7 @@ async function shoot() {
   const port = server.address().port, base = `http://localhost:${port}/`;
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  const seedRandom = () => { let s = 0x9e3779b9; Math.random = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const seedRandom = () => { window.__rs = () => { let s = 0x9e3779b9; Math.random = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }; window.__rs(); };   // __rs(): re-seed around newRun / loadDeck, so changes that add three.js objects (each draws Math.random for its uuid) do not shift game state
   const newPage = async () => { const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 }); page.setDefaultTimeout(240000); page.on('pageerror', e => console.log('pageerror', e.message)); await page.addInitScript(seedRandom); await page.addInitScript(() => { HTMLCanvasElement.prototype.requestPointerLock = function () { return Promise.resolve(); }; }); return page; };
   const failed = [];
   const hud = (page, hide) => page.evaluate((hide) => { let st = document.getElementById('__nohud'); if (!st) { st = document.createElement('style'); st.id = '__nohud'; document.head.appendChild(st); } st.textContent = hide ? 'body > *:not(#view):not(style):not(script) { visibility: hidden !important; }' : ''; }, hide);   // the HUD carries clocks and ticker text: off for every view but the talk close-up
@@ -60,12 +60,12 @@ async function shoot() {
   const gamePage = async (url) => {
     const page = await newPage(); await page.goto(base + url);
     await page.waitForFunction(() => window.__game && window.__game.ready, null, { timeout: 240000 }); await page.evaluate(() => __game.ready); await page.evaluate(() => __game.warmed);
-    await page.evaluate(({ seed, ship }) => { const g = __game, G = g.G; G.manual = true; G.forceShip = ship; G.forceSeed = seed; g.newRun(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.phase = 'play'; G.hp = G.maxHp = 1e6; document.exitPointerLock?.(); if (G.menus) G.menus.lock = () => null; g.setQuality?.('high');
+    await page.evaluate(({ seed, ship }) => { const g = __game, G = g.G; G.manual = true; G.forceShip = ship; G.forceSeed = seed; __rs(); g.newRun(); __rs(); document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); G.phase = 'play'; G.hp = G.maxHp = 1e6; document.exitPointerLock?.(); if (G.menus) G.menus.lock = () => null; g.setQuality?.('high');
       window.__sg = {   // helpers shared by every game view
         settle(n = 6) { let t = G.time || 0; for (let i = 0; i < n; i++) { t += 1 / 30; G.phase = G.phase === 'talk' ? 'talk' : 'play'; g.advance(1 / 30, t); } },
         hideEnemies() { for (const e of (g.enemies || [])) if (e.mesh) e.mesh.visible = false; },
         stand(x, z, yaw, pitch = -0.1) { const P = g.P; P.x = x; P.z = z; P.vx = P.vz = 0; P.yaw = yaw; P.pitch = pitch; },
-        findRoom(match) { const order = []; for (let d = 1; d <= G.ship.decks; d++) order.push(d); for (const dn of order) { g.loadDeck(dn); G.phase = 'play'; const r = g.world.d.rooms.find(match); if (r) return { dn, r }; } return null; },
+        findRoom(match) { const order = []; for (let d = 1; d <= G.ship.decks; d++) order.push(d); for (const dn of order) { __rs(); g.loadDeck(dn); __rs(); G.phase = 'play'; const r = g.world.d.rooms.find(match); if (r) return { dn, r }; } return null; },
         // far corner of a room looking at its centre (as tools/shot-room.mjs)
         roomView(r) { const w = g.world, d = w.d, cx = r.x + (r.w >> 1), cy = r.y + (r.h >> 1), open = []; for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (d.grid[y][x] === 0) open.push([x, y, Math.hypot(x - cx, y - cy)]); open.sort((a, b) => b[2] - a[2]); if (!open.length) return false; const [px, pz] = w.center(open[0][0], open[0][1]), [tx, tz] = w.center(cx, cy); this.stand(px, pz, Math.atan2(-(tx - px), -(tz - pz)), -0.22); return true; },
         frame() { g.renderOnce(); g.renderOnce(); },
@@ -86,7 +86,7 @@ async function shoot() {
       await run('engineering', () => room(page, 'engineering', `r.type === 'engineering'`));
       await run('sickbay', () => room(page, 'sickbay', `r.type === 'sickbay'`));
       await run('corridor', async () => {   // the longest straight open run outside any room, looked down end to end
-        const ok = await page.evaluate(() => { const S = __sg, g = __game, G = g.G; g.loadDeck(1); G.phase = 'play'; const w = g.world, d = w.d, inRoom = (x, y) => d.rooms.some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+        const ok = await page.evaluate(() => { const S = __sg, g = __game, G = g.G; __rs(); g.loadDeck(1); __rs(); G.phase = 'play'; const w = g.world, d = w.d, inRoom = (x, y) => d.rooms.some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
           const ys = d.grid.length, xs = d.grid[0].length, open = (x, y) => x >= 0 && y >= 0 && x < xs && y < ys && d.grid[y][x] === 0; let best = null;
           for (let y = 0; y < ys; y++) for (let x = 0; x < xs; x++) { if (!open(x, y) || inRoom(x, y)) continue; for (const [dx, dy] of [[1, 0], [0, 1]]) { if (open(x - dx, y - dy)) continue; let n = 0; while (open(x + dx * n, y + dy * n) && !inRoom(x + dx * n, y + dy * n)) n++; if (!best || n > best.n) best = { x, y, dx, dy, n }; } }
           if (!best) return false; S.hideEnemies(); const [px, pz] = w.center(best.x, best.y), [tx, tz] = w.center(best.x + best.dx * (best.n - 1), best.y + best.dy * (best.n - 1)); const yaw = Math.atan2(-(tx - px), -(tz - pz)); S.stand(px, pz, yaw, -0.03); S.settle(6); S.stand(px, pz, yaw, -0.03); S.frame(); return best.n; });
@@ -101,7 +101,7 @@ async function shoot() {
       });
       await run('talk', async () => {
         const who = await page.evaluate(async () => { const S = __sg, g = __game, G = g.G; S.settle(10); let best = null;
-          for (let dn = 1; dn <= G.ship.decks && !best; dn++) { g.loadDeck(dn); G.phase = 'play'; S.settle(20); const c = g.ents.filter(e => e.kind === 'crew' && e.person && !e.fake && e.mesh?.userData.human && e.mesh.visible && !e.walk && !e.repairing && e.turning === undefined && !e.cower); if (c.length) best = c[0]; }
+          for (let dn = 1; dn <= G.ship.decks && !best; dn++) { __rs(); g.loadDeck(dn); __rs(); G.phase = 'play'; S.settle(20); const c = g.ents.filter(e => e.kind === 'crew' && e.person && !e.fake && e.mesh?.userData.human && e.mesh.visible && !e.walk && !e.repairing && e.turning === undefined && !e.cower); if (c.length) best = c[0]; }
           if (!best) return null; const e = best, P = g.P, y0 = e.mesh.rotation.y; let px = e.x, pz = e.z; for (const da of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.5, -2.5, 3.14]) { px = e.x + Math.sin(y0 + da) * 1.3; pz = e.z + Math.cos(y0 + da) * 1.3; const [tx, ty] = g.world.tile(px, pz); if (!g.world.solid(tx, ty) && g.world.los(px, pz, e.x, e.z)) break; }
           S.stand(px, pz, Math.atan2(-(e.x - px), -(e.z - pz)), 0); for (let i = 0; i < 3; i++) { g.advance(1 / 30); g.renderOnce(); }
           if (!g.talk.begin(e)) return null; for (let i = 0; i < 40; i++) { g.advance(1 / 30); g.menus?.frame?.(1 / 30); g.renderOnce(); } return e.person.short; });
@@ -109,7 +109,7 @@ async function shoot() {
         await page.evaluate(() => { __game.talk.end?.(); __game.G.phase = 'play'; });
       });
       await run('blackout', async () => {
-        await page.evaluate(() => { const S = __sg, g = __game, G = g.G; g.loadDeck(1); G.phase = 'play'; S.hideEnemies(); const hit = S.findRoom(r => r.type === 'corridor' || r.type === 'mess' || r.type === 'lounge') || S.findRoom(() => true); const r = g.world.d.rooms.find(q => q.x === hit.r.x && q.y === hit.r.y); S.roomView(r); S.settle(4);
+        await page.evaluate(() => { const S = __sg, g = __game, G = g.G; __rs(); g.loadDeck(1); __rs(); G.phase = 'play'; S.hideEnemies(); const hit = S.findRoom(r => r.type === 'corridor' || r.type === 'mess' || r.type === 'lounge') || S.findRoom(() => true); const r = g.world.d.rooms.find(q => q.x === hit.r.x && q.y === hit.r.y); S.roomView(r); S.settle(4);
           G.blackout = 1e6; g.world.setPower(false); let t = G.time || 0; for (let i = 0; i < 120; i++) { t += 1 / 30; G.phase = 'play'; G.blackout = 1e6; g.advance(1 / 30, t); } S.roomView(r); S.frame(); });
         await save(page, 'blackout');
       });
@@ -117,7 +117,7 @@ async function shoot() {
     }
     await run('madness-torch', async () => {   // roguelike page, torch on (it is the only strong light there)
       const page = await gamePage('index.html?mode=madness&brief=0');
-      await page.evaluate(() => { const S = __sg, g = __game, G = g.G; g.loadDeck?.(1); G.phase = 'play'; S.hideEnemies(); const d = g.world.d, w = g.world, open = d.openTiles || []; if (open.length) { const [x, y] = open[Math.floor(open.length * 0.3)], [px, pz] = w.center(x, y); S.stand(px, pz, 0.8, -0.05); } g.P.torch = true; S.settle(10); S.frame(); });
+      await page.evaluate(() => { const S = __sg, g = __game, G = g.G; __rs(); g.loadDeck?.(1); __rs(); G.phase = 'play'; S.hideEnemies(); const d = g.world.d, w = g.world, open = d.openTiles || []; if (open.length) { const [x, y] = open[Math.floor(open.length * 0.3)], [px, pz] = w.center(x, y); S.stand(px, pz, 0.8, -0.05); } g.P.torch = true; S.settle(10); S.frame(); });
       await save(page, 'madness-torch'); await page.close();
     });
     const viewer = async (name, url, settleMs = 4000) => run(name, async () => {
