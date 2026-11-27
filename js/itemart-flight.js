@@ -11,7 +11,7 @@ import * as THREE from 'three';
 
 const PI = Math.PI;
 const GEO = new Map(); const geo = (key, f) => { let g = GEO.get(key); if (!g) { g = f(); GEO.set(key, g); } return g; };
-function bevelGeo(w, h, d, r) {   // chamfered box: 44 triangles, flat shaded (copy of itemart.js)
+export function bevelGeo(w, h, d, r) {   // chamfered box: 44 triangles, flat shaded (copy of itemart.js)
   const H = [w / 2, h / 2, d / 2], P = [], idx = new Map(), at = (a, s0, s1, s2) => { const k = a + '|' + s0 + s1 + s2; if (idx.has(k)) return idx.get(k); const sg = [s0, s1, s2], v = [0, 0, 0]; for (let i = 0; i < 3; i++) v[i] = sg[i] * (i === a ? H[i] : H[i] - r); P.push(v); idx.set(k, P.length - 1); return P.length - 1; };
   const T = [], S = [-1, 1], tri = (a, b, c) => T.push([a, b, c]), quad = (a, b, c, d2) => { tri(a, b, c); tri(a, c, d2); };
   for (let a = 0; a < 3; a++) for (const sa of S) { const o = [0, 1, 2].filter(i => i !== a), g = (t, u) => { const sg = [0, 0, 0]; sg[a] = sa; sg[o[0]] = t; sg[o[1]] = u; return at(a, ...sg); }; quad(g(-1, -1), g(1, -1), g(1, 1), g(-1, 1)); }
@@ -36,7 +36,7 @@ const orange = () => memo('orange', () => new THREE.MeshStandardMaterial({ color
 export const DEFS_FLIGHT = {};
 const def = (kind, name, cls, build, x = {}) => { DEFS_FLIGHT[kind] = { name, cls, build, ...x }; };
 const col = (k, c, r = 0.6, m = 0) => memo(k, () => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m }));
-const yel = () => col('fyel', 0xe6b422), webB = () => col('fwebB', 0x2a5ab0, 0.85), webO = () => col('fwebO', 0xf26a1b, 0.85), rope = () => col('frope', 0xb89c6a, 0.95), body = () => col('fscan', 0xd8a818, 0.5);
+const yel = () => col('fyel', 0xd9ae24, 0.92), webB = () => col('fwebB', 0x2a5ab0, 0.92), webO = () => col('fwebO', 0xf26a1b, 0.85), rope = () => col('frope', 0xa88f60, 0.98), body = () => col('fscan', 0xd0a41c, 0.38, 0.05);
 const shape = (key, pts, depth) => geo(key, () => { const s = new THREE.Shape(pts.map(p => new THREE.Vector2(p[0], p[1]))); const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false }); g.translate(0, 0, -depth / 2); return g; });
 
 // wheel chocks (frame: base): two wedges (length along x, ramp rising to +x... tall end at -x with a rope eye, grooves on the ramp) 0.25 x 0.12 x 0.12 m, rope 0.5 m sagging between them (along z).

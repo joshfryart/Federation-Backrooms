@@ -21,7 +21,11 @@ function board(K, S) {   // S = 1 full width, 0.5 half; every x is scaled by S
   tiles.forEach(([x, y], i) => K.box(0.12, 0.07, 0.008, x * S, y - 0.035, i === 10 ? GR : i === 4 || i === 13 ? GO : GG, 0.114, true));   // 20 system tiles
   K.box(W + 0.08, 0.05, 0.22, 0, 1.54, STEEL).box(W, 0.02, 0.2, 0, 1.57, DK, 0.0);                                  // key ledge
   const nk = S < 1 ? 6 : 12;
-  for (let i = 0; i < nk; i++) { const x = (i - (nk - 1) / 2) * (W - 0.4) / (nk - 1); K.box(0.14, 0.045, 0.1, x, 1.585, i % 5 === 3 ? RD : WHT, 0.06).box(0.12, 0.02, 0.004, x, 1.5, CREAM, 0.2); }
+  for (let i = 0; i < nk; i++) { const x = (i - (nk - 1) / 2) * (W - 0.4) / (nk - 1); K.box(0.14, 0.045, 0.1, x, 1.585, i % 5 === 3 ? RD : WHT, 0.06); }
+  K.box(W - 0.3, 0.014, 0.004, 0, 1.5, CREAM, 0.2).box(W + 0.08, 0.012, 0.23, 0, 1.51, DK, 0.0);                            // one label strip, shadow gap under the ledge
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) K.box(0.05, 0.05, 0.012, sx * (W / 2 + 0.005), cy + sy * 0.6, MT, 0.1);   // corner screw plates
+  K.box(W, 0.016, 0.004, 0, cy - 0.58, [0.14, 0.15, 0.17], 0.112).box(W, 0.016, 0.004, 0, cy + 0.58, [0.14, 0.15, 0.17], 0.112);   // dark inner lip, top and bottom (bezel shading)
+  for (let i = 0; i < (S < 1 ? 0 : 3); i++) K.box(0.014, 0.014, 0.006, -W / 2 + 0.06, cy - 0.3 + i * 0.1, i === 1 ? GO : GG, 0.112, true);   // status ticks on the left stile
   K.box(0.5, 0.02, 0.006, -W / 2 + 0.3, 2.86, WHT, 0.0).box(0.06, 0.06, 0.008, W / 2 - 0.1, 1.64, GG, 0.1, true);
   void MT; void YL; void WHT;
 }
