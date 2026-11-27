@@ -1,5 +1,6 @@
-// Headless test suite:  node tools/test.mjs [--gate] [--only a,b] [--seed N] [--ship i] [--list]   (needs `playwright` + Chromium; starts its own static server)
+// Headless test suite:  node tools/test.mjs [--node | --gate] [--only a,b] [--seed N] [--ship i] [--list]   (needs `playwright` + its Chromium (new headless, `npx playwright install chromium`); starts its own static server)
 //   full (default)  every section: node-only checks, then the browser sections page by page (one live page at a time), then the seed-set smoke
+//   --node          the node-only sections only (no browser is launched; CI's node job)
 //   --gate          the node-only sections + one browser smoke (load, newRun, 300 test-clock frames, lift one deck down, one high-quality render); target < 2 min
 //   --only a,b      just these sections (names: --list); a browser section runs on a fresh page of its kind
 //   --seed N        Math.random seed for every page (env TEST_SEED; default 1); each browser section re-seeds from (N, its name) before it runs,
@@ -22,7 +23,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'), imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
 const argv = process.argv.slice(2), arg = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : (argv[i + 1] ?? d); };
-const SEED = +(arg('seed', process.env.TEST_SEED ?? 1)) >>> 0, SHIP = arg('ship', null) == null ? null : +arg('ship'), GATE = argv.includes('--gate'), ONLY = arg('only', null) ? String(arg('only')).split(',') : null;
+const SEED = +(arg('seed', process.env.TEST_SEED ?? 1)) >>> 0, SHIP = arg('ship', null) == null ? null : +arg('ship'), GATE = argv.includes('--gate'), NODE = argv.includes('--node'), ONLY = arg('only', null) ? String(arg('only')).split(',') : null;
 // seed set for the full run's smoke (tools/seed-scan.mjs: smallest deck, a ring / twin hull, a large hull): [ship index, run seed]
 const SEED_SET = [[3, 56], [4, 2], [2, 7]];
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.glb': 'model/gltf-binary', '.webp': 'image/webp', '.exr': 'application/octet-stream', '.css': 'text/css', '.json': 'application/json' };
@@ -260,13 +261,29 @@ const server = createServer(async (req, res) => {
   catch { res.writeHead(404); res.end(); }
 }).listen(0);
 const port = server.address().port; let browser = null;
+// Chromium's own memory (Linux only, /proc): VmRSS summed over the browser's processes (SystemInfo.getProcessInfo), sampled every second so each section
+// line and the summary show the peak. The page JS heap alone hides native growth (e.g. the headless-shell pointer-lock input flood, see openPage).
+let rssCdp = null, rssBusy = false, rssPeak = 0, rssSecPeak = 0;
+const chromeRss = async () => {
+  if (!browser || process.platform !== 'linux') return null;
+  try { rssCdp ||= await browser.newBrowserCDPSession(); const { processInfo } = await rssCdp.send('SystemInfo.getProcessInfo'); let kb = 0;
+    for (const p of processInfo) { try { kb += +readFileSync(`/proc/${p.id}/status`, 'utf8').match(/VmRSS:\s+(\d+)/)[1]; } catch { /* exited */ } }
+    return kb / 1024; } catch { rssCdp = null; return null; }
+};
+const rssTick = async () => { if (rssBusy) return; rssBusy = true; const r = await chromeRss(); rssBusy = false; if (r != null) { rssPeak = Math.max(rssPeak, r); rssSecPeak = Math.max(rssSecPeak, r); } return r; };
+setInterval(rssTick, 1000).unref();
 const strSeed = (s) => { let h = SEED ^ 0x9e3779b9; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0; return h >>> 0; };
 // one browser for the whole run; ONE live page at a time (each page is its own renderer process, closed once its sections are done: every newRun() builds a ship).
 // Page load + game ready get a generous timeout and ONE retry on a fresh page (logged as RETRY): a slow or crashed load is not a test result.
 // Nothing else is retried here: a section that fails, fails.
 const gameReady = async (p) => p.evaluate(async ({ ship, manual }) => { await __game.ready; await __game.warmed; __game.setQuality('low'); __game.G.manual = manual; if (ship != null) Object.defineProperty(__game.G, 'forceShip', { get: () => ship, set: () => { }, configurable: true }); }, { ship: SHIP, manual: !process.env.TEST_REALTIME });   // TEST_REALTIME=1: the old wall-clock frame loop (diagnostics only)
 const openPage = async (path, tag = '', viewport = { width: 320, height: 180 }, ready = gameReady) => {
-  if (!browser) browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required'] });   // a running AudioContext: in a suspended one (no user gesture) every scheduled sound node stays alive, gigabytes over a run
+  // channel 'chromium' = Chromium's new headless mode, not the default chrome-headless-shell. In the headless shell an active pointer lock (the game takes
+  // one on newRun / resume / E) makes the browser send the renderer ~45k synthetic input events a second (blink.mojom.WidgetInputHandler, 568 B each)
+  // for as long as the lock is held: browser + renderer RSS grew ~0.5-1 GB every few seconds while the page JS heap stayed ~100 MB, peaks 4.5-6.5 GB
+  // per run, OOM kills on smaller machines, and lock / unlock pauses mid-section. New headless holds the same lock without the flood.
+  // TEST_CHANNEL=shell brings back the headless shell (comparison only).
+  if (!browser) browser = await chromium.launch({ ...(process.env.TEST_CHANNEL === 'shell' ? {} : { channel: process.env.TEST_CHANNEL || 'chromium' }), args: ['--use-gl=swiftshader', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--js-flags=--expose-gc', '--autoplay-policy=no-user-gesture-required'] });   // a running AudioContext: in a suspended one (no user gesture) every scheduled sound node stays alive, gigabytes over a run
   for (let attempt = 1; ; attempt++) {
     const p = await browser.newPage(viewport.device ? { ...viewport.device, deviceScaleFactor: 1 } : { viewport });   // viewport.device: a Playwright device profile (touch page) p.setDefaultTimeout(120000); p.setDefaultNavigationTimeout(120000);
     await p.addInitScript((seed) => { window.__seedRandom = (s) => { let a = s >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }; window.__seedRandom(seed); }, SEED);   // Math.random seeded (the generator of tools/soak-walk.mjs); __seedRandom re-seeds per section
@@ -1103,9 +1120,9 @@ for (const [i, [ship, seed]] of SEED_SET.entries()) S('smoke-set' + i, 'smoke', 
 
 // ---- runner ----
 if (argv.includes('--list')) { console.log(sections.map(s => `${s.name}${s.page ? ' [' + s.page + ']' : ' [node]'}`).join('\n')); process.exit(0); }
-const pick = ONLY ? sections.filter(s => ONLY.includes(s.name)) : GATE ? sections.filter(s => !s.page || s.name === 'smoke') : sections.filter(s => s.name !== 'smoke');
+const pick = ONLY ? sections.filter(s => ONLY.includes(s.name)) : NODE ? sections.filter(s => !s.page) : GATE ? sections.filter(s => !s.page || s.name === 'smoke') : sections.filter(s => s.name !== 'smoke');
 if (ONLY) for (const n of ONLY) if (!sections.some(s => s.name === n)) { console.log(`no section '${n}' (--list)`); process.exit(2); }
-console.log(`test: ${ONLY ? 'only ' + ONLY.join(',') : GATE ? 'gate' : 'full'}, seed ${SEED}${SHIP != null ? ', ship ' + SHIP : ''}, ${pick.length} sections`);
+console.log(`test: ${ONLY ? 'only ' + ONLY.join(',') : NODE ? 'node' : GATE ? 'gate' : 'full'}, seed ${SEED}${SHIP != null ? ', ship ' + SHIP : ''}, ${pick.length} sections`);
 const T0 = Date.now(), times = []; let page = null, pageKind = null;
 const mb = (b) => (b / 1048576).toFixed(0);
 const snap = (p) => p.evaluate(() => (window.gc?.(), { ship: __game.G.ship?.name, runSeed: __game.G.runSeed, deck: __game.G.shipDeck, heap: performance.memory?.usedJSHeapSize, gl: [__game.renderer.info.programs?.length, __game.renderer.info.memory.textures, __game.renderer.info.memory.geometries] }));
@@ -1118,12 +1135,13 @@ for (const sec of pick) {
   if (threw) { fail(`${sec.name} threw: ${String(threw.message || threw).split('\n')[0]}`); if (page) await page.close().catch(() => { }); page = null; pageKind = null; }   // a crashed / wedged page: the next section opens a fresh one
   if (secFails && curPage) console.log(where());
   if (errors.length > e0) console.log(`  page errors in ${sec.name}: ${[...new Set(errors.slice(e0))].slice(0, 3).join(' | ').slice(0, 400)}`);
-  const ms = Date.now() - t0; times.push([sec.name, ms]);
-  console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, ${game ? `ship=${ctx.ship ?? '-'} seed=${ctx.runSeed ?? '-'} deck=${ctx.deck ?? '-'}, ` : ''}heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB`);
+  const ms = Date.now() - t0; times.push([sec.name, ms]); const rss = sec.page ? await rssTick() : null;
+  console.log(`  [${sec.name}] ${(ms / 1000).toFixed(1)} s, ${game ? `ship=${ctx.ship ?? '-'} seed=${ctx.runSeed ?? '-'} deck=${ctx.deck ?? '-'}, ` : ''}heap ${game && ctx.heap ? 'page ' + mb(ctx.heap) + ' MB (GL programs / textures / geometries ' + ctx.gl.join(' / ') + '), ' : ''}node ${mb(process.memoryUsage().heapUsed)} MB${rss != null ? `, chromium RSS ${rss.toFixed(0)} MB (section peak ${rssSecPeak.toFixed(0)})` : ''}`);
+  rssSecPeak = 0;
 }
 if (page) await page.close().catch(() => { });
 const tot = (Date.now() - T0) / 1000, slow = times.slice().sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, ms]) => `${n} ${(ms / 1000).toFixed(1)}`).join(', ');
-console.log(`time: ${tot.toFixed(1)} s total (node ${(times.filter(([n]) => !sections.find(s => s.name === n).page).reduce((a, [, ms]) => a + ms, 0) / 1000).toFixed(1)} s); slowest: ${slow}`);
+console.log(`${rssPeak ? `chromium RSS peak ${rssPeak.toFixed(0)} MB; ` : ''}time: ${tot.toFixed(1)} s total (node ${(times.filter(([n]) => !sections.find(s => s.name === n).page).reduce((a, [, ms]) => a + ms, 0) / 1000).toFixed(1)} s); slowest: ${slow}`);
 cur = 'page-errors'; curPage = null; ctx = {};
 if (errors.length) fail('page errors:\n  ' + [...new Set(errors)].slice(0, 8).join('\n  '));
 if (browser) await browser.close(); server.close();

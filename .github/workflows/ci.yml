@@ -7,36 +7,61 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch supersedes a queued / running check.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  node:
     name: Node tests and job validators
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: lts/*
+          node-version: 22
 
-      # tools/test.mjs does `require('playwright')` at module load, so the package must resolve even
-      # for the node-only sections. No browser is downloaded: the browser sections are not run here.
-      - name: Cache npm downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: npm-playwright-1.49.1
-
+      # tools/test.mjs does `require('playwright')` at module load, so the package must resolve even for the node-only
+      # sections. No browser is downloaded in this job. Same version as the dev machine (playwright 1.63.0).
       - name: Install playwright module (no browser)
-        run: npm install --no-save --no-package-lock playwright@1.49.1
+        run: npm install --no-save --no-package-lock playwright@1.63.0
 
-      # Every [node] section from `node tools/test.mjs --list`: unit suites, generator, ship decks,
-      # inventory rooms, director cascade, crew voices, pace presets. Browser sections need Chromium and are not run in CI.
+      # Every [node] section of `node tools/test.mjs --list` (unit suites, generator, ship decks, inventory rooms,
+      # director cascade, crew voices, pace presets, perf governor, smoke / liminal / audio units, ...).
+      # The jobgames-unit section also checks that js/jobs/index.js matches the job files.
       - name: Generator and unit tests (node-only sections)
-        run: node tools/test.mjs --only comms,sim,walk-unit,duty,social,gait,movement,equipment-unit,repair-unit,handhelds-unit,nav-unit,ui-unit,talk-unit,combat-unit,wiring-unit,jobgames-unit,room-props,generator,ship-decks,inventory-rooms,director-cascade,voices,pace-presets,role
+        run: node tools/test.mjs --node
 
       - name: Validate all job modules
         run: node tools/check-jobs.mjs --all --quiet
 
+      # Collisions between job modules, and a stale generated bundle js/jobs/index.js.
       - name: Check job registry is up to date
         run: node tools/merge-jobs.mjs --check
+
+  browser:
+    name: Browser gate (headless Chromium, SwiftShader)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install playwright module
+        run: npm install --no-save --no-package-lock playwright@1.63.0
+
+      # tools/test.mjs launches Chromium's new headless mode (channel 'chromium'), not chrome-headless-shell; WebGL runs on SwiftShader.
+      - name: Install Chromium and its system dependencies
+        run: npx playwright install --with-deps --no-shell chromium
+
+      # --gate: the node-only sections again plus one browser smoke (load, newRun, 300 test-clock frames, lift one deck
+      # down, crowd LODs, one high-quality render). The full browser suite (`node tools/test.mjs`, ~3-4 min) is not run
+      # here: its `walk` section has an intermittent `npc lift` spacing failure (see TODO.md).
+      - name: Browser smoke (--gate)
+        run: node tools/test.mjs --gate

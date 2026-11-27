@@ -1,5 +1,7 @@
 name: Pages
 
+# Needs Settings -> Pages -> Build and deployment -> Source: "GitHub Actions" (a repository setting; until it is set,
+# the deploy job fails with "Failed to create deployment (status: 404) ... Ensure GitHub Pages has been enabled").
 on:
   push:
     branches: [main]
@@ -20,19 +22,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      # Allowlist, not a copy of the repo: tools/, node_modules/, .git/, .github/ and docs/screenshots/ stay out.
-      # docs/ is left out entirely because nothing at runtime loads from it (it is ~110 MB of notes and media).
-      # All asset references in the site are relative (./ or no prefix), so it works under /<repo>/.
+      # Allowlist, not a copy of the repo: tools/, node_modules/, .git/, .github/ and docs/ stay out (nothing at runtime
+      # loads from docs/; it is ~130 MB of notes and media). The 701 job source files js/jobs/<billet>__<slug>.js stay out
+      # too: the game loads the generated bundle js/jobs/index.js (plus kit.js / host.js), never the single files.
+      # js/meshlod-worker.js (crowd LOD worker) ships with js/. All asset references are relative, so the site works under /<repo>/.
       - name: Assemble site
         run: |
           set -euo pipefail
           rm -rf _site && mkdir _site
           cp ./*.html ./CREDITS.md _site/
           cp -r css js assets vendor _site/
+          find _site/js/jobs -maxdepth 1 -name '*__*.js' -delete
+          test -f _site/js/jobs/index.js && test -f _site/js/jobs/kit.js && test -f _site/js/jobs/host.js && test -f _site/js/meshlod-worker.js
+          du -sh _site
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
@@ -45,4 +51,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
