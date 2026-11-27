@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toBones, sample as sampleGesture } from './movement.js';
+import { pbr } from './assets.js';
 
 const PI = Math.PI;
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -124,8 +125,40 @@ class Build {
   }
 }
 const _mat = {};
+// Duty-outfit cloth (one shared material, so one program): the generated cloth set's weave (assets/textures/cloth_r, R = AO used as a height, G = roughness) projected
+// biplanar in bind space (the shells have no uv), scaled to metres by the mesh's own scale, turned into a bump with screen derivatives (as the skin detail in
+// js/humans.js), plus the same grazing-angle fuzz term the uniforms get. Without the texture set (viewer pages that load no textures) only the fuzz is added.
+const WEAVE_PER_M = 4;   // weave tiles per metre (the tile is 128 threads: ~5 threads / cm, a coarse duty twill that still reads at talking distance)
+function clothWeave(m) {
+  const p = pbr('cloth'), tex = p ? p.r : null, u = { uWeaveTex: { value: tex }, uWeave: { value: WEAVE_PER_M } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp; varying vec3 vWn;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWp = position * length( modelMatrix[ 0 ].xyz ); vWn = normal;');
+    let fs = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWp; varying vec3 vWn; uniform float uWeave;${tex ? '\nuniform sampler2D uWeaveTex;' : ''}`)
+      .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>
+void RE_Direct_Wear( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+  RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+  float fuzzV = pow( 1.0 - clamp( dot( geometryNormal, geometryViewDir ), 0.0, 1.0 ), 4.0 );
+  reflectedLight.directDiffuse += directLight.color * BRDF_Lambert( material.diffuseContribution ) * fuzzV * clamp( dot( geometryNormal, directLight.direction ) * 0.5 + 0.5, 0.0, 1.0 ) * 0.9;
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Wear`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+  reflectedLight.indirectDiffuse *= 1.0 + 0.6 * pow( 1.0 - clamp( dot( normal, normalize( vViewPosition ) ), 0.0, 1.0 ), 4.0 );`);
+    if (tex) fs = fs.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+  vec3 wW = pow( abs( normalize( vWn ) ), vec3( 4.0 ) ); wW /= wW.x + wW.y + wW.z + 1e-5; vec3 wq = vWp * uWeave;
+  vec2 wS = texture2D( uWeaveTex, wq.zy ).rg * wW.x + texture2D( uWeaveTex, wq.xz ).rg * wW.y + texture2D( uWeaveTex, wq.xy ).rg * wW.z;
+  roughnessFactor *= 0.75 + 0.3 * wS.y;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  { vec3 dpx = dFdx( -vViewPosition ), dpy = dFdy( -vViewPosition ); float hx = dFdx( wS.x ), hy = dFdy( wS.x );
+    vec3 r1 = cross( dpy, normal ), r2 = cross( normal, dpx ); float det = dot( dpx, r1 );
+    vec3 grad = sign( det ) * ( hx * r1 + hy * r2 ); normal = normalize( abs( det ) * normal - grad * 0.0025 ); }`);
+    sh.fragmentShader = fs;
+  };
+  m.customProgramCacheKey = () => tex ? 'wear2' : 'wear2n'; m.needsUpdate = true; return m;
+}
 const MAT = {
-  cloth: () => _mat.cloth || (_mat.cloth = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide })),
+  cloth: () => _mat.cloth || (_mat.cloth = clothWeave(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide }))),
   trim: () => _mat.trim || (_mat.trim = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.35, side: THREE.DoubleSide })),
   glass: () => _mat.glass || (_mat.glass = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.08, metalness: 0.0, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide })),
 };
