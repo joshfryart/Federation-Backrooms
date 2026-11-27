@@ -4,3 +4,5 @@ node_modules
 # shanty video render scratch (frames, wav, coverage): tools/video/README.md
 tools/video/out/
 results/
+shots/gfx-baseline/
+shots/gfx/

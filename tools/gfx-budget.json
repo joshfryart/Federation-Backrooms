@@ -1,0 +1,29 @@
+{
+  "_doc": "Graphics budget for the AAA-graphics work. 'baseline' = measured on the sandbox (4-core, SwiftShader, headless Chromium) before any graphics change: tools/perf.mjs (640x360, High, 3 ships x 2 spots + crowd rows) and tools/loadtime.mjs (960x540, seed 11 ship 0). Software GL: only compare against numbers from the same box. 'limits' are what tools/gfx-gate.mjs enforces. NOTE: the sandbox baseline already exceeds the two time limits (titleLoadS, beginToEnterS were set for a faster box); run the gate with GFX_TIME_SCALE=1.3 (or higher) on a slow box, or judge time limits relative to baseline.",
+  "baseline": {
+    "date": "2026-11-27",
+    "perf": {
+      "avgCalls": 337.2, "avgTris": 54142.7, "avgRenderMs": 13.2, "avgPrograms": 65.2, "avgObjs": 1958.3,
+      "maxPrograms": 73, "sceneLights": 9,
+      "rows": [
+        { "ship": "USF Ontario", "calls": 132, "tris": 19796, "programs": 49 },
+        { "ship": "USF Ontario", "calls": 192, "tris": 23454, "programs": 52 },
+        { "ship": "USF Ontario crowd", "calls": 497, "tris": 300459 },
+        { "ship": "USF Nova Scotia", "calls": 685, "tris": 109142, "programs": 72 },
+        { "ship": "USF Nova Scotia", "calls": 286, "tris": 82452, "programs": 72 },
+        { "ship": "USF Nova Scotia crowd", "calls": 465, "tris": 247928 },
+        { "ship": "USF Manitoba", "calls": 584, "tris": 66032, "programs": 73 },
+        { "ship": "USF Manitoba", "calls": 144, "tris": 23980, "programs": 73 },
+        { "ship": "USF Manitoba crowd", "calls": 366, "tris": 248615 }
+      ]
+    },
+    "load": { "titleLoadS": 3.365, "beginToEnterS": 11.686, "enterToPlayMs": 16197 }
+  },
+  "limits": {
+    "titleLoadS": 2.6,
+    "beginToEnterS": 9.5,
+    "maxPrograms": 75,
+    "drawCallsPct": 3,
+    "lights": 9
+  }
+}
