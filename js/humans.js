@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { procClips } from './proc-anims.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
-import { has, get } from './assets.js';
+import { has, get, pbr } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLods } from './meshlod.js';
@@ -259,11 +259,96 @@ float sh_n(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f)
              mix(mix(sh_h(i + vec3(0,0,1)), sh_h(i + vec3(1,0,1)), f.x), mix(sh_h(i + vec3(0,1,1)), sh_h(i + vec3(1,1,1)), f.x), f.y), f.z); }
 float sh_f(vec3 p){ return 0.5 * sh_n(p) + 0.25 * sh_n(p * 2.03 + 7.1) + 0.125 * sh_n(p * 4.1 + 3.7) + 0.0625 * sh_n(p * 8.3 + 1.3); }
 `;
+// ---- per-material light response: wrap RE_Direct (three's per-light BRDF hook in lights_physical_pars_fragment) with an extra term. Same program count as before:
+// each of these replaces the program its material already had (one customProgramCacheKey per kind of material), nothing is added per person.
+const directHook = (fs, name, body) => fs.replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>
+void RE_Direct_${name}( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+  RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+  ${body}
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_${name}`);
+// skin: wrap lighting tinted toward red past the terminator (light that entered the skin comes out a few mm further on, and red travels furthest), i.e. a cheap
+// subsurface look without a blur pass. Per channel wrap w: lambert' = (n.l + w) / (1 + w); only the part above plain lambert is added (the lit side is unchanged).
+const SKIN_SSS = `
+  float ndl = dot( geometryNormal, directLight.direction );
+  vec3 wrapW = vec3( 0.62, 0.3, 0.2 ), wrapL = clamp( ( vec3( ndl ) + wrapW ) / ( 1.0 + wrapW ), 0.0, 1.0 );
+  reflectedLight.directDiffuse += directLight.color * BRDF_Lambert( material.diffuseContribution ) * max( wrapL - max( ndl, 0.0 ), 0.0 ) * 0.85;`;
+// eyes: a wet cornea over the eyeball. The eye mesh is nearly flat (its normals all face forward), so the cornea is shaded with a sphere normal around each
+// eyeball's centre (vEyeN, see eyeShader): a second, very sharp specular lobe per light (the material's own roughness spreads it too wide to read as a glint).
+const EYE_CORNEA = `
+  vec3 eN = normalize( vEyeN ), hD = normalize( directLight.direction + geometryViewDir );
+  float nh = clamp( dot( eN, hD ), 0.0, 1.0 ), nl = clamp( dot( eN, directLight.direction ), 0.0, 1.0 );
+  reflectedLight.directSpecular += directLight.color * nl * min( D_GGX( 0.07, nh ) * 0.03, 4.0 ) * uGlint;`;
+// hair: Kajiya-Kay strand highlights (two shifted lobes, the second tinted by the hair colour). The cards' own normals jump from card to card, so the highlight
+// uses a smooth "shell" normal (vHairN: out from the centre of the hair volume) and a strand direction that runs from the crown down and out (vHairT), both
+// skinned in hairShader: one continuous band over the head instead of a highlight per card. The material's GGX term stays for the broad sheen.
+const HAIR_KK = `
+  vec3 N = normalize( vHairN ), T = vHairT - N * dot( vHairT, N ); T = T / max( length( T ), 1e-4 );
+  vec3 hD = normalize( directLight.direction + geometryViewDir );
+  vec3 T1 = normalize( T - N * 0.12 ), T2 = normalize( T + N * 0.2 );
+  float th1 = dot( T1, hD ), th2 = dot( T2, hD ), s1 = sqrt( max( 1.0 - th1 * th1, 0.0 ) ), s2 = sqrt( max( 1.0 - th2 * th2, 0.0 ) );
+  float nl = dot( N, directLight.direction ), vis = smoothstep( -0.15, 0.35, nl ) * ( 0.5 + 0.5 * clamp( dot( geometryNormal, directLight.direction ) * 0.5 + 0.5, 0.0, 1.0 ) );
+  vec3 hc = min( material.diffuseContribution * 1.8, vec3( 1.0 ) );
+  reflectedLight.directSpecular += directLight.color * vis * ( pow( s1, 48.0 ) * 0.06 * mix( vec3( 1.0 ), hc, 0.6 ) + pow( s2, 12.0 ) * 0.06 * hc );`;
+// cloth fuzz: fibres standing off the weave catch light at grazing angles (rim brightening, as velvet / brushed twill), from each light and from the ambient term
+const CLOTH_FUZZ = `
+  float fuzzV = pow( 1.0 - clamp( dot( geometryNormal, geometryViewDir ), 0.0, 1.0 ), 4.0 );
+  reflectedLight.directDiffuse += directLight.color * BRDF_Lambert( material.diffuseContribution ) * fuzzV * clamp( dot( geometryNormal, directLight.direction ) * 0.5 + 0.5, 0.0, 1.0 ) * 0.9;`;
+const FUZZ_AMBIENT = `#include <lights_fragment_end>
+  reflectedLight.indirectDiffuse *= 1.0 + 0.6 * pow( 1.0 - clamp( dot( normal, normalize( vViewPosition ) ), 0.0, 1.0 ), 4.0 );`;
+// eyes = eyesOf(): the two eyeball centres in the eye mesh's own space (x < mid = one eye, x >= mid = the other) and the eyes' forward direction there.
+// glint 0: the same program with the cornea terms off. The tongue and the shoes use it that way: they used to share one program with the eyes (the same
+// plain textured skinned material), and keeping all three on one program keeps the program count where it was.
+export function eyeShader(m, eyes, glint = 1) {
+  const u = { uEyeA: { value: eyes.a.clone() }, uEyeB: { value: eyes.b.clone() }, uEyeMid: { value: eyes.mid }, uEyeFwd: { value: eyes.fwd.clone() }, uGlint: { value: glint } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec4 uEyeA, uEyeB; uniform float uEyeMid; uniform vec3 uEyeFwd; varying vec3 vEyeN; varying vec3 vEyeF;')
+      .replace('#include <defaultnormal_vertex>', `#include <defaultnormal_vertex>
+        { vec4 ec = position.x < uEyeMid ? uEyeA : uEyeB; vec3 en = position - ec.xyz, ef = uEyeFwd;
+          #ifdef USE_SKINNING
+            en = ( skinMatrix * vec4( en, 0.0 ) ).xyz; ef = ( skinMatrix * vec4( ef, 0.0 ) ).xyz;
+          #endif
+          vEyeN = normalize( mat3( modelViewMatrix ) * en ); vEyeF = normalize( mat3( modelViewMatrix ) * ef ); }`);
+    sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vEyeN; varying vec3 vEyeF; uniform float uGlint;'), 'Eye', EYE_CORNEA).replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      { // catch light: a soft light near the viewer reflected in the cornea, pinned to the upper left of the pupil (on these meshes the painted pupil sits below the
+        // cap's apex, hence the downward offset; found by drawing the regions) so the lids never hide it; scaled by how lit the eye is so it never glows in the dark
+        vec3 tg = normalize( normalize( vEyeF ) * 2.5 + normalize( vViewPosition ) + vec3( -0.22, -0.6, 0.0 ) );
+        float lum = dot( reflectedLight.indirectDiffuse + reflectedLight.directDiffuse, vec3( 0.3, 0.59, 0.11 ) ) / max( dot( diffuseColor.rgb, vec3( 0.3, 0.59, 0.11 ) ), 0.05 );
+        reflectedLight.directSpecular += smoothstep( 0.9955, 0.9985, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 6.0, 0.05, 3.0 ) * uGlint; }`);
+  };
+  m.customProgramCacheKey = () => 'eye1'; m.needsUpdate = true; return u;
+}
+// crown: the top centre of the hair mesh in its own (bind) space; strands are taken to run from there down and out over the scalp
+export function hairShader(m, { crown, centre }) {
+  const u = { uCrown: { value: crown.clone() }, uHairC: { value: centre.clone() } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uCrown, uHairC; varying vec3 vHairT; varying vec3 vHairN;')
+      .replace('#include <defaultnormal_vertex>', `#include <defaultnormal_vertex>
+        { vec3 hd = position - uCrown + vec3( 0.0, -1e-4, 0.0 ), hn = position - uHairC + vec3( 0.0, 1e-4, 0.0 );
+          #ifdef USE_SKINNING
+            hd = ( skinMatrix * vec4( hd, 0.0 ) ).xyz; hn = ( skinMatrix * vec4( hn, 0.0 ) ).xyz;
+          #endif
+          vHairT = normalize( mat3( modelViewMatrix ) * hd ); vHairN = normalize( mat3( modelViewMatrix ) * hn ); }`);
+    sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairT; varying vec3 vHairN;'), 'Hair', HAIR_KK);
+  };
+  m.customProgramCacheKey = () => 'hair2'; m.needsUpdate = true; return u;
+}
+// the generated cloth set (assets/textures/cloth_*: plain weave normal + AO / roughness) on the uniform garments, tiled CLOTH_REPEAT times over the garment uv
+const CLOTH_REPEAT = 9; let clothMaps;
+function clothMapsFor() {
+  if (clothMaps !== undefined) return clothMaps; const p = pbr('cloth'); if (!p) return (clothMaps = null);
+  const rep = (t) => { const c = t.clone(); c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(CLOTH_REPEAT, CLOTH_REPEAT); c.needsUpdate = true; return c; };   // clones share the image: one upload
+  return (clothMaps = ownRandom(() => ({ n: rep(p.n), r: rep(p.r) })));   // private random stream: see blobMat
+}
 export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
   const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
+    sh.fragmentShader = directHook(sh.fragmentShader, 'Skin', SKIN_SSS);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
       .replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 q = vObj * 9.0 + uSeed;
@@ -288,7 +373,7 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
         vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad * 0.0012); }`)
       .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0');
   };
-  m.customProgramCacheKey = () => 'skin1';
+  m.customProgramCacheKey = () => 'skin2';
   m.needsUpdate = true;
   return u;
 }
@@ -303,18 +388,68 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
 export function releaseHuman(obj) { if (!obj?.traverse) return; const seen = new Set(); obj.traverse(o => { const sk = o.isSkinnedMesh && o.skeleton; if (sk && !seen.has(sk)) { seen.add(sk); sk.dispose(); } }); }
 // Uniform styles on top of the division colour, driven by the per-vertex `zone` mask baked in info(): duty = darker trousers, trim = contrast cuffs, yoke = darker shoulders / collar.
 const STYLE_MIX = { plain: [0, 0, 0], duty: [1, 0, 0], trim: [0, 1, 0], yoke: [0, 0, 1], 'trim-duty': [1, 1, 0] };
+// Every uniform garment (any style, plain included) shares ONE program: the style mix is a uniform (0,0,0 = plain), plus the cloth weave maps and the fuzz term.
+// (Before, plain garments and styled ones were two programs.) Garments without the zone attribute (none today) read zone = 0 and stay plain.
 function styleGarment(m, style, uniform) {
-  const mix = STYLE_MIX[style] || STYLE_MIX.plain; if (!mix[0] && !mix[1] && !mix[2]) return;
-  const trim = uniform.clone().lerp(new THREE.Color(0xf2efe6), 0.62), dark = new THREE.Vector3(0.42, 0.42, 0.46);
+  const mix = STYLE_MIX[style] || STYLE_MIX.plain;
+  const trim = uniform.clone().lerp(new THREE.Color(0xf2efe6), 0.62), dark = new THREE.Vector3(0.42, 0.42, 0.46), cm = clothMapsFor();
+  if (cm) { m.normalMap = cm.n; m.normalScale = new THREE.Vector2(0.45, 0.45); m.roughnessMap = cm.r; m.roughness = 1.05; m.aoMap = cm.r; m.aoMapIntensity = 0.5; }   // ORM: R = AO, G = roughness
   m.onBeforeCompile = (sh) => {
     m.userData.styleCompiled = true;
     sh.uniforms.uStyleMix = { value: new THREE.Vector3(...mix) }; sh.uniforms.uTrim = { value: trim }; sh.uniforms.uDark = { value: dark };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 zone; varying vec3 vZone;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvZone = zone;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vZone; uniform vec3 uStyleMix, uTrim, uDark;')
+    sh.fragmentShader = directHook(sh.fragmentShader, 'Cloth', CLOTH_FUZZ).replace('#include <lights_fragment_end>', FUZZ_AMBIENT)
+      .replace('#include <common>', '#include <common>\nvarying vec3 vZone; uniform vec3 uStyleMix, uTrim, uDark;')
       .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.2, 0.5, vZone.x) * uStyleMix.x);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uTrim, smoothstep(0.3, 0.6, vZone.y) * uStyleMix.y);\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.35, 0.65, vZone.z) * uStyleMix.z);');
   };
-  m.customProgramCacheKey = () => 'garstyle'; m.needsUpdate = true;
+  m.customProgramCacheKey = () => 'garstyle2'; m.needsUpdate = true;
 }
+// eyeball centres for eyeShader, per body kind: split the eye mesh at its middle in x, each eyeball (a closed low-poly sphere) centred in its box. The GLBs are
+// quantised (positions normalised per axis, the scale lives in the bone inverses), so only box centres are meaningful here: an affine map keeps them; the
+// skinning matrix in the shader turns (vertex - centre) into a real-space direction.
+const eyeSpots = {};
+const NO_EYES = { a: new THREE.Vector4(), b: new THREE.Vector4(), mid: 0, fwd: new THREE.Vector3(0, 0, 1) };
+function eyesOf(kind) {
+  if (eyeSpots[kind]) return eyeSpots[kind]; const S = restMesh(kind, 'eyes'); if (!S) return (eyeSpots[kind] = NO_EYES);
+  const geo = S.o.geometry; if (!geo.boundingBox) geo.computeBoundingBox(); const P = geo.attributes.position, mid = (geo.boundingBox.min.x + geo.boundingBox.max.x) / 2, v = new THREE.Vector3();
+  // the eye mesh is the front of each eyeball only: put the centre one eyeball radius (half its width, world space) behind its front
+  const wb = [new THREE.Box3(), new THREE.Box3()]; for (let i = 0; i < S.n; i++) { v.fromBufferAttribute(P, i); wb[v.x < mid ? 0 : 1].expandByPoint(v.fromArray(S.W, i * 3)); }
+  const c = (b) => { const r = (b.max.x - b.min.x) / 2, m = S.toMesh(new THREE.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, b.max.z - r)); return new THREE.Vector4(m.x, m.y, m.z, r); };
+  const o0 = S.toMesh(new THREE.Vector3()), fwd = S.toMesh(new THREE.Vector3(0, 0, 1)).sub(o0).normalize();   // the models face +z
+  return (eyeSpots[kind] = { a: c(wb[0]), b: c(wb[1]), mid, fwd });
+}
+// strand origin + shell centre for hairShader, per body kind (every clone shares the hair geometry): top of the hair mesh, a little behind its centre (the crown whorl)
+const crowns = {};
+function crownOf(kind) {
+  if (crowns[kind]) return crowns[kind]; const S = restMesh(kind, 'hair'); if (!S) return (crowns[kind] = { crown: new THREE.Vector3(0, 1, 0), centre: new THREE.Vector3() });
+  const b = S.box, cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2, dz = b.max.z - b.min.z;   // rest pose, world space (y up, +z forward)
+  return (crowns[kind] = { crown: S.toMesh(new THREE.Vector3(cx, b.max.y, cz - dz * 0.12)), centre: S.toMesh(new THREE.Vector3(cx, b.max.y - dz * 0.5, cz - dz * 0.05)) });   // centre of the head: about half a head-depth below the top
+}
+// A part of the source model in its rest pose: { box (world space), split(fn) -> boxes, toMesh(p): world point -> the mesh's own (quantised, z-up) vertex space }.
+// The GLBs are quantised and z-up inside the skin, so points for a shader that works on `position` must be mapped back through the skin of the bone that carries the part.
+function restMesh(kind, matName) {
+  let o = null; get(kind)?.scene.traverse(q => { if (q.isSkinnedMesh && q.material.name === matName) o = q; }); if (!o) return null;
+  o.updateMatrixWorld(true); o.skeleton.bones.forEach(b => b.updateMatrixWorld(true));
+  const P = o.geometry.attributes.position, n = P.count, W = new Float32Array(n * 3), v = new THREE.Vector3(), box = new THREE.Box3();
+  for (let i = 0; i < n; i++) { o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld); v.toArray(W, i * 3); box.expandByPoint(v); }
+  const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight; let k = 0; for (let j = 1; j < 4; j++) if (sw.getComponent(0, j) > sw.getComponent(0, k)) k = j;
+  const bi = si.getComponent(0, k), M = new THREE.Matrix4().multiplyMatrices(o.matrixWorld, o.bindMatrixInverse).multiply(o.skeleton.bones[bi].matrixWorld).multiply(o.skeleton.boneInverses[bi]).multiply(o.bindMatrix), Mi = M.clone().invert();
+  return { o, box, W, n, toMesh: (p) => p.clone().applyMatrix4(Mi) };
+}
+// contact shadow under each standing person: one shared soft radial falloff (dense core under the feet, long soft tail) instead of a hard-edged flat disc.
+// Drawn first among the transparents (renderOrder -1) so it never covers a decal on the same floor. One more program than the flat disc (a textured basic material).
+// The falloff texture is made once (on a private random stream: three draws Math.random for every texture's uuid, and seeded test / golden-shot runs must
+// not shift); each person still gets their own small geometry + material as before, so the page's Math.random stream is exactly what it was.
+let blobTex;
+function blobMat() {
+  if (blobTex === undefined) blobTex = ownRandom(() => { const N = 64, c = typeof document !== 'undefined' ? document.createElement('canvas') : null; if (!c) return null;
+    c.width = c.height = N; const x = c.getContext('2d'), img = x.createImageData(N, N);
+    for (let y = 0; y < N; y++) for (let i = 0; i < N; i++) { const dx = (i + 0.5) / N * 2 - 1, dy = (y + 0.5) / N * 2 - 1, a = Math.max(0, 1 - Math.hypot(dx * 1.06, dy * 0.94)); img.data[(y * N + i) * 4 + 3] = Math.round(255 * (0.65 * Math.pow(a, 1.5) + 0.35 * Math.pow(a, 5))); }
+    x.putImageData(img, 0, 0); return new THREE.CanvasTexture(c); });
+  return new THREE.MeshBasicMaterial({ color: 0x000000, map: blobTex, transparent: true, opacity: blobTex ? 0.85 : 0.38, depthWrite: false });
+}
+// run fn with Math.random swapped for a private generator (for one-off allocations whose three.js uuids must not consume the page's seeded stream)
+function ownRandom(fn) { const R = Math.random; let s = 0x51ed27; Math.random = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; try { return fn(); } finally { Math.random = R; } }
 export function makeHuman(opts = {}) {
   const per = opts.person; let seed = opts.seed;
   if (seed === undefined && per) { seed = (per.id + 1) * 7919; for (const ch of (per.family || '') + (per.given || '')) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619); }
@@ -333,14 +468,16 @@ export function makeHuman(opts = {}) {
     const name = o.material.name || '';
     if (opts.material) { o.material = opts.material; if (name === 'eyelashes' || name === 'tongue') o.visible = false; return; }
     const m = o.material = o.material.clone(); mats[name.split('_')[0]] = m;
-    if (name === 'body' && kind !== 'suit') { m.color.copy(skin); m.roughness = 0.58; m.emissive = skin.clone().multiply(new THREE.Color(0.9, 0.35, 0.25)); m.emissiveIntensity = 0.07;   // cheap subsurface warmth
+    if (name === 'body' && kind !== 'suit') { m.color.copy(skin); m.roughness = 0.58; m.emissive = skin.clone().multiply(new THREE.Color(0.9, 0.35, 0.25)); m.emissiveIntensity = opts.slime ? 0.07 : 0.035;   // a little warmth in the shade (the wrap-light SSS in skinShader does the rest)
       if (!opts.slime && !opts.material) mats.skinU = skinShader(m, { wound: Math.min(1, (opts.bloody || 0) * 0.9), seed: rnd() * 40, pale: opts.pale || 0 });
       if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
-    else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.75; }
+    else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.35; m.alphaToCoverage = true; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.7;   // alpha to coverage: soft card edges under MSAA (High's post buffer / the canvas), a plain alpha test without it
+      hairShader(m, crownOf(kind)); }
     else if (name === 'brows') { m.color.setRGB(hair[0] * 0.6, hair[1] * 0.6, hair[2] * 0.6); m.alphaTest = 0.02; m.transparent = true; m.depthWrite = false; m.roughness = 0.8; o.castShadow = false; }
     else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); if (o.geometry.attributes.zone) styleGarment(m, style, uniform); }
-    else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; }
-    else if (name === 'eyes') { m.roughness = 0.08; if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
+    else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; eyeShader(m, NO_EYES, 0); }   // shares the eyes' program, glint off
+    else if (name === 'tongue') eyeShader(m, eyesOf(kind), 0);   // shares the eyes' program, glint off
+    else if (name === 'eyes') { m.roughness = 0.08; eyeShader(m, eyesOf(kind)); if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
     else if (name === 'teeth') { m.alphaTest = 0.5; }
     if (opts.tint) m.color.multiply(new THREE.Color(opts.tint));
   });
@@ -349,7 +486,7 @@ export function makeHuman(opts = {}) {
   if (kind !== 'suit' && !opts.height) {   // build: lean / average / stocky, a little taller or shorter, so a crowd of four meshes does not read as four people
     const BUILD = [[0.92, 0.95, 1.02], [1, 1, 1], [1, 1, 1], [1.1, 1.08, 0.98], [1.04, 1.02, 1.0], [0.96, 0.97, 1.05]], [wx, wz, hy] = pickOf(BUILD, rnd), b = 0.97 + rnd() * 0.07;
     inner.scale.x *= wx * b; inner.scale.z *= wz * b * (0.98 + rnd() * 0.04); inner.scale.y *= hy; }
-  if (opts.shadow !== false) { const bs = new THREE.Mesh(new THREE.CircleGeometry(0.42, 14), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false })); bs.rotation.x = -Math.PI / 2; bs.position.y = 0.02; g.add(bs); g.userData.blob = bs; }
+  if (opts.shadow !== false) { const bs = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), blobMat()); bs.rotation.x = -Math.PI / 2; bs.position.y = 0.02; bs.renderOrder = -1; g.add(bs); g.userData.blob = bs; }
   const mixer = new THREE.AnimationMixer(inner); const acts = {}; let cur = null, curKey = '';
   const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'upperarm_l', 'clavicle_l', 'clavicle_r', 'thigh_l', 'thigh_r', 'foot_l', 'foot_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
   const H = {
