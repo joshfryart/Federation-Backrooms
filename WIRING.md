@@ -39,3 +39,29 @@ No game hook outside the owned files is needed: everything is wired inside `js/w
 One harness suggestion for the owner of `tools/shot-gfx.mjs` (S0), so golden-shot comparisons survive changes that create objects:
 
 - `tools/shot-gfx.mjs`, `gamePage()` evaluate (the line with `g.newRun()`, ~line 63): re-seed `Math.random` right before and right after `g.newRun()`, and in `__sg.findRoom` / the corridor / talk / blackout views around every `g.loadDeck(dn)` call (`__rs(); g.loadDeck(dn); __rs();`). Reason: every new three.js geometry / texture / material draws `Math.random` for its UUID, so any graphics change that adds or removes an object shifts the seeded stream and the compared views show different alerts, blackouts and crowd positions (S2 saw 57-95 % "differences" that were game state). With the re-seed, S2's after-vs-before was 0.04-2.1 % per view. The baseline must be re-shot with the same patched harness.
+# WIRING — hooks stream S3 (post / grade / VFX) needs outside its files
+
+S3 owns `js/fx.js`, `js/smoke.js`, `js/talk.js`. Everything below is optional: without it the game runs as before with the BASE grade
+(the look the game always had). Nothing here adds a light, a pass or a program.
+
+## 1. Per-room / per-ship colour grade — `js/main.js`, `function render1(dt, t)` (line ~2176, inside `if (CFG.quality === 'high') {`)
+
+Add one line before `post.render(...)`:
+
+```js
+    if (world && ship && G.phase !== 'talk') post.gradeAt(world, P.x, P.z, ship, { mode: G.mode });   // js/fx.js GRADES: hull class + the room the player stands in (blends over 0.8 s, looked up at most 4x a second)
+```
+
+`post.gradeAt` does its own throttling (250 ms) and room lookup (`world.tile` + `world.d.rooms`), and only re-targets when the
+(hull, room type, mode) key changes. The talk close-up keeps the grade it entered with (frozen world).
+
+## 2. Snap the grade on a deck change — `js/main.js`, `loadDeck` (line ~249, after `scene.fog = new THREE.FogExp2(...)`)
+
+```js
+  post?.setGradeFor(ship, null, { instant: true, mode: G.mode });   // no 0.8 s grade blend across the lift doors
+```
+
+## 3. (none needed) particles
+
+`Particles` keeps its constructor signature; lit / soft are inferred (additive -> unlit, size >= 0.3 -> soft puff). `main.js` may pass
+`{ lit: 0..1, soft: true|false }` explicitly if a set should differ (e.g. `water` with `lit: 0.6`).
