@@ -143,6 +143,9 @@ function growbed() {
   b.cyl(0.016, 0.016, 0.58, M.pipe, -0.98, 0.14, 0.2, 8); b.cyl(0.016, 0.016, 0.8, M.pipe, -0.98, 0.32, 0, 8, PI / 2);
   b.cyl(0.02, 0.02, 0.8, M.pipeG, 0.98, 0.32, 0, 8, PI / 2); for (const z of zs) b.box(0.06, 0.02, 0.02, M.pipeG, 0.96, 0.82, z);
   b.cyl(0.02, 0.02, 0.62, M.pipeG, 0.98, 0.08, 0.38, 8); b.cyl(0.02, 0.02, 1.5, M.pipeG, 0.23, -0.67, 0.38, 8, 0, 0, PI / 2);
+  // detail: raised drip lip round the tray, pipe clamps on the riser, reservoir level strip
+  for (const sz of [-1, 1]) b.box(1.98, 0.03, 0.02, M.tray, 0, 0.8, sz * 0.45); for (const sx of [-1, 1]) b.box(0.02, 0.03, 0.88, M.tray, sx * 0.99, 0.8, 0);
+  for (const y of [0.2, 0.4]) b.box(0.05, 0.02, 0.05, M.dark, -0.98, y, 0.2); b.box(0.012, 0.3, 0.006, M.glowG, -0.2, 0.1, 0.235);
   const g = new THREE.Group(); g.add(b.done('bench'));
   return finish(g, 'growbed', { top: 0.9, size: [2.0, 1.55, 0.9], box: [-1.05, 1.05, -0.5, 0.5], spots: [[0, 0.75, PI]], use: { tend: { x: 0, z: 0.75, ry: PI }, pump: { x: -0.85, z: 0.6, ry: PI } }, dept: 'sciences' });
 }
@@ -166,6 +169,8 @@ function nutrient_tanks() {
   [-0.25, 0, 0.25].forEach((px, i) => { b.cyl(0.055, 0.055, 0.06, tubeCol[i], px, 0.14, 0.05, 12, PI / 2); b.cyl(0.07, 0.07, 0.025, M.dark, px, 0.14, 0.095, 12, PI / 2); b.box(0.05, 0.022, 0.02, M.glowG, px + 0.0, 0.31, 0.02); b.cyl(0.012, 0.012, 0.04, M.steel, px, 0.05, 0.1, 8, PI / 2); });
   b.pop();
   [-0.25, 0, 0.25].forEach((px, i) => { const x0 = px, x1 = xs[i], zr = 0.3 + i * 0.05; b.rod(x0, 0.74, bz + 0.1, x0, 0.19 + i * 0.01, bz + 0.13, 0.014, tubeCol[i]); b.rod(x0, 0.19 + i * 0.01, bz + 0.13, x1, 0.19 + i * 0.01, tz + 0.44 + (i - 1) * 0.0, 0.014, tubeCol[i]); });
+  // detail: hazard plate and lid handle on every tank
+  xs.forEach((x, i) => { b.box(0.16, 0.1, 0.008, M.yellow, x, 1.05, tz + 0.304); b.box(0.12, 0.03, 0.03, M.dark, x, 1.39, tz + 0.1); });
   const g = new THREE.Group(); g.add(b.done('tanks'));
   return finish(g, 'nutrient_tanks', { size: [2.3, 1.42, 1.2], box: [-1.15, 1.15, -0.6, 0.6], spots: [[0, 1.0, PI]], use: { board: { x: 0, z: 1.0, ry: PI }, tankA: { x: -0.72, z: 0.5, ry: PI }, tankC: { x: 0.72, z: 0.5, ry: PI } }, dept: 'sciences' });
 }
@@ -201,6 +206,9 @@ function charttable() {
   // dome ring and glass dome (flattened hemisphere), points inside
   b.cyl(0.52, 0.55, 0.04, M.steel, 0, 0.9, 0.0, 24); b.put(G('dome', () => { const d = new THREE.SphereGeometry(0.5, 18, 6, 0, PI * 2, 0, PI / 2); d.scale(1, 0.62, 0.78); return d; }), M.dome, 0, 0.94, 0);
   for (let i = 0; i < 34; i++) { const a = rn() * 6.28, r = Math.sqrt(rn()) * 0.42, y = 0.99 + rn() * 0.2 * (1 - r / 0.5), m = i % 4 === 0 ? M.glowA : M.glowC; b.put(G('oct', () => new THREE.OctahedronGeometry(0.014)), m, Math.cos(a) * r, y, Math.sin(a) * r * 0.75); }
+  // detail: corner trim, panel seam, vent slots and status LEDs on the body
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(0.03, 0.78, 0.03, M.steel, sx * 0.735, 0.06, sz * 0.435); b.box(1.44, 0.008, 0.008, M.slot, 0, 0.45, 0.452);
+  for (let i = 0; i < 3; i++) b.box(0.3, 0.012, 0.01, M.slot, -0.45, 0.3 + i * 0.04, 0.452); for (let i = 0; i < 3; i++) b.box(0.02, 0.012, 0.01, [M.glowG, M.glowA, M.glowC][i], 0.5 + i * 0.05, 0.3, 0.452);
   const g = new THREE.Group(); g.add(b.done('table'));
   return finish(g, 'charttable', { top: 0.9, size: [1.6, 1.25, 1.0], box: [-0.8, 0.8, -0.5, 0.5], spots: [[0, 0.95, PI]], use: { stand: { x: 0, z: 0.95, ry: PI }, side_l: { x: -1.1, z: 0, ry: PI / 2 }, side_r: { x: 1.1, z: 0, ry: -PI / 2 }, keyboard: { x: 0, z: 0.95, ry: PI } }, dept: 'sciences' });
 }
@@ -225,6 +233,7 @@ function spectrometer() {
   for (const sx of [-1, 1]) b.cyl(0.02, 0.025, 0.02, M.rubber, ix + sx * 0.25, T - 0.0, iz + 0.2, 6);
   // right of the bench: sample rack with 8 vials, waste bottle, wash bottle
   b.box(0.22, 0.03, 0.1, M.steel, 0.32, T, 0.12); const vm = [M.vialA, M.vialB, M.vialC, M.vialD]; for (let i = 0; i < 8; i++) b.cyl(0.013, 0.013, 0.075, vm[i % 4], 0.235 + (i % 4) * 0.05, T + 0.03, 0.095 + Math.floor(i / 4) * 0.05, 5);
+  b.rod(ix + 0.1, T + 0.1, iz - 0.25, 0.5, T + 0.02, -0.3, 0.02, M.rubber); b.rod(ix + 0.15, T + 0.2, iz - 0.25, 0.55, T + 0.02, -0.33, 0.016, M.dark); b.box(0.4, 0.008, 0.01, M.glowT, ix, T + 0.295, fz + 0.002);
   b.cyl(0.07, 0.07, 0.24, M.orange, 0.45, T, -0.18, 12); b.cyl(0.03, 0.03, 0.03, M.dark, 0.45, T + 0.24, -0.18, 8); b.cyl(0.03, 0.035, 0.18, M.white, 0.32, T, -0.22, 10); b.cyl(0.012, 0.015, 0.05, M.dark, 0.32, T + 0.18, -0.22, 6);
   const g = new THREE.Group(); g.add(b.done('bench'));
   return finish(g, 'spectrometer', { top: 0.9, size: [1.2, 1.3, 0.7], box: [-0.6, 0.6, -0.35, 0.35], spots: [[ix, 0.65, PI]], use: { stand: { x: ix, z: 0.65, ry: PI }, door: { x: ix - 0.18, y: 0.97, z: 0.25 }, rack: { x: 0.32, y: 0.92, z: 0.12 } }, dept: 'sciences' });
@@ -250,6 +259,8 @@ function samplefridge() {
   // header: readout, alarm lamps, mute button, key lock
   b.box(W, 0.26, 0.05, M.dark, 0, fy + fh + 0.0, dz - 0.01); b.box(0.2, 0.1, 0.01, scr('readout', 14, 160, 100), 0, fy + fh + 0.08, dz + 0.016); b.cyl(0.018, 0.018, 0.01, M.glowG, -0.18, fy + fh + 0.17, dz + 0.016, 10, PI / 2); b.cyl(0.018, 0.018, 0.01, M.glowA, -0.26, fy + fh + 0.17, dz + 0.016, 10, PI / 2);
   b.box(0.05, 0.025, 0.012, M.red, 0.18, fy + fh + 0.17, dz + 0.016); b.cyl(0.025, 0.025, 0.012, M.steel, 0.27, fy + fh + 0.1, dz + 0.016, 10, PI / 2); b.box(0.004, 0.03, 0.014, M.dark, 0.27, fy + fh + 0.087, dz + 0.019);
+  // detail: condenser grille in the kick plate
+  for (let i = 0; i < 4; i++) b.box(0.5, 0.012, 0.01, M.slot, 0, 0.03 + i * 0.02, D / 2 + 0.002);
   const g = new THREE.Group(); g.add(b.done('fridge'));
   return finish(g, 'samplefridge', { size: [W, H, D], box: [-0.4, 0.4, -0.4, 0.4], spots: [[0, 0.75, PI]], use: { stand: { x: 0, z: 0.75, ry: PI }, door: { x: 0.28, y: 1.0, z: 0.4 }, readout: { x: 0, y: 1.76, z: 0.4 } }, dept: 'sciences' });
 }
@@ -273,6 +284,8 @@ function fumehood() {
   b.box(0.08, 0.1, 0.02, M.dark, 0.68, 1.1, 0.44); b.cyl(0.014, 0.014, 0.01, M.glowG, 0.68, 1.12, 0.455, 8, PI / 2);
   // duct collar, flange and duct
   b.cyl(0.19, 0.22, 0.1, M.steel, 0, 2.3, -0.05, 16); b.cyl(0.15, 0.15, 0.8, M.pipeG, 0, 2.4, -0.05, 14); b.cyl(0.2, 0.2, 0.03, M.steel, 0, 2.55, -0.05, 14);
+  // detail: gas and vacuum service taps on the right post, sash cable runs
+  [M.yellow, M.blue, M.red].forEach((c, i) => b.box(0.03, 0.03, 0.04, c, 0.68, 1.02 + i * 0.07, 0.43)); for (const sx of [-1, 1]) b.rod(sx * 0.66, 1.55, 0.31, sx * 0.66, 2.1, 0.31, 0.01, M.dark);
   const g = new THREE.Group(); g.add(b.done('hood'));
   return finish(g, 'fumehood', { size: [1.5, 3.2, 0.8], box: [-0.78, 0.78, -0.42, 0.5], spots: [[0, 0.75, PI]], use: { stand: { x: 0, z: 0.75, ry: PI }, sash: { x: 0, y: 1.5, z: 0.4 }, valves: { x: 0.68, y: 1.3, z: 0.5 } }, dept: 'sciences' });
 }
