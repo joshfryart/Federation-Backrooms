@@ -38,11 +38,12 @@ function info(kind) {
   // paint a dark undershirt onto the torso skin (vertex colours from skin weights) so cropped tops read as uniforms
   if (kind !== 'suit') src.scene.traverse(o => {
     if (!o.isSkinnedMesh || o.material.name !== 'body') return;
-    const g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, col = new Float32Array(n * 3);
+    const g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, col = new Float32Array(n * 3), shade = g.attributes.color;   // shade: the GLB's COLOR_0 hairline shade (tools/build-models.mjs), if any
     const torso = o.skeleton.bones.map(b => /^(pelvis|spine_0\d|clavicle_[lr])$/.test(b.name));
     for (let i = 0; i < n; i++) {
       let w = 0, tot = 0; for (let k = 0; k < 4; k++) { const wk = sw.getComponent(i, k); tot += wk; if (torso[si.getComponent(i, k)]) w += wk; }
       const v = 1 - 0.97 * Math.min(1, Math.max(0, (w / (tot || 1) - 0.3) / 0.25)); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = v;
+      if (shade) { col[i * 3] *= shade.getX(i); col[i * 3 + 1] *= shade.getY(i); col[i * 3 + 2] *= shade.getZ(i); }
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); o.material.vertexColors = true;
   });

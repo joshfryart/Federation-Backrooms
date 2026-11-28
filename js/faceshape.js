@@ -202,11 +202,16 @@ function sparseShape(w) {
   const keep = new Set(FACE_MORPHS.filter(n => Math.abs(w[n] || 0) >= 0.2).sort((a, b) => Math.abs(w[b]) - Math.abs(w[a])).slice(0, FACE_SHAPE_K)), out = {};
   for (const n of FACE_MORPHS) out[n] = keep.has(n) ? w[n] : 0; return out;
 }
+// model pass (tools/build-models.mjs): the structural targets read too subtle in the talk close-up (review): drawn influences are scaled by FACE_SHAPE_GAIN when
+// applied (FaceAge and FaceAsym keep their own range: age is 0..1 by rank, asymmetry is already drawn per side). faceShapeFor() is unchanged, so H.shape
+// still reports the drawn values.
+export const FACE_SHAPE_GAIN = 1.35;
+const gained = (w) => { const out = {}; for (const n of FACE_MORPHS) out[n] = (w[n] || 0) * (n === 'FaceAge' || n === 'FaceAsym' ? 1 : FACE_SHAPE_GAIN); return out; };
 export function applyFaceShape(inner, kind, w) {
-  const rig = rigs[kind]; if (!rig) return null; const on = faceShapeCfg.on ? 1 : 0; w = faceShapeCfg.full ? w : sparseShape(w);
+  const rig = rigs[kind]; if (!rig) return null; const on = faceShapeCfg.on ? 1 : 0; w = faceShapeCfg.full ? w : sparseShape(w); const ret = w; w = gained(w);
   inner.traverse(o => { const dict = o.morphTargetDictionary; if (!o.isMesh || !dict) return; for (const nm of FACE_MORPHS) { const i = dict[nm]; if (i !== undefined) o.morphTargetInfluences[i] = (w[nm] || 0) * on; } });
   inner.traverse(o => { const u = o.isMesh && o.material?.userData?.eyeU; if (!u || !u.uEyeShA) return;
     u.uEyeShA.value.set(0, 0, 0); u.uEyeShB.value.set(0, 0, 0); if (!on) return;
     FACE_MORPHS.forEach((nm, k) => { const v = w[nm] || 0; if (!v) return; u.uEyeShA.value.addScaledVector(rig.eyeD[0][k], v); u.uEyeShB.value.addScaledVector(rig.eyeD[1][k], v); }); });
-  return w;
+  return ret;
 }
