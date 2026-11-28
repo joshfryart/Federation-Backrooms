@@ -2,6 +2,9 @@
 //
 //   node tools/build-textures.mjs --procedural [outDir] [name…]   generate the project's own tileable PBR sets
 //   node tools/build-textures.mjs <ambientCG dir> <outDir>          convert ambientCG (CC0) 1K-JPG sets
+//   node tools/build-textures.mjs --procedural [outDir] detail wear  only the two shared surface maps (detail_m / wear_m)
+//   node tools/build-textures.mjs --check [dir]                     cross-set grade / seam report
+//   node tools/build-textures.mjs --heal <dir> name…                edge-heal a scan set that has a seam (in place)
 //
 // Procedural sets are original work (no third-party source). Each set is built from one height field:
 //   <name>_c.webp  albedo, neutral grey (the game tints per ship / per room), cavity AO baked in
@@ -92,6 +95,7 @@ function grade(A, mean, contrast = 1) {
 async function emit(name, set, OUT) {
   const N = set.N, n2 = N * N, ctx = { N, H: new Float32Array(n2).fill(0.5), A: new Float32Array(n2).fill(0.7), R: new Float32Array(n2).fill(0.7), M: new Float32Array(n2) };
   set.draw(ctx);
+  if (set.hBlur) ctx.H = blur(ctx.H, N, set.hBlur, set.wrapY !== false);   // soften the height before normals / AO: fewer one-texel normal steps to alias at small mips
   const wrapY = set.wrapY !== false, ao = cavityAO(ctx.H, N, set.aoK ?? 9, wrapY);
   for (let i = 0; i < n2; i++) ctx.A[i] *= mix(1, ao[i], set.aoBake ?? 0.75);
   grade(ctx.A, set.mean ?? 0.72, set.contrast ?? 1);
@@ -131,7 +135,7 @@ function wallCommon(ctx, seed, body) {
 const SETS = {
   // painted panel: two smooth enamelled panels per bay, countersunk screws, paint chipped back to metal at edges and low down
   wallp: { N: 1024, wrapY: false, mean: 0.74, contrast: 0.95, nStrength: 3.2, aoK: 7, outR: 512, draw(ctx) {
-    const chip = fbm(ctx.N, 56, 4, 77, 0.55);
+    const chip = fbm(ctx.N, 96, 4, 77, 0.55);   // chip speckle: finer (~2.6 cm) than before (56 cells), see the threshold below
     wallCommon(ctx, 21, (o, x, y, u, i, n1, n2) => {
       const U = fract(u * 2) * (WALL_W / 2), du = Math.min(U, WALL_W / 2 - U);   // metres from the nearest vertical seam
       const upper = y < 2.03, top = upper ? 0.19 : 2.3, bot = upper ? 2.0 : 2.93, d = Math.min(du - 0.012, y - top, bot - y);   // distance inside the panel
@@ -142,8 +146,10 @@ const SETS = {
       // screws
       for (const sy of upper ? [0.26, 1.93] : [2.37, 2.86]) { const dx = du - 0.055, dy = y - sy, rr = Math.hypot(dx, dy); if (rr < 0.016) { o.h = 0.56 + 0.05 * sstep(0.016, 0.01, rr) - (Math.abs(dx + dy) < 0.003 ? 0.08 : 0); o.a = 0.55; o.r = 0.35; o.m = 1; return; } }
       // chips: more at panel edges and towards the deck
-      const c = sstep(0.69, 0.725, chip[i] + 0.2 * (1 - sstep(0, 0.05, d)) + 0.1 * sstep(1.8, 3.0, y) - 0.08);
-      if (c > 0) { o.h -= 0.035 * c; o.a = mix(o.a, 0.56 + (n2[i] - 0.5) * 0.12, c); o.r = mix(o.r, 0.45, c); o.m = mix(o.m, 0.55, c); }
+      // fewer (threshold up ~0.03 and a wider ramp), lower contrast (the chip is a light-grey primer, not bare black metal: albedo 0.66 vs the paint's 0.7-0.8,
+      // metalness 0.25, so it never goes near-black under dim light), and it keeps the edge / low-on-the-wall bias
+      const c = sstep(0.72, 0.775, chip[i] + 0.2 * (1 - sstep(0, 0.05, d)) + 0.1 * sstep(1.8, 3.0, y) - 0.08);
+      if (c > 0) { o.h -= 0.02 * c; o.a = mix(o.a, 0.66 + (n2[i] - 0.5) * 0.08, c * 0.85); o.r = mix(o.r, 0.55, c); o.m = mix(o.m, 0.25, c); }
     });
   } },
   // padded: quilted, buttoned acoustic padding above the rail, plain fluted wainscot below
@@ -187,19 +193,19 @@ const SETS = {
   // joint strip on its border and only rotation-safe detail near the edge.
   // -------------------------------------------------------------------------------------------------------
   // bar grating in a welded frame
-  grate: { N: 512, mean: 0.58, contrast: 1.0, nStrength: 4, aoK: 6, aoBake: 0.6, outR: 256, draw({ N, H, A, R, M }) {
+  grate: { N: 512, mean: 0.58, contrast: 0.9, nStrength: 3.2, aoK: 6, aoBake: 0.6, outR: 256, hBlur: 1, draw({ N, H, A, R, M }) {
     const n = fbm(N, 32, 3, 3), rust = fbm(N, 10, 4, 8);
+    // Bar / gap edges are antialiased over ~3 texels (coverage ramps, not a hard step) and the gap is a dark grey rather than near-black: the
+    // GPU's 2x2 mip chain cannot hold 20 bars per tile below ~32 px, and a hard black/white square wave aliases there into moire. js/assets.js
+    // also fades the contrast of the smallest mips of this set, so what is left at distance is a flat mean, not a beat pattern.
     for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
-      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v);
-      let h, a, r = 0.5, m = 0.9;
-      if (e < 0.03) { h = 0.7 - 0.2 * sstep(0.004, 0, e); a = 0.6 + (n[i] - 0.5) * 0.12; }
-      else {
-        const bar = Math.abs(fract(u * 20) - 0.5), rod = Math.abs(fract(v * 5) - 0.5);
-        if (bar < 0.17) { h = 0.66 - 0.12 * sstep(0.1, 0.17, bar); a = 0.62 + 0.12 * sstep(0.1, 0.0, bar) + (n[i] - 0.5) * 0.14; }
-        else if (rod < 0.035) { h = 0.5; a = 0.45; }
-        else { h = 0.05; a = 0.05; r = 0.95; m = 0; }
-      }
-      const ru = sstep(0.6, 0.75, rust[i]) * (h > 0.3 ? 1 : 0); a = mix(a, a * 0.62, ru); r = clamp(r + ru * 0.35); m *= 1 - ru * 0.6;
+      const i = py * N + px, u = (px + 0.5) / N, v = (py + 0.5) / N, e = Math.min(u, 1 - u, v, 1 - v);
+      const bar = Math.abs(fract(u * 20) - 0.5), rod = Math.abs(fract(v * 5) - 0.5);
+      const cb = sstep(0.215, 0.125, bar), cr = sstep(0.05, 0.02, rod) * (1 - cb), cov = Math.max(cb, cr), fr = sstep(0.04, 0.02, e);   // bar / cross-rod / frame coverage
+      let h = mix(0.1, 0.66 - 0.12 * sstep(0.1, 0.17, bar), cb); h = mix(h, 0.5, cr); h = mix(h, 0.7, fr);
+      let a = mix(0.1, 0.62 + 0.12 * sstep(0.1, 0.0, bar) + (n[i] - 0.5) * 0.14, cb); a = mix(a, 0.45, cr); a = mix(a, 0.6 + (n[i] - 0.5) * 0.12, fr);
+      let r = mix(0.9, 0.5, Math.max(cov, fr)), m = mix(0, 0.9, Math.max(cov, fr));
+      const ru = sstep(0.6, 0.75, rust[i]) * Math.max(cov, fr); a = mix(a, a * 0.62, ru); r = clamp(r + ru * 0.35); m *= 1 - ru * 0.6;
       H[i] = h; A[i] = a; R[i] = r; M[i] = m;
     }
   } },
@@ -271,15 +277,14 @@ const SETS = {
     }
   } },
   // slatted baffle / vent ceiling: long louvres over a dark plenum
-  ceilg: { N: 512, mean: 0.6, contrast: 1.0, nStrength: 3.6, aoK: 7, aoBake: 0.85, outR: 256, draw({ N, H, A, R, M }) {
-    const n = fbm(N, 10, 4, 81);
+  ceilg: { N: 512, mean: 0.6, contrast: 0.9, nStrength: 3.0, aoK: 7, aoBake: 0.85, outR: 256, hBlur: 1, draw({ N, H, A, R, M }) {
+    const n = fbm(N, 10, 4, 81);   // louvre edges are antialiased (coverage ramps, see grate): 16 louvres per tile alias into moire in the 2x2 mip chain otherwise
     for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
-      const i = py * N + px, u = px / N, v = py / N, e = Math.min(u, 1 - u, v, 1 - v), s = fract(v * 16), cross = Math.abs(fract(u * 2) - 0.5);
-      let h = 0.5, a = 0.58 + (n[i] - 0.5) * 0.12, r = 0.45, m = 0.9;
-      if (e < 0.02) { h = 0.7; a = 0.5; r = 0.5; }
-      else if (s < 0.5) { h = 0.3 + 0.6 * s; a = 0.6 + 0.2 * s; }
-      else { h = 0.05; a = 0.06; r = 0.9; m = 0; }
-      if (cross < 0.012) { h = 0.75; a = 0.5; m = 0.9; }
+      const i = py * N + px, u = (px + 0.5) / N, v = (py + 0.5) / N, e = Math.min(u, 1 - u, v, 1 - v), s = fract(v * 16), cross = Math.abs(fract(u * 2) - 0.5);
+      const cov = sstep(0, 0.07, s) * sstep(0.57, 0.43, s), fr = sstep(0.03, 0.015, e), cr = sstep(0.02, 0.008, cross) * 0.9;
+      let h = mix(0.05, 0.3 + 0.6 * Math.min(s, 0.5), cov), a = mix(0.06, 0.6 + 0.2 * s + (n[i] - 0.5) * 0.12, cov), r = mix(0.9, 0.45, cov), m = mix(0, 0.9, cov);
+      h = mix(h, 0.7, fr); a = mix(a, 0.5, fr); r = mix(r, 0.5, fr); m = mix(m, 0.9, fr);
+      h = mix(h, 0.75, cr); a = mix(a, 0.5, cr); m = mix(m, 0.9, cr);
       H[i] = h; A[i] = a; R[i] = r; M[i] = m;
     }
   } },
@@ -390,9 +395,88 @@ const SETS = {
 
 };
 
+// ---------------------------------------------------------------------------------------------------------
+// SURFACE MAPS — single packed images shared by every world surface (js/world.js envSurface), sampled in WORLD
+// space (dominant-axis plane, metres), so they are independent of each set's UVs and break up tile repetition.
+//   detail_m.webp  512 px = 0.5 m: tangent-space micro normal (OpenGL, +Y up). Close-up detail
+//                  where the 1-2.5 m sets are magnified past their texel size (orange-peel paint, fine scratches, pitting).
+//   wear_m.webp    512 px = 3.2 m: R = dirt (soft blotches + streaks), G = smudge / roughness offset (0.5 = none),
+//                  B = chip mask for edge wear (curvature-driven in the shader, so only rounded edges ever show it).
+// ---------------------------------------------------------------------------------------------------------
+async function surfaceMaps(OUT, only = []) {
+  const N = 512, want = (n) => !only.length || only.includes(n);
+  if (want('detail')) {
+    const op = fbm(N, 48, 3, 201, 0.55), pit = vnoise(N, 160, 203), H = new Float32Array(N * N), R = rng(205);
+    for (let i = 0; i < N * N; i++) H[i] = 0.5 + (op[i] - 0.5) * 0.55 - sstep(0.86, 0.97, pit[i]) * 0.35;
+    for (let k = 0; k < 70; k++) {   // fine scratches: short straight strokes at random angles (wrapping), slightly deeper in the middle
+      const x0 = R() * N, y0 = R() * N, a = R() * Math.PI, len = 20 + R() * 120, dep = 0.08 + R() * 0.14, ca = Math.cos(a), sa = Math.sin(a);
+      for (let s = 0; s < len; s += 0.5) { const px = Math.floor(x0 + ca * s + N) % N, py = Math.floor(y0 + sa * s + N) % N, w = Math.sin(Math.PI * s / len); H[py * N + px] -= dep * w; }
+    }
+    const nm = normalMap(blur(H, N, 1), N, 2.2), out = Buffer.alloc(N * N * 3);
+    for (let i = 0; i < N * N * 3; i++) out[i] = nm[i];   // a plain tangent-space normal map: also usable as a material's uv normalMap
+    await sharp(out, { raw: { width: N, height: N, channels: 3 } }).webp({ quality: 84, smartSubsample: true }).toFile(`${OUT}/detail_m.webp`);
+    console.log('surface map detail_m', `${N}px`);
+  }
+  if (want('wear')) {
+    const n = fbm(N, 4, 6, 211, 0.55), st = vnoise(N, 48, 213, 4), sm = fbm(N, 20, 3, 215), ch = fbm(N, 28, 4, 217, 0.6), out = Buffer.alloc(N * N * 3);
+    for (let i = 0; i < N * N; i++) {
+      const dirt = clamp(sstep(0.42, 0.78, n[i]) * 0.85 + sstep(0.62, 0.9, st[i]) * (0.3 + n[i] * 0.5)), smudge = 0.5 + (sstep(0.5, 0.8, sm[i]) - sstep(0.2, 0.35, sm[i]) * 0.4) * 0.5;
+      out[i * 3] = Math.round(dirt * 255); out[i * 3 + 1] = Math.round(clamp(smudge) * 255); out[i * 3 + 2] = Math.round(clamp(ch[i] * 1.25 - 0.12) * 255);
+    }
+    await sharp(out, { raw: { width: N, height: N, channels: 3 } }).webp({ quality: 80 }).toFile(`${OUT}/wear_m.webp`);
+    console.log('surface map wear_m', `${N}px`);
+  }
+}
+
 async function procedural(OUT = 'assets/textures', only = []) {
   await mkdir(OUT, { recursive: true });
   for (const [name, set] of Object.entries(SETS)) if (!only.length || only.includes(name)) await emit(name, set, OUT);
+  await surfaceMaps(OUT, only);
+}
+
+// ---- cross-set grade / seam check: node tools/build-textures.mjs --check [dir] ----
+// Per set: albedo mean / contrast (std) against the shared grade target, and the seam step: mean |left - right| (and |top - bottom|) edge-pixel difference over the
+// 98th-percentile step between any two neighbouring columns (rows) inside the image. ~1 or less = seamless, > 2.5 = a visible seam when tiled. The reference is the 98th
+// percentile rather than the mean because a pattern built from hard lines (grout, louvre rows, scale rows, rod frames) has a few very large neighbour steps and a
+// mostly flat remainder: against the mean, a seam that merely lands on one of the pattern's own lines (the tile / wall / grate / scales sets, which are exactly
+// periodic by construction) scores 6-9, while against the 98th percentile it scores about 1; noisy textures score the same under either. Walls (wrapY false) skip the y seam.
+// "--check" also lists the scan sets against their ambientCG target mean (CG table below).
+async function check(DIR = 'assets/textures') {
+  const { readdir } = await import('node:fs/promises');
+  const names = [...new Set((await readdir(DIR)).filter(f => f.endsWith('_c.webp')).map(f => f.slice(0, -7)))].sort();
+  const pct = (a, p) => { const s = Float32Array.from(a).sort(); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
+  console.log('set       size  mean  std   seamX seamY  (target mean / contrast from SETS; seam ~1 = seamless)');
+  for (const n of names) {
+    const { data, info } = await sharp(`${DIR}/${n}_c.webp`).greyscale().raw().toBuffer({ resolveWithObject: true }), W = info.width, Hh = info.height, ch = info.channels;
+    const px = (x, y) => data[(y * W + x) * ch] / 255; let s = 0, s2 = 0; for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) { const v = px(x, y); s += v; s2 += v * v; }
+    const mean = s / (W * Hh), std = Math.sqrt(Math.max(0, s2 / (W * Hh) - mean * mean));
+    const cs = new Float32Array(W - 1), rs = new Float32Array(Hh - 1); let ex = 0, ey = 0;
+    for (let x = 1; x < W; x++) { let t = 0; for (let y = 0; y < Hh; y++) t += Math.abs(px(x, y) - px(x - 1, y)); cs[x - 1] = t / Hh; }
+    for (let y = 1; y < Hh; y++) { let t = 0; for (let x = 0; x < W; x++) t += Math.abs(px(x, y) - px(x, y - 1)); rs[y - 1] = t / W; }
+    for (let y = 0; y < Hh; y++) ex += Math.abs(px(0, y) - px(W - 1, y)); for (let x = 0; x < W; x++) ey += Math.abs(px(x, 0) - px(x, Hh - 1));
+    const set = SETS[n], sx = ex / Hh / Math.max(pct(cs, 0.98), 0.004), sy = set?.wrapY === false ? NaN : ey / W / Math.max(pct(rs, 0.98), 0.004), tm = set ? (set.mean ?? 0.72) : CG[n]?.[1], tgt = tm == null ? ' (scan)' : ` (target ${tm}${set ? '' : ', scan'})`;
+    const flag = (sx > 2.5 || sy > 2.5) ? '  <- seam' : (tm != null && Math.abs(mean - tm) > 0.06) ? '  <- off grade' : '';
+    console.log(`${n.padEnd(9)} ${String(W).padStart(4)}  ${mean.toFixed(2)}  ${std.toFixed(2)}  ${sx.toFixed(2).padStart(5)} ${Number.isNaN(sy) ? '  -  ' : sy.toFixed(2).padStart(5)}${tgt}${flag}`);
+  }
+}
+
+// ---- edge healing for sets that cannot be regenerated (the ambientCG scans): node tools/build-textures.mjs --heal [dir] name… ----
+// Pulls the two edge pixels of every row / column towards their common mean (the difference smoothed along the seam) and fades that correction out over ~W/64 pixels (cosine), on the colour, normal (renormalised)
+// and packed maps. Only meant for a set whose seam step is a lone line at the border (the tile scan's grout line is 1 px wide at the wrap, 2-3 px elsewhere).
+async function heal(DIR, names) {
+  for (const n of names) for (const kind of ['c', 'n', 'r']) {
+    const f = `${DIR}/${n}_${kind}.webp`, { data, info } = await sharp(f).raw().toBuffer({ resolveWithObject: true }), W = info.width, Hh = info.height, ch = info.channels, B = Math.max(2, W >> 6), buf = Float32Array.from(data);
+    const R = Math.max(3, W >> 6), smooth = (a) => { const m = a.length, o = new Float32Array(m); for (let i = 0; i < m; i++) { let t = 0; for (let k = -R; k <= R; k++) t += a[(i + k + m) % m]; o[i] = t / (2 * R + 1); } return o; };   // the correction is smoothed along the seam (circularly) so per-row noise does not become streaks
+    const at = (x, y, c) => (y * W + x) * ch + c, wgt = (d) => 0.5 * (1 + Math.cos(Math.PI * d / B));
+    for (let c = 0; c < ch; c++) {
+      { const dl = smooth(Float32Array.from({ length: Hh }, (_, y) => (buf[at(0, y, c)] - buf[at(W - 1, y, c)]) / 2)); for (let y = 0; y < Hh; y++) for (let d = 0; d < B; d++) { buf[at(d, y, c)] -= dl[y] * wgt(d); buf[at(W - 1 - d, y, c)] += dl[y] * wgt(d); } }
+      { const dl = smooth(Float32Array.from({ length: W }, (_, x) => (buf[at(x, 0, c)] - buf[at(x, Hh - 1, c)]) / 2)); for (let x = 0; x < W; x++) for (let d = 0; d < B; d++) { buf[at(x, d, c)] -= dl[x] * wgt(d); buf[at(x, Hh - 1 - d, c)] += dl[x] * wgt(d); } }
+    }
+    if (kind === 'n' && ch >= 3) for (let i = 0; i < W * Hh; i++) { const o = i * ch, x = buf[o] / 127.5 - 1, y = buf[o + 1] / 127.5 - 1, z = buf[o + 2] / 127.5 - 1, il = 1 / (Math.hypot(x, y, z) || 1); buf[o] = (x * il + 1) * 127.5; buf[o + 1] = (y * il + 1) * 127.5; buf[o + 2] = (z * il + 1) * 127.5; }
+    const out = Buffer.from(buf.map(v => clamp(Math.round(v), 0, 255)));
+    await sharp(out, { raw: { width: W, height: Hh, channels: ch } }).webp(kind === 'n' ? { quality: 86, smartSubsample: true } : { quality: kind === 'c' ? 82 : 75 }).toFile(f + '.tmp');
+    const { rename } = await import('node:fs/promises'); await rename(f + '.tmp', f); console.log('healed', n, kind);
+  }
 }
 
 // ---- ambientCG conversion (albedo neutralised to grey, fixed mean, because the game tints surfaces) ----
@@ -411,5 +495,7 @@ async function convert(SRC, OUT) {
 
 const args = process.argv.slice(2);
 if (args[0] === '--procedural') await procedural(args[1], args.slice(2));
+else if (args[0] === '--check') await check(args[1]);
+else if (args[0] === '--heal') await heal(args[1], args.slice(2));
 else if (args.length >= 2) await convert(args[0], args[1]);
-else console.log('usage: node tools/build-textures.mjs --procedural [outDir] [name…]  |  node tools/build-textures.mjs <ambientCG dir> <outDir>');
+else console.log('usage: node tools/build-textures.mjs --procedural [outDir] [name…]  |  --check [dir]  |  --heal <dir> name…  |  node tools/build-textures.mjs <ambientCG dir> <outDir>');

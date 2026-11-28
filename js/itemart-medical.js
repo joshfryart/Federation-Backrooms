@@ -30,6 +30,8 @@ const cyz = (rt, rbm, h, m, x = 0, y = 0, z = 0, seg = 10) => { const o = cy(rt,
 const tor = (R, r, m, x = 0, y = 0, z = 0, arc = PI * 2, rs = 4, ts = 10) => mesh(geo(`tr${R}|${r}|${arc}|${rs}|${ts}`, () => new THREE.TorusGeometry(R, r, rs, ts, arc)), m, x, y, z);
 const sph = (r, m, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) => { const o = mesh(geo(`sp${r}`, () => new THREE.SphereGeometry(r, 8, 5)), m, x, y, z); o.scale.set(sx, sy, sz); return o; };
 const own = {}; const memo = (k, f) => own[k] || (own[k] = f());
+const wornSteel = () => memo('wornsteel', () => new THREE.MeshStandardMaterial({ color: 0xaab0b8, metalness: 0.8, roughness: 0.5 }));
+const reflect = () => memo('reflect', () => new THREE.MeshStandardMaterial({ color: 0xcfd6c8, metalness: 0.3, roughness: 0.25, emissive: 0x1c2018 }));
 const orange = () => memo('orange', () => new THREE.MeshStandardMaterial({ color: 0xe0661e, roughness: 0.6 }));
 
 export const DEFS_MEDICAL = {};
@@ -41,15 +43,16 @@ def('stretcher', 'folding stretcher', 'medical', (g, M, o) => {
   const O = orange(), open = !!(o && o.open);
   if (!open) {
     g.add(rb(0.46, 0.026, 0.96, 0.01, O, 0, 0.0, 0)); g.add(rb(0.46, 0.026, 0.96, 0.01, O, 0, 0.034, 0));   // the bed folded in half
-    for (const sx of [-1, 1]) { g.add(cyz(0.014, 0.014, 1.1, M.alu, sx * 0.25, 0.017, 0, 8)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.017, 0.5, 8)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.017, -0.5, 8)); }
+    for (const sx of [-1, 1]) { g.add(cyz(0.014, 0.014, 1.1, M.alu, sx * 0.25, 0.017, 0, 8)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.017, 0.5, 6)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.017, -0.5, 6)); }
+    for (const z of [-0.14, 0.14]) g.add(bx(0.4, 0.004, 0.025, reflect(), 0, 0.049, z));   // reflective tape across the folded bed
     g.add(rb(0.54, 0.062, 0.07, 0.014, M.steel, 0, 0.017, 0));   // hinge sleeve across the fold
     for (const z of [-0.27, 0.27]) { g.add(rb(0.5, 0.072, 0.045, 0.01, M.dark, 0, 0.017, z)); g.add(rb(0.05, 0.03, 0.016, 0.005, M.amber, 0.1, 0.017, z + 0.03)); }
     for (const z of [-0.36, 0.36]) g.add(rb(0.5, 0.016, 0.018, 0.005, M.alu, 0, -0.03, z));   // folded leg frames
   } else {
     g.add(rb(0.46, 0.022, 1.92, 0.01, O, 0, 0, 0)); g.add(rb(0.28, 0.03, 0.3, 0.01, M.white, 0, 0.026, -0.7));   // bed and a head pad
-    for (const sx of [-1, 1]) { g.add(cyz(0.014, 0.014, 2.1, M.alu, sx * 0.25, 0.0, 0, 8)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.0, 1.03, 8)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.0, -1.03, 8)); for (const z of [-0.8, 0.8]) g.add(cy(0.012, 0.012, 0.15, M.alu, sx * 0.25, -0.075, z, 6)); }
+    for (const sx of [-1, 1]) { g.add(cyz(0.014, 0.014, 2.1, M.alu, sx * 0.25, 0.0, 0, 8)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.0, 1.03, 6)); g.add(cyz(0.019, 0.019, 0.13, M.rubber, sx * 0.25, 0.0, -1.03, 6)); for (const z of [-0.8, 0.8]) g.add(cy(0.012, 0.012, 0.15, M.alu, sx * 0.25, -0.075, z, 6)); }
     for (const z of [-0.4, 0.05, 0.5]) { g.add(rb(0.5, 0.03, 0.05, 0.01, M.dark, 0, 0.018, z)); g.add(rb(0.05, 0.025, 0.02, 0.005, M.amber, 0.1, 0.034, z)); }
-    g.add(rb(0.54, 0.05, 0.06, 0.012, M.steel, 0, 0.0, 0));
+    g.add(rb(0.54, 0.05, 0.06, 0.012, M.steel, 0, 0.0, 0)); for (const z of [-0.95, 0.95]) g.add(bx(0.4, 0.004, 0.03, reflect(), 0, 0.013, z));
   }
 }, { cls2: 'two-handed', rest: 0.03 });
 
@@ -58,7 +61,7 @@ def('iv_bag', 'IV fluid bag', 'medical', (g, M) => {
   const fluid = memo('ivfluid', () => new THREE.MeshStandardMaterial({ color: 0xe6d78a, roughness: 0.3, transparent: true, opacity: 0.8, emissive: 0x403a10 }));
   g.add(rb(0.15, 0.026, 0.25, 0.011, M.glass, 0, 0.013, 0)); g.add(rb(0.12, 0.02, 0.17, 0.008, fluid, 0, 0.013, 0.025)); g.add(rb(0.15, 0.028, 0.03, 0.01, M.cloth2, 0, 0.014, -0.115));
   g.add(cy(0.012, 0.012, 0.02, M.white, 0, 0.012, 0.135, 8).rotateX(PI / 2)); g.add(cy(0.008, 0.008, 0.018, M.red, 0.03, 0.012, 0.135, 8).rotateX(PI / 2)); g.add(cy(0.006, 0.006, 0.03, M.steel, 0, 0.012, 0.155, 6).rotateX(PI / 2));
-  g.add(tor(0.012, 0.003, M.rubber, 0, 0.014, -0.125, PI * 2, 4, 8).rotateX(PI / 2)); g.add(bx(0.04, 0.003, 0.012, M.red, -0.045, 0.0285, -0.02));
+  g.add(tor(0.012, 0.003, M.rubber, 0, 0.014, -0.125, PI * 2, 4, 8).rotateX(PI / 2)); g.add(bx(0.04, 0.003, 0.012, M.red, -0.045, 0.0285, -0.02)); g.add(bx(0.07, 0.003, 0.05, M.cloth2, 0.02, 0.0285, 0.03));   // printed label panel
 }, { base: true });
 
 // surgical forceps (haemostat), 0.18 m: two crossed arms with finger rings at the grip end, locking ratchet, serrated tips toward +y
@@ -68,23 +71,23 @@ def('forceps', 'surgical forceps', 'medical', (g, M) => {
     g.add(bx(0.007, 0.12, 0.005, M.steel, s * 0.004, 0.08, 0).rotateZ(-s * 0.03)); g.add(bx(0.005, 0.02, 0.005, M.steel, s * 0.0, 0.14, 0));
   }
   g.add(bx(0.024, 0.01, 0.01, M.steel, 0, 0.03, 0)); g.add(rb(0.03, 0.012, 0.008, 0.003, M.alu, 0, 0.018, 0.0)); for (let i = 0; i < 4; i++) g.add(bx(0.016, 0.002, 0.007, M.steel, 0, -0.005 - i * 0.003, 0.0));
-  g.add(bx(0.012, 0.012, 0.006, M.dark, 0, 0.145, 0));
+  g.add(bx(0.012, 0.012, 0.006, wornSteel(), 0, 0.145, 0));   // serrated jaw faces, worn matte
 }, { lie: true });
 
 // kidney dish (emesis basin), 0.25 x 0.12 x 0.035 m, stainless, with two instruments in it (frame: base)
 def('kidney_dish', 'kidney dish', 'medical', (g, M) => {
   const dbl = memo('kdmat', () => new THREE.MeshStandardMaterial({ color: 0xc8ccd2, metalness: 0.85, roughness: 0.3, side: THREE.DoubleSide }));
   const wall = mesh(geo('kdwall', () => new THREE.CylinderGeometry(0.12, 0.09, 0.035, 22, 1, true)), dbl, 0, 0.0175, 0); wall.scale.set(1, 1, 0.5); g.add(wall);
-  const fl = cy(0.09, 0.09, 0.004, M.alu, 0, 0.002, 0, 22); fl.scale.set(1, 1, 0.5); g.add(fl);
+  const fl = cy(0.09, 0.09, 0.004, wornSteel(), 0, 0.002, 0, 22); fl.scale.set(1, 1, 0.5); g.add(fl);
   g.add(tor(0.12, 0.004, M.steel, 0, 0.035, 0, PI * 2, 4, 22).rotateX(PI / 2)); g.children[g.children.length - 1].scale.set(1, 0.5, 1);
-  g.add(bx(0.012, 0.005, 0.1, M.steel, -0.03, 0.012, 0.0).rotateY(0.2)); g.add(bx(0.01, 0.005, 0.085, M.alu, 0.03, 0.012, 0.01).rotateY(-0.15)); g.add(bx(0.06, 0.012, 0.03, M.cloth2, -0.01, 0.01, -0.02));
+  g.add(bx(0.012, 0.005, 0.1, M.steel, -0.03, 0.012, 0.0).rotateY(0.2)); g.add(bx(0.01, 0.005, 0.085, M.alu, 0.03, 0.012, 0.01).rotateY(-0.15)); g.add(bx(0.06, 0.012, 0.03, M.cloth2, -0.01, 0.01, -0.02)); g.add(bx(0.03, 0.004, 0.012, M.red, 0.1, 0.037, 0.0));   // marker tab on the rim
 }, { base: true });
 
 // gauze / crepe bandage roll, 0.1 m wide, 0.07 m diameter, loose tail and a tape strip (frame: base)
 def('bandage', 'bandage roll', 'medical', (g, M) => {
   const tape = memo('tape', () => new THREE.MeshStandardMaterial({ color: 0xd9c9a0, roughness: 0.8 }));
-  g.add(cy(0.035, 0.035, 0.1, M.cloth2, 0, 0.05, 0, 14)); g.add(cy(0.012, 0.012, 0.102, M.dark, 0, 0.05, 0, 8)); g.add(cy(0.0355, 0.0355, 0.012, tape, 0, 0.05, 0, 14));
-  g.add(rb(0.09, 0.004, 0.14, 0.001, M.cloth2, 0, 0.002, 0.09)); g.add(bx(0.012, 0.006, 0.02, M.red, 0, 0.005, 0.15));
+  g.add(cy(0.035, 0.035, 0.1, M.cloth2, 0, 0.05, 0, 14)); g.add(cy(0.012, 0.012, 0.102, M.dark, 0, 0.05, 0, 6)); g.add(cy(0.0355, 0.0355, 0.012, tape, 0, 0.05, 0, 14));
+  g.add(rb(0.09, 0.004, 0.14, 0.001, M.cloth2, 0, 0.002, 0.09)); g.add(bx(0.012, 0.006, 0.02, M.red, 0, 0.005, 0.15)); g.add(bx(0.03, 0.01, 0.006, M.steel, 0, 0.005, 0.158));   // fastening clip
 }, { base: true });
 
 // name keywords -> kind. Prepend to itemart's KW (first match wins).

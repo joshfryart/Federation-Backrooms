@@ -48,6 +48,16 @@ export async function talkTests(fail) {
   { const plan = SP.babblePlan('Hello there, sir. All quiet.'), mid = plan.syl[1], j = T.jawAt(plan.syl, mid.at + mid.dur / 2);
     ck(j > 0.2 && j <= 1, 'jaw opens mid-syllable (' + j.toFixed(2) + ')'); ck(T.jawAt(plan.syl, -0.1) === 0 && T.jawAt(plan.syl, plan.total + 1) === 0 && T.jawAt([], 0.3) === 0, 'jaw shut before / after / without a plan');
     let ok = true; for (let t = 0; t < 3; t += 0.01) { const f = T.flapAt(t); if (!(f >= 0 && f <= 1)) ok = false; } ck(ok, 'flap stays in 0..1'); }
+  // ---- js/faceanim.js (pure parts): visemes, blink statistics, mood faces in real morph names
+  { const F = await imp('js/faceanim.js'), text = 'Maybe. Is the warp core stable?', plan = SP.babblePlan(text), syl = F.visemePlan(text, plan.syl);
+    ck(syl[0].vc === 'bil' && syl.some(s => s.q) && !syl[0].q, 'visemes: "Maybe" opens on a lip seal, the question (not the first sentence) is marked');
+    const m0 = F.visemeAt(syl, syl[0].at + syl[0].dur * 0.05), mid = syl.find(s => s.vow === 'a' && s.stress), mA = mid && F.visemeAt(syl, mid.at + mid.dur * 0.55);
+    ck(m0.close > 0.8 && m0.jaw < 0.05, 'bilabial onset: lips sealed, jaw shut (' + m0.jaw.toFixed(2) + ')'); ck(mA && mA.jaw > 0.35, 'stressed "a": jaw open');
+    let inRange = true; for (let t = -0.1; t < plan.total + 0.2; t += 0.013) { const v = F.visemeAt(syl, t); for (const k in v) if (!(v[k] >= 0 && v[k] <= 1)) inRange = false; } ck(inRange, 'viseme channels stay in 0..1');
+    const b = new F.Blinker(F.prng(9)); let n = 0, prev = 0, full = 0; for (let i = 0; i < 30 * 600; i++) { const l = b.step(1 / 30); if (l > 0.3 && prev <= 0.3) n++; if (l > 0.99) full++; prev = l; }
+    ck(n >= 100 && n <= 220, 'blinks: 10-22 a minute at rest (' + (n / 10).toFixed(1) + ')'); ck(full > 0, 'blinks close fully sometimes');
+    const names = new Set(F.MORPHS); ck(Object.values(F.MOOD).every(f => Object.keys(f).every(k => names.has(k))) && T.MOOD_FACE === F.MOOD, 'mood faces use real morph names only');
+    const ex = F.expandAliases({ Smile: 0.4, Frown: 0.2 }); ck(!('Smile' in ex) && ex.MouthLeftPullUp === 0.4 && ex.MouthRightPullDown === 0.2, 'Smile / Frown expand to mouth-corner morphs'); }
   // ---- mood + relationship labels
   ck(T.moodOf({ trust: 0.8 }) === 'warm' && T.moodOf({ trust: 0.5 }) === 'neutral' && T.moodOf({ trust: 0.2 }) === 'edge', 'mood from trust');
   ck(T.moodOf({ trust: 0.7, stress: 1 }) !== 'warm', 'ship stress cools the mood'); ck(T.relLabel(0.9) === 'trusted' && T.relLabel(0.1) === 'cold' && T.relLabel(0.45) === 'neutral', 'relationship labels');

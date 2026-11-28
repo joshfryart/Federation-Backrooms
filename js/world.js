@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { giPatch } from './gi.js';
 import { SEARCHABLE, clutterFor } from './items.js';
 import { buildInstanced, kindForName } from './itemart.js';
 import { ROOMS, mulberry32 } from './data.js';
@@ -7,7 +8,7 @@ import { tubeStep, tubeBoxes } from './tube.js';
 import { TALL_LIGHT, tallLightMul } from './rooms/_tall.js';   // tall-room panel light: hang height, range, intensity match (updatePanelLights in main.js)
 const TALL_MUL = tallLightMul();
 import { dressTable } from './rooms/index.js';   // per-room dressing hook: a room module's optional `dress` export overrides its row in the tables below (docs/rooms/README.md)
-import { pbr, PBR_SETS, has as hasModel, instance } from './assets.js';
+import { pbr, PBR_SETS, has as hasModel, instance, surfaceMap } from './assets.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildPropArt, PROP_ART, PROP_ART_KINDS, PROP_ART_FIXTURES } from './propart.js';   // art batches (js/propart-*.js), docs/propart-integration.md
@@ -167,6 +168,74 @@ const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export { generate, genShip, shipPlan } from './gen.js';
 
 // ------------------------------------------------------------------
+// Shared surface layer (walls, floors, ceilings, trim, props, wall fixtures): one shader patch, one program cache key, so it
+// REPLACES each patched material's program instead of adding one (an unpatched material with the same parameters elsewhere would
+// keep the old program: patch whole families). Everything is sampled in world space on the surface's dominant axis plane, so it
+// works on any UVs (or none) and breaks up the 2.5 m tile repeat:
+//   detail  assets/textures/detail_m.webp (0.5 m): micro normal (a plain tangent-space normal map), faded out from 1.5 to 6 m; close-ups no longer turn to mush
+//   grime   assets/textures/wear_m.webp (3.2 m): dirt blotches / streaks (darker, matter), heavier near the deck on walls
+//   wear    curvature of the interpolated normal (fwidth) x a chip mask: bare metal on tight rounded edges (radius under ~2 cm) of painted /
+//           coated metal only: gated on the material's own metalness (rubber, padding, fabric, wood, plastics never chip), faded out once a
+//           pixel covers more than ~6 mm (thin pipes / far edges would only sparkle). Flat faces and soft rounded shapes never.
+//   floor   albedo floor (linear, hue kept, soft knee): near-black paints and rubbers read as dark, not as holes, under the deck lights
+// Per material: envSurface(mat, { detail, grime, wear, floor }) (0..1 strengths; floor default 0.04). No-op when the maps did not load. The program is
+// compiled with the rest of the deck (prewarmPrograms / warmDraws in js/main.js see it like any other world material).
+// ------------------------------------------------------------------
+// painted / padded finishes keep the hull's hue but not its darkness: the dark-hulled ships (Alberta 0x5d6168, Newfoundland 0x6d7681) made
+// their painted and padded rooms near-black. HSL lightness is floored (sRGB; 0.58 painted, 0.54 padded, 0.5 ceilings): the other eight hulls are at or above it (BC 0.57 moves by 0.01).
+function paintCol(c, minL) { const h = {}; c.getHSL(h, THREE.SRGBColorSpace); if (h.l < minL) c.setHSL(h.h, h.s * 0.85, minL, THREE.SRGBColorSpace); return c; }
+const ENV_KEY = 'envS1';
+function envCompile(sh) {
+  Object.assign(sh.uniforms, this.userData.envU);
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vEnvW;\nvarying vec3 vEnvN;')
+    .replace('#include <project_vertex>', `#include <project_vertex>
+{ vec4 envP = vec4( transformed, 1.0 ); vec3 envNo = objectNormal;
+#ifdef USE_INSTANCING
+  envP = instanceMatrix * envP; envNo = mat3( instanceMatrix ) * envNo;
+#endif
+  envP = modelMatrix * envP; vEnvW = envP.xyz; vEnvN = normalize( mat3( modelMatrix ) * envNo ); }`);
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vEnvW;\nvarying vec3 vEnvN;\nuniform sampler2D uEnvDetail;\nuniform sampler2D uEnvWear;\nuniform vec4 uEnvP;')
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+{
+  vec3 eA = abs( vEnvN ); bool eX = eA.x > eA.y && eA.x > eA.z, eY = !eX && eA.y > eA.z;
+  vec2 eUV = eX ? vEnvW.zy : eY ? vEnvW.xz : vEnvW.xy;
+  float eDist = length( vViewPosition );
+  // grime: dirt blotches + streaks, more toward the deck on walls (a soft 0.9 m ramp broken up by the blotch mask, so it never reads as a band)
+  vec3 eW = texture2D( uEnvWear, eUV * 0.3125 ).rgb;
+  float eLow = ( 1.0 - eA.y ) * ( 1.0 - smoothstep( 0.0, 0.9, vEnvW.y ) ); eLow *= eLow;
+  float eDirt = clamp( uEnvP.y * ( eW.r * 0.8 + eLow * 0.45 * eW.r ), 0.0, 1.0 );
+  diffuseColor.rgb *= 1.0 - eDirt * 0.5;
+  roughnessFactor = clamp( mix( roughnessFactor, 1.0, eDirt * 0.4 ) + ( eW.g - 0.5 ) * 0.3 * uEnvP.y, 0.05, 1.0 );
+  // edge wear: curvature (1/m) of the interpolated normal; only tight edges (r under ~2 cm) of painted / coated metal (own metalness 0.15+)
+  // light up, and only while the pixel footprint resolves them (6 -> 12 mm per pixel fades it out: no sparkle on thin pipes or far edges)
+  float eFoot = length( fwidth( vEnvW ) );
+  float eCurv = length( fwidth( vEnvN ) ) / max( eFoot, 1e-4 );
+  float eEdge = uEnvP.z * smoothstep( 0.15, 0.3, metalnessFactor ) * smoothstep( 45.0, 90.0, eCurv ) * smoothstep( 0.38, 0.62, eW.b ) * ( 1.0 - smoothstep( 0.006, 0.012, eFoot ) );
+  diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.58, 0.59, 0.6 ), eEdge * 0.8 );
+  roughnessFactor = mix( roughnessFactor, 0.3, eEdge ); metalnessFactor = mix( metalnessFactor, 1.0, eEdge );
+  // albedo floor (uEnvP.w, linear luminance): after grime and wear; soft knee from 0 -> w up to 2w -> 2w, hue kept
+  float eL = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+  if ( eL < 2.0 * uEnvP.w ) diffuseColor.rgb = eL > 1e-4 ? diffuseColor.rgb * ( ( uEnvP.w + eL * eL / ( 4.0 * uEnvP.w ) ) / eL ) : vec3( uEnvP.w );
+  // detail normal: world-plane slope added in view space, faded with distance (it is close-up detail; further out it only reads as noise and glints)
+  float eF = uEnvP.x * ( 1.0 - smoothstep( 1.5, 6.0, eDist ) );
+  if ( eF > 0.001 ) {
+    vec2 eD = texture2D( uEnvDetail, eUV * 2.0 ).xy * 2.0 - 1.0;
+    vec3 eO = eX ? vec3( 0.0, eD.y, eD.x ) : eY ? vec3( eD.x, 0.0, eD.y ) : vec3( eD.x, eD.y, 0.0 );
+    normal = normalize( normal + ( viewMatrix * vec4( eO, 0.0 ) ).xyz * eF * 0.3 );
+  }
+}`);
+  giPatch(sh);   // keep the baked deck GI (js/gi.js) on these: this onBeforeCompile replaces the shared prototype hook
+}
+function envSurface(mat, { detail = 0.5, grime = 0.5, wear = 0, floor = 0.04 } = {}) {
+  const dt = surfaceMap('detail'), wt = surfaceMap('wear'); if (!dt || !wt || !mat?.isMeshStandardMaterial || mat.userData.envU) return mat;
+  if (mat.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile) return mat;   // someone else patches this one
+  mat.userData.envU = { uEnvDetail: { value: dt }, uEnvWear: { value: wt }, uEnvP: { value: new THREE.Vector4(detail, grime, wear, floor) } };
+  mat.onBeforeCompile = envCompile; mat.customProgramCacheKey = () => ENV_KEY;
+  return mat;
+}
+export { envSurface };
+
+// ------------------------------------------------------------------
 // Prop meshes
 // ------------------------------------------------------------------
 const M = {};
@@ -186,18 +255,35 @@ function labelTex() {
     g.strokeStyle = '#555b66'; g.lineWidth = 6; g.strokeRect(3, 3, s - 6, s);
   });
 }
+// console / monitor display (emissive: drawn with MeshBasicMaterial at 1.5x, so the bright parts bloom): LCARS frame, readout columns, bar
+// graphs, a glowing trace and a status block; then a sub-pixel RGB grid, scanlines and a soft edge falloff so it reads as a lit panel up close.
+// 512 px (was 256): a console fills ~400 px of a 960 px view at arm's length.
 function screenTex(kind) {
-  return canvasTex(256, (g, s) => {
-    g.fillStyle = '#04070c'; g.fillRect(0, 0, s, s);
-    const cols = kind === 'med' ? ['#58f0a0', '#2aa870', '#e8f8f0'] : kind === 'eng' ? ['#ffa040', '#ff5a30', '#ffd890'] : ['#58b8ff', '#f0a050', '#c890f0'];
-    const rr = (x, y, w, h, r, c) => { g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); };
-    rr(8, 8, 60, 96, [28, 0, 0, 28], cols[0]); rr(74, 8, 174, 18, 9, cols[1]); rr(8, 110, 60, 138, [28, 0, 0, 28], cols[2]); rr(74, 230, 174, 18, 9, cols[0]);
-    for (let i = 0; i < 6; i++) rr(74 + (i % 3) * 60, 36 + Math.floor(i / 3) * 30, 52, 22, 11, cols[(i * 7) % 3]);
-    g.fillStyle = cols[0]; g.font = 'bold 13px monospace';
-    for (let i = 0; i < 7; i++) g.fillText(String(Math.floor(Math.random() * 9e5)).padStart(6, '0') + '  ' + (Math.random() * 99).toFixed(1), 80, 118 + i * 15);
-    g.strokeStyle = cols[2]; g.lineWidth = 2; g.beginPath();
-    for (let x = 0; x < 60; x++) { const y = kind === 'med' ? ((x % 20 === 8) ? -26 : (x % 20 === 10) ? 14 : 0) : Math.sin(x * 0.5) * 9 * Math.sin(x * 0.13); g.lineTo(182 + x, 150 + y); } g.stroke();
-    g.fillStyle = 'rgba(0,0,0,0.25)'; for (let y = 0; y < s; y += 3) g.fillRect(0, y, s, 1);
+  return canvasTex(512, (g, s) => {
+    // the 256 px version drew 14 numbers from Math.random per screen: still drawn (and used as the first readout digits), so seeded runs keep their stream
+    const pre = Array.from({ length: 14 }, () => Math.random()); let q = kind === 'med' ? 11 : kind === 'eng' ? 23 : 37, pi = 0; const R = () => { if (pi < pre.length) return pre[pi++]; q = (q * 16807) % 2147483647; return q / 2147483647; };
+    g.fillStyle = '#03060b'; g.fillRect(0, 0, s, s);
+    const cols = kind === 'med' ? ['#58f0a0', '#2aa870', '#e8f8f0', '#9fe8ff'] : kind === 'eng' ? ['#ffa040', '#ff5a30', '#ffd890', '#ffcf6a'] : ['#58b8ff', '#f0a050', '#c890f0', '#9fd4ff'];
+    const rr = (x, y, w, h, r, c, glow = 0) => { g.shadowColor = c; g.shadowBlur = glow; g.fillStyle = c; g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); g.shadowBlur = 0; };
+    // frame: elbows and bars
+    rr(14, 14, 112, 190, [56, 0, 0, 56], cols[0], 10); rr(136, 14, 360, 32, 16, cols[1], 8); rr(14, 214, 112, 284, [56, 0, 0, 56], cols[2], 10); rr(136, 466, 360, 32, 16, cols[0], 8);
+    g.fillStyle = '#03060b'; g.fillRect(70, 46, 56, 150); g.fillRect(70, 222, 56, 236);
+    for (let i = 0; i < 6; i++) rr(140 + (i % 3) * 118, 60 + Math.floor(i / 3) * 52, 104, 40, 20, cols[(i * 7) % 4], 6);
+    // readout columns
+    g.font = 'bold 22px monospace'; g.shadowBlur = 6;
+    for (let i = 0; i < 9; i++) { const c = cols[i % 3 === 2 ? 3 : 0]; g.shadowColor = g.fillStyle = c; g.globalAlpha = 0.65 + R() * 0.35; g.fillText(String(Math.floor(R() * 9e5)).padStart(6, '0') + ' ' + (R() * 99).toFixed(1), 150, 200 + i * 28); }
+    g.globalAlpha = 1; g.shadowBlur = 0;
+    // bar graph
+    for (let i = 0; i < 10; i++) { const h = 20 + R() * 90; rr(370 + i * 12, 300 - h, 8, h, 2, i === 7 ? cols[1] : cols[3], 4); }
+    // trace
+    g.strokeStyle = cols[2]; g.shadowColor = cols[2]; g.shadowBlur = 12; g.lineWidth = 3; g.beginPath();
+    for (let x = 0; x < 120; x++) { const y = kind === 'med' ? ((x % 40 === 16) ? -46 : (x % 40 === 20) ? 26 : (x % 40 === 18) ? -8 : 0) : Math.sin(x * 0.25) * 18 * Math.sin(x * 0.065); g.lineTo(370 + x, 400 + y); } g.stroke(); g.shadowBlur = 0;
+    g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(370, 340 + k * 40); g.lineTo(490, 340 + k * 40); g.stroke(); }
+    // sub-pixel grid + scanlines, vignette
+    const im = g.getImageData(0, 0, s, s), d = im.data;
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) { const i = (y * s + x) * 4, sub = x % 3, k = y % 3 === 2 ? 0.72 : 1; d[i] *= (sub === 0 ? 1 : 0.82) * k; d[i + 1] *= (sub === 1 ? 1 : 0.82) * k; d[i + 2] *= (sub === 2 ? 1 : 0.82) * k; }
+    g.putImageData(im, 0, 0);
+    const v = g.createRadialGradient(s / 2, s / 2, s * 0.3, s / 2, s / 2, s * 0.75); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.45)'); g.fillStyle = v; g.fillRect(0, 0, s, s);
   });
 }
 function mats() {
@@ -206,7 +292,7 @@ function mats() {
   const std = (o) => new THREE.MeshStandardMaterial(o);
   M.metal = std({ color: 0x8f959e, metalness: 0.85, roughness: 0.42, normalMap: dk.normal, normalScale: new THREE.Vector2(0.25, 0.25) });
   M.panel = std({ color: 0xb9bec6, metalness: 0.5, roughness: 0.5, normalMap: w.normal, roughnessMap: w.rough });
-  M.dark = std({ color: 0x23262d, metalness: 0.6, roughness: 0.5 });
+  M.dark = std({ color: 0x363a43, metalness: 0.35, roughness: 0.42 });   // was 0x23262d / 0.6 / 0.5: read as a hole under the deck lights (diffuse ~0.008 linear)
   M.fabric = std({ color: 0x7a2f2f, roughness: 0.95, normalMap: cp.normal, normalScale: new THREE.Vector2(1.5, 1.5) });
   M.sheet = std({ color: 0x9aa7b8, roughness: 0.95, normalMap: cp.normal });
   M.white = std({ color: 0xdfe6ea, roughness: 0.32, metalness: 0.05 });
@@ -216,7 +302,7 @@ function mats() {
   M.leaf = std({ color: 0x2f7a38, roughness: 0.8 });
   M.trunk = std({ color: 0x5a3f2a, roughness: 0.9 });
   M.glass = std({ color: 0x9fd0ff, roughness: 1, metalness: 0, transparent: true, opacity: 0.25, ...(T.d.glass ? { normalMap: T.d.glass.normal, roughnessMap: T.d.glass.rough } : { roughness: 0.05 }) });
-  M.rubber = std({ color: 0x0c0c0e, roughness: 0.9 });
+  M.rubber = std({ color: 0x161618, roughness: 0.72 });   // was 0x0c0c0e / 0.9 (stays the darkest prop finish; the env floor lifts it to ~0.04 linear)
   M.hazard = std({ color: 0xd8a818, roughness: 0.6, metalness: 0.2 });
   M.screenB = new THREE.MeshBasicMaterial({ map: screenTex('ops'), color: new THREE.Color(1.5, 1.5, 1.5) });
   M.screenO = new THREE.MeshBasicMaterial({ map: screenTex('eng'), color: new THREE.Color(1.5, 1.5, 1.5) });
@@ -229,8 +315,17 @@ function mats() {
   M.blinkR = new THREE.MeshBasicMaterial({ color: 0xff3020 });
   M.blinkG = new THREE.MeshBasicMaterial({ color: 0x30ff60 });
   M.pipe = std({ color: 0x70757d, metalness: 0.9, roughness: 0.35 });
+  // shared surface layer on the prop family (js/propart-*.js builds with these same materials): painted / bare metal chips on rounded edges, grime, close-up detail
+  // the untextured ones also take detail_m as an ordinary uv normal map (faint): that moves them into the normal-mapped standard variant
+  // M.metal / M.crate already use, so patching them replaces a program instead of forking the plain standard one other files still use
+  { const dn = surfaceMap('detail'); if (dn) for (const k of ['dark', 'white', 'wood', 'pipe', 'hazard', 'rubber']) { M[k].normalMap = dn; M[k].normalScale = new THREE.Vector2(0.25, 0.25); } }
+  for (const [k, o] of Object.entries(PROP_ENV)) envSurface(M[k], o);
   return M;
 }
+// wear only on painted / coated metal (panel, dark, crates, hazard); bare metal (metal, pipe) has nothing to chip to, and plastics, wood,
+// fabric, sheet and rubber never chip (the shader also gates wear on metalness, so a soft finish cannot pick it up by accident)
+const PROP_ENV = { metal: { detail: 0.45, grime: 0.35, wear: 0 }, panel: { detail: 0.4, grime: 0.35, wear: 0.7 }, dark: { detail: 0.35, grime: 0.3, wear: 0.6 }, crate: { detail: 0.4, grime: 0.5, wear: 0.8 }, crate2: { detail: 0.4, grime: 0.5, wear: 0.8 },
+  pipe: { detail: 0.35, grime: 0.4, wear: 0 }, white: { detail: 0.25, grime: 0.25, wear: 0 }, hazard: { detail: 0.4, grime: 0.55, wear: 0.9 }, wood: { detail: 0.3, grime: 0.3, wear: 0 }, fabric: { detail: 0.2, grime: 0.35, wear: 0 }, sheet: { detail: 0.15, grime: 0.2, wear: 0 }, rubber: { detail: 0.3, grime: 0.3, wear: 0 } };
 const geoCache = {};
 function rbox(w, h, d, mat, x = 0, y = 0, z = 0, r = 0.04) {
   const k = `${w},${h},${d},${r}`; const geo = geoCache[k] || (geoCache[k] = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2.01, h / 2.01, d / 2.01)));
@@ -391,12 +486,19 @@ export function buildProp(kind) {
   return g;
 }
 
-export function buildLift(accent, deckNo) {
+export function buildLift(accent, deckNo, trim = null) {   // trim: the world's door-frame material (World.trimMat): the surround is drawn in brushed steel
   const g = new THREE.Group();
   const frame = new THREE.MeshLambertMaterial({ color: 0x3a3f48 });
   const door = new THREE.MeshLambertMaterial({ color: 0x9aa0aa });
-  g.add(box(2.4, 0.25, 0.3, frame, 0, 2.55, 0));
-  g.add(box(0.25, 2.8, 0.3, frame, -1.1, 0, 0)); g.add(box(0.25, 2.8, 0.3, frame, 1.1, 0, 0));
+  if (trim) {   // header + two posts + a thin inner reveal, steel tinted toward the frame grey; one instanced draw like the door frames
+    const parts = [[0, 2.55 + 0.125, 0, 2.4, 0.25, 0.3, 0x8a9099], [-1.1, 1.4, 0, 0.25, 2.8, 0.3, 0x7c828b], [1.1, 1.4, 0, 0.25, 2.8, 0.3, 0x7c828b], [0, 2.52, 0.1, 2.0, 0.04, 0.14, 0xb8bec6], [-0.985, 1.26, 0.1, 0.03, 2.52, 0.14, 0xb8bec6], [0.985, 1.26, 0.1, 0.03, 2.52, 0.14, 0xb8bec6]];
+    const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), trim, parts.length), o = new THREE.Object3D(), c = new THREE.Color();
+    parts.forEach(([x, y, z, sx, sy, sz, col], i) => { o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.updateMatrix(); im.setMatrixAt(i, o.matrix); im.setColorAt(i, c.set(col)); });
+    im.castShadow = im.receiveShadow = true; g.add(im);
+  } else {
+    g.add(box(2.4, 0.25, 0.3, frame, 0, 2.55, 0));
+    g.add(box(0.25, 2.8, 0.3, frame, -1.1, 0, 0)); g.add(box(0.25, 2.8, 0.3, frame, 1.1, 0, 0));
+  }
   const l = box(0.95, 2.5, 0.12, door, -0.5, 0, 0); const r = box(0.95, 2.5, 0.12, door, 0.5, 0, 0);
   l.name = 'doorL'; r.name = 'doorR'; g.add(l, r);
   const light = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.05), new THREE.MeshBasicMaterial({ color: 0xff3030 }));
@@ -606,7 +708,7 @@ const ROOM_DECOR = {
 dressTable('decor', ROOM_DECOR);   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.decor`
 const kitCache = {};
 function kitGeo(name, build) { return kitCache[name] || (kitCache[name] = (() => { const K = new Kit(); build(K); return K.done(); })()); }
-function kitMats() { const m = mats(); if (!m.kit) { m.kit = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }); m.kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true }); } return m; }
+function kitMats() { const m = mats(); if (!m.kit) { m.kit = envSurface(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 }), { detail: 0.35, grime: 0.4, wear: 0.6 }); m.kitGlow = new THREE.MeshBasicMaterial({ vertexColors: true }); } return m; }
 export const DECOR_KINDS = Object.keys(DECOR);
 // one wall fixture as a stand-alone group (model viewer)
 export function buildDecor(kind) { const m = kitMats(), geo = kitGeo(kind, DECOR[kind]), g = new THREE.Group(); if (geo.solid) g.add(new THREE.Mesh(geo.solid, m.kit)); if (geo.glow) g.add(new THREE.Mesh(geo.glow, m.kitGlow)); return g; }
@@ -818,6 +920,7 @@ export class World {
       const fm = FLOOR_MAT[kind], dm = T.d[kind];
       const fmat = new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(fm.ns, fm.ns), roughnessMap: dm.rough, roughness: dm.orm ? 1 : fm.roughness, metalness: dm.orm ? 1 : fm.metalness });
       if (dm.orm) { fmat.aoMap = dm.rough; fmat.metalnessMap = dm.rough; }
+      envSurface(fmat, { detail: kind === 'carpet' ? 0.15 : 0.4, grime: kind === 'holo' ? 0 : kind === 'carpet' ? 0.45 : 0.75 });
       const im = new THREE.InstancedMesh(geo, fmat, list.length);
       list.forEach(([x, y], i) => {
         dummy.position.set((x + 0.5) * TS, 0, (y + 0.5) * TS); dummy.rotation.y = kind === 'holo' ? 0 : Math.floor(rndv() * 4) * Math.PI / 2; dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
@@ -841,12 +944,14 @@ export class World {
       dressTable('ceil', CEIL_OF, { ck, T });   // PER-ROOM EXTENSION POINT: js/rooms/<type>.js `dress.ceil`
       const corridorCeil = ck({ longhouse: 'ceilm', plough: 'ceilm', tandem: 'ceilg' }[ship.hull] || 'ceilt');
       const byC = {}; for (const t of open) { const r = d.room[t[1]][t[0]], k = r ? CEIL_OF[r] || ck('ceilt') : corridorCeil; (byC[k] || (byC[k] = [])).push(t); }
-      const CEIL_GAIN = { ceilt: 1.0, ceilp: 1.05, ceilc: 0.95 };   // tint gain per ceiling set (the clinical panel reads whiter, felt coffers warmer)
+      const CEIL_GAIN = { ceilt: 1.0, ceilp: 1.05, ceilc: 0.95 };
+      const ceilCol = paintCol(wallCol.clone(), 0.5);   // ceilings are finished (painted / tiled) surfaces too: same lightness floor as painted walls   // tint gain per ceiling set (the clinical panel reads whiter, felt coffers warmer)
       for (const [kind, list] of Object.entries(byC)) {
         const dm = T.d[kind]; if (!dm) continue;
         const cm = new THREE.MeshStandardMaterial(dm.orm ? { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, aoMap: dm.rough, metalnessMap: dm.rough, roughness: 1, metalness: 1 } : { map: T[kind], normalMap: dm.normal, roughnessMap: dm.rough, roughness: 1, metalness: 0 });
+        envSurface(cm, { detail: 0.25, grime: 0.3 });
         const im = new THREE.InstancedMesh(geo, cm, list.length);
-        list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, wallCol.clone().multiplyScalar(CEIL_GAIN[kind] || 0.85)); });
+        list.forEach(([x, y], i) => { dummy.position.set((x + 0.5) * TS, this.ceilAt(x, y), (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, ceilCol.clone().multiplyScalar(CEIL_GAIN[kind] || 0.85)); });
         g.add(im);
       }
     }
@@ -856,6 +961,7 @@ export class World {
       const m = mats();
       const shell = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.8) });
       const inner = new THREE.MeshStandardMaterial({ color: 0x4a4f57, metalness: 0.7, roughness: 0.5, normalMap: T.d.deck.normal, normalScale: new THREE.Vector2(0.4, 0.4) });
+      envSurface(shell, { detail: 0.35, grime: 0.6 }); envSurface(inner, { detail: 0.35, grime: 0.4, wear: 0.4 });
       const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.2) });
       const red = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.7, 0.2, 0.12) });
       const grilleMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 0.95, 0.7) });   // the lit room glowing through a tube-wall vent
@@ -982,7 +1088,8 @@ export class World {
         const dm = T.d[kind], ns = kind === 'wall' ? (T.real ? 0.55 : 1) : 0.9;
         const mat = new THREE.MeshStandardMaterial({ map: T[kind], normalMap: dm.normal, normalScale: new THREE.Vector2(ns, ns), roughnessMap: dm.rough, roughness: dm.orm ? 1 : T.real ? 0.8 : 1, metalness: dm.orm ? 1 : T.real ? 0.3 : 0.05 });
         if (dm.orm) { mat.aoMap = dm.rough; mat.metalnessMap = dm.rough; }
-        const im = new THREE.InstancedMesh(geo, mat, list.length), base = kind === 'wallq' ? wallCol.clone().lerp(new THREE.Color(ship.accent), 0.14) : kind === 'wallg' ? wallCol.clone().multiplyScalar(0.92) : wallCol;
+        envSurface(mat, { detail: kind === 'wallq' ? 0.2 : 0.4, grime: 0.65 });
+        const im = new THREE.InstancedMesh(geo, mat, list.length), base = kind === 'wallq' ? paintCol(wallCol.clone().lerp(new THREE.Color(ship.accent), 0.14), 0.54) : kind === 'wallg' ? wallCol.clone().multiplyScalar(0.92) : kind === 'wallp' ? paintCol(wallCol.clone(), 0.58) : wallCol;
         list.forEach(([x, y], i) => {
           dummy.position.set((x + 0.5) * TS, WH / 2, (y + 0.5) * TS); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
           im.setColorAt(i, base.clone().multiplyScalar(0.82 + rndv() * 0.22));
@@ -1004,7 +1111,7 @@ export class World {
           hd.push([x + 0.5 + dx * 0.5, y + 0.5 + dy * 0.5, dx !== 0, Math.min(this.ceilAt(nx, ny), WH)]);
         }
         if (hd.length) {
-          const hm = new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.7) });
+          const hm = envSurface(new THREE.MeshStandardMaterial({ map: T.wall, normalMap: T.d.wall.normal, roughness: 0.8, metalness: 0.3, color: wallCol.clone().multiplyScalar(0.7) }), { detail: 0.3, grime: 0.5 });
           const im_set = (m, i, d) => m.setMatrixAt(i, d.matrix); const hg = new THREE.BoxGeometry(1, 1, 1), hi = new THREE.InstancedMesh(hg, hm, hd.length);
           hd.forEach(([cx, cz, alongZ, lo], i) => { const h = TALL_H - lo; dummy.position.set(cx * TS, lo + h / 2, cz * TS); dummy.scale.set(alongZ ? 0.3 : TS, h, alongZ ? TS : 0.3); dummy.updateMatrix(); im_set(hi, i, dummy); });
           dummy.scale.set(1, 1, 1); hi.castShadow = false; hi.receiveShadow = true; g.add(hi);   // headers start at the lower ceiling: no shadow caster (as the wall extensions above)
@@ -1111,7 +1218,7 @@ export class World {
     yield;
     // lift
     {
-      const lift = buildLift(ship.accent, d.deck + 1);
+      const lift = buildLift(ship.accent, d.deck + 1, this.trimMat());
       const [ex, ey] = d.exit; const [cx, cz] = this.center(ex, ey);
       const [dx, dy] = d.exitDir;
       lift.position.set(cx - dx * (TS / 2 - 0.2), 0, cz - dy * (TS / 2 - 0.2));
@@ -1119,6 +1226,13 @@ export class World {
       g.add(lift); this.lift = lift; this.liftPos = new THREE.Vector3(cx, 0, cz);
       this.liftStatus = lift.getObjectByName('status');
     }
+  }
+
+  // brushed-steel trim (door frames, lift surround): one material per world, always drawn as an InstancedMesh with instance colours, so the
+  // lift's pieces share the door frames' program (a plain Mesh with it would be a new program variant)
+  trimMat() {
+    if (this._trim) return this._trim; const T = textures();
+    return this._trim = envSurface(T.d.trim ? new THREE.MeshStandardMaterial({ map: T.trim, normalMap: T.d.trim.normal, roughnessMap: T.d.trim.rough, metalnessMap: T.d.trim.rough, aoMap: T.d.trim.rough, roughness: 1, metalness: 0.7, color: 0xffffff }) : new THREE.MeshLambertMaterial({ color: 0xffffff }), { detail: 0.5, grime: 0.35, wear: 0.5 });
   }
 
   _details() {
@@ -1192,8 +1306,8 @@ export class World {
     }
     this.doorFrames = frames;
     if (frames.length) {
-      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), T.d.trim ? new THREE.MeshStandardMaterial({ map: T.trim, normalMap: T.d.trim.normal, roughnessMap: T.d.trim.rough, metalnessMap: T.d.trim.rough, aoMap: T.d.trim.rough, roughness: 1, metalness: 1, color: 0xffffff }) : new THREE.MeshLambertMaterial({ color: 0xffffff }), frames.length * 3);
-      let i = 0; const c = accent.clone().multiplyScalar(0.55), c2 = new THREE.Color(0x30343c);
+      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), this.trimMat(), frames.length * 3);
+      let i = 0; const c = accent.clone().multiplyScalar(0.55), c2 = new THREE.Color(0x4a505a);   // posts were 0x30343c: x the steel map (~0.32) = ~0.01 albedo, black pillars
       for (const f of frames) {
         const lat = TS / 2 - 0.12;
         const parts = [[0, 0, -lat, 0.28, WH, 0.24, c2], [0, 0, lat, 0.28, WH, 0.24, c2], [0, WH - 0.25, 0, 0.3, 0.5, TS, c]];
@@ -1447,7 +1561,7 @@ export class World {
       const lamp = inst(new Kit().box(0.02, 0.05, 1.3, 0, 0, 0xffffff, -0.65).done().solid, m.kitGlow, fr.flatMap(f => [-1, 1].map(s => ({ f, s }))), ({ f, s }, o) => { o.position.set(f.x + (f.ax ? s * 0.16 : 0), WH - 0.13, f.z + (f.ax ? 0 : s * 0.16)); o.rotation.y = f.ax ? 0 : Math.PI / 2; return new THREE.Color(ROOM_LIGHT[f.room] || 0xffffff).multiplyScalar(1.7); });
       if (lamp) lamp.receiveShadow = false;
       // sliding door leaves: two panels per doorway that part when someone walks up (World.slideDoors, driven by main.js)
-      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.roughness = 1; dm.metalness = 1; dm.color.set(0xb0b8c4); } }
+      { const dm = new THREE.MeshStandardMaterial({ color: 0x8a94a2, metalness: 0.7, roughness: 0.4 }); { const hp = pbr('hull'); if (hp) { dm.map = hp.c; dm.normalMap = hp.n; dm.roughnessMap = hp.r; dm.metalnessMap = hp.r; dm.roughness = 1; dm.metalness = 0.6; dm.color.set(0xb0b8c4); } } envSurface(dm, { detail: 0.45, grime: 0.4 });   // metalness 0.6 x map (was 1): the closed leaves read near-black (all mirror, little diffuse)
         const hw = (TS - 0.52) / 2, pg = new THREE.BoxGeometry(0.07, 2.42, hw);
         this.doors = fr.map(f => { const g = new THREE.Group(); g.position.set(f.x, 1.25, f.z); if (!f.ax) g.rotation.y = Math.PI / 2; const L = new THREE.Mesh(pg, dm), R = new THREE.Mesh(pg, dm); L.position.z = -hw / 2; R.position.z = hw / 2; g.add(L, R); this.group.add(g); return { f, g, L, R, hw, open: 0, near: false, mat: doorMaterial(f.room) }; }); }
     }
@@ -1591,7 +1705,7 @@ export class World {
     const d = this.d, [ex, ey] = d.exit, [dx, dy] = d.exitDir, [cx, cz] = this.center(ex, ey);
     this.carMode = true; this.car = { tx: ex, ty: ey, x: cx, z: cz, dx, dy };
     this.lift.position.set(cx + dx * (TS / 2 - 0.12), 0, cz + dy * (TS / 2 - 0.12));
-    const fill = box(TS, WH - 2.8, 0.3, new THREE.MeshLambertMaterial({ color: 0x3a3f48 }), 0, 2.8, 0); this.lift.add(fill);
+    { const fill = new THREE.InstancedMesh(new THREE.BoxGeometry(TS, WH - 2.8, 0.3), this.trimMat(), 1); fill.setMatrixAt(0, new THREE.Matrix4().makeTranslation(0, 2.8 + (WH - 2.8) / 2, 0)); fill.setColorAt(0, new THREE.Color(0x5a6068)); this.lift.add(fill); }   // trim steel over the header, as the surround
     if (this.liftLight) { this.liftLight.color.set(0xfff0d8); this.liftLight.intensity = 3.5; this.liftLight.distance = 6; }
     this.setLiftOpen(false);
   }

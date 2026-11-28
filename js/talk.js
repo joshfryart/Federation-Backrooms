@@ -20,6 +20,7 @@ import { babblePlan, NEUTRAL_VOICE, getMode } from './speech.js';
 import { newWheel, wheelSVG, moveTo, pickItem, digitPick, stepSel, R0, R1 } from './wheel.js';
 import { deptCol } from './icons.js';
 import { UIHUB } from './ui-mode.js';
+import { FaceAnim, MOOD } from './faceanim.js';   // visemes, expressions, blinks, eye contact (js/faceanim.js)
 
 // ------------------------------------------------------------------------------------------------ tuning
 export const TALK = {
@@ -36,9 +37,15 @@ export const TALK = {
   cps: 36,                     // subtitle typing speed
   replyDelay: 0.28,            // you pick -> they answer
   glance: [5, 9],              // thinking glance away every 5-9 s (0.8 s)
+  // the face key (the permanent talk PointLight, 0 outside a talk): off to screen-left of the face line (the side away from the camera's offset: short
+  // lighting, the far cheek lit, the near one in its own shade) and above, so it models the face against the deck's flat hemisphere + GI + overhead lamp fill
+  key: { i: 1.5, fwd: 0.5, side: 0.62, up: 0.3, ref: 0.26, max: 2.2 },   // ref / max: see keyFor
 };
 
 // ------------------------------------------------------------------------------------------------ maths (pure)
+/** key intensity for a speaker's skin albedo (THREE.Color, linear; or {r,g,b}): exposed for the face like a camera operator would, a darker face gets more
+ *  key (up to keyMax x) so it keeps its form against the room instead of sinking into it; fair skin (luminance >= keyRef) gets the base key */
+export function keyFor(c, K = TALK.key) { if (!c) return K.i; const L = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; return K.i * clamp(Math.sqrt(K.ref / Math.max(L, 1e-3)), 1, K.max); }
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const ease = (u) => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };   // smoothstep
 export const lerp = (a, b, k) => a + (b - a) * k;
@@ -120,7 +127,7 @@ export const flapAt = (t) => clamp(0.5 * Math.sin(t * 17) + 0.35 * Math.sin(t * 
 /** mood: warm / neutral / edge from trust, stress (0..1, ship alert) and being busy (repair) */
 export function moodOf({ trust = 0.5, stress = 0, busy = false } = {}) { const s = trust - stress * 0.4 - (busy ? 0.08 : 0); return s > 0.62 ? 'warm' : s < 0.32 ? 'edge' : 'neutral'; }
 export const MOOD_LABEL = { warm: 'warm', neutral: 'neutral', edge: 'on edge' };
-export const MOOD_FACE = { warm: { Smile: 0.22 }, neutral: { Smile: 0.05 }, edge: { Frown: 0.22, LeftInnerBrowUp: 0.25, RightInnerBrowUp: 0.25 } };
+export const MOOD_FACE = MOOD;   // real morph names now (the old Smile / Frown keys are not morphs on these bodies); js/faceanim.js
 export function relLabel(t) { return t > 0.8 ? 'trusted' : t > 0.55 ? 'warm' : t > 0.35 ? 'neutral' : t > 0.2 ? 'wary' : 'cold'; }
 
 // ------------------------------------------------------------------------------------------------ intents (pure)
@@ -391,7 +398,7 @@ export class Talk {
       UIHUB.ui?.open('talk', { close: () => this.end() });   // releases pointer lock on purpose: no pause screen, Esc pops this layer
       this.memo.trust0 = G.duty ? G.duty.trust(e.person) : 0.5; this.mood = moodOf({ trust: this.memo.trust0, stress: clamp((this.save.alert || 0) / 4, 0, 1) });   // the face until setupUI (refresh) has the full context
       if (this.c.vmScene) { this.vmWas = this.c.vmScene.visible; this.c.vmScene.visible = false; }
-      this.addLight(); this.setupDof();
+      this.addLight(H); this.setupDof();
       // the zoom starts now; the talk UI (intents, wheel SVG, plate, relationship meter) is built on the second zoom frame, once the first close-up frame is
       // on screen (tools/talktime.mjs: building it here, with a forced layout to start the fade-in, added 7-43 ms between E and that first frame).
       // #tk is display:block from here on but shows nothing until 'in' (bars off screen, vignette / plate / wheel at opacity 0).
@@ -420,7 +427,7 @@ export class Talk {
     if (s) { cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); cam.rotation.order = s.order || 'YXZ'; cam.updateMatrixWorld?.(); }
     if (e?.mesh && s) {
       const H = e.mesh.userData.human; e.talkHold = false;
-      if (H) { H.add = null; H.face({ JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: 0, RightUpperLidClosed: 0 }); if (s.clip && H.current !== s.clip) H.play(s.clip, { fade: 0.3 }); H.standing = s.standing; }
+      if (H) { H.add = null; e.faceAnim?.reset(); if (H.eyes?.u?.uEyeK) H.eyes.u.uEyeK.value.x = 1; H.face({ JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: 0, RightUpperLidClosed: 0 }); if (s.clip && H.current !== s.clip) H.play(s.clip, { fade: 0.3 }); H.standing = s.standing; }
       if (!this.seated) e.mesh.rotation.y = this.restoreRot ?? s.rot;
     }
     for (const m of this.hidden) m.visible = true; this.hidden = [];
@@ -524,9 +531,9 @@ export class Talk {
     if (talking && (this.nextBeat -= dt) <= 0) { this.nextBeat = 1.4 + Math.random() * 1.2; if (!e.fid.cur) e.fid.force('talk_emphasis'); }
     const o = e.fid.update(dt, { state: 'talking', stress: clamp((this.save.alert || 0) / 4, 0, 1), playerNear: true });
     H.add = o.bones;
-    const blink = ((this.tt * 0.37 + (m.id || 0) * 0.13) % 1) > 0.965 ? 1 : 0, f = { JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: blink, RightUpperLidClosed: blink };
-    Object.assign(f, MOOD_FACE[this.mood] || {}); for (const k in o.face) f[k] = Math.max(f[k] || 0, o.face[k]);
-    f.JawDrop = Math.max(f.JawDrop || 0, jaw * 0.55); H.face(f);
+    // face: visemes from the syllable plan, mood + gesture + micro-expressions, varied blinks, brow / lid coupling (js/faceanim.js; `jaw` above stays for the flap fallback / tests)
+    const fa = e.faceAnim || (e.faceAnim = new FaceAnim(H, ((e.person.id | 0) + 1) * 7919)), stress = clamp((this.save.alert || 0) / 4, 0, 1);
+    fa.talk(dt, { speech: this.speech, mood: this.mood, gest: o.face, talking, stress, flap: flapAt });
     // eye contact: head turns to the camera (clamped), with a thinking glance away now and then
     const cam = this.c.camera, hp = this.headPos(); let yaw = 0, pitch = 0;
     if (hp && !out) { const dx = cam.position.x - hp.x, dz = cam.position.z - hp.z, dy = cam.position.y - hp.y; yaw = clamp(wrapAng(Math.atan2(dx, dz) - m.rotation.y), -TALK.lookMax, TALK.lookMax); pitch = clamp(-Math.atan2(dy, Math.hypot(dx, dz)), -TALK.pitchMax, TALK.pitchMax); }
@@ -534,6 +541,7 @@ export class Talk {
     if (this.glance > 0) { this.glance -= dt; if (!talking) yaw += 0.4; }
     const kk = damp(5, dt); H.lookYaw += (yaw - H.lookYaw) * kk; H.lookPitch += (pitch - H.lookPitch) * kk;
     H.update(dt);
+    fa.after(dt, { target: out ? null : cam.position, glance: this.glance, talking });   // head beats, then the eyes: contact with scanning fixations, leading the glance away
   }
   headPos(out) { const H = this.e?.mesh?.userData?.human, b = H?.bones?.Head; if (!b) return null; const v = out || (this._hp || (this._hp = this.c.camera.position.clone())); this.e.mesh.updateMatrixWorld(true); b.getWorldPosition(v); return v; }
   /** face centre (world) from the Head bone: up and a little forward along the speaker's facing */
@@ -553,7 +561,8 @@ export class Talk {
     cam.position.copy(s.pos).lerp(this._v.set(this.camPos.x, this.camPos.y, this.camPos.z), k); cam.quaternion.slerpQuaternions(s.quat, qT, k);
     const breath = 1 + TALK.breath * Math.sin(this.tt * Math.PI * 2 * TALK.breathHz); cam.fov = lerp(s.fov, TALK.fov * breath, k); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
     if (k >= 0.3 && !this._occ) this.occlude(fc, fr, aspect);
-    if (this.light) { const f = this.clear, r = fr.right; this.light.position.set(fc.x + f.x * 0.75 - r.x * 0.45, fc.y + 0.32, fc.z + f.z * 0.75 - r.z * 0.45); this.light.intensity = (this.lightI || 1.2) * k; }
+    if (this.light) { const f = this.clear, r = fr.right, L = TALK.key; this.light.position.set(fc.x + f.x * L.fwd - r.x * L.side, fc.y + L.up, fc.z + f.z * L.fwd - r.z * L.side); this.light.intensity = (this.lightI || L.i) * k;
+      const eu = this.e?.mesh?.userData?.human?.eyes?.u; if (eu?.uEyeK) eu.uEyeK.value.x = 1 + (L.i / (this.lightI || L.i) - 1) * k; }   // r3: the key's dark-skin boost (keyFor) is for the skin, not the whites of the eyes (js/eyes.js EYE_END)
     if (this.dof) { const p = this._v.set(fc.x, fc.y, fc.z).project(cam); this.dof.uniforms.center.value.set((p.x + 1) / 2, (p.y + 1) / 2); this.dof.uniforms.aspect.value = aspect; this.dof.uniforms.amount.value = k; this.dof.enabled = k > 0.01 && this.c.CFG?.quality === 'high'; }
     const clk = this.G.comms?.clock?.format?.(); if (clk && this.dom) this.dom.clk.textContent = `SHIP TIME ${clk}`;
   }
@@ -576,8 +585,8 @@ export class Talk {
   }
   // The face light is created once and stays in the scene at intensity 0: three.js recompiles every lit material's shader whenever the scene's light count changes,
   // so adding it per conversation (and removing it again afterwards) stalled the game for a second or more, at the start and at the end of every talk.
-  ensureLight() { const T = this.c.THREE; if (this.light || !T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.light.position.set(0, -50, 0); this.lightI = 0.45; this.c.scene.add(this.light); }
-  addLight() { this.ensureLight(); this.lightI = 0.45; if (this.light) this.light.intensity = 0; this._occ = false; }
+  ensureLight() { const T = this.c.THREE; if (this.light || !T || !this.c.scene) return; this.light = new T.PointLight(0xffe6c8, 0, 2.6, 2); this.light.position.set(0, -50, 0); this.lightI = TALK.key.i; this.c.scene.add(this.light); }
+  addLight(H) { this.ensureLight(); this.lightI = keyFor(H?.mats?.body?.color); if (this.light) this.light.intensity = 0; this._occ = false; }
   /** compile the depth-of-field pass now (one throwaway composer frame with it enabled): the loading screen calls this so the first talk does not.
    *  { world: false }: the post passes only, the scene passes skipped (the boarding screen draws every object into both buffers itself, main.js warmDraws,
    *  so a full-resolution world raster here would add a whole frame of GPU time and no first draw); then drawn twice, as the composer's buffers swap roles

@@ -10,9 +10,10 @@ import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance, MODEL_FILES, PBR_SETS } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, dressCrew, prewarmOutfits, outfitStats } from './actors.js';
 import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
-import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman, bakeKinds } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
+import { GI, installGI, bindScene as giBindScene, giUse, giStep, giFrame, giDispose } from './gi.js';   // per-deck baked bounce light + contact occlusion, one shared shader hook (js/gi.js)
 import { shipDeckFor, deckOptions, drawSchematic, zoneOf } from './ships.js';
 import { makeComplement, ShipState, SYSTEMS, SYS, DEPT, DEPARTMENTS, DIVISION, HOST_LABEL, DEPT_LINES, pickCrewFor, nextMadness, CAN_TURN, hardwareSites, renderOrgChart, renderLoadout, statusPill, STATUS_CSS } from './crew.js';
 import { makeJunction, setLamp, makeBeacon, setJunctionDoor } from './sysview.js';
@@ -40,7 +41,7 @@ import { readRole, saveRole, resolveRole, readMission, mountRoleControl } from '
 import { readPace, savePace, mountPaceControl, paceFor } from './pace.js';   // shift length / pace presets (title screen, ?pace=)
 import { RepairCrew } from './repair.js';   // NPC repair response (Systems Nominal)
 import { barkGate, gestureFor } from './etiquette.js';   // NPC speech etiquette (when crew may speak / nod)
-import { holdItem, dropItem } from './carry.js';
+import { holdItem, dropItem, makeCart } from './carry.js';
 import { HANDHELDS } from './handhelds.js';
 import { makeGait, gaitNow, describeGait } from './gait.js';
 import { Fidgeter } from './movement.js';
@@ -69,12 +70,13 @@ const COMPUTER = ['Life support failure on Deck 4.', 'Intruder alert. Intruder a
   'Please remain calm. All decks are safe.', 'Hull breach detected. Sealing bulkheads.', 'Unable to locate captain.', 'Gravity plating offline in section 12.', 'Security teams respond to the cargo bay.', 'Self-destruct sequence: cancelled.', 'There are no lifeforms aboard.'];
 
 // ---------------- renderer ----------------
+installGI();   // before anything compiles: every built-in lit material gets the GI hook (same program count, js/gi.js)
 const canvas = $('view');
 // ?test=1 (tools/test.mjs pages): cheap renderer (no antialias, pixel ratio 1, no shadow maps). The gate's one high-quality smoke render loads without it.
 const TEST_MODE = new URLSearchParams(location.search).get('test') === '1';
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !TEST_MODE, powerPreference: 'high-performance' });
 renderer.setPixelRatio(TEST_MODE ? 1 : Math.min(window.devicePixelRatio, 1.5));
-const scene = new THREE.Scene();
+const scene = new THREE.Scene(); giBindScene(scene);   // GI only in the world scene
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 80);
 scene.add(camera);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x555555, 1.9); scene.add(hemi);
@@ -83,6 +85,7 @@ const torch = new THREE.SpotLight(0xfff6e0, 22, 30, 0.5, 0.65, 1.7); torch.posit
 const torchT = new THREE.Object3D(); torchT.position.set(0, 0, -5); camera.add(torchT); torch.target = torchT;
 renderer.shadowMap.enabled = !TEST_MODE; renderer.shadowMap.type = THREE.PCFShadowMap;
 torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.camera.near = 0.2; torch.shadow.camera.far = 30; torch.shadow.bias = -0.0004; torch.shadow.normalBias = 0.04;
+torch.shadow.radius = 2.5;   // r187 PCF is a 5-tap Vogel disk scaled by radius (a uniform: no recompile): soft torch shadow edges instead of 1-texel ones
 let post = null;
 // the first-person viewmodel lives in its own scene (own lights, drawn over the world) so it never clips walls or gets blown out by the torch
 const vmScene = new THREE.Scene(), vmCam = new THREE.PerspectiveCamera(55, 1, 0.01, 5);
@@ -92,7 +95,11 @@ const vmRim = new THREE.DirectionalLight(0xfff6e0, 0); vmRim.position.set(0.3, 0
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = vmCam.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); vmCam.updateProjectionMatrix(); post?.setSize(innerWidth, innerHeight); }
 addEventListener('resize', resize); resize();
 post = new Post(renderer, scene, camera, { scene: vmScene, camera: vmCam });
-{ const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.3; }
+// Reflections / IBL: the real HDRI (assets/env/lobby.exr, loadEnv in ready()) is set before anything is drawn. RoomEnvironment used to be baked here first, at
+// startup, as a placeholder the EXR then replaced (a PMREM bake on the main thread for nothing); now it is only the fallback when the EXR fails to load.
+scene.environmentIntensity = 0.3;
+const roomEnvFallback = () => { const pm = new THREE.PMREMGenerator(renderer); const t = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); return t; };
+
 const blood = new Particles(scene, 500, { size: 0.07, gravity: 9 });
 const sparks = new Particles(scene, 200, { size: 0.06, additive: true, gravity: 7 });
 const steam = new Particles(scene, 160, { size: 0.5, opacity: 0.16, gravity: -0.3, drag: 0.4 });
@@ -103,7 +110,7 @@ const water = new Particles(scene, 240, { size: 0.045, gravity: 8 });
 const WATER = new THREE.Color(0x9ec8d8);
 const panelLights = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xfff0d0, 0, 10, 1.5); scene.add(l); return l; });
 let panelSel = [], emergSel = [], panelT = 0; const ALERT_RED = new THREE.Color(0xff2010);
-const EMERG_COL = new THREE.Color(0xff2a14), EMERG_I = 3.2, EMERG_R = 7;   // emergency lamp light in a blackout (world.emerg: lamp positions, js/world.js)
+const EMERG_COL = new THREE.Color(0xff2a14), EMERG_I = 3.2, EMERG_R = 7, GI_COL = new THREE.Color();   // emergency lamp light in a blackout (world.emerg: lamp positions, js/world.js)
 function updatePanelLights(dt) {
   panelT -= dt;
   if (panelT <= 0 && world) {
@@ -115,6 +122,7 @@ function updatePanelLights(dt) {
   }
   const pa = world ? world.powerAmt : 1, al = world ? world.alertAmt : 0;
   scene.environmentIntensity = 0.3 * (0.04 + 0.96 * pa);
+  if (ship) { GI_COL.set(ship.light).lerp(ALERT_RED, al * 0.7); giFrame(GI_COL, pa * (0.85 + 0.15 * (world ? world.flickerF : 1))); }   // baked bounce follows the ship's light colour, power and alert
   // the same three pooled lights stand in for the nearest emergency lamps once the power drops (never add / remove lights: a change in
   // the light count recompiles every lit material, see the talk-stall note in TODO.md). Each slot takes whichever source is brighter.
   const off = 1 - pa;
@@ -151,6 +159,8 @@ const SAVE = createSave((() => { try { return localStorage; } catch (e) { return
 const CFG = SAVE.cfg();
 const sound = new Sound(); sound.vol = CFG.vol; attachSpeech(sound);
 function saveCfg() { SAVE.setCfg(CFG); }
+// GTAO stays opt-in (pause menu): on by default it doubled draw calls in software GL (tools/perf.mjs 337 -> 626) and went over the programs budget.
+// Its sample counts (8 / 8) live in js/fx.js.
 const gov = new Governor(); let perfWorld = null;
 const applyPerf = () => { perfWorld = world; applyLevel(gov.cfg, { post, torch, world }); };
 function setQuality(q, auto = false) {   // auto: the governor (js/perfgov.js) moved it: not saved, so the next session starts on High again
@@ -207,7 +217,7 @@ function updateHUD() {
 
 // ---------------- level loading ----------------
 function clearLevel() {
-  if (world) { scene.remove(world.group); world.dispose(preDeck ? geoSet(preDeck.world.group) : null); }   // geometries the next deck's prebuilt world shares (model instances) stay uploaded
+  if (world) { scene.remove(world.group); giDispose(world); world.dispose(preDeck ? geoSet(preDeck.world.group) : null); }   // geometries the next deck's prebuilt world shares (model instances) stay uploaded
   for (const g of gorns) { scene.remove(g.mesh); releaseHuman(g.mesh); }
   for (const e of ents) { scene.remove(e.mesh); releaseHuman(e.mesh); }   // bone textures (js/humans.js releaseHuman)
   for (const r of repairPts) if (r.obj) scene.remove(r.obj);
@@ -244,11 +254,13 @@ function loadDeck(n) {
   const NM = NOM(), SD = NM ? G.shipDecks[G.shipDeck] : null; let data;
   if (SD) { data = SD.data; data.used.clear(); for (const k of SD.used0) data.used.add(k); data.flooded = false; }   // the ship's data is kept for the whole run; only this deck gets a 3D build
   else { data = generate(n - 1, G.runSeed + n * 7919, { ...deckOptions(ship, G.shipDeck), liminal: n >= 3 }); data.flooded = n === 3 || n === 6 || (n > 8 && Math.random() < 0.25); }
-  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = takePreDeck(SD ? data : null) || new World(data, ship); scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
+  G.visits = G.visits || {}; G.visits[n] = (G.visits[n] || 0) + 1; data.visit = NOM() ? 1 : G.visits[n]; G.fieldCache = null; G.liminal = (!NOM() && n >= 4) ? ((r) => r ? { run: r, count: 0, walked: 0 } : null)(findLoopRun(data)) : null; data.loopRun = G.liminal?.run || null; data.emptyRuns = (!NOM() && n >= 3) ? findEmptyRuns(data, data.loopRun) : null; world = takePreDeck(SD ? data : null) || new World(data, ship); { const g0 = performance.now(); giUse(world, TS, renderer); try { performance.measure('deck:gi', { start: g0 }); } catch { } } scene.add(world.group); world.setFancy(CFG.quality === 'high'); world.nearFn = (x, z, r) => Math.hypot(P.x - x, P.z - z) < r || ents.some(e => e.mesh && Math.hypot(e.x - x, e.z - z) < r) || gorns.some(e => !e.dead && Math.hypot(e.x - x, e.z - z) < r);   // anyone near a tube hatch opens it
   if (NM) { world.mountCar(); clearRider(); for (const s of world.searchSites || []) if (SD.st.sites.has(siteKey(s))) s.used = true; if (SD.st.explored && SD.st.explored.length === world.explored.length) world.explored.set(SD.st.explored);   /* a new run can inherit the previous run's save of a differently sized deck */ G.lift = { state: 'idle', armed: false, far: true, rider: null }; }
   scene.fog = new THREE.FogExp2(ship.fog, ship.fogD); G.fogBase = ship.fogD; scene.background = new THREE.Color(ship.fog);
+  post?.setGradeFor(ship, null, { instant: true, mode: G.mode });   // js/fx.js grade: snap to the hull's grade, no blend across the lift doors
   hemi.color.set(ship.light); hemi.groundColor.set(ship.floor);
   lamp.color.set(ship.light);
+  if (earlyCompile) { earlyCompile = false; if (!TEST_MODE) try { prewarmPrograms(); } catch (e) { console.warn('compile', e.message); } }   // boarding (startRun): queue the deck's programs now, see earlyCompile
 
   if (NM) { const c = world.car; P.x = c.x; P.z = c.z; P.yaw = Math.atan2(-c.dx, -c.dy); P.pitch = 0; P.vx = P.vz = 0; }   // standing in the lift car, facing the doors
   else {
@@ -984,6 +996,7 @@ function newRun(opts = {}) {   // opts.hold: build everything but stay in phase 
   G.shipOrder = shuffle(SHIPS.map((_, i) => i));
   G.ship = SHIPS[G.forceShip ?? G.shipOrder[0]];
   G.roster = makeComplement(G.ship, G.runSeed); for (const p of G.roster.people) p.uniform = G.roster.uniformOf(p); G.portraits?.clear();   // portraits are cached by person id: a new crew needs new faces
+  if (earlyCompile) queuePortraitPrograms();   // boarding: the faces' programs link on the GPU while the rest of newRun runs (see queuePortraitPrograms)
   { G.roleChoice = G.roleChoice || readRole(location.search, localStorage); const want = resolveRole(G.roleChoice, G.runSeed), inRoster = G.roster.people.some(p => p.billet === want && p.billet !== 'player');   // role choice (js/role.js): preferred billet, falls back to a random one when this hull has none
     G.player = NOM() ? pickBillet(G.roster, G.runSeed, inRoster ? want : null) : (G.roster.byBillet.comp?.[0] || G.roster.people[G.roster.people.length - 1]);
     if (NOM()) { G.player.isPlayer = true; G.mission = readMission(location.search) ?? pickMission(G.runSeed); G.role = { choice: G.roleChoice, billet: G.player.billet, mission: G.mission, miss: G.roleChoice !== 'random' && !inRoster }; } }   // Systems Nominal: you are dealt (or pick) a billet; the old mode keeps a stable crew member whose voice speaks for you
@@ -1021,6 +1034,13 @@ function prewarmPrograms() {
 // off screen as it came into view (tools/decktime.mjs "first draws"). Frustum culling off, scissored to one pixel (raster is nothing; the frame's own
 // RenderPass clears the buffers), no shadow-map pass (its handful of depth programs are drawn on every deck). Crowd culling (perfcull.js) is not applied here.
 // skip: objects already drawn this way (the next deck's world, warmed during the lift ride: preDeckWarm) are hidden, only what is new is drawn.
+// GTAO (opt-in, rung 0 only): its normal/depth pass draws every object again with a MeshNormalMaterial override (own programs per skinned / instanced /
+// morphed variant) and its AO / denoise / blend quads are programs of their own; draw the whole pass once, scissored to one pixel, with the rest of warmDraws.
+function warmAO(C) {
+  const ao = post.ao, tg = [ao.normalRenderTarget, ao.gtaoRenderTarget, ao.pdRenderTarget, C.renderTarget1, C.renderTarget2].filter(Boolean), keep = tg.map(t => [t.scissor.clone(), t.scissorTest]);
+  for (const t of tg) { t.scissor.set(0, 0, 1, 1); t.scissorTest = true; }
+  try { ao.render(renderer, C.renderTarget2, C.renderTarget1); } finally { tg.forEach((t, i) => { t.scissor.copy(keep[i][0]); t.scissorTest = keep[i][1]; }); }
+}
 function warmDraws(skip = null) {
   const R = renderer, C = CFG.quality === 'high' ? post?.composer : null, tgts = C?.renderTarget1 ? [C.renderTarget1, C.renderTarget2] : [null];
   const culled = [], hid = [], off = (o) => { if (skip && o.visible && !o.children.length && skip.has(o)) { o.visible = false; hid.push(o); } if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); } };
@@ -1034,6 +1054,7 @@ function warmDraws(skip = null) {
       try { R.autoClear = true; R.render(scene, camera); R.autoClear = false; R.clearDepth(); R.render(vmScene, vmCam); }
       finally { if (t) { t.scissor.copy(ts); t.scissorTest = tt; } }
     }
+    if (C && post.ao?.enabled) warmAO(C);
   } finally {
     for (const o of culled) o.frustumCulled = true; for (const o of hid) o.visible = true;
     R.autoClear = ac; sm.autoUpdate = au; sm.needsUpdate = nu; R.setRenderTarget(prev); R.setScissor(sc); R.setScissorTest(st);
@@ -1048,11 +1069,11 @@ function warmDraws(skip = null) {
 const PRE_DECK_MS = 8;   // World build per ride frame (it pauses at the next yield after this: one prop, or one block of walls / floors)
 let preDeck = null, preWarmed = null;   // { data, world, warm: WeakSet of objects drawn by preDeckWarm | null }; preWarmed: the set, for the next deckPrograms
 const geoSet = (g) => { const s = new Set(); g.traverse(o => { if (o.geometry) s.add(o.geometry); }); return s; };
-function dropPreDeck() { if (preDeck) { try { preDeck.world.dispose(); } catch (e) { } } preDeck = null; }
+function dropPreDeck() { if (preDeck) { try { dropExtras(preDeck.extras); giDispose(preDeck.world); preDeck.world.dispose(); } catch (e) { } } preDeck = null; }
 function takePreDeck(data) {
   const p = preDeck; preDeck = null; if (!p) return null;
-  if (!data || p.data !== data) { p.world.dispose(); return null; }
-  while (p.world.buildStep()); preWarmed = p.warm; G.preDecks = (G.preDecks || 0) + 1; G.onPreDeck?.(p.world, data); return p.world;   // onPreDeck: test hook (lift-riders compares it with a world built at arrival)
+  if (!data || p.data !== data) { dropExtras(p.extras); giDispose(p.world); p.world.dispose(); return null; }
+  while (p.world.buildStep()); preWarmed = p.warm; preExtras = p.extras; G.preDecks = (G.preDecks || 0) + 1; G.onPreDeck?.(p.world, data); return p.world;   // onPreDeck: test hook (lift-riders compares it with a world built at arrival)
 }
 function preDeckStep(L) {
   if (L.preFail || !NOM() || !G.shipDecks || !world) return; const SD = G.shipDecks[L.to]; if (!SD) return;
@@ -1061,6 +1082,8 @@ function preDeckStep(L) {
     if (!preDeck) { const d = SD.data; d.flooded = false; d.visit = 1; d.loopRun = null; d.emptyRuns = null;   // what loadDeck sets on a Systems Nominal deck before its World
       preDeck = { data: d, world: new World(d, G.ship, { staged: true }), warm: null, warmed: 0 }; return; }
     if (preDeck.world.buildStep(PRE_DECK_MS)) return;
+    if (giStep(preDeck.world, TS, PRE_DECK_MS)) return;   // then its GI bake (js/gi.js), same budget per frame
+    if (!TEST_MODE && preDeckExtras(preDeck)) return;   // then stand-ins for what loadDeck adds at arrival (medical hologram, parked carts), same budget
     if (!TEST_MODE && preDeck.warmed < 2) preDeckWarm(preDeck.warmed++);   // one frame compiles its programs, the next draws it
   } catch (e) { console.warn('pre-deck', e.message); dropPreDeck(); L.preFail = true; }
 }
@@ -1068,9 +1091,32 @@ function preDeckWarm(k) {   // k 0: compile the programs, 1: draw it into both p
   const p = preDeck, w = p.world, old = world.group, i = scene.children.indexOf(old); if (i < 0) return;
   w.setFancy(CFG.quality === 'high');
   scene.children[i] = w.group; w.group.parent = scene; old.parent = null;   // in place (same child order, no add/remove events), the same light count as at arrival
+  const ex = p.extras?.group; if (ex) w.group.add(ex);   // the arrival stand-ins ride along in the world's group for both frames (no lights in them)
   try { if (k === 0) prewarmPrograms(); else { warmDraws(); const warm = new WeakSet(); w.group.traverseVisible((o) => { if (o.isMesh || o.isPoints || o.isLine || o.isSprite) warm.add(o); }); p.warm = warm; } }
-  finally { scene.children[i] = old; old.parent = scene; w.group.parent = null; }
+  finally { if (ex) w.group.remove(ex); scene.children[i] = old; old.parent = scene; w.group.parent = null; }
 }
+// What loadDeck adds at arrival besides the World has programs of its own too. tools/decktime.mjs (seed 11, ship 0) found two: the sickbay's medical
+// hologram (makeMedHolo: one holo ShaderMaterial on a body whose meshes have 15 / 12 / 4 / 1 / 0 morph targets = 5 programs, 5 on the first arrival at deck 3)
+// and the parked carts (js/haul.js park: a MeshStandardMaterial variant of their crates, 1 program on the arrival at deck 5). Crew bodies were checked
+// too (a stand-in per body kind + outfit + uniform): every one of them was already compiled, so they are not built (they cost ~300 ms in the draw frame).
+// During the ride, after the GI bake, those stand-ins are built (only when the deck has a sickbay / cargo-type room) and ride along in preDeckWarm's compile
+// and draw frames, so arrival finds the programs compiled and drawn into both post buffers. They are never shown and are dropped after the arrival's
+// deckPrograms (as dropBody: skeletons released, materials not disposed, so the programs stay cached for the real ones). Built on a private random
+// stream: three.js draws Math.random for every uuid, and the page's stream (seeded by the test tools) must not shift. Not in TEST_MODE (no warm-up there).
+let preExtras = null;   // the stand-ins of the deck just arrived at, released after its deckPrograms
+const ownRand = (fn) => { const R = Math.random; let s = 0x2f6b1d; Math.random = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; try { return fn(); } finally { Math.random = R; } };
+function preDeckExtras(p) {   // true while stand-ins are left to build (PRE_DECK_MS per ride frame, at least one)
+  if (!p.extras) {
+    const todo = [], rooms = new Set((p.data.rooms || []).map(r => r.type));
+    if (rooms.has('sickbay') && (!G.fx || G.fx.emh)) todo.push(() => { const m = makeMedHolo(); if (m) m.userData.preExtra = true; return m; });   // loadDeck's EMH
+    if (['cargo', 'stores', 'shuttlebay'].some(t => rooms.has(t))) for (const kind of ['cargo', 'tool']) for (const loaded of [true, false]) todo.push(() => makeCart(kind, loaded));   // Haul.park
+    p.extras = { group: new THREE.Group(), todo }; p.extras.group.name = 'arrival-standins'; return true;
+  }
+  const x = p.extras, end = performance.now() + PRE_DECK_MS;
+  while (x.todo.length) { const m = ownRand(x.todo.shift()); if (m) x.group.add(m); if (performance.now() >= end) break; }
+  return x.todo.length > 0;
+}
+function dropExtras(x) { if (!x) return; for (const m of x.group.children.slice()) { x.group.remove(m); if (m.userData.preExtra) releaseHuman(m); } }
 // resolves once the GPU has finished everything queued so far (a WebGL2 fence polled between tasks: never blocks the main thread); at most `capMs`
 function gpuIdle(capMs = 30000) {
   const gl = renderer.getContext(); if (!gl.fenceSync) return Promise.resolve(); const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); const t0 = performance.now();
@@ -1078,17 +1124,49 @@ function gpuIdle(capMs = 30000) {
 }
 // a deck changed mid-run (lift, ladder well, next deck): queue the new deck's programs in one go, so the driver compiles them together (in parallel where it has
 // KHR_parallel_shader_compile) instead of one stall per material as each first comes into view while walking the deck
-function deckPrograms() { const skip = preWarmed; preWarmed = null; if (!TEST_MODE) try { prewarmPrograms(); warmDraws(skip); G.talk?.warmDof?.(); } catch (e) { console.warn('compile', e.message); } }   // + the conversation's depth-of-field pass in both post buffers (js/talk.js warmDof)
+function deckPrograms() { const skip = preWarmed; preWarmed = null; if (!TEST_MODE) try { prewarmPrograms(); warmDraws(skip); G.talk?.warmDof?.(); } catch (e) { console.warn('compile', e.message); } dropExtras(preExtras); preExtras = null; }   // + the conversation's depth-of-field pass in both post buffers (js/talk.js warmDof)
 // Begin / retry: loading screen -> build the run (ship, crew, systems, deck 1: the heavy synchronous part) -> compile shaders -> render every crew portrait (so the radio, duty board and
 // wheel never render heads mid-play) -> an "Enter the ship" button (a click, so pointer lock is allowed). Nothing plays until all of it is done.
+// earlyCompile: set by startRun around newRun. loadDeck then queues the first deck's programs (prewarmPrograms) as soon as its World is in the scene and the
+// fog / lights are set, instead of after newRun returns. compileShader / linkProgram only queue work for the GPU process (nothing waits on them until a
+// program is first used), so the GPU links the world's ~60 programs while the main thread is still busy with the rest of loadDeck and newRun (bodies from
+// the sim, haul, kit, ...); it used to sit idle through all of newRun and then link everything while the portraits waited on it (tools/loadtime.mjs).
+// The later prewarmPrograms in startRun only adds what loadDeck put in after (crew bodies, items, the car): the same programs as before, in the same keys.
+let earlyCompile = false;
+// The crew portraits (js/portraits.js) draw in a scene of their own (four lights), so their body programs are not the world's: the first face of each kind
+// used to wait (getProgramInfoLog at first use) for its programs to link, behind everything else queued on the GPU. As soon as the roster exists (newRun),
+// one stand-in per body kind is built (makeHuman with the portrait's own options, on a private random stream) and compiled into the
+// portrait scene for the atlas target (renderer.compile only: no draw, nothing waits), so the GPU process links them while the main thread generates the
+// ship. The stand-ins hold the programs until the faces are drawn (portraits keeps one material per program alive itself), then their materials are
+// disposed: a program no face used is released again (the programs count does not rise).
+// (Seed 11 ship 0, all 91 crew: every face compiles to the same 11 programs whatever its body kind, rank, uniform or department, so a stand-in per body
+// kind is already more than needed; it costs ~1-2 ms of CPU each.)
+let ptPre = null;
+function queuePortraitPrograms() {
+  const PT = G.portraits; ptPre = null; if (TEST_MODE || !PT || !NOM() || !G.menus || !G.roster) return;
+  try {
+    PT._setup(); if (!PT.scene || !PT.atlas || !PT.cam) return;
+    const grp = new THREE.Group(), seen = new Set();
+    ownRand(() => { for (const p of G.roster.people) { const k = p.body; if (seen.has(k)) continue; seen.add(k); const g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false }); if (g) grp.add(g); } });
+    const R = renderer, prev = R.getRenderTarget(); PT.scene.add(grp); R.setRenderTarget(PT.atlas);
+    try { R.compile(PT.scene, PT.cam); } finally { R.setRenderTarget(prev); PT.scene.remove(grp); }
+    ptPre = grp;
+  } catch (e) { console.warn('portrait programs', e.message); }
+}
+function dropPortraitPrograms() {
+  const g = ptPre; ptPre = null; if (!g) return; const kept = new Set(G.portraits?.kept?.values() || []), done = new Set();   // never a material a face kept (or a shared one)
+  for (const h of g.children) { releaseHuman(h); h.traverse(o => { for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) if (m.dispose && !m.userData?.shared && !kept.has(m) && !done.has(m)) { done.add(m); m.dispose(); } }); }
+}
 let runLoading = false; const PORTRAIT_BATCH_MS = 120;   // crew portraits rendered per paint during boarding: keeps the bar and the face card moving several times a second
 async function startRun() {
   if (runLoading || G.phase === 'loading') return; runLoading = true;
   try {
     document.exitPointerLock?.(); Loading.show('Boarding', NOM() ? 'Generating the ship, its crew and their schedules' : 'Generating the ship'); Loading.set(0.03, 'Preparing…'); await paint();
-    if (warmed && !TEST_MODE) { Loading.set(0.05, 'Tailoring uniforms…'); await warmed; }   // Begin pressed before the title-screen prewarm finished (ready())
+    // Begin pressed before the title-screen uniform prewarm (js/actors.js prewarmOutfits) finished: it is no longer waited for here (that wait was ~0.7-0.9 s
+    // of boarding when Begin is pressed at once, tools/loadtime.mjs). Its jobs keep running one per task (own random stream) between the awaits below, mostly while
+    // the main thread waits on the GPU for the portraits; an outfit newRun needs before its job ran is built there (wearart.js caches it per body kind).
     Loading.set(0.08, 'Generating the ship, crew and first deck…'); await paint();
-    mark('run:start'); const enter = newRun({ hold: true }); mark('run:newRun');   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
+    mark('run:start'); earlyCompile = true; let enter; try { enter = newRun({ hold: true }); } finally { earlyCompile = false; } mark('run:newRun');   // the heavy part: blocks for a moment, the overlay keeps its CSS motion
     Loading.set(0.5, 'Compiling shaders…'); await paint();
     try { world && prewarmPrograms(); } catch (e) { console.warn('compile', e.message); } mark('run:compile');
     // the post passes (and the conversation's depth of field) first, in both buffer orders: they draw onto the canvas, and presenting the canvas waits for all the GPU
@@ -1108,7 +1186,7 @@ async function startRun() {
       }
       if (prev) show(await prev);
     }
-    mark('run:portraits');
+    dropPortraitPrograms(); mark('run:portraits');
     // every object's first draw into both post buffers (warmDraws: no canvas, so nothing waits on it here): the first play frames after Enter did ~70 of them
     // (tools/loadtime.mjs enterFrames). Queued last, so the faces above are not stuck behind it; the GPU works through it while the player reads the button,
     // and a click before it is done keeps the overlay up ("Almost ready…") until a fence says the GPU is idle, instead of a frozen first frame.
@@ -1340,7 +1418,7 @@ function interact() {
   if (NOM() && G.haul?.interact()) return;   // grab / let go of a cart, pick a put-down item back up
   if (NOM() && G.combat?.interact()) return;   // the armory arms locker (draw a phaser) / someone knocked down or in a fight (js/grapple.js)
   const near = nearest(2.2, e => ['crew', 'body', 'emh'].includes(e.kind) && !e.used);
-  if (near && NOM() && near.kind === 'crew' && near.person && !near.fake && G.hud2) { if (!G.talk?.begin(near)) talkMenu(near); return; }   // close-up conversation (js/talk.js); the list menu is the fallback
+  if (near && NOM() && near.kind === 'crew' && near.person && !near.fake && G.hud2) { if (G.talk && world) hemi.intensity = 1.9 * (0.03 + 0.97 * world.powerAmt);   /* the world freezes during the talk: never start it inside a flicker dip (intensity only, no program change) */ if (!G.talk?.begin(near)) talkMenu(near); return; }   // close-up conversation (js/talk.js); the list menu is the fallback
   if (!near && NOM() && G.hud2) {
     const lp = lookedPropObj(); if (lp && (lp.kind === 'console' || lp.kind === 'servers')) { terminalMenu(); return; }
     const c = !G.carry && nearestClutter(); if (c && world.takeClutter(c)) { G.carry = { name: c.name, real: c.real, item: classifyItem(c.name, c.real) }; sound.pickup(); G.say(`You take: ${c.name}. [G] put it down`, 'good'); return; }
@@ -2175,6 +2253,7 @@ function render(dt, t) {
 function render1(dt, t) {
   if (CFG.quality === 'high') {
     const danger = parseFloat($('danger').style.opacity) || 0;
+    if (world && ship && G.phase !== 'talk') post.gradeAt(world, P.x, P.z, ship, { mode: G.mode });   // js/fx.js GRADES: hull class + room type (0.8 s blend, room looked up <= 4x/s)
     post.render(dt, t, Math.min(1, danger), Math.max(0, invuln - 0.5) * 1.2 + Math.max(0, (G.glitchT || 0)) * 0.5 + (G.phase === 'dying' ? Math.min(1, G.dyingT / 1.5) * 0.6 : 0));
   } else { renderer.render(scene, camera); renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = true; }
 }
@@ -2201,20 +2280,23 @@ const ready = (async () => {
   const envP = loadEnv(renderer, 'lobby').then((e) => { mark('boot:env'); bump(BOOT_W.env, 'Lighting the lobby…'); return e; });
   const tex = loadTextures(undefined, () => bump(1, 'Loading textures…')).then(() => mark('boot:tex'));
   const [, , env] = await Promise.all([small, models, envP, tex]); mark('boot:assets');
-  if (env) scene.environment = env; buildViewmodel();
+  scene.environment = env || roomEnvFallback(); if (!env) console.warn('lobby.exr did not load: RoomEnvironment fallback'); buildViewmodel();
   // the uniform prewarm (~0.4 s of CPU in small steps) runs behind the title screen instead of before it: the title is opaque and draws nothing, so the steps
   // land while the player reads it, and Begin waits for whatever is left (startRun). Tests await __game.warmed themselves.
+  try { bakeKinds(); } catch (e) { console.warn('bakeKinds', e.message); } mark('boot:bake');   // per-body-kind face / hair / cloth / eye bakes on the boot screen, not in boarding (js/humans.js bakeKinds)
   warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true }); warmed.then(() => mark('boot:warm'));
   bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
   Loading.hide(TEST_MODE); mark('boot:title');
 })();
 $('begin').disabled = true; $('begin').textContent = 'Loading assets…';
 window.__game = { ready, outfitStats, renderStats, SAVE, recordRun, titleBoard, gov, get cullStats() { return cullStatsRef; }, lodCfg, lodStats, lodsSettled, get jobgame() { return G.jobgame; }, get sites() { return G.sites; }, startJob, goJob, atJob, jobFor, dutyHere, enterHide, exitHide, get hands() { return hands; }, get warmed() { return ready.then(() => warmed); }, CFG, setQuality, decals, blood, sparks, post, die, G, P, get world() { return world; }, get director() { return G.director; }, get repairPts() { return repairPts; }, get shipState() { return G.shipState; }, get alerts() { return G.comms?.alerts; }, get comms() { return G.comms?.bus; }, get commsSim() { return G.comms?.sim; }, get bridge() { return G.comms?.bridge; }, get clock() { return G.comms?.clock; }, get commsHud() { return G.comms?.hud; }, get roster() { return G.roster; }, get sim() { return G.sim; }, get social() { return G.social; }, get duty() { return G.duty; }, get phases() { return G.phases; }, nomDie, nomEnd, switchPlayer, talkMenu, terminalMenu, startWalk, pathField, gaitFor, describeGait, fidgetStep, dodgeCheck, evacuationStep, simBodies, simTileFor, liftWaitSpots: () => world?.car ? liftWaitSpots(world.car) : [], liftQueueSpots: () => world?.car ? liftQueueSpots(world.car) : [], refuseReact, get hud2() { return G.hud2; }, get gorns() { return gorns; }, get ents() { return ents; }, newRun, loadDeck, fire, killMad, advance, renderOnce: () => render(1 / 30, elapsed), panelLights, updatePanelLights, get manualTimers() { return timers.length; }, S, spawnRepairer, complete: completeDeck, step: (dt, t) => { if (G.manual) scene.updateMatrixWorld();   /* what the skipped render did: world matrices for look-at raycasts, name tags */ const r = (G.phase === 'ride' || G.phase === 'select') ? liftStep(dt, t) : step(dt, t); if (G.manual) runTimers(dt); return r; }, liftTo: chooseDeck, rollRider, boardLift, leaveRider, destOf, riderDest, get rider() { return G.lift?.rider; }, speak, liftLine, openLiftPanel, closeLiftPanel, inCarTile, setMode(m) { G.mode = m === 'madness' ? 'madness' : 'nominal'; }, shipPlan, camera, scene, renderer, makeEnemy, sound };
+window.__game.GI = GI;   // js/gi.js shared uniforms (tools/test.mjs smoke)
 Object.defineProperty(window.__game, 'menus', { get: () => G.menus }); Object.defineProperty(window.__game, 'ui', { get: () => G.menus?.UI });   // js/menus.js, js/ui-mode.js
 Object.defineProperty(window.__game, 'haul', { get: () => G.haul }); Object.defineProperty(window.__game, 'kit', { get: () => G.kit }); window.__game.repairTime = (r) => repairTime(r); Object.assign(window.__game, { opStart, opEnd });   // equipment / carts (js/haul.js)
 Object.defineProperty(window.__game, 'repair', { get: () => G.repair }); Object.defineProperty(window.__game, 'role', { get: () => G.role });   // { choice, billet, mission, miss } (js/role.js)
 Object.defineProperty(window.__game, 'pace', { get: () => G.pace, set: (p) => { G.pace = paceFor(p?.id ?? p); } }); Object.assign(window.__game, { repairStand, repairBodies, ambientBarks });   // crew repair / pace (js/repair.js, js/pace.js)
 Object.defineProperty(window.__game, 'talk', { get: () => G.talk }); window.__game.interact = interact; window.__game.deckPrograms = deckPrograms; window.__game.warmDraws = warmDraws;   // conversation close-up (js/talk.js)
+window.__game.preDeckInfo = () => preDeck && { to: G.shipDecks?.findIndex(s => s.data === preDeck.data), built: preDeck.world.built, gi: !!preDeck.world.gi, warmed: preDeck.warmed, extras: preDeck.extras && { left: preDeck.extras.todo.length, built: preDeck.extras.group.children.length } };   // tools/decktime.mjs: how far the next deck got during the ride   // conversation close-up (js/talk.js)
 titleBoard();
 mountSaveControls(document, SAVE, { onChange: () => { Object.assign(CFG, SAVE.cfg()); G.best = SAVE.best(); sound.vol = CFG.vol; sound.setVolume?.(CFG.vol); $('sens').value = CFG.sens; $('vol').value = CFG.vol; $('qsel').value = CFG.quality; $('calm').checked = !!CFG.calm; if ($('aoon')) $('aoon').checked = !!CFG.ao; post.setAO?.(CFG.ao); $('capson').checked = !!CFG.caps; $('cbmode').checked = !!CFG.cb; document.body.classList.toggle('cb', !!CFG.cb); document.body.classList.toggle('lc-calm', !!CFG.calm); post.setCalm?.(CFG.calm); titleBoard(); } });   // pause menu: export / import / reset save (js/save-ui.js)
 frame();

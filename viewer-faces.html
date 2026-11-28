@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Face viewer — Starfarers: The Backdecks</title>
+<style>html,body{margin:0;background:#0b0e16;overflow:hidden;font-family:Arial;color:#fff}canvas{display:block;width:100vw;height:100vh}
+.tag{position:fixed;font-size:10px;letter-spacing:.06em;white-space:nowrap;pointer-events:none;text-shadow:0 1px 3px #000;opacity:.85}</style>
+<canvas id="c"></canvas>
+<!-- Crew faces close up, one cell per person of a ship's roster (js/crew.js makeComplement), to judge the face shape morphs (js/faceshape.js).
+     ?ship=0 &seed=1 &n=12 &cols=4 &start=0 · ?shape=0 (no face shapes: before) · ?normals=0 (shape targets without normal targets) · ?yaw=0.6 (three-quarter view) · ?kind=crew_f (one body for all) · ?expr=1 (smile + jaw) · ?tags=0 · ?sweep=FaceNose (one target from -1 to +1 on one person) -->
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
+import { loadModels, loadTextures } from './js/assets.js';
+import { makeHuman } from './js/humans.js';
+import { faceShapeCfg } from './js/faceshape.js';
+import { makeComplement } from './js/crew.js';
+import { SHIPS } from './js/data.js';
+const q = new URLSearchParams(location.search), N = +(q.get('n') || 12), COLS = +(q.get('cols') || 4), ROWS = Math.ceil(N / COLS), yaw = +(q.get('yaw') || 0.35), start = +(q.get('start') || 0);
+faceShapeCfg.on = q.get('shape') !== '0'; faceShapeCfg.normals = q.get('normals') !== '0'; faceShapeCfg.full = q.get('full') === '1';
+const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+r.setPixelRatio(1); r.setSize(innerWidth, innerHeight, false); r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.15; r.setScissorTest(true);
+const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);
+{ const pm = new THREE.PMREMGenerator(r); s.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; s.environmentIntensity = 0.45; }
+const key = new THREE.DirectionalLight(0xfff0dc, 2.6); key.position.set(-2, 3, 4); s.add(key);
+const rim = new THREE.DirectionalLight(0xc8d8ff, 1.2); rim.position.set(3, 2, -3); s.add(rim);
+s.add(new THREE.HemisphereLight(0xdfe6ff, 0x2a2420, 0.35));
+await Promise.all([loadModels(), loadTextures().catch(() => null)]);
+const ship = SHIPS[+(q.get('ship') || 0)] || SHIPS[0], roster = makeComplement(ship, +(q.get('seed') || 1));
+// ?sweep=FaceNose: one person (the first of the slice) N times, that target from -1 to +1 and every other shape target at 0 (checks one field at a time)
+const sweep = q.get('sweep'), people = sweep ? Array.from({ length: N }, () => roster.people[start]) : roster.people.slice(start, start + N);
+const cells = [];
+people.forEach((p, i) => {
+  const g = makeHuman({ person: p, kind: q.get('kind') || p.body, rank: p.rank, uniform: roster.uniformOf(p), shadow: false, ...(sweep ? { faceShape: { [sweep]: N > 1 ? -1 + 2 * i / (N - 1) : 1 } } : {}) }); if (!g) return;
+  const H = g.userData.human; H.play('idle', { fade: 0 }); H.mixer.setTime(0.5); if (q.get('expr') === '1') H.face({ MouthLeftPullUp: 0.7, MouthRightPullUp: 0.7, JawDrop: 0.25 });
+  g.position.set(i * 3, 0, 0); s.add(g); g.updateMatrixWorld(true);
+  const head = H.bones.Head.getWorldPosition(new THREE.Vector3()); head.y += 0.012 * H.height / 1.75; head.z += 0.03;
+  const cam = new THREE.PerspectiveCamera(22, (innerWidth / COLS) / (innerHeight / ROWS), 0.05, 10); cam.position.set(head.x + Math.sin(yaw) * 0.62, head.y + 0.02, head.z + Math.cos(yaw) * 0.62); cam.lookAt(head);
+  const t = document.createElement('div'); t.className = 'tag'; t.textContent = `${p.given} ${p.family} · ${p.body} · r${p.rank}` + (sweep ? ` · ${sweep} ${(N > 1 ? -1 + 2 * i / (N - 1) : 1).toFixed(2)}` : H.shape ? ' · age ' + H.shape.FaceAge.toFixed(2) : ''); if (q.get('tags') !== '0') document.body.appendChild(t);
+  cells.push({ cam, t, i });
+});
+function draw() {
+  const cw = innerWidth / COLS, ch = innerHeight / ROWS;
+  for (const c of cells) { const x = (c.i % COLS) * cw, y = innerHeight - (Math.floor(c.i / COLS) + 1) * ch; r.setViewport(x, y, cw, ch); r.setScissor(x, y, cw, ch); r.render(s, c.cam); c.t.style.left = x + 4 + 'px'; c.t.style.top = innerHeight - y - ch + 4 + 'px'; }
+}
+draw(); requestAnimationFrame(() => { draw(); window.__ready = true; });
+</script>

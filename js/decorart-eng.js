@@ -15,6 +15,7 @@ export const DECOR_ENG = {
     // 60 L concentrate tank (0.4 m x 0.48 m), floor standing against the wall on the left, plinth, dished top, filler cap, sight glass
     K.box(0.5, 0.03, 0.5, -0.35, 0.015, DK).cyl(0.2, 0.46, -0.35, 0.26, RD, 0.04).cyl(0.2, 0.03, -0.35, 0.505, MT, 0.04).cyl(0.07, 0.05, -0.35, 0.545, DK, 0.17)
       .box(0.05, 0.34, 0.012, -0.35, 0.27, GLASS, 0.44).box(0.03, 0.2, 0.006, -0.35, 0.2, FOAM, 0.452).box(0.07, 0.012, 0.006, -0.35, 0.44, DK, 0.452).box(0.07, 0.012, 0.006, -0.35, 0.1, DK, 0.452);
+    K.box(0.44, 0.03, 0.44, -0.35, 0.18, STEEL, 0.03).box(0.44, 0.03, 0.44, -0.35, 0.38, STEEL, 0.03).box(0.1, 0.025, 0.012, -0.35, 0.54, YL, 0.4);   // two retaining straps, rubber foot pad, filler-cap tag
     // tank outlet up the wall to the manifold
     K.cyl(0.03, 0.14, -0.35, 0.6, MT, 0.17).cyl(0.03, 0.2, -0.35, 0.66, MT, 0.04, 'z').cyl(0.03, 0.55, -0.35, 0.94, RD, 0.07);
     // manifold with a proportioner body between two quarter-turn isolation valves
@@ -39,6 +40,7 @@ export const DECOR_ENG = {
     K.cyl(0.26, 0.05, -0.04, 1.28, RD, 0.03, 'z', false, 16).cyl(0.23, 0.1, -0.04, 1.28, 0x18181a, 0.08, 'z', false, 16).cyl(0.26, 0.03, -0.04, 1.28, RD, 0.185, 'z', false, 16).cyl(0.07, 0.04, -0.04, 1.28, MT, 0.2, 'z');
     K.box(0.06, 0.28, 0.06, 0.28, 1.2, MT, 0.04).box(0.14, 0.05, 0.05, 0.28, 1.38, YL, 0.04).box(0.5, 0.1, 0.006, 0, 1.78, WHT, 0.01).box(0.4, 0.035, 0.004, 0, 1.78, RD, 0.016)
       .cyl(0.06, 0.03, 0.3, 0.72, RD, 0.0, 'z', false, 12).box(0.8, 0.04, 0.26, 0, 0.78, STEEL).box(0.03, 0.03, 0.006, 0.34, 1.65, GG, 0.25, true);
+    K.box(0.025, 0.1, 0.03, -0.42, 1.5, STEEL, 0.1).box(0.025, 0.1, 0.03, -0.42, 1.0, STEEL, 0.1).box(0.04, 0.05, 0.04, 0.43, 1.25, DK, 0.1);   // hinge knuckles, key lock, hazard lip on the sill
   },
   panelbox(K) {
     K.box(0.5, 0.72, 0.12, 0, 1.5, 0x6a6f58).box(0.44, 0.64, 0.01, 0, 1.5, 0x777c66, 0.12).box(0.5, 0.05, 0.004, 0, 1.82, YL, 0.122)
@@ -46,6 +48,7 @@ export const DECOR_ENG = {
     [GG, GG, GR].forEach((c, i) => K.box(0.04, 0.04, 0.008, -0.14 + i * 0.07, 1.7, c, 0.13, true));
     K.box(0.03, 0.14, 0.03, 0.18, 1.5, DK, 0.13).cyl(0.025, 0.012, 0.18, 1.38, MT, 0.13, 'z').box(0.22, 0.1, 0.004, -0.06, 1.46, CREAM, 0.131);
     for (let i = 0; i < 5; i++) K.box(0.3, 0.014, 0.006, -0.06, 1.28 + i * 0.03, 0x4a4f44, 0.13);
+    K.box(0.024, 0.09, 0.024, -0.26, 1.78, STEEL, 0.1).box(0.024, 0.09, 0.024, -0.26, 1.26, STEEL, 0.1).box(0.05, 0.06, 0.03, 0.18, 1.62, YL, 0.13).box(0.07, 0.015, 0.006, 0.18, 1.62, DK, 0.16);   // door hinge barrels, hazard sticker
   },
   panelopen(K) {
     // cabinet, dead-front, insert bay (relay cards), breaker row, bus bars, loom; door swung 90 degrees at the left
@@ -56,6 +59,7 @@ export const DECOR_ENG = {
     for (let i = 0; i < 8; i++) { const x = -0.2 + i * 0.057, trip = i === 5; K.box(0.04, 0.085, 0.026, x, 1.56, DK, 0.1).box(0.014, 0.04, 0.02, x, 1.56 + (trip ? -0.025 : 0.025), trip ? RD : CREAM, 0.12); }
     K.box(0.54, 0.12, 0.012, 0, 1.36, 0xb0c8d0, 0.12).box(0.5, 0.025, 0.012, 0, 1.38, COPPER, 0.1).box(0.5, 0.025, 0.012, 0, 1.31, COPPER, 0.1);
     for (let i = 0; i < 6; i++) K.cyl(0.011, 0.2, -0.12 + i * 0.048, 1.18, i === 4 ? RD : 0x0c0c0e, 0.1 + (i % 2) * 0.008);
+    K.box(0.026, 0.12, 0.026, -0.3, 1.92, STEEL, 0.02).box(0.026, 0.12, 0.026, -0.3, 1.1, STEEL, 0.02).box(0.012, 0.3, 0.004, 0, 1.5, 0x20242a, 0.098);   // hinge barrels, door-stay shadow strip
     K.box(0.02, 0.86, 0.58, -0.33, 1.5, 0x2b3038, 0.0).box(0.004, 0.44, 0.26, -0.318, 1.55, CREAM, 0.14).box(0.03, 0.03, 0.58, -0.33, 1.08, YL, 0.0);
   },
 };

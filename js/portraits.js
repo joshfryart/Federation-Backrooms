@@ -1,5 +1,5 @@
 // Live crew portraits: a small headshot rendered from each person's actual model (js/humans.js makeHuman), framed on the
-// Head bone by a tiny dedicated camera into a render target, white-balanced, cached per person id as a data URL.
+// Head bone by a tiny dedicated camera into a render target, exposure-normalised, cached per person id as a data URL.
 // Lazy: get(person) queues a render and returns the cached URL or null; tick() renders a few per frame; a placeholder
 // silhouette in the person's department colour stands in meanwhile. <img data-pid> elements are patched when ready.
 // Used by the radio contact cards, the duty/order/delegate pickers, the comm log, the wheel and (later) conversations.
@@ -10,6 +10,7 @@
 //   PT.renderManyAsync(people, budgetMs) -> { n, done } (the same, readback through a fence: the boarding screen draws the next batch meanwhile)
 import * as THREE from 'three';
 import { makeHuman, releaseHuman } from './humans.js';
+import { hwDetail } from './hairwear.js';
 
 import { DEPT_COL, DEPT_LETTER, deptCol } from './icons.js';
 export { DEPT_COL, DEPT_LETTER, deptCol };
@@ -36,9 +37,11 @@ export class Portraits {
   _setup() {
     if (this.scene) return;
     const s = this.size; this.scene = new THREE.Scene();
-    this.scene.add(new THREE.HemisphereLight(0xf4f6ff, 0x30343c, 2.2));
-    const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(0.8, 1.2, 1.6); this.scene.add(key);
-    const fill = new THREE.DirectionalLight(0xdfe8ff, 0.9); fill.position.set(-1.4, 0.2, 1.0); this.scene.add(fill);
+    // the same four lights as before (a change in count makes new programs), balanced like the talk close-up: a warm key carries the face, the flat
+    // hemisphere fill is lower than it was (2.2: with it the faces came out pale and formless, as in the close-up before its fix)
+    this.scene.add(new THREE.HemisphereLight(0xfff6ee, 0x30343c, 1.5));
+    const key = new THREE.DirectionalLight(0xfff1e2, 2.6); key.position.set(0.8, 1.2, 1.6); this.scene.add(key);
+    const fill = new THREE.DirectionalLight(0xdfe8ff, 0.7); fill.position.set(-1.4, 0.2, 1.0); this.scene.add(fill);
     const rim = new THREE.DirectionalLight(0xfff0dd, 1.2); rim.position.set(0, 1, -1.5); this.scene.add(rim);
     this.cam = new THREE.PerspectiveCamera(24, 1, 0.05, 5);
     const W = Portraits.ATLAS * s; this.atlas = new THREE.WebGLRenderTarget(W, W, { samples: 0 }); this.atlas.texture.colorSpace = THREE.SRGBColorSpace;
@@ -90,7 +93,7 @@ export class Portraits {
         const p = list[i], k = this.key(p); if (k == null) { out.push({ p, url: null }); continue; } if (this.cache.has(k)) { out.push({ p, url: this.cache.get(k) }); continue; }
         const f0 = performance.now(); let g = null;
         try {
-          g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false }); if (!g) { this.failed.add(k); out.push({ p, url: null }); continue; }
+          g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false }); if (!g) { this.failed.add(k); out.push({ p, url: null }); continue; }   // integration: the deck's garstyle3 program (already compiled by then; hwDetail = 0 below turns its seam / fold detail off) instead of compiling garstyle2 just for the portraits
           const f1 = performance.now(); this.stats.make += f1 - f0;
           const H = g.userData.human; H.play('idle', { fade: 0 }); H.mixer.update(0.4); H.face?.({ LeftUpperLidOpen: 0.2, RightUpperLidOpen: 0.2 });
           this.scene.add(g); g.updateMatrixWorld(true);
@@ -100,7 +103,7 @@ export class Portraits {
           this.cam.position.copy(hp).addScaledVector(fwd, 0.92).add(new THREE.Vector3(0.06, 0.02, 0)); this.cam.lookAt(hp.x, hp.y - 0.03, hp.z);
           // into this face's tile of the atlas (viewport + scissor, so the clear only touches the tile)
           const n = tiles.length, x = (n % A) * s, y = Math.floor(n / A) * s; rt.viewport.set(x, y, s, s); rt.scissor.set(x, y, s, s); rt.scissorTest = true;
-          R.setRenderTarget(rt); R.clear(); R.render(this.scene, this.cam);
+          R.setRenderTarget(rt); R.clear(); hwDetail.value = 0; try { R.render(this.scene, this.cam); } finally { hwDetail.value = 1; }   // 128 px tiles: no strand / seam detail (js/hairwear.js; it cost ~1.5 s of software-GL boarding)
           this.stats.draw += performance.now() - f1; tiles.push({ p, k, x, y });
         } catch (e) { console.warn('portrait failed', e); this.failed.add(k); out.push({ p, url: null }); }
         finally { if (g) { this.scene.remove(g); releaseHuman(g); g.traverse(o => { if (o.isMesh && o.material?.dispose && !o.material.userData?.shared && !this._keep(o.material)) o.material.dispose(); }); }   /* materials are per-human clones; geometry/textures stay shared with the cache (GL keeps anything a queued draw still uses alive) */ }
@@ -116,11 +119,12 @@ export class Portraits {
     const prog = this.renderer?.properties?.get(m)?.currentProgram; if (!prog) return false; const k = prog.cacheKey ?? prog.id;
     this.kept = this.kept || new Map(); if (this.kept.has(k)) return false; this.kept.set(k, m); return true;
   }
-  // flip Y, grey-world white balance (half strength, sampled on the centre where the face is), soft vignette, then a data URL
+  // flip Y, exposure (sampled on the centre where the face is), soft vignette, then a data URL. No grey-world white balance any more: the centre is half
+  // uniform, so a gold or red tunic pushed every face toward lavender / cyan (the lights are fixed, there is nothing to balance), and skin is not grey
   _encode(src, W, ox, oy) {   // the tile at (ox, oy) of a W-pixel-wide readback (rows bottom-up, as GL returns them)
     const s = this.size, img = this.cx.createImageData(s, s), d = img.data, at = (x, y) => ((oy + y) * W + ox + x) * 4; let r = 0, gg = 0, b = 0, n = 0;
     for (let y = s * 0.3 | 0; y < s * 0.75; y++) for (let x = s * 0.3 | 0; x < s * 0.7; x++) { const i = at(x, y); r += src[i]; gg += src[i + 1]; b += src[i + 2]; n++; }
-    const avg = (r + gg + b) / (3 * n || 1), kr = 1 + ((avg / (r / n || 1)) - 1) * 0.5, kg = 1 + ((avg / (gg / n || 1)) - 1) * 0.5, kb = 1 + ((avg / (b / n || 1)) - 1) * 0.5;
+    const avg = (r + gg + b) / (3 * n || 1), kr = 1, kg = 1, kb = 1;
     const ex = Math.min(1.6, Math.max(0.9, 118 / (avg || 1)));   // keep faces readable whatever the light
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
       const i = at(x, s - 1 - y), o = (y * s + x) * 4, vx = x / s - 0.5, vy = y / s - 0.45, v = 1 - Math.min(0.35, (vx * vx + vy * vy) * 0.9);
