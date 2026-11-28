@@ -427,7 +427,7 @@ export class Talk {
     if (s) { cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); cam.rotation.order = s.order || 'YXZ'; cam.updateMatrixWorld?.(); }
     if (e?.mesh && s) {
       const H = e.mesh.userData.human; e.talkHold = false;
-      if (H) { H.add = null; e.faceAnim?.reset(); H.face({ JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: 0, RightUpperLidClosed: 0 }); if (s.clip && H.current !== s.clip) H.play(s.clip, { fade: 0.3 }); H.standing = s.standing; }
+      if (H) { H.add = null; e.faceAnim?.reset(); if (H.eyes?.u?.uEyeK) H.eyes.u.uEyeK.value.x = 1; H.face({ JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: 0, RightUpperLidClosed: 0 }); if (s.clip && H.current !== s.clip) H.play(s.clip, { fade: 0.3 }); H.standing = s.standing; }
       if (!this.seated) e.mesh.rotation.y = this.restoreRot ?? s.rot;
     }
     for (const m of this.hidden) m.visible = true; this.hidden = [];
@@ -561,7 +561,8 @@ export class Talk {
     cam.position.copy(s.pos).lerp(this._v.set(this.camPos.x, this.camPos.y, this.camPos.z), k); cam.quaternion.slerpQuaternions(s.quat, qT, k);
     const breath = 1 + TALK.breath * Math.sin(this.tt * Math.PI * 2 * TALK.breathHz); cam.fov = lerp(s.fov, TALK.fov * breath, k); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
     if (k >= 0.3 && !this._occ) this.occlude(fc, fr, aspect);
-    if (this.light) { const f = this.clear, r = fr.right, L = TALK.key; this.light.position.set(fc.x + f.x * L.fwd - r.x * L.side, fc.y + L.up, fc.z + f.z * L.fwd - r.z * L.side); this.light.intensity = (this.lightI || L.i) * k; }
+    if (this.light) { const f = this.clear, r = fr.right, L = TALK.key; this.light.position.set(fc.x + f.x * L.fwd - r.x * L.side, fc.y + L.up, fc.z + f.z * L.fwd - r.z * L.side); this.light.intensity = (this.lightI || L.i) * k;
+      const eu = this.e?.mesh?.userData?.human?.eyes?.u; if (eu?.uEyeK) eu.uEyeK.value.x = 1 + (L.i / (this.lightI || L.i) - 1) * k; }   // r3: the key's dark-skin boost (keyFor) is for the skin, not the whites of the eyes (js/eyes.js EYE_END)
     if (this.dof) { const p = this._v.set(fc.x, fc.y, fc.z).project(cam); this.dof.uniforms.center.value.set((p.x + 1) / 2, (p.y + 1) / 2); this.dof.uniforms.aspect.value = aspect; this.dof.uniforms.amount.value = k; this.dof.enabled = k > 0.01 && this.c.CFG?.quality === 'high'; }
     const clk = this.G.comms?.clock?.format?.(); if (clk && this.dom) this.dom.clk.textContent = `SHIP TIME ${clk}`;
   }

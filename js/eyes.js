@@ -50,7 +50,7 @@ export const EYE_VERT_N = `
 
 export const EYE_FRAG_PARS = `
 varying vec3 vEyeN; varying vec3 vEyeF; varying vec3 vEyeF0; varying vec3 vEyeU0; varying vec3 vEyeX0;
-uniform float uGlint; uniform vec4 uIris, uIris2, uEyeLid, uEyeLook; uniform vec3 uEyeLidK; uniform vec3 uLidCol;
+uniform float uGlint; uniform vec4 uIris, uIris2, uEyeLid, uEyeLook; uniform vec3 uEyeLidK; uniform vec3 uLidCol; uniform vec2 uEyeK;
 float gEyeIris = 0.0, gEyeAO = 1.0, gEyeWet = 0.0, gEyePx = 1.0; vec3 gEyeF = vec3( 0.0, 0.0, 1.0 );
 float eh2( vec2 p ) { p = fract( p * vec2( 0.1031, 0.1030 ) ); p += dot( p, p.yx + 33.33 ); return fract( ( p.x + p.y ) * p.x ); }
 float en2( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
@@ -85,9 +85,10 @@ export const EYE_SURFACE = `
     float lx = dot( eN, X0 ), ly = dot( eN, U0 ), lx2 = ( lx - uEyeLidK.z ) * ( lx - uEyeLidK.z );
     float yLo = uEyeLid.z + uEyeLidK.y * lx2, yUp = mix( uEyeLid.x - uEyeLidK.x * lx2, yLo, uEyeLid.y );
     float dUp = yUp - ly, dLo = ly - yLo;                 // > 0 inside the opening (sin units: 0.075 is ~1 mm on this ball)
-    float shUp = 1.0 - 0.6 * ( 1.0 - smoothstep( 0.0, 0.2, dUp ) ) - 0.25 * ( 1.0 - smoothstep( 0.0, 0.5, dUp ) );   // contact shadow + lash shade under the upper lid
-    float shLo = 1.0 - 0.35 * ( 1.0 - smoothstep( 0.0, 0.07, dLo ) );
-    float shCorner = 1.0 - 0.4 * smoothstep( 0.3, 0.62, lx ) - 0.35 * smoothstep( 0.45, 0.78, - lx );   // inner (nasal) and outer corners
+    // r3: lighter and narrower (0.6 over 0.2 + 0.25 over 0.5, with the lash strip above it it read as a heavy dark liner)
+    float shUp = 1.0 - 0.38 * ( 1.0 - smoothstep( 0.0, 0.14, dUp ) ) - 0.14 * ( 1.0 - smoothstep( 0.0, 0.4, dUp ) );   // contact shadow + lash shade under the upper lid
+    float shLo = 1.0 - 0.25 * ( 1.0 - smoothstep( 0.0, 0.06, dLo ) );
+    float shCorner = 1.0 - 0.45 * smoothstep( 0.22, 0.6, lx ) - 0.4 * smoothstep( 0.36, 0.75, - lx );   // inner (nasal) and outer corners (r3: a little wider)
     gEyeAO = shUp * shLo * shCorner;
     gEyeWet = smoothstep( 0.0, 0.012, dLo ) * ( 1.0 - smoothstep( 0.02, 0.05, dLo ) );
     // ---- iris: refract at the cornea, walk to the iris plane, back to uv ----
@@ -123,7 +124,9 @@ export const EYE_SURFACE = `
     vec3 pupilC = vec3( 0.004 );
     vec3 alb = mix( pupilC, iris, smoothstep( pup - 0.03, pup + 0.03, rr ) );
     // sclera: off-white, warmer and pinker into the corners (the painted map), veins from the corners in toward the limbus
-    vec3 scl = tex.rgb * vec3( 0.88, 0.85, 0.8 );
+    // r3: slightly off-white (x0.8 / 0.76 / 0.7 of the map, was 0.88 / 0.85 / 0.8: with the full deck ambient it read paper white next to the face) and
+    // shaded as it curves away into the corners (the ball turns from the light and sits deeper in the socket there)
+    vec3 scl = tex.rgb * vec3( 0.8, 0.76, 0.7 ) * ( 1.0 - 0.3 * smoothstep( 1.25, 2.7, rr ) );
     float vw = smoothstep( 1.12, 2.2, rr ) * ( 0.4 + 0.6 * abs( dir.x ) );
     float vn = ef2( vec2( ang * 2.2 + uEyeLook.z, rr * 1.4 ) );
     float vein = ( 1.0 - smoothstep( 0.0, 0.035 + 0.05 * ( 1.0 - aa ), abs( ef2( vec2( ang * 5.0 + vn * 2.4 + uEyeLook.z, rr * 2.2 ) ) - 0.5 ) ) ) * vw;
@@ -133,7 +136,7 @@ export const EYE_SURFACE = `
     gEyeIris = smoothstep( 1.02, 0.94, rr );
     // lid margin: a narrow band of the lid's wet inner rim on the ball reads as the lids' thickness
     float rim = ( 1.0 - smoothstep( 0.0, 0.03, dLo ) ) + ( 1.0 - smoothstep( 0.0, 0.025, dUp ) ) * 0.6;
-    ball = mix( ball, uLidCol, clamp( rim, 0.0, 1.0 ) * 0.85 );
+    ball = mix( ball, uLidCol, clamp( rim, 0.0, 1.0 ) * 0.55 );   // (r3: 0.85)
     diffuseColor.rgb *= ball;
   }`;
 // diffuse on the iris: a flat disc behind the cornea, lit by light refracted at the cornea (replaces the sphere-normal Lambert there)
@@ -146,10 +149,14 @@ export const EYE_DIRECT = `
     vec3 mN = normalize( geometryNormal + vEyeU0 * 0.9 ), hW = normalize( directLight.direction + geometryViewDir );
     reflectedLight.directSpecular += directLight.color * max( dot( mN, directLight.direction ), 0.0 ) * pow( max( dot( mN, hW ), 0.0 ), 60.0 ) * 1.5 * gEyeWet;
   }`;
+// r3: the eye sits in the orbit, under the brow: the deck's indirect light (hemisphere + GI bounce, which skin weights by its normal, uAmb) reaches it at
+// ~70%. The environment reflection (IBL + the GI room probe; roughness 0.08) is held to 45% on the sclera and 22% on the iris: at full strength the
+// room's cool grey reflected over the whole cornea and the dark iris (albedo ~0.05) read pale blue-grey in every talk close-up, whatever its colour.
+// uEyeK (x: direct diffuse scale) is set by js/talk.js for the speaker while the talk key is boosted for darker skin (keyFor), so the whites are not.
 export const EYE_END = `
   if ( uGlint > 0.5 ) {
-    reflectedLight.directDiffuse *= gEyeAO; reflectedLight.indirectDiffuse *= gEyeAO;
-    reflectedLight.directSpecular *= mix( 1.0, gEyeAO, 0.6 ); reflectedLight.indirectSpecular *= mix( 1.0, gEyeAO, 0.8 );
+    reflectedLight.directDiffuse *= gEyeAO * uEyeK.x; reflectedLight.indirectDiffuse *= gEyeAO * 0.7;
+    reflectedLight.directSpecular *= mix( 1.0, gEyeAO, 0.6 ); reflectedLight.indirectSpecular *= mix( 1.0, gEyeAO, 0.8 ) * mix( 0.45, 0.22, gEyeIris );
   }`;
 export const eyeGlsl = (s) => s.replaceAll('${IRIS_R}', EYE_IRIS.r.toFixed(4)).replaceAll('${PUPIL0}', EYE_IRIS.pupil0.toFixed(3));
 
@@ -180,7 +187,7 @@ export function eyeUniforms(eyes, look) {
     uEyeRA: { value: id.clone() }, uEyeRB: { value: id.clone() },
     uIris: { value: look ? look.iris.clone() : new THREE.Vector4(0.065, 0.032, 0.011, 1) }, uIris2: { value: look ? look.inner.clone() : new THREE.Vector4() },
     uEyeLook: { value: look ? look.look.clone() : new THREE.Vector4(0.42, 1, 0, 0.3) }, uEyeLid: { value: new THREE.Vector4((eyes.lid || LID_DEFAULT)[0], 0, (eyes.lid || LID_DEFAULT)[2], 0) }, uEyeLidK: { value: new THREE.Vector3((eyes.lid || LID_DEFAULT)[1], (eyes.lid || LID_DEFAULT)[3], (eyes.lid || LID_DEFAULT)[4]) },
-    uLidCol: { value: new THREE.Color(0.35, 0.12, 0.1) },
+    uLidCol: { value: new THREE.Color(0.35, 0.12, 0.1) }, uEyeK: { value: new THREE.Vector2(1, 1) },
   };
 }
 // u: eyeUniforms(); eyes: per-kind rest data; seed: per person. Returns { step(dt, faceW) }.

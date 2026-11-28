@@ -302,7 +302,9 @@ const SKIN_AMBIENT = `#include <lights_fragment_end>
 const EYE_CORNEA = `
   vec3 eN = normalize( vEyeN ), hD = normalize( directLight.direction + geometryViewDir );
   float nh = clamp( dot( eN, hD ), 0.0, 1.0 ), nl = clamp( dot( eN, directLight.direction ), 0.0, 1.0 ), ga = clamp( gEyePx * 0.7, 0.014, 0.07 );
-  reflectedLight.directSpecular += directLight.color * nl * min( D_GGX( ga, nh ) * ga * ga * 6.0, 4.0 ) * uGlint;`;
+  reflectedLight.directSpecular += directLight.color * nl * 1.6 * exp( - 2.0 * ( 1.0 - nh ) / ( ga * ga ) ) * uGlint;`;
+// (r3: a Gaussian lobe, same width and ~the same peak as the old D_GGX * a^2 * 6: GGX's long tail spread ~0.1 of the light over the whole iris, and with
+// the boosted talk key that alone washed every iris out to a pale grey; this one is gone three widths out)
 // hair: Kajiya-Kay strand highlights (two shifted lobes, the second tinted by the hair colour). The cards' own normals jump from card to card, so the highlight
 // uses a smooth "shell" normal (vHairN: out from the centre of the hair volume) and a strand direction that runs from the crown down and out (vHairT), both
 // skinned in hairShader: one continuous band over the head instead of a highlight per card.
@@ -347,9 +349,9 @@ export function eyeShader(m, eyes, glint = 1, look = null) {
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${EYE_END}
       { // catch light: a soft light near the viewer reflected in the cornea, pinned to the upper left of the pupil (on these meshes the painted pupil sits below the
         // cap's apex, hence the downward offset; found by drawing the regions) so the lids never hide it; scaled by how lit the eye is so it never glows in the dark
-        vec3 tg = normalize( normalize( vEyeF ) * 2.5 + normalize( vViewPosition ) + vec3( -0.22, -0.6, 0.0 ) ); float cw = clamp( gEyePx * 0.11, 0.0012, 0.0075 );   // C3: smaller in a close-up
+        vec3 tg = normalize( normalize( vEyeF ) * 2.5 + normalize( vViewPosition ) + vec3( -0.22, -0.6, 0.0 ) ); float cw = clamp( gEyePx * 0.05, 0.0008, 0.0035 );   // C3: smaller in a close-up (r3: max 0.0075 -> 0.0035: it was a white disc a third of the iris wide)
         float lum = dot( reflectedLight.indirectDiffuse + reflectedLight.directDiffuse, vec3( 0.3, 0.59, 0.11 ) ) / max( dot( diffuseColor.rgb, vec3( 0.3, 0.59, 0.11 ) ), 0.05 );
-        reflectedLight.directSpecular += smoothstep( 1.0 - cw * 1.47, 1.0 - cw * 0.47, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 8.0, 0.1, 4.0 ) * uGlint * gEyeAO; }`);   // ~2 px across at 960x540 in the talk close-up (it was a sub-pixel speck)
+        reflectedLight.directSpecular += smoothstep( 1.0 - cw * 1.47, 1.0 - cw * 0.47, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 4.0, 0.1, 2.0 ) * uGlint * gEyeAO; }`);   // ~2 px across at 960x540 in the talk close-up (it was a sub-pixel speck)
     giPatch(sh);
   };
   m.customProgramCacheKey = () => 'eye2'; m.needsUpdate = true; m.userData.eyeU = u; return u;
@@ -541,7 +543,7 @@ export function makeHuman(opts = {}) {
       eu.uLidCol.value.copy(skin).multiply(new THREE.Color(0.9, 0.5, 0.45)); H_eyes = eyeRig(eu, ek, el.seed);   // C3 eyes: per-person iris (eyeLook), lid-rim colour, saccade rig
       if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
     else if (name === 'teeth') { m.alphaTest = 0.5; m.color.setScalar(0.62); }   // teeth sit in the mouth's shade (nothing occludes them here): full white they glowed in the close-up, most of all on dark skin
-    else if (name === 'eyelashes') { m.color.copy(skin).multiplyScalar(0.18); m.roughness = 0.75; }   // the lash meshes are solid strips (no alpha card): near-black (the GLB's 0.012) they read as heavy eyeliner rings in the close-up; a deep shade of the skin keeps the lid line without the ink
+    else if (name === 'eyelashes') { m.color.copy(skin).multiplyScalar(0.36); m.roughness = 0.75; }   // (r3: 0.18: the lower strip still read as a dark band under the eye and the upper as liner)   // the lash meshes are solid strips (no alpha card): near-black (the GLB's 0.012) they read as heavy eyeliner rings in the close-up; a deep shade of the skin keeps the lid line without the ink
     if (opts.tint) m.color.multiply(new THREE.Color(opts.tint));
   });
   if (kind !== 'suit') {   // face shape (js/faceshape.js): from the seed, or for a seedless body from what was already drawn (no extra draw on rnd)

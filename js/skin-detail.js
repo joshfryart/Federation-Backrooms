@@ -50,7 +50,7 @@ export function skinDetailFor(kind, seed, color) {
   const L = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b, male = kind === 'crew_m' || kind === 'crew_heavy';
   const stubble = male && hash(seed, 1) < 0.7 ? 0.35 + 0.65 * hash(seed, 2) : 0;
   const fp = L > 0.2 ? 0.45 : L > 0.1 ? 0.2 : 0.08, freck = hash(seed, 3) < fp ? 0.35 + 0.65 * hash(seed, 4) : 0;
-  const age = 0.1 + 0.9 * hash(seed, 5) ** 2, oil = 0.35 + 0.65 * hash(seed, 6);
+  const age = 0.1 + 0.9 * hash(seed, 5) ** 2, oil = 0.3 + 0.5 * hash(seed, 6);   // (r3: oil 0.35..1)
   return new THREE.Vector4(stubble, freck, age, oil);
 }
 
@@ -75,10 +75,11 @@ const COLOR = `
     #define SD_FADE(freq) (1.0 - smoothstep(0.22, 0.6, px * (freq)))   // 0 = the pattern is below a pixel: use its mean and skip the noise
     float head = sd_blob(f, vec3(0.0, -0.03, -0.035), vec3(0.12, 0.16, 0.14));
     float L = max(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.01);
+    vec3 sdBase = diffuseColor.rgb;   // r3: the person's own tone here; blush / lips / under-eye / melanin are held near it (the HOLD block below)
     // ---- melanin: low-frequency variation (sun-exposed face / forearms a touch deeper), as a darker AND more saturated shift ----
     // shared noise samples (SwiftShader compile time grows with every inlined noise call: one sample serves several terms)
     float nLo = sd_n2(f * 22.0 + 3.1), nMid = sd_n2(f * 130.0 + 1.0);
-    float mel = (nLo - 0.5) * 0.5;
+    float mel = (nLo - 0.5) * 0.4;
     float fore = 0.0, nose = 0.0, cheek = 0.0;
     // the face terms are skipped off the head (most of the body's pixels; software GL runs every term for every pixel otherwise)
     if (head > 0.0) {
@@ -94,29 +95,37 @@ const COLOR = `
       float noseTip = sd_blob(f, vec3(0.0, nY, nZ), vec3(0.012, 0.012, 0.016));
       float ear = sd_blob(fs, vec3(earX - 0.01, -0.02, earZ + 0.005), vec3(0.022, 0.04, 0.035));
       float under = sd_blob(fs, vec3(eh, -0.018, -0.006), vec3(0.018, 0.008, 0.03)) * (1.0 - lip);
-      mel += 0.2 * fore + 0.12 * nose;
+      mel += 0.1 * fore + 0.08 * nose;   // r3: 0.2 / 0.12 (a darker, more saturated band across the forehead)
       // ---- hemoglobin: cheeks, nose tip, ears (multiplicative, so it reads on every skin tone in proportion) ----
       float hb = cheek * 0.55 + noseTip * 0.45 + ear * 0.75 + chin * 0.15;
       hb *= mix(1.0, 0.75 + 0.5 * nMid, SD_FADE(130.0));   // broken-capillary mottling inside the flush
-      diffuseColor.rgb *= mix(vec3(1.0), vec3(1.0, 0.8, 0.8), clamp(hb, 0.0, 1.0));
-      // lips: redder, a little darker, with vertical fine lines
+      diffuseColor.rgb *= mix(vec3(1.0), vec3(1.0, 0.86, 0.86), clamp(hb, 0.0, 1.0));   // r3: 0.8 -> 0.86 (with the melanin saturation it read orange-red on mid tones)
+      // lips: a deeper, slightly rosier shade of the person's own skin (r3: was x(0.88, 0.58, 0.6), a salmon lipstick on every tone), with vertical fine lines
       float fLl = SD_FADE(900.0), lipLines = lip > 0.0 && fLl > 0.0 ? mix(0.5, sd_n2(vec3(f.x * 900.0, f.y * 60.0, 0.0)), fLl) : 0.5;
-      diffuseColor.rgb *= mix(vec3(1.0), vec3(0.88, 0.58, 0.6) * (0.96 + 0.08 * lipLines), lip);
+      diffuseColor.rgb *= mix(vec3(1.0), vec3(0.84, 0.72, 0.72) * (0.95 + 0.1 * lipLines), lip);
       sdLip = lip;
       // under-eye: thin skin over the orbicularis, a cool purple-brown shadow
       diffuseColor.rgb *= mix(vec3(1.0), vec3(0.86, 0.82, 0.9), under * 0.8);
+      SD_HOLD
       // stubble (men only): below a line from the sideburn down to the mouth corner and up under the nose; fades down the neck; never on the lips.
-      // Follicle dots + a shadow tone (the dots average into it with distance), cool grey-brown, darker than any skin.
+      // r3: fine speckle, not a smudge. Before, the shadow tone was a 42-67% blend to near-black (the follicles fade to their mean below a pixel, and
+      // that mean was set at 0.45 where the dots really cover ~15%), so at talk distance it was one dark patch. Now: a light shadow tone relative to the
+      // skin (x0.45, so dark skin does not go grey), follicles (0.8 mm cells) that fade to their true coverage, and a 2.5 mm speckle layer that still
+      // reads at talk distance; both thin out toward the edge of the beard area (density, not just a darker-to-lighter ramp), so the edge is soft.
       float fFine = SD_FADE(1300.0), dotsFine = fFine > 0.0 ? sd_dots(f * 1300.0 + 0.7, 0.2) : 0.0;   // pores off the beard, follicles in it
       float fol = 0.0;
       if (uSkinD.x > 0.0) {
         float yCheek = mix(mY + 0.012, -0.03, smoothstep(0.03, earX - 0.012, ax));    // cheek line: mouth corner up to the sideburn
         float yTop = mix(nY - 0.009, yCheek, smoothstep(0.014, 0.03, ax));             // moustache under the nose
-        float beard = smoothstep(yTop + 0.005, yTop - 0.012, f.y) * smoothstep(chY - 0.045, chY - 0.012, f.y) * smoothstep(earZ + 0.012, earZ + 0.03, f.z)
-                    * smoothstep(0.85, 1.25, lipD) * step(ax, earX + 0.01) * uSkinD.x;
-        fol = mix(0.45, dotsFine, fFine);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.022, 0.02, 0.022), beard * (0.42 + 0.55 * fol));
-        sdBeard = beard; fol *= beard;
+        float bm = smoothstep(yTop + 0.008, yTop - 0.02, f.y) * smoothstep(chY - 0.05, chY - 0.008, f.y) * smoothstep(earZ + 0.01, earZ + 0.035, f.z)
+                 * smoothstep(0.85, 1.35, lipD) * (1.0 - smoothstep(earX - 0.005, earX + 0.012, ax));
+        float beard = bm * uSkinD.x;
+        float fCo = SD_FADE(400.0), spk = fCo > 0.0 ? sd_dots(f * 440.0 + 3.3, 1.0 - 0.95 * beard) : 0.0;   // speckle: denser in the middle of the beard area
+        fol = mix(0.15, dotsFine, fFine);
+        float spkM = mix(0.14 * beard, spk, fCo);
+        vec3 stub = mix(diffuseColor.rgb * 0.45, vec3(0.03, 0.026, 0.024), 0.45);
+        diffuseColor.rgb = mix(diffuseColor.rgb, stub, clamp(beard * (0.26 + 0.5 * fol) + 0.8 * spkM, 0.0, 0.85));
+        sdBeard = beard * 0.6; fol *= beard;
       }
       // skin grain: 2-4 mm albedo mottling (the fine structure that keeps a face from reading as plastic once the pores are below a pixel)
       float fGr = SD_FADE(330.0), grain = (nMid - 0.5) * 0.6 + (fGr > 0.0 ? (sd_n2(f * 330.0 + 5.0) - 0.5) * fGr : 0.0);
@@ -128,7 +137,7 @@ const COLOR = `
       sdH = (-0.00006 * pores * poreAmt + 0.00002 * grain) * head + 0.00003 * fol - 0.00004 * lipLines * lip;
       sdOil = tz * uSkinD.w * head;
     }
-    diffuseColor.rgb = max(mix(vec3(L), diffuseColor.rgb, 1.0 + 0.3 * mel), 0.0) * (1.0 - 0.09 * mel);   // deeper and more saturated where mel > 0 (linear: no pow)
+    if (head <= 0.0) { SD_HOLD }
     // freckles: sparse round dots, densest over the nose bridge and cheeks, some on the forehead and the shoulders / arms
     if (uSkinD.y > 0.0) {
       float fdens = (max(cheek, nose * 0.9) + fore * 0.45 + (1.0 - head) * 0.35) * smoothstep(0.42, 0.62, nLo + 0.25 * cheek);
@@ -139,9 +148,15 @@ const COLOR = `
     float aspot = sd_dots(f * 110.0 + 2.3, 0.94) * uSkinD.z;
     if (aspot > 0.0) diffuseColor.rgb *= mix(vec3(1.0), vec3(0.86, 0.74, 0.62), aspot * 0.45 * smoothstep(0.35, 0.6, nLo) * (0.4 + 0.6 * max(fore, cheek)));
   }`;
+// r3 tone hold (SD_HOLD in COLOR): melanin (deeper + more saturated where mel > 0, linear), then the colour change against the person's own base tone
+// is held to a believable range: each channel within -10 % / +12 % of the luminance change (hue and saturation stay theirs), luminance x0.8 .. x1.06.
+// Before, blush x melanin x lip tint stacked per person (an orange-red cast on mid tones, pinker cheeks on fair ones).
+const HOLD = `{ diffuseColor.rgb = max(mix(vec3(L), diffuseColor.rgb, 1.0 + 0.3 * mel), 0.0) * (1.0 - 0.09 * mel);
+      float sdM = max(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)), 1e-5) / L; vec3 sdR = diffuseColor.rgb / max(sdBase * sdM, vec3(1e-5));
+      diffuseColor.rgb = sdBase * clamp(sdR, vec3(0.9), vec3(1.12)) * clamp(sdM, 0.8, 1.06); }`;
 const ROUGH = `
-  roughnessFactor = mix(roughnessFactor * (1.06 + 0.06 * sdCav), 0.4, sdOil * 0.75);   // dry cheeks, oily T-zone
-  roughnessFactor = mix(roughnessFactor, 0.46, sdLip * 0.8);
+  roughnessFactor = mix(roughnessFactor * (1.06 + 0.06 * sdCav), 0.44, sdOil * 0.55);   // dry cheeks, oily T-zone (r3: 0.4 at 0.75: a pale sheen band on the forehead)
+  roughnessFactor = mix(roughnessFactor, 0.5, sdLip * 0.5);   // (r3: 0.46 at 0.8 read as lip gloss)
   roughnessFactor = mix(roughnessFactor, min(roughnessFactor + 0.18, 1.0), sdBeard);
 `;
 const BUMP = `
@@ -149,7 +164,7 @@ const BUMP = `
     vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1);
     vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad); }`;
 const SPEC = `
-  { float sdS = mix(0.72, 1.3, sdOil) * (1.0 - 0.45 * sdCav) * (1.0 - 0.5 * sdBeard) * (1.0 + 0.25 * sdLip);   // skin F0 ~0.028 off the T-zone, pores hold no sheen
+  { float sdS = mix(0.72, 1.12, sdOil) * (1.0 - 0.45 * sdCav) * (1.0 - 0.5 * sdBeard) * (1.0 + 0.1 * sdLip);   // (r3: oil 1.3, lips 1.25)   // skin F0 ~0.028 off the T-zone, pores hold no sheen
     material.specularColor *= sdS; material.specularColorBlended *= sdS; }`;
 
 // patch the skin program (call from skinShader's onBeforeCompile, after its own edits); adds the uniforms to sh
@@ -158,7 +173,7 @@ export function skinDetailPatch(sh, face, detail) {
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform mat4 uFaceM; varying vec3 vFace;')
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFace = (uFaceM * vec4(position, 1.0)).xyz;');
   sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + PARS)
-    .replace('#include <metalnessmap_fragment>', COLOR + '\n' + ROUGH + '\n#include <metalnessmap_fragment>')
+    .replace('#include <metalnessmap_fragment>', COLOR.replaceAll('SD_HOLD', HOLD) + '\n' + ROUGH + '\n#include <metalnessmap_fragment>')
     .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + BUMP)
     .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n' + SPEC);
 }
