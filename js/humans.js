@@ -10,6 +10,7 @@ import { requestLods } from './meshlod.js';
 import { giPatch } from './gi.js';   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
 import { addFaceShapes, faceShapeFor, applyFaceShape } from './faceshape.js';   // per-person face shape morphs (stream C1)
 import { skinFaceOf, skinDetailFor, skinDetailPatch } from './skin-detail.js';   // stream C2: face-space skin detail in the skin program (pores, blush, lips, stubble, freckles, ...)
+import { EYE_VERT_PARS, EYE_VERT_ROT, EYE_VERT_N, EYE_FRAG_PARS, EYE_ILLUM, EYE_SURFACE, EYE_DIRECT, EYE_END, eyeGlsl, eyeUniforms, eyeLook, eyeRig, EYE_LIDS } from './eyes.js';   // C3 eyes
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -290,10 +291,12 @@ const SKIN_AMBIENT = `#include <lights_fragment_end>
   { vec3 nW = inverseTransformDirection( normal, viewMatrix ); reflectedLight.indirectDiffuse *= mix( uAmb.x, 1.0, smoothstep( -0.6, 0.85, nW.y ) ) * uAmb.y; }`;
 // eyes: a wet cornea over the eyeball. The eye mesh is nearly flat (its normals all face forward), so the cornea is shaded with a sphere normal around each
 // eyeball's centre (vEyeN, see eyeShader): a second, very sharp specular lobe per light (the material's own roughness spreads it too wide to read as a glint).
+// C3: the lobe's width follows the eye's size on screen (gEyePx: how fast the sphere normal turns per pixel, set in js/eyes.js EYE_SURFACE): a pin-point
+// reflection of the lamp in a close-up, the old ~2 px glint (alpha 0.07) at talk distance and beyond; peak brightness is the same at every width.
 const EYE_CORNEA = `
   vec3 eN = normalize( vEyeN ), hD = normalize( directLight.direction + geometryViewDir );
-  float nh = clamp( dot( eN, hD ), 0.0, 1.0 ), nl = clamp( dot( eN, directLight.direction ), 0.0, 1.0 );
-  reflectedLight.directSpecular += directLight.color * nl * min( D_GGX( 0.07, nh ) * 0.03, 4.0 ) * uGlint;`;
+  float nh = clamp( dot( eN, hD ), 0.0, 1.0 ), nl = clamp( dot( eN, directLight.direction ), 0.0, 1.0 ), ga = clamp( gEyePx * 0.7, 0.014, 0.07 );
+  reflectedLight.directSpecular += directLight.color * nl * min( D_GGX( ga, nh ) * ga * ga * 6.0, 4.0 ) * uGlint;`;
 // hair: Kajiya-Kay strand highlights (two shifted lobes, the second tinted by the hair colour). The cards' own normals jump from card to card, so the highlight
 // uses a smooth "shell" normal (vHairN: out from the centre of the hair volume) and a strand direction that runs from the crown down and out (vHairT), both
 // skinned in hairShader: one continuous band over the head instead of a highlight per card.
@@ -318,27 +321,32 @@ const FUZZ_AMBIENT = `#include <lights_fragment_end>
 // eyes = eyesOf(): the two eyeball centres in the eye mesh's own space (x < mid = one eye, x >= mid = the other) and the eyes' forward direction there.
 // glint 0: the same program with the cornea terms off. The tongue and the shoes use it that way: they used to share one program with the eyes (the same
 // plain textured skinned material), and keeping all three on one program keeps the program count where it was.
-export function eyeShader(m, eyes, glint = 1) {
-  const u = { uEyeA: { value: eyes.a.clone() }, uEyeB: { value: eyes.b.clone() }, uEyeMid: { value: eyes.mid }, uEyeFwd: { value: eyes.fwd.clone() }, uGlint: { value: glint }, uEyeShA: { value: new THREE.Vector3() }, uEyeShB: { value: new THREE.Vector3() } };   // uEyeSh*: per-person eyeball shift (js/faceshape.js), mesh space
+// ---- C3 eyes: iris depth / pupil / limbal ring / veins / lid contact / tear line / saccades: GLSL + rig in js/eyes.js (all behind uGlint, same program) ----
+// look: eyeLook() (per-person iris colour etc.; omitted = the old brown); returns the uniforms (eyeRig drives uEyeRA / uEyeRB / uEyeLid)
+export function eyeShader(m, eyes, glint = 1, look = null) {
+  const u = Object.assign(eyeUniforms(eyes, look), { uGlint: { value: glint }, uEyeShA: { value: new THREE.Vector3() }, uEyeShB: { value: new THREE.Vector3() } });   // uEyeSh*: per-person eyeball shift (C1, js/faceshape.js), mesh space
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec4 uEyeA, uEyeB; uniform float uEyeMid; uniform vec3 uEyeFwd, uEyeShA, uEyeShB; varying vec3 vEyeN; varying vec3 vEyeF;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed += position.x < uEyeMid ? uEyeShA : uEyeShB;')
-      .replace('#include <defaultnormal_vertex>', `#include <defaultnormal_vertex>
-        { vec4 ec = position.x < uEyeMid ? uEyeA : uEyeB; vec3 en = position - ec.xyz, ef = uEyeFwd;
-          #ifdef USE_SKINNING
-            en = ( skinMatrix * vec4( en, 0.0 ) ).xyz; ef = ( skinMatrix * vec4( ef, 0.0 ) ).xyz;
-          #endif
-          vEyeN = normalize( mat3( modelViewMatrix ) * en ); vEyeF = normalize( mat3( modelViewMatrix ) * ef ); }`);
-    sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vEyeN; varying vec3 vEyeF; uniform float uGlint;'), 'Eye', EYE_CORNEA).replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + EYE_VERT_PARS + '\nuniform vec3 uEyeShA, uEyeShB;')
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + EYE_VERT_ROT)
+      .replace('#include <defaultnormal_vertex>', '#include <defaultnormal_vertex>\n' + EYE_VERT_N)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed = eyeP + ( position.x < uEyeMid ? uEyeShA : uEyeShB );'   /* C1 face-shape eyeball shift */);
+    sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\n' + EYE_FRAG_PARS).replace('#include <lights_pars_begin>', '#include <lights_pars_begin>\n' + EYE_ILLUM), 'Eye', EYE_CORNEA + EYE_DIRECT)
+      .replace('#include <map_fragment>', `#if defined( USE_MAP )
+        if ( uGlint > 0.5 ) {${eyeGlsl(EYE_SURFACE)}} else {
+        #include <map_fragment>
+        }
+        #endif`)
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  if ( uGlint > 0.5 ) normal = normalize( vEyeN );   // the ball is lit as a sphere (the mesh normals all face forward)')
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${EYE_END}
       { // catch light: a soft light near the viewer reflected in the cornea, pinned to the upper left of the pupil (on these meshes the painted pupil sits below the
         // cap's apex, hence the downward offset; found by drawing the regions) so the lids never hide it; scaled by how lit the eye is so it never glows in the dark
-        vec3 tg = normalize( normalize( vEyeF ) * 2.5 + normalize( vViewPosition ) + vec3( -0.22, -0.6, 0.0 ) );
+        vec3 tg = normalize( normalize( vEyeF ) * 2.5 + normalize( vViewPosition ) + vec3( -0.22, -0.6, 0.0 ) ); float cw = clamp( gEyePx * 0.11, 0.0012, 0.0075 );   // C3: smaller in a close-up
         float lum = dot( reflectedLight.indirectDiffuse + reflectedLight.directDiffuse, vec3( 0.3, 0.59, 0.11 ) ) / max( dot( diffuseColor.rgb, vec3( 0.3, 0.59, 0.11 ) ), 0.05 );
-        reflectedLight.directSpecular += smoothstep( 0.989, 0.9965, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 8.0, 0.1, 4.0 ) * uGlint; }`);   // ~2 px across at 960x540 in the talk close-up (it was a sub-pixel speck)
+        reflectedLight.directSpecular += smoothstep( 1.0 - cw * 1.47, 1.0 - cw * 0.47, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 8.0, 0.1, 4.0 ) * uGlint * gEyeAO; }`);   // ~2 px across at 960x540 in the talk close-up (it was a sub-pixel speck)
     giPatch(sh);
   };
-  m.customProgramCacheKey = () => 'eye1'; m.needsUpdate = true; m.userData.eyeU = u; return u;
+  m.customProgramCacheKey = () => 'eye2'; m.needsUpdate = true; m.userData.eyeU = u; return u;
 }
 // crown: the top centre of the hair mesh in its own (bind) space; strands are taken to run from there down and out over the scalp
 export function hairShader(m, { crown, centre }) {
@@ -443,7 +451,10 @@ function eyesOf(kind) {
   const wb = [new THREE.Box3(), new THREE.Box3()]; for (let i = 0; i < S.n; i++) { v.fromBufferAttribute(P, i); wb[v.x < mid ? 0 : 1].expandByPoint(v.fromArray(S.W, i * 3)); }
   const c = (b) => { const r = (b.max.x - b.min.x) / 2, m = S.toMesh(new THREE.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, b.max.z - r)); return new THREE.Vector4(m.x, m.y, m.z, r); };
   const o0 = S.toMesh(new THREE.Vector3()), fwd = S.toMesh(new THREE.Vector3(0, 0, 1)).sub(o0).normalize();   // the models face +z
-  return (eyeSpots[kind] = { a: c(wb[0]), b: c(wb[1]), mid, fwd });
+  // C3 eyes: the head frame (up / right) in mesh space, which way is the nose for each eye, and the rest-space map for the saccade rotation (js/eyes.js eyeRig)
+  const up = S.toMesh(new THREE.Vector3(0, 1, 0)).sub(o0).normalize(), right = S.toMesh(new THREE.Vector3(1, 0, 0)).sub(o0).normalize();
+  const cw = wb.map(b => { const r = (b.max.x - b.min.x) / 2; return new THREE.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, b.max.z - r); }), xm = (cw[0].x + cw[1].x) / 2;
+  return (eyeSpots[kind] = { a: c(wb[0]), b: c(wb[1]), mid, fwd, up, right, nasal: new THREE.Vector2(Math.sign(xm - cw[0].x) || 1, Math.sign(xm - cw[1].x) || -1), lid: EYE_LIDS[kind], M: S.M, Mi: S.M.clone().invert(), cwA: cw[0], cwB: cw[1] });
 }
 // strand origin + shell centre for hairShader, per body kind (every clone shares the hair geometry): top of the hair mesh, a little behind its centre (the crown whorl)
 const crowns = {};
@@ -461,7 +472,7 @@ function restMesh(kind, matName) {
   for (let i = 0; i < n; i++) { o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld); v.toArray(W, i * 3); box.expandByPoint(v); }
   const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight; let k = 0; for (let j = 1; j < 4; j++) if (sw.getComponent(0, j) > sw.getComponent(0, k)) k = j;
   const bi = si.getComponent(0, k), M = new THREE.Matrix4().multiplyMatrices(o.matrixWorld, o.bindMatrixInverse).multiply(o.skeleton.bones[bi].matrixWorld).multiply(o.skeleton.boneInverses[bi]).multiply(o.bindMatrix), Mi = M.clone().invert();
-  return { o, box, W, n, toMesh: (p) => p.clone().applyMatrix4(Mi) };
+  return { o, box, W, n, M, toMesh: (p) => p.clone().applyMatrix4(Mi) };
 }
 // contact shadow under each standing person: one shared soft radial falloff (dense core under the feet, long soft tail) instead of a hard-edged flat disc.
 // Drawn first among the transparents (renderOrder -1) so it never covers a decal on the same floor. One more program than the flat disc (a textured basic material).
@@ -493,7 +504,7 @@ export function makeHuman(opts = {}) {
   const skin = skinAlbedo(new THREE.Color(opts.skin ?? pickOf(SKINS, rnd))); if (opts.pale) skin.lerp(new THREE.Color(0xb9b3a4), opts.pale);
   const hair = opts.hair || pickOf(HAIRS, rnd); const uniform = new THREE.Color(opts.uniform ?? pickOf(DIVISIONS, rnd));
   const style = opts.style ?? pickOf(['plain', 'plain', 'duty', 'duty', 'trim', 'yoke', 'trim-duty'], rnd);   // uniform variants (see styleGarment)
-  const faces = []; const mats = {}; let H_shape = null;
+  const faces = []; const mats = {}; let H_shape = null, H_eyes = null;
   inner.traverse(o => {
     if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = !opts.material;
     if (o.morphTargetDictionary) faces.push(o);
@@ -509,7 +520,8 @@ export function makeHuman(opts = {}) {
     else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); if (o.geometry.attributes.zone) styleGarment(m, style, uniform); }
     else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; eyeShader(m, NO_EYES, 0); }   // shares the eyes' program, glint off
     else if (name === 'tongue') eyeShader(m, eyesOf(kind), 0);   // shares the eyes' program, glint off
-    else if (name === 'eyes') { m.roughness = 0.08; m.color.setScalar(0.82); eyeShader(m, eyesOf(kind));   // sclera ~0.7 albedo, not paper white (it read as glowing against the face)
+    else if (name === 'eyes') { m.roughness = 0.08; m.color.setScalar(0.82); const ek = eyesOf(kind), el = eyeLook(seed ?? Math.round(skin.r * 1e5 + skin.g * 1e3 + hair[0] * 7e4 + uniform.r * 3e3), skin, opts.bloody || 0), eu = eyeShader(m, ek, 1, el);   // sclera ~0.7 albedo, not paper white (it read as glowing against the face)
+      eu.uLidCol.value.copy(skin).multiply(new THREE.Color(0.9, 0.5, 0.45)); H_eyes = eyeRig(eu, ek, el.seed);   // C3 eyes: per-person iris (eyeLook), lid-rim colour, saccade rig
       if (opts.bloody) { m.emissive = new THREE.Color(0x601008); m.emissiveIntensity = 0.6; } if (opts.slime) { m.emissive = new THREE.Color(0x30ff60); m.emissiveIntensity = 1.6; } }
     else if (name === 'teeth') { m.alphaTest = 0.5; m.color.setScalar(0.62); }   // teeth sit in the mouth's shade (nothing occludes them here): full white they glowed in the close-up, most of all on dark skin
     else if (name === 'eyelashes') { m.color.copy(skin).multiplyScalar(0.18); m.roughness = 0.75; }   // the lash meshes are solid strips (no alpha card): near-black (the GLB's 0.012) they read as heavy eyeliner rings in the close-up; a deep shade of the skin keeps the lid line without the ink
@@ -527,7 +539,7 @@ export function makeHuman(opts = {}) {
   const mixer = new THREE.AnimationMixer(inner); const acts = {}; let cur = null, curKey = '';
   const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'upperarm_l', 'clavicle_l', 'clavicle_r', 'thigh_l', 'thigh_r', 'foot_l', 'foot_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
   const H = {
-    kind, inner, mixer, bones, mats, height, faceW: {}, lookYaw: 0, lookPitch: 0, shape: H_shape,
+    kind, inner, mixer, bones, mats, height, faceW: {}, lookYaw: 0, lookPitch: 0, shape: H_shape, eyes: H_eyes,
     has: (k) => !!inf.clips[k],
     play(key, { loop = true, fade = 0.25, speed = 1, restart = false } = {}) {
       const clip = inf.clips[key]; if (!clip) return;
@@ -541,6 +553,7 @@ export function makeHuman(opts = {}) {
     face(w) { Object.assign(H.faceW, w); for (const m of faces) for (const k in H.faceW) { const i = m.morphTargetDictionary[k]; if (i !== undefined) m.morphTargetInfluences[i] = H.faceW[k]; } },
     update(dt) {
       mixer.update(dt); holoTime.value = performance.now() / 1000;
+      if (H.eyes) H.eyes.step(dt, H.faceW);   // C3 eyes: saccades, lid edge
       if (H.add) for (const n in H.add) { const b = bones[n]; if (b) { const r = H.add[n]; if (r[0]) b.rotateX(r[0]); if (r[1]) b.rotateY(r[1]); if (r[2]) b.rotateZ(r[2]); } }   // additive gesture layer from js/movement.js
       if (H.lookYaw || H.lookPitch) { const b = bones.Head; if (b) { b.rotateY(H.lookYaw * 0.6); b.rotateX(H.lookPitch); } const n = bones.neck_01; if (n) n.rotateY(H.lookYaw * 0.4); }
     },
