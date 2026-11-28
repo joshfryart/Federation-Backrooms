@@ -19,6 +19,7 @@ const opt = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : (ar
 const OUT = resolve(ROOT, opt('out', 'shots/gfx')), CMP = opt('compare', null) && resolve(ROOT, opt('compare')), THR = +opt('thr', 24), ONLY = opt('only', null) ? String(opt('only')).split(',') : null;
 const SEED = 1, SHIP = 1, W = 960, H = 540;
 const VIEWS = ['corridor', 'bridge', 'engineering', 'sickbay', 'crowd', 'talk', 'blackout', 'madness-torch', 'viewer-wear', 'viewer-medical', 'viewer-stations1', 'models-enemies'];
+const TALK_PICK = +opt('talk-pick', 0);   // --talk-pick N: the talk view picks the Nth eligible crew member (deck order; another person / seed), saved as talk-N.png (N > 0)
 if (argv.includes('--list')) { console.log(VIEWS.join('\n')); process.exit(0); }
 const want = VIEWS.filter(v => !ONLY || ONLY.includes(v));
 
@@ -102,12 +103,12 @@ async function shoot() {
         if (!n) throw new Error('no crew'); await save(page, 'crowd');
       });
       await run('talk', async () => {
-        const who = await page.evaluate(async () => { const S = __sg, g = __game, G = g.G; S.settle(10); let best = null;
-          for (let dn = 1; dn <= G.ship.decks && !best; dn++) { __rs(); g.loadDeck(dn); __rs(); G.phase = 'play'; S.settle(20); const c = g.ents.filter(e => e.kind === 'crew' && e.person && !e.fake && e.mesh?.userData.human && e.mesh.visible && !e.walk && !e.repairing && e.turning === undefined && !e.cower); if (c.length) best = c[0]; }
+        const who = await page.evaluate(async (pick) => { const S = __sg, g = __game, G = g.G; S.settle(10); let best = null;
+          for (let dn = 1; dn <= G.ship.decks && !best; dn++) { __rs(); g.loadDeck(dn); __rs(); G.phase = 'play'; S.settle(20); const c = g.ents.filter(e => e.kind === 'crew' && e.person && !e.fake && e.mesh?.userData.human && e.mesh.visible && !e.walk && !e.repairing && e.turning === undefined && !e.cower); if (c.length > pick) best = c[pick]; else if (c.length) pick -= c.length; }
           if (!best) return null; const e = best, P = g.P, y0 = e.mesh.rotation.y; let px = e.x, pz = e.z; for (const da of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.5, -2.5, 3.14]) { px = e.x + Math.sin(y0 + da) * 1.3; pz = e.z + Math.cos(y0 + da) * 1.3; const [tx, ty] = g.world.tile(px, pz); if (!g.world.solid(tx, ty) && g.world.los(px, pz, e.x, e.z)) break; }
           S.stand(px, pz, Math.atan2(-(e.x - px), -(e.z - pz)), 0); for (let i = 0; i < 3; i++) { g.advance(1 / 30); g.renderOnce(); }
-          if (!g.talk.begin(e)) return null; for (let i = 0; i < 40; i++) { g.advance(1 / 30); g.menus?.frame?.(1 / 30); g.renderOnce(); } return e.person.short; });
-        if (!who) throw new Error('talk did not start'); await hud(page, false); await save(page, 'talk'); await hud(page, true);
+          if (!g.talk.begin(e)) return null; for (let i = 0; i < 40; i++) { g.advance(1 / 30); g.menus?.frame?.(1 / 30); g.renderOnce(); } return e.person.short; }, TALK_PICK);
+        if (!who) throw new Error('talk did not start'); console.log('talk with', who); await hud(page, false); await save(page, TALK_PICK ? 'talk-' + TALK_PICK : 'talk'); await hud(page, true);
         await page.evaluate(() => { __game.talk.end?.(); __game.G.phase = 'play'; });
       });
       await run('blackout', async () => {
