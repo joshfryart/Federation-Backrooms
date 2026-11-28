@@ -3,7 +3,7 @@
 // garstyle2; the worn-outfit cloth gets one program of its own, `wearcloth1`, which it used to share with the outfit trim).
 //
 // HAIR (bakeHair, hairPatch):
-//   * per vertex `hairD` (vec4): xyz = the offset (hair mesh space) that lays the vertex down onto the scalp 2 mm above the skin (crop styles), w = distance to the
+//   * per vertex `hairD` (vec4): xyz = the offset (hair mesh space) that lays the vertex down onto the scalp 4 mm above the skin (crop styles; r3: and lifts any vertex under that up to it, every style), w = distance to the
 //     scalp in metres (0.9 = not over the head: long hair, the ponytail) for the hair cards; for the added parts w = part + random (1 = flyaway strand, 2 = bun)
 //     and xyz = the part's strand direction
 //   * added geometry, appended to the hair mesh itself (no extra draw call, same material, carried into the crowd LODs like every other attribute):
@@ -62,14 +62,17 @@ function bakeHair(kind, scene, s, B) {
   const skull = new THREE.Box3(), cell = (x, y, z) => `${Math.floor(x / C)}|${Math.floor(y / C)}|${Math.floor(z / C)}`;
   for (let i = 0; i < nb; i++) { let w = 0; for (let k = 0; k < 4; k++) if (bn[bsi.getComponent(i, k)]) w += bsw.getComponent(i, k); if (w < 0.5) continue;
     const k = cell(Bp[i * 3], Bp[i * 3 + 1], Bp[i * 3 + 2]); (grid.get(k) || grid.set(k, []).get(k)).push(i); if (Bp[i * 3 + 1] > centre.y - 0.03) skull.expandByPoint(v.fromArray(Bp, i * 3)); }
-  const LIFT = 0.002, D = new Float32Array(n0 * 4), d = new THREE.Vector3(), Li = new THREE.Matrix3().setFromMatrix4(Mhi);
+  const LIFT = 0.004, D = new Float32Array(n0 * 4), d = new THREE.Vector3(), Li = new THREE.Matrix3().setFromMatrix4(Mhi);
   for (let i = 0; i < n0; i++) {
     const x = H[i * 3], y = H[i * 3 + 1], z = H[i * 3 + 2]; let best = -1, bd = 0.05 * 0.05;
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) { const L = grid.get(cell(x + a * C, y + b * C, z + c * C)); if (L) for (const j of L) { const dd = (Bp[j * 3] - x) ** 2 + (Bp[j * 3 + 1] - y) ** 2 + (Bp[j * 3 + 2] - z) ** 2; if (dd < bd) { bd = dd; best = j; } } }
     if (best < 0) { D[i * 4 + 3] = 0.9; continue; }
     const nx = Bn[best * 3], ny = Bn[best * 3 + 1], nz = Bn[best * 3 + 2], h = (x - Bp[best * 3]) * nx + (y - Bp[best * 3 + 1]) * ny + (z - Bp[best * 3 + 2]) * nz;   // height above the skin along its normal
     D[i * 4 + 3] = Math.min(0.89, Math.max(0, h));
-    if (h > LIFT) { d.set(-nx, -ny, -nz).multiplyScalar(h - LIFT).applyMatrix3(Li); D[i * 4] = d.x; D[i * 4 + 1] = d.y; D[i * 4 + 2] = d.z; }
+    // (r3: also the other way: cards at or under the skin are lifted to LIFT above it, always, not only when cropped. The hairline cards lie on the forehead
+    // and dipped in and out of it (more so with the C1 brow / forehead shapes), so the skin cut them off along a jagged depth intersection that no alpha could
+    // soften: that, not the map's alpha, was the hard hairline. 2 mm was not enough clear of the shaped brow; LIFT 2 -> 4 mm, crop styles included)
+    d.set(-nx, -ny, -nz).multiplyScalar(h - LIFT).applyMatrix3(Li); D[i * 4] = d.x; D[i * 4 + 1] = d.y; D[i * 4 + 2] = d.z;
   }
   // distance (m, to 12 mm) from the open border of the hair mesh over its welded surface: where that border lies on the skin it is the hairline / nape line
   const HE = new Float32Array(n0).fill(1); {
@@ -97,15 +100,18 @@ function bakeHair(kind, scene, s, B) {
   // flyaways: roots on the outer layer of the upper half of the hair, strands leave the surface and curl out / down
   const cand = []; { let maxR = 0; const rr = new Float32Array(n0); for (let i = 0; i < n0; i++) { rr[i] = Math.hypot(H[i * 3] - centre.x, H[i * 3 + 1] - centre.y, H[i * 3 + 2] - centre.z); if (D[i * 4 + 3] < 0.89) maxR = Math.max(maxR, rr[i]); }   // over the head only (not the length of long hair)
     for (let i = 0; i < n0; i++) if (rr[i] > maxR * 0.78 && H[i * 3 + 1] > centre.y - 0.02 && D[i * 4 + 3] < 0.89) cand.push(i); }
-  const NS = cand.length ? 36 : 0, SEG = 4;
+  // r3: fewer (36 -> 20), thinner (0.4-0.65 mm -> 0.16-0.26 mm at the root), tapered to a point, and curved: each strand leaves the surface nearly
+  // tangent and bends round a constant arc (plus a slight twist out of plane) instead of standing out as a short straight stroke
+  const NS = cand.length ? 20 : 0, SEG = 6, ax = new THREE.Vector3(), tw = new THREE.Vector3();
   for (let k = 0; k < NS; k++) {
     const i = cand[Math.floor(R() * cand.length)], r = R(); p.fromArray(H, i * 3); out.subVectors(p, centre).normalize(); p.addScaledVector(out, -0.002);
-    dir.subVectors(p, crown).normalize().multiplyScalar(0.8).addScaledVector(out, 0.3 + R() * 0.45).add(new THREE.Vector3(R() - 0.5, R() - 0.6, R() - 0.5).multiplyScalar(0.5)).normalize();
-    const len = 0.012 + R() * R() * 0.028, wd = 0.0004 + R() * 0.00025, curl = new THREE.Vector3(R() - 0.5, -0.6 - R() * 0.6, R() - 0.5).multiplyScalar(0.9 / len * 0.012);
-    const pts = []; const q = p.clone(), dd = dir.clone(); for (let j = 0; j <= SEG; j++) { pts.push(q.clone()); dd.addScaledVector(curl, len / SEG).normalize(); q.addScaledVector(dd, len / SEG); if (q.y > top) q.y = top; }
+    dir.subVectors(p, crown).normalize().multiplyScalar(0.9).addScaledVector(out, 0.12 + R() * 0.22).add(new THREE.Vector3(R() - 0.5, R() - 0.6, R() - 0.5).multiplyScalar(0.35)).normalize();
+    const len = 0.014 + R() * R() * 0.024, wd = 0.00008 + R() * 0.00005, bend = (1.6 + R() * 1.6) * (R() < 0.5 ? -1 : 1);   // total turn (rad) over the strand
+    ax.crossVectors(dir, out); if (ax.lengthSq() < 1e-6) ax.set(1, 0, 0); ax.normalize(); tw.copy(out).multiplyScalar((R() - 0.5) * 0.8).add(ax).normalize();   // bend plane: mostly along the surface
+    const pts = []; const q = p.clone(), dd = dir.clone(); for (let j = 0; j <= SEG; j++) { pts.push(q.clone()); dd.applyAxisAngle(tw, bend / SEG).addScaledVector(out, 0.04).normalize(); q.addScaledVector(dd, len / SEG); if (q.y > top) q.y = top; }
     w1.crossVectors(dir, out).normalize(); if (w1.lengthSq() < 1e-6) w1.set(1, 0, 0); w2.crossVectors(dir, w1).normalize();
     for (const wv of [w1, w2]) { const base = nv;
-      for (let j = 0; j <= SEG; j++) { const t = j / SEG, hw = wd * (1 - 0.7 * t), tg = j < SEG ? pts[j + 1].clone().sub(pts[j]).normalize() : pts[j].clone().sub(pts[j - 1]).normalize(), nrm = new THREE.Vector3().crossVectors(tg, wv).normalize();
+      for (let j = 0; j <= SEG; j++) { const t = j / SEG, hw = wd * (1 - 0.92 * t), tg = j < SEG ? pts[j + 1].clone().sub(pts[j]).normalize() : pts[j].clone().sub(pts[j - 1]).normalize(), nrm = new THREE.Vector3().crossVectors(tg, wv).normalize();
         vert(pts[j].clone().addScaledVector(wv, -hw), nrm, 0, t, tg, 1 + r * 0.98); vert(pts[j].clone().addScaledVector(wv, hw), nrm, 1, t, tg, 1 + r * 0.98); }
       for (let j = 0; j < SEG; j++) { const a = base + j * 2; IX.push(a, a + 1, a + 3, a, a + 3, a + 2); } }
   }
@@ -140,10 +146,13 @@ function bakeHair(kind, scene, s, B) {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); g.setAttribute('hairD', new THREE.BufferAttribute(hd, 4)); g.setAttribute('hairE', new THREE.BufferAttribute(he, 1)); g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeBoundingBox(); g.computeBoundingSphere();
-  // the parts' colour: the mean of the opaque texels of the hair map (linear), so the bun and strands match the cards without sampling the map's alpha
+  // the parts' colour: the mean of the darker half of the opaque texels of the hair map (linear), so the bun and strands match the cards without sampling the
+  // map's alpha. (r3: the darker half only: crew_heavy's map carries light grey curl lines, and the plain mean put those into every flyaway: light streaks)
   let tint = new THREE.Vector3(0.3, 0.24, 0.2);
-  try { const img = hair.material.map?.image; if (img && typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, 32, 32); const px = x.getImageData(0, 0, 32, 32).data; let r = 0, gg = 0, b = 0, cnt = 0;
-    for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) { r += px[i]; gg += px[i + 1]; b += px[i + 2]; cnt++; } if (cnt) { const lin = (u) => { u /= cnt * 255; return u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4); }; tint = new THREE.Vector3(lin(r), lin(gg), lin(b)); } } } catch (e) { /* tainted / not decoded: keep the default */ }
+  try { const img = hair.material.map?.image; if (img && typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, 32, 32); const px = x.getImageData(0, 0, 32, 32).data, op = [];
+    for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) op.push(i); op.sort((a, b) => (px[a] + px[a + 1] + px[a + 2]) - (px[b] + px[b + 1] + px[b + 2])); const dk = op.slice(0, Math.max(1, op.length >> 1));
+    let r = 0, gg = 0, b = 0; for (const i of dk) { r += px[i]; gg += px[i + 1]; b += px[i + 2]; } const cnt = op.length ? dk.length : 0;
+    if (cnt) { const lin = (u) => { u /= cnt * 255; return u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4); }; tint = new THREE.Vector3(lin(r), lin(gg), lin(b)); } } } catch (e) { /* tainted / not decoded: keep the default */ }
   Object.assign(B, { hairM: Mh, hairMi: new THREE.Matrix3().setFromMatrix4(Mhi), crown, centre, tint, hairTop: box.max.y, parts: na });
 }
 
@@ -177,9 +186,11 @@ function hwNoise() {
   t.wrapS = t.wrapT = t.wrapR = THREE.RepeatWrapping; t.unpackAlignment = 1; t.needsUpdate = true; return (noiseTex = t);
 }
 /** uniforms for one person's hair material: null when this kind was not baked */
-export function hairUniforms(kind, st) {
+/** skin: the person's skin albedo (THREE.Color, linear; r3: the hairline blends toward it, see hairPatch) */
+export function hairUniforms(kind, st, skin = null) {
   const B = BAKE[kind]; if (!B?.hairM) return null; st = st || hairStyleFor(kind, 0);
-  return { uHWDetail: hwDetail, uHWNoise: { value: hwNoise() }, uHairM: { value: B.hairM }, uHairMi: { value: B.hairMi }, uHCrown: { value: B.crown }, uHCentre: { value: B.centre }, uHairTint: { value: B.tint }, uHairStyle: { value: st.style }, uHairCut: { value: st.cut } };
+  const sk = skin ? new THREE.Vector3(skin.r, skin.g, skin.b) : new THREE.Vector3(0.3, 0.2, 0.15);
+  return { uHWDetail: hwDetail, uHWNoise: { value: hwNoise() }, uHairM: { value: B.hairM }, uHairMi: { value: B.hairMi }, uHCrown: { value: B.crown }, uHCentre: { value: B.centre }, uHairTint: { value: B.tint }, uHairStyle: { value: st.style }, uHairCut: { value: st.cut }, uHSkin: { value: sk } };
 }
 export function hairPatch(sh, u) {
   if (!u) return; Object.assign(sh.uniforms, u);
@@ -191,18 +202,19 @@ attribute vec4 hairD; attribute float hairE; varying float vHE; varying float vH
       vHD = rp - uHCrown; float band = smoothstep( uHCrown.y - 0.055, uHCrown.y - 0.085, rp.y );
       float crop = clamp( uHairStyle.x + uHairStyle.y * band, 0.0, 0.97 );
       if ( hairD.w < 0.89 ) vHW = hairD.w * ( 1.0 - crop );   // height above the scalp after the crop (roots, hairline)
-      transformed += hairD.xyz * crop + uHairMi * ( normalize( rp - uHCentre ) * uHairStyle.z * ( 1.0 - crop ) * smoothstep( 0.0, 0.006, hairD.w ) );
+      transformed += hairD.xyz * ( hairD.w < 0.004 ? 1.0 : crop ) + uHairMi * ( normalize( rp - uHCentre ) * uHairStyle.z * ( 1.0 - crop ) * smoothstep( 0.0, 0.006, hairD.w ) );
     } else {
       vHD = mat3( uHairM ) * hairD.xyz;
       bool show = part < 1.5 ? fract( hairD.w ) < uHairStyle.w : uHairCut.z > 0.5;
       if ( !show ) transformed = vec3( 0.0 );   // a part this person does not wear: every vertex to one point
     } }`);
   sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-uniform float uHWDetail; uniform vec3 uHCrown, uHCentre, uHairTint; uniform vec4 uHairStyle, uHairCut; varying vec3 vHP; varying vec3 vHD; varying float vHW; varying float vHE; varying float vHS;
-float gHairShift = 0.0, gHairSpec = 1.0, gHairH = 0.0;` + NOISE)
+uniform float uHWDetail; uniform vec3 uHCrown, uHCentre, uHairTint, uHSkin; uniform vec4 uHairStyle, uHairCut; varying vec3 vHP; varying vec3 vHD; varying float vHW; varying float vHE; varying float vHS;
+float gHairShift = 0.0, gHairSpec = 1.0, gHairH = 0.0, gHardA = 0.0, gHairBack = 1.0;` + NOISE)
     .replace('#include <color_fragment>', `#include <color_fragment>
   { float part = floor( vHW ), seed = uHairCut.w * 31.0;
     if ( part < 0.5 ) {
+      float a0 = diffuseColor.a;   // the map's own alpha
       float r = length( vHD ); vec3 t = vHD / max( r, 1e-4 );
       // strands radiate from the crown whorl: noise on the direction from the crown (across the strands) stretched slowly along their length
       vec3 qc = t * 16.0 + vec3( 0.0, r * 9.0, 0.0 ) + seed, qs = t * 125.0 + vec3( 0.0, r * 30.0, 0.0 );
@@ -215,26 +227,63 @@ float gHairShift = 0.0, gHairSpec = 1.0, gHairH = 0.0;` + NOISE)
       diffuseColor.a *= mix( 1.0, 0.45 + 1.1 * strand, smoothstep( 0.95, 0.4, diffuseColor.a ) );
       diffuseColor.a *= smoothstep( 0.15, 0.55, strand + scalp / 0.0035 * 0.6 + 0.05 );
       float cropK = clamp( uHairStyle.x + uHairStyle.y * smoothstep( uHCrown.y - 0.055, uHCrown.y - 0.085, vHP.y ), 0.0, 1.0 );
-      if ( det ) diffuseColor.a *= mix( 1.0, 0.5 + 0.45 * hw_n( vHP * 900.0 ), cropK * cropK * step( vHS, 0.88 ) );   // cropped close: thinner cover, the scalp shows through (alpha to coverage)
-      float line = ( 1.0 - smoothstep( 0.0, 0.008, vHE ) ) * ( 1.0 - smoothstep( 0.004, 0.012, vHS ) );   // the mesh border where it lies on the skin: hairline, nape
-      float hl = 0.5; if ( det ) hl = hw_n( vHP * 300.0 + seed );   // ~3 mm tufts: they read at talking distance (strand-scale noise averages out there, and finer breaks up into specks)
-      diffuseColor.a *= mix( 1.0, 0.2 + 0.8 * smoothstep( 0.3, 0.7, hl * 0.8 + vHE / 0.008 - 0.2 ), line );
-      gHairSpec *= 1.0 - 0.7 * line; diffuseColor.rgb *= 1.0 + 0.12 * line;   // fine baby hair at the line: no strand glints, a touch lighter (thin, backlit)
-      gHairH = strand * 0.00022 + clump * 0.0007;
+      float thin = 1.0; if ( det ) { float tn = mix( hw_n( vHP * 900.0 ), 0.5, smoothstep( 0.3, 0.8, length( fwidth( vHP * 900.0 ) ) ) );   // (r3: faded to its mean once under ~2 px: sub-pixel alpha
+        thin = mix( 1.0, 0.5 + 0.45 * tn, cropK * cropK * step( vHS, 0.88 ) ); }                                                                // noise made alpha to coverage draw a network of light iso-lines)
+      diffuseColor.a *= thin;   // cropped close: thinner cover, the scalp shows through (alpha to coverage)
+      // r3 hairline: feathered instead of a hard cut-out. The hair that meets the forehead / temples / nape is the cards lying on the skin (lifted clear of
+      // it in the vertex shader, see bakeHair LIFT). On them the painted alpha, blurred over ~2 cm (ab) and thinned toward the mesh border (vHE), is a strand
+      // DENSITY: a hair is drawn where its own noise value (~0.7 mm across, ~6 mm along the strand, so the edge breaks into combed hairs, not specks) is under
+      // the local density, with a soft step widened by the pixel footprint so alpha to coverage dithers it under MSAA. As the density drops the colour goes
+      // from the root-darkened hair toward the shaded skin under it (uHSkin x 0.42: ~the body's 0.72 hairline shade x hair shadow; lighter read as pale
+      // specks), so what is left of any edge has little contrast against the skin.
+      float onSkin = 1.0 - smoothstep( 0.004, 0.014, vHS ), ed = smoothstep( 0.0, 0.012, vHE ), ab = a0;
+      #ifdef USE_MAP
+        if ( onSkin > 0.0 && det ) ab = textureLod( map, vMapUv, 4.0 ).a;   // the painted alpha blurred over ~16 texels (~2 cm) (a fixed mip: a fixed width on the head); the map's own edge is 2-3 texels
+      #endif
+      onSkin *= smoothstep( uHCrown.y - 0.035, uHCrown.y - 0.06, vHP.y );   // not the parting / crown: a hairline is 4+ cm below the top of the hair
+      onSkin *= 1.0 - smoothstep( 0.9, 0.99, a0 );   // only texels the map paints thin or clear: solid paint stays (the blur also dips at UV island seams)
+      float line = onSkin * ( 1.0 - ed * smoothstep( 0.6, 0.97, ab ) );
+      if ( line > 0.0 ) {
+        float hs = strand; if ( det ) { vec2 az = normalize( vHD.xz + vec2( 1e-5, 0.0 ) ) * 110.0;   // across the strands: the angle round the crown (~0.7 mm); along: r (~6 mm)
+          hs = hw_n( vec3( az, r * 170.0 ) + seed ) * 0.75 + clump * 0.25; }
+        float hn = clamp( ( hs - 0.25 ) / 0.5, 0.0, 1.0 ), dens = smoothstep( 0.4, 0.95, ab ) * ed, sw = 0.08 + min( length( fwidth( qs ) ) * 0.1, 0.3 );
+        float cov = smoothstep( -sw, sw, dens * 1.15 - hn - 0.08 ) * step( 0.03, dens );   // (no density, no hair: lone specks out on the forehead)
+        diffuseColor.a = mix( diffuseColor.a, cov * thin, onSkin );   // replaces the map's cut (and the scalp thinning above) on the skin
+        vec3 hc = diffuse * uHairTint * 0.8, skinSh = uHSkin * 0.42 * mix( vec3( 1.0 ), hc / max( max( hc.r, hc.g ), max( hc.b, 1e-3 ) ), 0.3 );
+        diffuseColor.rgb = mix( diffuseColor.rgb, hc, ( 1.0 - smoothstep( 0.3, 0.8, a0 ) ) * onSkin );   // thinly painted texels carry little colour of their own
+        float bl = ( 1.0 - dens ) * onSkin * 0.25;   // thin hair at the line shows the skin through it
+        diffuseColor.rgb = mix( diffuseColor.rgb * mix( 1.0, 0.92, line ), skinSh, bl );
+      }
+      gHairSpec *= 1.0 - 0.85 * line;   // fine baby hair at the line: no strand glints
+      // r3: the underside of a card (double-sided, its normal flipped toward the eye) is the inside of the hair, in its own shade, but it was lit like the
+      // outside: wherever a gap or an edge-on card showed it (crew_heavy's buzz cut, the backs of the heads) it read as thin light streaks / cracks
+      if ( !gl_FrontFacing ) { diffuseColor.rgb *= 0.8; gHairSpec *= 0.15; gHairBack = 0.15; }   // (the streaks were its sheen; much darker read as black gaps in grey / fair hair)
+      // r3: cards lying on the scalp, away from the hairline, take a plain alpha test instead of alpha to coverage: the painted curls / strands give their
+      // alpha iso-lines all over a short cut, and partial coverage along every one of them let the lit scalp through as a network of light cracks
+      gHardA = ( 1.0 - smoothstep( 0.015, 0.03, vHS ) ) * step( line, 0.0 );
+      // bump: each noise term only while its features span a few pixels (r3: the strand term at sub-pixel scale turned the normal over at random from one
+      // pixel quad to the next, and the GGX lobe lit those quads as a network of white cracks / specks, worst on crew_heavy's buzz cut and along hairlines)
+      gHairH = ( strand * 0.00022 * ( 1.0 - smoothstep( 0.25, 0.6, fw ) ) + clump * 0.0007 * ( 1.0 - smoothstep( 0.08, 0.2, length( fwidth( qc ) ) ) ) ) * ( 1.0 - line );
       // length cut (bob / shoulder length): uneven clumped ends; ponytail off past a radius from the head centre
       if ( uHairCut.x > 0.0 ) { float cy = uHCrown.y - uHairCut.x + ( clump - 0.5 ) * 0.03 + ( strand - 0.5 ) * 0.01; if ( vHP.y < cy ) discard; diffuseColor.a *= smoothstep( 0.0, 0.012, vHP.y - cy ); }
       if ( uHairCut.y > 0.0 && vHW > uHairCut.y + ( strand - 0.5 ) * 0.008 ) discard;   // ponytail off: everything standing well clear of the scalp
     } else if ( part < 1.5 ) {   // flyaway: a tapered single hair (uv.x across, uv.y root -> tip)
-      diffuseColor.rgb = diffuse * uHairTint * 1.05; float ac = 1.0 - abs( vMapUv.x * 2.0 - 1.0 );
-      diffuseColor.a = smoothstep( 0.05, 0.6, ac ) * ( 1.0 - 0.55 * vMapUv.y ); gHairSpec = 1.3;
+      // r3: the root-darkened hair colour (darker-half map tint x 0.8), never lighter than the cards; fades out toward the tip, strand glints halved
+      diffuseColor.rgb = diffuse * uHairTint * 0.8; float ac = 1.0 - abs( vMapUv.x * 2.0 - 1.0 );
+      diffuseColor.a = smoothstep( 0.05, 0.6, ac ) * ( 1.0 - 0.75 * vMapUv.y * vMapUv.y ); gHairSpec = 0.5;
     } else {   // bun: hair wrapped round the coil
       vec3 t = normalize( vHD ); float strand = hw_n( vec3( vMapUv * vec2( 260.0, 40.0 ), seed ) ) * 0.7 + hw_n( vec3( vMapUv * vec2( 70.0, 12.0 ), seed + 3.0 ) ) * 0.3;
       diffuseColor.rgb = diffuse * uHairTint * mix( 0.6, 1.2, strand ); diffuseColor.a = 1.0; gHairShift = ( strand - 0.5 ) * 0.2; gHairSpec = 0.6 + 0.6 * strand; gHairH = strand * 0.0006;
     } }`)
+    .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  reflectedLight.directSpecular *= gHairBack; reflectedLight.indirectSpecular *= gHairBack;')
+    .replace('#include <alphatest_fragment>', `if ( gHardA > 0.5 ) { if ( diffuseColor.a < alphaTest * 0.5 ) discard; diffuseColor.a = 1.0; } else {   // (half the threshold: fewer holes onto the dark under-layers)
+  #include <alphatest_fragment>
+  }`)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   if ( uHWDetail > 0.5 ) { vec3 dpx = dFdx( -vViewPosition ), dpy = dFdy( -vViewPosition ); float hx = dFdx( gHairH ), hy = dFdy( gHairH );
     vec3 r1 = cross( dpy, normal ), r2 = cross( normal, dpx ); float det = dot( dpx, r1 );
-    vec3 grad = sign( det ) * ( hx * r1 + hy * r2 ); normal = normalize( abs( det ) * normal - grad ); }`)
+    vec3 grad = sign( det ) * ( hx * r1 + hy * r2 ); float gl = length( grad ), gm = 0.45 * abs( det );   // r3: tilt capped at ~24 deg (alpha-tested card edges / silhouettes)
+    normal = normalize( abs( det ) * normal - grad * min( 1.0, gm / max( gl, 1e-12 ) ) ); }`)
     .replace('vec3 T1 = normalize( T - N * 0.12 )', 'vec3 T1 = normalize( T - N * ( 0.12 + gHairShift ) )')
     .replace('pow( s1, 48.0 ) * 0.06', 'pow( s1, 48.0 ) * 0.06 * gHairSpec').replace('pow( s2, 12.0 ) * 0.06', 'pow( s2, 12.0 ) * 0.06 * gHairSpec');
 }
