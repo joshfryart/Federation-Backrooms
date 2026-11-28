@@ -6,3 +6,5 @@ tools/video/out/
 results/
 shots/gfx-baseline/
 shots/gfx/
+shots/
+.claude/
