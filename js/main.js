@@ -10,7 +10,7 @@ import { makeEnemy, S, THREATS } from './enemies.js';
 import { loadModels, loadEnv, loadTextures, has as hasModel, instance, MODEL_FILES, PBR_SETS } from './assets.js';
 import { makeCrew, makeHologram, animateCrew, makeTribble, makeItem, makeViewmodel, makeHands, dressCrew, prewarmOutfits, outfitStats } from './actors.js';
 import { wearStep, wearWalk } from './wearglue.js';   // headsets, breathers, suit donning, sleepers lying on bunks (js/wearart.js)
-import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman } from './humans.js';
+import { makeSurvivor, makeCorpse, makeMedHolo, liveFace, markImpostor, makeHuman, releaseHuman, bakeKinds } from './humans.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { Post, Particles, Decals, Dust } from './fx.js';
 import { GI, installGI, bindScene as giBindScene, giUse, giStep, giFrame, giDispose } from './gi.js';   // per-deck baked bounce light + contact occlusion, one shared shader hook (js/gi.js)
@@ -2283,6 +2283,7 @@ const ready = (async () => {
   scene.environment = env || roomEnvFallback(); if (!env) console.warn('lobby.exr did not load: RoomEnvironment fallback'); buildViewmodel();
   // the uniform prewarm (~0.4 s of CPU in small steps) runs behind the title screen instead of before it: the title is opaque and draws nothing, so the steps
   // land while the player reads it, and Begin waits for whatever is left (startRun). Tests await __game.warmed themselves.
+  try { bakeKinds(); } catch (e) { console.warn('bakeKinds', e.message); } mark('boot:bake');   // per-body-kind face / hair / cloth / eye bakes on the boot screen, not in boarding (js/humans.js bakeKinds)
   warmed = prewarmOutfits(undefined, TEST_MODE ? {} : { eager: true }); warmed.then(() => mark('boot:warm'));
   bump(BOOT_W.warm, 'Ready'); const b = $('begin'); b.disabled = false; b.textContent = 'Begin shift';
   Loading.hide(TEST_MODE); mark('boot:title');

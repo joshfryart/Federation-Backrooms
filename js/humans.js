@@ -500,6 +500,14 @@ const SKIN_KNEE = 0.26, SKIN_SLOPE = 0.35;
 export function skinAlbedo(c) { const L = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; if (L > SKIN_KNEE) c.multiplyScalar((SKIN_KNEE + (L - SKIN_KNEE) * SKIN_SLOPE) / L); return c; }
 // run fn with Math.random swapped for a private generator (for one-off allocations whose three.js uuids must not consume the page's seeded stream)
 function ownRandom(fn) { const R = Math.random; let s = 0x51ed27; Math.random = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; try { return fn(); } finally { Math.random = R; } }
+// integration (characters C1-C5): the per-kind bakes in info() (face shape targets ~60 ms, hair / cloth bake ~55 ms, eye bones, LOD queue) for every body kind at once,
+// called by js/main.js on the boot loading screen, so they no longer land in boarding (Begin is usually pressed before the title-screen outfit prewarm gets to them).
+// Runs on a private Math.random (three's uuids), so the page's random stream is the same as when the first makeHuman of each kind did it.
+export function bakeKinds(kinds = [...CREW_KINDS, 'crew_heavy']) {
+  let s = 0x6c8e9cf5; const own = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const R = Math.random; Math.random = own;
+  try { for (const k of kinds) if (has(k)) { info(k); eyesOf(k); skinFaceOf(k, restMesh); } } finally { Math.random = R; }   // + the C3 eye frame and the C2 skin face frame (cached per kind)
+}
 export function makeHuman(opts = {}) {
   const per = opts.person; let seed = opts.seed;
   if (seed === undefined && per) { seed = (per.id + 1) * 7919; for (const ch of (per.family || '') + (per.given || '')) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619); }

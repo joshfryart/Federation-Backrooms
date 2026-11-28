@@ -93,7 +93,7 @@ export class Portraits {
         const p = list[i], k = this.key(p); if (k == null) { out.push({ p, url: null }); continue; } if (this.cache.has(k)) { out.push({ p, url: this.cache.get(k) }); continue; }
         const f0 = performance.now(); let g = null;
         try {
-          g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false, clothDetail: false });   // clothDetail: the plain uniform program (seams / folds are sub-pixel here, and cost ~0.4 s of software-GL boarding) if (!g) { this.failed.add(k); out.push({ p, url: null }); continue; }
+          g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false }); if (!g) { this.failed.add(k); out.push({ p, url: null }); continue; }   // integration: the deck's garstyle3 program (already compiled by then; hwDetail = 0 below turns its seam / fold detail off) instead of compiling garstyle2 just for the portraits
           const f1 = performance.now(); this.stats.make += f1 - f0;
           const H = g.userData.human; H.play('idle', { fade: 0 }); H.mixer.update(0.4); H.face?.({ LeftUpperLidOpen: 0.2, RightUpperLidOpen: 0.2 });
           this.scene.add(g); g.updateMatrixWorld(true);

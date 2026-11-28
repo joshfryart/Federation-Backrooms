@@ -17,7 +17,8 @@ import * as THREE from 'three';
 
 export const FACE_MORPHS = ['FaceNose', 'FaceNoseW', 'FaceBridge', 'FaceJaw', 'FaceChin', 'FaceLips', 'FaceBrow', 'FaceEyes', 'FaceEars', 'FaceCheek', 'FaceAge', 'FaceAsym', 'FaceLong'];
 const SHAPED = new Set(['body', 'brows', 'eyelashes']);   // meshes that get the targets (eyes: uniform shift; teeth / tongue / hair: left alone, the fields stay off them)
-export const faceShapeCfg = { on: true, normals: true };   // normals: normal targets on the body for the shape morphs (shading follows the new shape; doubles the body's morph texture)
+export const faceShapeCfg = { on: true, normals: true, full: false };   // full: every target per person (else the FACE_SHAPE_K largest, see sparseShape)
+//    // normals: normal targets on the body for the shape morphs (shading follows the new shape; doubles the body's morph texture)
 export const faceShapeStats = { ms: 0, kinds: 0, verts: 0, mapDev: 0 };   // viewer-faces.html ?shape=0 (before / after); influences are still set, at 0
 
 const rigs = {};   // per body kind: landmarks (canonical frame) + per-eye world centres + eye mesh world -> mesh map
@@ -194,8 +195,15 @@ export function faceShapeFor(key, { kind = 'crew_m', skin = null, rank = null } 
   };
 }
 // set a built person's shape: morph influences on the shaped meshes, the eyeball shift on the eye material (eyeShader's uEyeShA / uEyeShB)
+// integration: at most FACE_SHAPE_K targets per person, the largest; |w| < 0.2 dropped (under ~1 mm). Every non-zero morph influence costs each body vertex a position
+// and a normal fetch from three's morph texture (crowds every frame, the 91 boarding portraits): all 13 cost ~0.5 s of software-GL boarding, this keeps most of the look.
+export const FACE_SHAPE_K = 6;
+function sparseShape(w) {
+  const keep = new Set(FACE_MORPHS.filter(n => Math.abs(w[n] || 0) >= 0.2).sort((a, b) => Math.abs(w[b]) - Math.abs(w[a])).slice(0, FACE_SHAPE_K)), out = {};
+  for (const n of FACE_MORPHS) out[n] = keep.has(n) ? w[n] : 0; return out;
+}
 export function applyFaceShape(inner, kind, w) {
-  const rig = rigs[kind]; if (!rig) return null; const on = faceShapeCfg.on ? 1 : 0;
+  const rig = rigs[kind]; if (!rig) return null; const on = faceShapeCfg.on ? 1 : 0; w = faceShapeCfg.full ? w : sparseShape(w);
   inner.traverse(o => { const dict = o.morphTargetDictionary; if (!o.isMesh || !dict) return; for (const nm of FACE_MORPHS) { const i = dict[nm]; if (i !== undefined) o.morphTargetInfluences[i] = (w[nm] || 0) * on; } });
   inner.traverse(o => { const u = o.isMesh && o.material?.userData?.eyeU; if (!u || !u.uEyeShA) return;
     u.uEyeShA.value.set(0, 0, 0); u.uEyeShB.value.set(0, 0, 0); if (!on) return;

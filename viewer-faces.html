@@ -14,7 +14,7 @@ import { faceShapeCfg } from './js/faceshape.js';
 import { makeComplement } from './js/crew.js';
 import { SHIPS } from './js/data.js';
 const q = new URLSearchParams(location.search), N = +(q.get('n') || 12), COLS = +(q.get('cols') || 4), ROWS = Math.ceil(N / COLS), yaw = +(q.get('yaw') || 0.35), start = +(q.get('start') || 0);
-faceShapeCfg.on = q.get('shape') !== '0'; faceShapeCfg.normals = q.get('normals') !== '0';
+faceShapeCfg.on = q.get('shape') !== '0'; faceShapeCfg.normals = q.get('normals') !== '0'; faceShapeCfg.full = q.get('full') === '1';
 const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
 r.setPixelRatio(1); r.setSize(innerWidth, innerHeight, false); r.toneMapping = THREE.AgXToneMapping; r.toneMappingExposure = 1.15; r.setScissorTest(true);
 const s = new THREE.Scene(); s.background = new THREE.Color(0x1a1f2c);

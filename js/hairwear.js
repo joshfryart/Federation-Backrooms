@@ -206,7 +206,7 @@ float gHairShift = 0.0, gHairSpec = 1.0, gHairH = 0.0;` + NOISE)
       float r = length( vHD ); vec3 t = vHD / max( r, 1e-4 );
       // strands radiate from the crown whorl: noise on the direction from the crown (across the strands) stretched slowly along their length
       vec3 qc = t * 16.0 + vec3( 0.0, r * 9.0, 0.0 ) + seed, qs = t * 125.0 + vec3( 0.0, r * 30.0, 0.0 );
-      bool det = uHWDetail > 0.5; float clump = det ? hw_n( qc ) : 0.5, strand = det ? hw_n( qs ) * 0.65 + hw_n( qs * 2.3 + 5.1 ) * 0.35 : 0.5;
+      bool det = uHWDetail > 0.5; float clump = 0.5, strand = 0.5; if ( det ) { clump = hw_n( qc ); strand = hw_n( qs ) * 0.65 + hw_n( qs * 2.3 + 5.1 ) * 0.35; }   // (integration: a real branch, not a select: portraits skip the noise)
       float fw = length( fwidth( qs ) ); strand = mix( strand, 0.5, smoothstep( 0.5, 1.5, fw ) );
       float scalp = vHW, root = 1.0 - smoothstep( 0.0015, 0.012, scalp ), tip = smoothstep( 0.1, 0.32, r );
       diffuseColor.rgb *= mix( 0.74, 1.14, strand ) * mix( 0.68, 1.12, clump ) * mix( 1.0, 0.8, root ) * ( 1.0 + 0.14 * tip );
@@ -217,7 +217,7 @@ float gHairShift = 0.0, gHairSpec = 1.0, gHairH = 0.0;` + NOISE)
       float cropK = clamp( uHairStyle.x + uHairStyle.y * smoothstep( uHCrown.y - 0.055, uHCrown.y - 0.085, vHP.y ), 0.0, 1.0 );
       if ( det ) diffuseColor.a *= mix( 1.0, 0.5 + 0.45 * hw_n( vHP * 900.0 ), cropK * cropK * step( vHS, 0.88 ) );   // cropped close: thinner cover, the scalp shows through (alpha to coverage)
       float line = ( 1.0 - smoothstep( 0.0, 0.008, vHE ) ) * ( 1.0 - smoothstep( 0.004, 0.012, vHS ) );   // the mesh border where it lies on the skin: hairline, nape
-      float hl = det ? hw_n( vHP * 300.0 + seed ) : 0.5;   // ~3 mm tufts: they read at talking distance (strand-scale noise averages out there, and finer breaks up into specks)
+      float hl = 0.5; if ( det ) hl = hw_n( vHP * 300.0 + seed );   // ~3 mm tufts: they read at talking distance (strand-scale noise averages out there, and finer breaks up into specks)
       diffuseColor.a *= mix( 1.0, 0.2 + 0.8 * smoothstep( 0.3, 0.7, hl * 0.8 + vHE / 0.008 - 0.2 ), line );
       gHairSpec *= 1.0 - 0.7 * line; diffuseColor.rgb *= 1.0 + 0.12 * line;   // fine baby hair at the line: no strand glints, a touch lighter (thin, backlit)
       gHairH = strand * 0.00022 + clump * 0.0007;
