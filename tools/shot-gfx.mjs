@@ -3,6 +3,8 @@
 //   --out DIR      where the PNGs go (default shots/gfx)
 //   --compare DIR  after shooting, print per-view pixel diff % against DIR/<name>.png (a pixel differs when any channel moves > --thr, default 24/255)
 //                  and exit 3 on a missing/size-mismatched file. With --only and no shooting needed use --no-shoot to just compare --out against DIR.
+// Golden baseline: shots/gfx-baseline-r2 (shot with the re-seeding below, two consecutive runs < 1.5% apart per view). shots/gfx-baseline is stale: it was
+// shot before Math.random was re-seeded around newRun / loadDeck (__rs) and has different game state from every later run; do not compare against it.
 // Views: corridor, bridge, engineering (tall), sickbay, crowd, talk, blackout, madness-torch (game pages, ship 1 / seed 1, Math.random seeded),
 //        viewer-wear, viewer-medical, viewer-stations1, models-enemies (static viewer pages, fixed camera).
 // PNGs are decoded with a tiny built-in decoder (zlib from node), no extra dependencies.

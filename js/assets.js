@@ -68,6 +68,31 @@ const pbrSets = {};
 export const PBR_SETS = ['wall', 'deck', 'carpet', 'tile', 'ceil', 'wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'ceilp', 'ceilc', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime'];
 // generated sets pack ambient occlusion / roughness / metalness into the R / G / B channels of <name>_r.webp
 export const ORM_SETS = new Set(['wallp', 'wallq', 'wallg', 'grate', 'rubber', 'hex', 'paver', 'ceilt', 'ceilm', 'ceilg', 'ceilp', 'ceilc', 'trim', 'lens', 'glass', 'scales', 'flesh', 'cloth', 'hull', 'grime']);
+// Mip pre-filtering for the line-grid sets. The GPU builds mips with a 2x2 box chain, which cannot hold a fine square wave: grate (20 bars per 2.5 m tile) and
+// ceilg (16 louvres) alias into moire from the 32 px level down, exactly where a floor or ceiling is seen at 1-2 px per bar (a room's far half at 960x540).
+// MIP_FADE[set] = first mip level whose contrast is pulled toward the map's mean; the maps keep their full-resolution detail (close-ups are untouched) and
+// levels from there on keep 35% / 10% / 0% of their detail, so what is left at distance is flat mean colour, not a beat pattern. The chain is built on a
+// 2D canvas (native resampling), read back once per level, and uploaded as a DataTexture with user mips.
+const MIP_FADE = { grate: 4, ceilg: 4 };
+const KEEP = [0.35, 0.1, 0];
+function fadedMips(src, from, flip) {
+  const mk = (w, h) => typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+  let w = src.width, h = src.height, cv = mk(w, h), g = cv.getContext('2d', { willReadFrequently: true }); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'low';
+  if (flip) { g.translate(0, h); g.scale(1, -1); } g.drawImage(src, 0, 0);
+  const levels = [{ data: new Uint8Array(g.getImageData(0, 0, w, h).data.buffer), width: w, height: h }];
+  while (w > 1 || h > 1) {
+    const nw = Math.max(1, w >> 1), nh = Math.max(1, h >> 1), c2 = mk(nw, nh), g2 = c2.getContext('2d', { willReadFrequently: true }); g2.imageSmoothingEnabled = true; g2.imageSmoothingQuality = 'low';
+    g2.drawImage(cv, 0, 0, w, h, 0, 0, nw, nh); levels.push({ data: new Uint8Array(g2.getImageData(0, 0, nw, nh).data.buffer), width: nw, height: nh }); cv = c2; w = nw; h = nh;
+  }
+  const mean = levels[levels.length - 1].data.slice(0, 4);
+  for (let L = from; L < levels.length; L++) {
+    const k = KEEP[L - from] ?? 0, d = levels[L].data;
+    for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c++) d[i + c] = mean[c] + (d[i + c] - mean[c]) * k;
+  }
+  const t = new THREE.DataTexture(levels[0].data, levels[0].width, levels[0].height, THREE.RGBAFormat, THREE.UnsignedByteType);
+  t.mipmaps = levels; t.generateMipmaps = false; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.flipY = false; t.needsUpdate = true;
+  return t;
+}
 export function loadTextures(names = PBR_SETS, onEach = null) {   // onEach(name): called as each set finishes
   // Decoded off the main thread into ImageBitmaps where the browser can (same test as three's GLTFLoader): an <img> texture is decoded on the main thread at its
   // first GPU upload, ~15 ms per 512-1024 px map, i.e. mid-boarding and again as each new deck's surfaces first draw. The bitmap is flipped and left
@@ -76,11 +101,12 @@ export function loadTextures(names = PBR_SETS, onEach = null) {   // onEach(name
   const bitmaps = typeof createImageBitmap !== 'undefined' && !(saf != null && saf < 17) && !(ff != null && ff < 98);
   const bl = bitmaps ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }) : null, tl = new THREE.TextureLoader();
   const done = (t, srgb) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
-  const one = (url, srgb) => new Promise(res => bl
-    ? bl.load(url, (bmp) => { const t = new THREE.Texture(bmp); t.flipY = false; t.needsUpdate = true; res(done(t, srgb)); }, undefined, () => res(null))   // flipY already applied to the bitmap
-    : tl.load(url, t => res(done(t, srgb)), undefined, () => res(null)));
+  const plain = (src, flipY) => { const t = new THREE.Texture(src); t.flipY = flipY; t.needsUpdate = true; return t; };
+  const one = (url, srgb, fade = 0) => new Promise(res => bl
+    ? bl.load(url, (bmp) => { let t = null; if (fade) try { t = fadedMips(bmp, fade, false); } catch (e) { t = null; } res(done(t || plain(bmp, false), srgb)); }, undefined, () => res(null))   // flipY already applied to the bitmap
+    : tl.load(url, t => { let f = null; if (fade) try { f = fadedMips(t.image, fade, true); } catch (e) { f = null; } res(done(f || t, srgb)); }, undefined, () => res(null)));
   const sets = Promise.all(names.map(async n => {
-    const [c, nm, r] = await Promise.all([one(`./assets/textures/${n}_c.webp`, true), one(`./assets/textures/${n}_n.webp`), one(`./assets/textures/${n}_r.webp`)]);
+    const [c, nm, r] = await Promise.all([one(`./assets/textures/${n}_c.webp`, true, MIP_FADE[n]), one(`./assets/textures/${n}_n.webp`, false, MIP_FADE[n]), one(`./assets/textures/${n}_r.webp`, false, MIP_FADE[n])]);
     if (c && nm && r) pbrSets[n] = { c, n: nm, r, orm: ORM_SETS.has(n) };
     onEach?.(n);
   }));
