@@ -119,7 +119,8 @@ engineering tools) double as improvised weapons, and fights are grappling and me
 
 Serve the folder statically (ES modules need http):
 
-    python3 -m http.server 8000   # then open http://localhost:8000
+    node tools/serve.mjs 8000     # then open http://127.0.0.1:8000 (async, keep-alive; the game loads ~260 module files)
+    python3 -m http.server 8000   # also works, but can take minutes on some machines (one slow request at a time)
 
 No build step; three.js and its addons are vendored in `vendor/`. Models, textures and the HDRI are in `assets/`.
 The first load shows a loading screen that preloads every crew portrait; press **Enter the ship** when it's ready.
