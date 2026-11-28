@@ -20,6 +20,7 @@ import { babblePlan, NEUTRAL_VOICE, getMode } from './speech.js';
 import { newWheel, wheelSVG, moveTo, pickItem, digitPick, stepSel, R0, R1 } from './wheel.js';
 import { deptCol } from './icons.js';
 import { UIHUB } from './ui-mode.js';
+import { FaceAnim, MOOD } from './faceanim.js';   // visemes, expressions, blinks, eye contact (js/faceanim.js)
 
 // ------------------------------------------------------------------------------------------------ tuning
 export const TALK = {
@@ -126,7 +127,7 @@ export const flapAt = (t) => clamp(0.5 * Math.sin(t * 17) + 0.35 * Math.sin(t * 
 /** mood: warm / neutral / edge from trust, stress (0..1, ship alert) and being busy (repair) */
 export function moodOf({ trust = 0.5, stress = 0, busy = false } = {}) { const s = trust - stress * 0.4 - (busy ? 0.08 : 0); return s > 0.62 ? 'warm' : s < 0.32 ? 'edge' : 'neutral'; }
 export const MOOD_LABEL = { warm: 'warm', neutral: 'neutral', edge: 'on edge' };
-export const MOOD_FACE = { warm: { Smile: 0.22 }, neutral: { Smile: 0.05 }, edge: { Frown: 0.22, LeftInnerBrowUp: 0.25, RightInnerBrowUp: 0.25 } };
+export const MOOD_FACE = MOOD;   // real morph names now (the old Smile / Frown keys are not morphs on these bodies); js/faceanim.js
 export function relLabel(t) { return t > 0.8 ? 'trusted' : t > 0.55 ? 'warm' : t > 0.35 ? 'neutral' : t > 0.2 ? 'wary' : 'cold'; }
 
 // ------------------------------------------------------------------------------------------------ intents (pure)
@@ -426,7 +427,7 @@ export class Talk {
     if (s) { cam.position.copy(s.pos); cam.quaternion.copy(s.quat); cam.fov = s.fov; cam.updateProjectionMatrix(); cam.rotation.order = s.order || 'YXZ'; cam.updateMatrixWorld?.(); }
     if (e?.mesh && s) {
       const H = e.mesh.userData.human; e.talkHold = false;
-      if (H) { H.add = null; H.face({ JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: 0, RightUpperLidClosed: 0 }); if (s.clip && H.current !== s.clip) H.play(s.clip, { fade: 0.3 }); H.standing = s.standing; }
+      if (H) { H.add = null; e.faceAnim?.reset(); H.face({ JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: 0, RightUpperLidClosed: 0 }); if (s.clip && H.current !== s.clip) H.play(s.clip, { fade: 0.3 }); H.standing = s.standing; }
       if (!this.seated) e.mesh.rotation.y = this.restoreRot ?? s.rot;
     }
     for (const m of this.hidden) m.visible = true; this.hidden = [];
@@ -530,9 +531,9 @@ export class Talk {
     if (talking && (this.nextBeat -= dt) <= 0) { this.nextBeat = 1.4 + Math.random() * 1.2; if (!e.fid.cur) e.fid.force('talk_emphasis'); }
     const o = e.fid.update(dt, { state: 'talking', stress: clamp((this.save.alert || 0) / 4, 0, 1), playerNear: true });
     H.add = o.bones;
-    const blink = ((this.tt * 0.37 + (m.id || 0) * 0.13) % 1) > 0.965 ? 1 : 0, f = { JawDrop: 0, Smile: 0, Frown: 0, LeftInnerBrowUp: 0, RightInnerBrowUp: 0, LeftUpperLidClosed: blink, RightUpperLidClosed: blink };
-    Object.assign(f, MOOD_FACE[this.mood] || {}); for (const k in o.face) f[k] = Math.max(f[k] || 0, o.face[k]);
-    f.JawDrop = Math.max(f.JawDrop || 0, jaw * 0.55); H.face(f);
+    // face: visemes from the syllable plan, mood + gesture + micro-expressions, varied blinks, brow / lid coupling (js/faceanim.js; `jaw` above stays for the flap fallback / tests)
+    const fa = e.faceAnim || (e.faceAnim = new FaceAnim(H, ((e.person.id | 0) + 1) * 7919)), stress = clamp((this.save.alert || 0) / 4, 0, 1);
+    fa.talk(dt, { speech: this.speech, mood: this.mood, gest: o.face, talking, stress, flap: flapAt });
     // eye contact: head turns to the camera (clamped), with a thinking glance away now and then
     const cam = this.c.camera, hp = this.headPos(); let yaw = 0, pitch = 0;
     if (hp && !out) { const dx = cam.position.x - hp.x, dz = cam.position.z - hp.z, dy = cam.position.y - hp.y; yaw = clamp(wrapAng(Math.atan2(dx, dz) - m.rotation.y), -TALK.lookMax, TALK.lookMax); pitch = clamp(-Math.atan2(dy, Math.hypot(dx, dz)), -TALK.pitchMax, TALK.pitchMax); }
@@ -540,6 +541,7 @@ export class Talk {
     if (this.glance > 0) { this.glance -= dt; if (!talking) yaw += 0.4; }
     const kk = damp(5, dt); H.lookYaw += (yaw - H.lookYaw) * kk; H.lookPitch += (pitch - H.lookPitch) * kk;
     H.update(dt);
+    fa.after(dt, { target: out ? null : cam.position, glance: this.glance, talking });   // head beats, then the eyes: contact with scanning fixations, leading the glance away
   }
   headPos(out) { const H = this.e?.mesh?.userData?.human, b = H?.bones?.Head; if (!b) return null; const v = out || (this._hp || (this._hp = this.c.camera.position.clone())); this.e.mesh.updateMatrixWorld(true); b.getWorldPosition(v); return v; }
   /** face centre (world) from the Head bone: up and a little forward along the speaker's facing */

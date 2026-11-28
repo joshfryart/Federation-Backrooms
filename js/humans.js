@@ -7,6 +7,7 @@ import { has, get, pbr } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLods } from './meshlod.js';
+import { rigEyes, idleFace } from './faceanim.js';   // facial animation (eye bones, blink variety, talk visemes): js/faceanim.js
 import { giPatch } from './gi.js';   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
 import { addFaceShapes, faceShapeFor, applyFaceShape } from './faceshape.js';   // per-person face shape morphs (stream C1)
 import { skinFaceOf, skinDetailFor, skinDetailPatch } from './skin-detail.js';   // stream C2: face-space skin detail in the skin program (pores, blush, lips, stubble, freckles, ...)
@@ -56,6 +57,7 @@ function info(kind) {
   if (kind !== 'suit') addFaceShapes(kind, src.scene);   // face shape targets (js/faceshape.js): before the LODs, so every LOD carries the same morph count
   const height = box.max.y - box.min.y;
   if (kind !== 'suit') { crownOf(kind); bakeHairWear(kind, src.scene, height); }   // js/hairwear.js: hair parts + scalp offsets, garment seams / folds (before the LODs: they copy every attribute)
+  rigEyes(src.scene, THREE);   // two eye bones in the eye mesh's own skeleton (js/faceanim.js), before any clone
   queueLods(kind, src.scene, height);
   return meta[kind] = { height, clips };
 }
@@ -569,10 +571,7 @@ export function makeHuman(opts = {}) {
 }
 
 // blink + small idle expression; call each frame for living, friendly humans
-export function liveFace(H, t, seed = 0) {
-  const b = (t * 0.37 + seed) % 1; const lid = b > 0.96 ? 1 : 0;
-  H.face({ LeftUpperLidClosed: lid, RightUpperLidClosed: lid });
-}
+export function liveFace(H, t, seed = 0) { idleFace(H, t, seed); }   // varied blinks + brow / lid coupling + eye darts (js/faceanim.js)
 
 // ---- ready-made NPCs (return null when the models failed to load so callers can fall back) ----
 // person (optional): a member of the ship's complement from js/crew.js — { body, rank, uniform }

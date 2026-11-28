@@ -193,6 +193,9 @@ export function eyeRig(u, eyes, seed) {
     u,
     // gaze: a held direction (rad, + = the person's left / up) the saccades play around; amp scales the saccades (0 = still eyes)
     gaze(yaw = 0, pitch = 0, amp = 1) { st.gy = yaw; st.gp = pitch; st.amp = amp; },
+    // hold (integration C3 + C4): an already-smoothed gaze from js/faceanim.js setEyes (talk eye contact, idle darts). Applied at once (no second smoothing), and the
+    // random saccades drop to small fixational hops while someone else steers the eyes, so the two rigs never fight over a fixation.
+    hold(yaw = 0, pitch = 0) { st.yaw += yaw - st.gy; st.pitch += pitch - st.gp; st.gy = yaw; st.gp = pitch; st.amp = 0.35; },
     step(dt, faceW) {
       st.t += dt;
       if ((st.next -= dt) <= 0) {   // a new fixation: mostly small hops near the centre, now and then a larger look aside, often a return to centre
