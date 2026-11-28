@@ -5,11 +5,13 @@
 // contact cue once the torch (the only shadow caster) was off (Systems Nominal). The bake runs on the CPU while the lift rides to the next deck
 // (js/main.js preDeckStep, a few ms per frame) and produces two small textures over the deck's XZ plane:
 //   giOcc  (6 texels per 2.5 m tile, RGBA8): R floor-contact occlusion (walls + props: dark under and around furniture, at wall bases),
-//          G wall/ceiling corner occlusion, B ceiling height / 8 m.
+//          G wall/ceiling corner occlusion, B ceiling height / 8 m, A room exposure gain / 4 (ROOM_GI below: evens out how bright rooms read).
 //   giIrr  (2 texels per tile, RGBA8, sqrt-encoded): RGB one diffuse bounce of ALL the deck's panel lights (tile line of sight, room colour,
 //          spread through open space only), A local light level (0 = no panel near; it scales the hemisphere fill, so unlit stretches read darker).
-// The shader part (GI_FRAG) runs after <lights_fragment_maps>: irradiance = irradiance * occ * fill(level) + bounce * occ, and the IBL
-// (assets/env/lobby.exr) is occluded the same way and tinted toward the room's light colour.
+// The shader part (GI_FRAG) runs after <lights_fragment_maps>: irradiance = (irradiance * occ * fill(level) + bounce * occ) * gain, direct light
+// *= floor contact * gain, and the IBL (assets/env/lobby.exr) is occluded the same way, tinted toward the room's light colour, and gets the
+// room's own bounce added as a local reflection probe (rough metal decks mirror the room, not the lobby). gain eases back to 1 as the power
+// fails, so a blackout stays as dark as before; then a faint emergency-red bounce stands in (giFrame).
 //
 // No program is added: installGI() replaces Material.prototype.onBeforeCompile (a no-op by default) before anything compiles, so every built-in
 // lit material (standard / physical / lambert / phong / toon) gets the same patched source and the same cache key as before; materials with their
@@ -19,8 +21,45 @@
 import * as THREE from 'three';
 
 export const GI_OCC_RES = 6, GI_IRR_RES = 2;   // texels per tile
-const CEIL_MAX = 8, IRR_SCALE = 4;   // giOcc.b = ceiling / CEIL_MAX; giIrr.rgb = sqrt(bounce / IRR_SCALE)
-const blank = (() => { const t = new THREE.DataTexture(new Uint8Array([255, 255, 64, 255]), 1, 1); t.needsUpdate = true; return t; })();
+const CEIL_MAX = 8, IRR_SCALE = 4, GAIN_MAX = 4, RAD_K = 1.0;   // giOcc.b = ceiling / CEIL_MAX, giOcc.a = room gain / GAIN_MAX; giIrr.rgb = sqrt(bounce / IRR_SCALE)
+// Per room type (js/data.js ROOMS keys; '' = corridors and anything outside a room): gain = exposure gain baked into giOcc.a (all the room's
+// reflected light, diffuse and specular, is multiplied by it; emissive is not), alb = how much of the panels' light the room's surfaces bounce
+// (default 0.32, the old flat value; a type may set its own). Tuned with tools/shot-rooms.mjs (3 hulls, every room type, normal power) toward
+// one band of mean frame luminance (TODO.md): the white clinical rooms (sickbay, laundry, washroom) get less, the dark-metal and small rooms more,
+// corridors sit in the middle. Mood stays in the panel colour (js/world.js ROOM_LIGHT) and the grade (js/fx.js GRADES): engineering reads
+// darker and warmer than sickbay. Each room's gain is then normalised by GI_NORM (its own panel light, measured in the bake).
+export const ROOM_GI = {
+  '': { gain: 0.59, alb: 0.32 },   // corridors
+  airlock: { gain: 1.54 },
+  arboretum: { gain: 2.49 },
+  armory: { gain: 3.03 },
+  atrium: { gain: 3.50 },
+  bridge: { gain: 0.77 },
+  brig: { gain: 1.60 },
+  cargo: { gain: 1.30 },
+  datacore: { gain: 1.75 },
+  engineering: { gain: 1.45 },
+  gym: { gain: 2.62 },
+  holodeck: { gain: 0.96 },
+  lab: { gain: 0.76 },
+  laundry: { gain: 0.31 },
+  lounge: { gain: 1.23 },
+  mess: { gain: 1.00 },
+  morgue: { gain: 0.50 },
+  plant: { gain: 2.76 },
+  quarters: { gain: 2.68 },
+  readyroom: { gain: 1.30 },
+  shuttlebay: { gain: 2.23 },
+  sickbay: { gain: 0.75 },
+  stores: { gain: 1.25 },
+  transporter: { gain: 1.60 },
+  washroom: { gain: 0.32 },
+  workshop: { gain: 0.66 },
+};
+const roomGI = (t) => ({ ...ROOM_GI[''], ...ROOM_GI[t || ''] });
+// per-room normalisation: gain *= clamp((ref / the room's mean direct panel light) ^ k, lo, hi)
+export const GI_NORM = { ref: 6, k: 1.83, lo: 0.15, hi: 2 };
+const blank = (() => { const t = new THREE.DataTexture(new Uint8Array([255, 255, 64, 64]), 1, 1); t.needsUpdate = true; return t; })();
 // x on/off (main scene only), y hemisphere fill where no panel is near (0..1), z bounce gain, w IBL room tint amount
 export const GI = {
   u: {
@@ -45,14 +84,19 @@ if ( giAmt.x > 0.5 ) {
   float giAO = giFloor * mix( giO.g, 1.0, smoothstep( 0.0, 0.7, giCeil - giW.y ) );
   // the panels hang overhead, so what shades the floor from the bounce shades it from them too (the only contact shadow with the torch off)
   float giSh = mix( 1.0, giFloor, 0.9 );
-  reflectedLight.directDiffuse *= giSh; reflectedLight.directSpecular *= giSh;
+  // room exposure gain (giOcc.a: all reflected light, diffuse and specular, direct and indirect; emissive is left alone), faded out with the power (giTint = light colour x power): emergency lamps and the torch in a blackout are not boosted
+  float giG = mix( 1.0, giO.a * ${GAIN_MAX.toFixed(1)}, smoothstep( 0.15, 0.75, max( giTint.r, max( giTint.g, giTint.b ) ) ) );
+  reflectedLight.directDiffuse *= giSh * giG; reflectedLight.directSpecular *= giSh * giG;
   vec3 giB = giL.rgb * giL.rgb * ${IRR_SCALE.toFixed(2)} * giTint * giAmt.z * ( 1.0 - 0.35 * max( giN.y, 0.0 ) );   // bounce reaches walls / undersides more than the lit floor
   float giLit = giL.a * giL.a;
-  irradiance = irradiance * giAO * mix( giAmt.y, 1.0, giLit ) + giB * giAO;
-  iblIrradiance *= giAO;
+  irradiance = ( irradiance * giAO * mix( giAmt.y, 1.0, giLit ) + giB * giAO ) * giG;
+  iblIrradiance *= giAO * giG;
   #if defined( RE_IndirectSpecular )
     vec3 giC = giL.rgb / max( max( giL.r, max( giL.g, giL.b ) ), 1e-3 );
-    radiance *= mix( vec3( 1.0 ), giC, giAmt.w * smoothstep( 0.0, 0.25, giL.a ) ) * mix( 1.0, giAO, 0.8 );
+    // the room is what a rough metal floor / panel mirrors, not the lobby HDRI: add the baked room bounce as a local probe (the dark-metal decks of
+    // engineering, cargo, plant and datacore were near black: their only light was the 0.3-strength lobby reflection). Ceilings get a third of
+    // it (they face away from the lit floor), walls two thirds.
+    radiance = ( radiance * mix( vec3( 1.0 ), giC, giAmt.w * smoothstep( 0.0, 0.25, giL.a ) ) * mix( 1.0, giAO, 0.8 ) + giB * giAO * ${RAD_K.toFixed(2)} * ( 0.65 + 0.35 * giN.y ) ) * giG;
   #endif
 }
 #endif
@@ -75,8 +119,10 @@ export function bindScene(scene) {
   scene.onBeforeRender = () => { GI.u.giAmt.value.x = GI.enabled && GI.world ? 1 : 0; };
   scene.onAfterRender = () => { GI.u.giAmt.value.x = 0; };
 }
-// per frame: ship light colour x power x alert (the same as the pooled panel lights)
-export function giFrame(col, power) { GI.u.giTint.value.copy(col).multiplyScalar(power); }
+// per frame: ship light colour x power x alert (the same as the pooled panel lights). As the power fails (power under the 0.85 flicker floor) a
+// faint emergency-red bounce takes over (the red lamps on the walls lighting the room a little): uniform only, same baked bounce field.
+const EMERG_GI = new THREE.Color(1, 0.16, 0.08).multiplyScalar(0.025);
+export function giFrame(col, power) { const off = Math.min(1, Math.max(0, 1 - power / 0.85)), t = GI.u.giTint.value.copy(col).multiplyScalar(power); t.r += EMERG_GI.r * off; t.g += EMERG_GI.g * off; t.b += EMERG_GI.b * off; }
 
 // ---- bake ----
 const lum = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -140,7 +186,7 @@ export function* giBake(world, TS) {
       const floorAO = Math.max(0.2, 1 - 0.62 * wf - 0.78 * cf), ceilAO = Math.max(0.45, 1 - 0.6 * wf);
       const tx = (x / R) | 0, ty = (y / R) | 0; let ch = world.ceilAt(tx, ty);
       if (grid[ty][tx] === 1) { ch = 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (grid[ty + b]?.[tx + a] !== undefined && grid[ty + b][tx + a] !== 1) ch = Math.max(ch, world.ceilAt(tx + a, ty + b)); if (!ch) ch = 3.2; }
-      occ[k * 4] = floorAO * 255; occ[k * 4 + 1] = ceilAO * 255; occ[k * 4 + 2] = Math.min(255, ch / CEIL_MAX * 255); occ[k * 4 + 3] = 255;
+      occ[k * 4] = floorAO * 255; occ[k * 4 + 1] = ceilAO * 255; occ[k * 4 + 2] = Math.min(255, ch / CEIL_MAX * 255); occ[k * 4 + 3] = 255 / GAIN_MAX;
     }
     if ((y & 7) === 7) yield;
   }
@@ -168,6 +214,36 @@ export function* giBake(world, TS) {
     }
     if ((ty & 1) === 1) yield;
   }
+  // room exposure gain (giOcc.a). Per room: its type's gain (ROOM_GI) x a partial normalisation of how much panel light the room gets (mean direct
+  // light over its floor, E above: panel count, dead panels, tall ceilings, light colour) toward GI_NORM.ref, so one under-lit store room or a lounge
+  // with a few dead tubes does not read black next to a bright lab. Corridors keep ROOM_GI[''] (they are the reference). Walls take their open
+  // neighbours' gain (dilated a tile deep), then a half-tile box blur so a doorway is a soft ramp, not a step.
+  const rmap = world.d?.room, rooms = world.d?.rooms || [], tileGain = new Float32Array(W * H).fill(roomGI('').gain), info = [];
+  for (const r of rooms) {
+    let sum = 0, n = 0;
+    for (let y = r.y * IR; y < (r.y + r.h) * IR; y++) for (let x = r.x * IR; x < (r.x + r.w) * IR; x++) { const k = x + y * IW; if (!open[k]) continue; sum += lum(E[k * 3], E[k * 3 + 1], E[k * 3 + 2]); n++; }
+    const est = n ? sum / n : 0, N = GI_NORM, g = Math.max(0.25, Math.min(GAIN_MAX - 0.05, roomGI(r.type).gain * Math.max(N.lo, Math.min(N.hi, Math.pow(N.ref / Math.max(est, 0.05), N.k)))));
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (rmap?.[y]?.[x] === r.type) tileGain[x + y * W] = g;
+    info.push({ type: r.type, x: r.x, y: r.y, est: +est.toFixed(3), gain: +g.toFixed(3) });
+  }
+  const gainT = new Float32Array(OW * OH), has = new Uint8Array(OW * OH);
+  for (let y = 0; y < OH; y++) for (let x = 0; x < OW; x++) { const k = x + y * OW; if (wall[k]) continue; gainT[k] = tileGain[((x / R) | 0) + ((y / R) | 0) * W]; has[k] = 1; }
+  for (let pass = 0; pass < R + 1; pass++) {
+    const nh = has.slice(), ng = gainT.slice(); let any = false;
+    for (let y = 0; y < OH; y++) for (let x = 0; x < OW; x++) {
+      const k = x + y * OW; if (has[k]) continue; let n = 0, sg = 0;
+      if (x > 0 && has[k - 1]) { sg += gainT[k - 1]; n++; } if (x < OW - 1 && has[k + 1]) { sg += gainT[k + 1]; n++; } if (y > 0 && has[k - OW]) { sg += gainT[k - OW]; n++; } if (y < OH - 1 && has[k + OW]) { sg += gainT[k + OW]; n++; }
+      if (n) { ng[k] = sg / n; nh[k] = 1; any = true; }
+    }
+    gainT.set(ng); has.set(nh); if (!any) break;
+    yield;
+  }
+  for (let k = 0; k < OW * OH; k++) if (!has[k]) gainT[k] = 1;
+  const SG = sat(gainT);
+  for (let y = 0; y < OH; y++) for (let x = 0; x < OW; x++) occ[(x + y * OW) * 4 + 3] = Math.min(255, Math.round(boxAvg(SG, x, y, R >> 1) / GAIN_MAX * 255));
+  yield;
+  // what the room's surfaces bounce (ROOM_GI alb), applied where the light lands, before it spreads
+  for (let y = 0; y < IH; y++) for (let x = 0; x < IW; x++) { const k = x + y * IW; if (!open[k]) continue; const a = roomGI(world.d?.room?.[(y / IR) | 0]?.[(x / IR) | 0]).alb; E[k * 3] *= a; E[k * 3 + 1] *= a; E[k * 3 + 2] *= a; }
   // diffuse through open texels only (a wall stops it), 6 passes of a 3x3 average
   let A = E, B = new Float32Array(E.length);
   for (let pass = 0; pass < 6; pass++) {
@@ -180,11 +256,11 @@ export function* giBake(world, TS) {
     const t = A; A = B; B = t === E ? new Float32Array(E.length) : t;
     yield;
   }
-  const irr = new Uint8Array(IW * IH * 4), lit = new Float32Array(IW * IH), ALB = 0.32;
+  const irr = new Uint8Array(IW * IH * 4), lit = new Float32Array(IW * IH), ALB0 = ROOM_GI[''].alb;   // lit (the fill level) stays measured at the default albedo
   for (let k = 0; k < IW * IH; k++) {
-    const r = A[k * 3] * ALB, g = A[k * 3 + 1] * ALB, b = A[k * 3 + 2] * ALB;
+    const r = A[k * 3], g = A[k * 3 + 1], b = A[k * 3 + 2];
     irr[k * 4] = Math.sqrt(Math.min(1, r / IRR_SCALE)) * 255; irr[k * 4 + 1] = Math.sqrt(Math.min(1, g / IRR_SCALE)) * 255; irr[k * 4 + 2] = Math.sqrt(Math.min(1, b / IRR_SCALE)) * 255;
-    lit[k] = Math.min(1, lum(A[k * 3], A[k * 3 + 1], A[k * 3 + 2]) / 1.6); irr[k * 4 + 3] = Math.sqrt(lit[k]) * 255;
+    lit[k] = Math.min(1, lum(r, g, b) / ALB0 / 1.6); irr[k * 4 + 3] = Math.sqrt(lit[k]) * 255;
   }
   // walls take the values of the open space next to them (3 dilation passes), so a wall face samples its own room, not black
   for (let pass = 0; pass < 3; pass++) {
@@ -197,7 +273,7 @@ export function* giBake(world, TS) {
     open.set(done);
   }
   const tex = (data, w, h) => { const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.UnsignedByteType); t.magFilter = t.minFilter = THREE.LinearFilter; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.generateMipmaps = false; t.needsUpdate = true; return t; };
-  world.gi = { occ: tex(occ, OW, OH), irr: tex(irr, IW, IH), W, H, props: boxes.length };
+  world.gi = { occ: tex(occ, OW, OH), irr: tex(irr, IW, IH), W, H, props: boxes.length, rooms: info };
 }
 // finish (or run) the bake now and point the shared uniforms at this deck
 export function giUse(world, TS, renderer = null) {

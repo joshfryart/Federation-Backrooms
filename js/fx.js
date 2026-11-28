@@ -31,28 +31,35 @@ export const GRADES = {
     tandem: { lift: [1.02, 0.99, 0.98], sat: 0.95, contrast: 0.04 },          // grimy twin hulls
     plough: { lift: [0.98, 1.01, 1.02], sat: 1.03 },
   },
-  room: {   // room types (the room the player stands in; corridors use the ship layer alone)
+  room: {   // room types (the room the player stands in; corridors use the ship layer alone). One entry per type js/gen.js can put in d.rooms
+    // (js/data.js ROOMS minus 'jefferies', which is carved into the tile map only): checkGrades() below, `node tools/shot-rooms.mjs --check`.
+    // Exposure is the bake's job (js/gi.js ROOM_LIGHT_GAIN): expo stays 0.97..1.05 here. sat stays >= 0.9 so red-alert lamps, emergency
+    // lamps and blood keep their red in every room (the colour-blind setting, body.cb, swaps UI colours only, not the 3D scene).
     bridge: { lift: [0.96, 0.99, 1.06], gain: [1.01, 1.0, 0.99], contrast: 0.04, sat: 1.04 },
     readyroom: { gain: [1.03, 1.0, 0.96] },
-    engineering: { lift: [0.95, 1.0, 1.07], gain: [1.04, 1.0, 0.94], contrast: 0.06, sat: 1.05 },
+    engineering: { lift: [0.95, 0.99, 1.06], gain: [1.05, 1.0, 0.93], contrast: 0.06, sat: 1.04 },   // warm highlights over cool shadows: the darkest, warmest working room
     plant: { lift: [0.96, 1.0, 1.05], gain: [1.05, 1.0, 0.93], contrast: 0.06 },
     workshop: { gain: [1.03, 1.0, 0.95], contrast: 0.03 },
-    sickbay: { lift: [0.98, 1.01, 1.03], gain: [0.98, 1.01, 1.03], sat: 0.9, expo: 1.03 },
-    morgue: { lift: [0.96, 1.0, 1.06], gain: [0.97, 1.0, 1.04], sat: 0.75 },
-    lab: { lift: [0.98, 1.0, 1.03], gain: [0.99, 1.01, 1.02], sat: 0.94 },
+    sickbay: { lift: [0.98, 1.01, 1.03], gain: [0.98, 1.01, 1.03], sat: 0.93, expo: 1.02 },          // clean, cool, the brightest room
+    morgue: { lift: [0.96, 1.0, 1.06], gain: [0.97, 1.0, 1.04], sat: 0.9, contrast: 0.02 },          // cold but not drained (was sat 0.75: alert lamps went brown)
+    lab: { lift: [0.98, 1.0, 1.03], gain: [0.99, 1.01, 1.02], sat: 0.95 },
     arboretum: { lift: [0.98, 1.03, 0.98], gain: [1.02, 1.03, 0.95], sat: 1.08 },
+    atrium: { lift: [0.98, 1.02, 0.99], gain: [1.03, 1.02, 0.95], sat: 1.05, contrast: -0.02 },     // the tall garden court: arboretum's green, a softer daylight
     holodeck: { sat: 1.06, contrast: -0.04, expo: 1.02 },
     mess: { gain: [1.04, 1.01, 0.95], sat: 1.04 },
     lounge: { gain: [1.05, 1.01, 0.93], sat: 1.03, contrast: -0.02 },
     quarters: { gain: [1.04, 1.01, 0.95], contrast: -0.03 },
-    brig: { lift: [0.96, 1.0, 1.05], sat: 0.85, contrast: 0.05 },
-    armory: { lift: [0.97, 1.0, 1.04], sat: 0.9, contrast: 0.05 },
-    cargo: { sat: 0.93, contrast: 0.04 },
-    stores: { sat: 0.94, contrast: 0.03 },
-    shuttlebay: { lift: [0.97, 1.0, 1.04], sat: 0.95 },
+    gym: { lift: [0.99, 1.0, 1.02], gain: [1.02, 1.01, 0.97], sat: 1.03, contrast: 0.03 },            // bright and punchy
+    laundry: { lift: [0.99, 1.0, 1.02], gain: [1.02, 1.01, 0.98], sat: 0.96, contrast: -0.02 },       // steam-soft, a little flat
+    washroom: { lift: [0.98, 1.0, 1.03], gain: [0.99, 1.01, 1.02], sat: 0.95, contrast: -0.01 },      // tiled, cool, clean
+    transporter: { lift: [0.96, 0.99, 1.06], gain: [0.99, 1.0, 1.03], sat: 1.02, contrast: 0.03 },   // the pad's blue
+    airlock: { lift: [0.97, 1.0, 1.04], gain: [1.02, 1.0, 0.97], sat: 0.95, contrast: 0.05 },         // bare steel, hazard paint holds its yellow
+    brig: { lift: [0.96, 1.0, 1.05], sat: 0.92, contrast: 0.05 },
+    armory: { lift: [0.97, 1.0, 1.04], sat: 0.92, contrast: 0.05 },
+    cargo: { sat: 0.94, contrast: 0.04 },
+    stores: { sat: 0.95, contrast: 0.03 },
+    shuttlebay: { lift: [0.97, 1.0, 1.04], sat: 0.96 },
     datacore: { lift: [0.95, 1.0, 1.08], gain: [0.98, 1.0, 1.03], contrast: 0.05 },
-    jefferies: { gain: [1.05, 1.0, 0.92], contrast: 0.06, sat: 0.95 },
-    lift: {},
   },
   madness: { lift: [1.0, 0.97, 1.03], sat: 0.85, contrast: 0.06 },   // the roguelike mode (index.html?mode=madness): drained and harsher
 };
@@ -67,6 +74,14 @@ export function stackGrade(...layers) {
 export function gradeFor(ship, roomType = null, o = {}) {
   const hull = typeof ship === 'string' ? ship : ship?.hull;
   return stackGrade(GRADES.ship[hull], roomType ? GRADES.room[roomType] : null, o.mode === 'madness' ? GRADES.madness : null);
+}
+/** node check (tools/shot-rooms.mjs --check): every room type the generator can place (js/data.js ROOMS keys minus 'jefferies', which never enters
+ *  d.rooms) has a GRADES.room entry, no entry is dead, and every hull x room stack keeps expo in 0.97..1.05 and sat >= 0.85 */
+export function checkGrades(ROOMS) {
+  const types = Object.keys(ROOMS).filter(t => t !== 'jefferies'), room = Object.keys(GRADES.room);
+  const missing = types.filter(t => !GRADES.room[t]), dead = room.filter(t => !ROOMS[t] || t === 'jefferies'), bad = [];
+  for (const h of Object.keys(GRADES.ship)) for (const t of room) { const g = gradeFor(h, t); if (g.expo < 0.97 || g.expo > 1.05 || g.sat < 0.85) bad.push(`${h}/${t} expo ${g.expo.toFixed(3)} sat ${g.sat.toFixed(3)}`); }
+  return { ok: !missing.length && !dead.length && !bad.length, missing, dead, bad };
 }
 /** blend grade a towards b by k (0..1) into out */
 export function lerpGrade(a, b, k, out = {}) {
