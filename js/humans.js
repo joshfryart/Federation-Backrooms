@@ -7,7 +7,8 @@ import { has, get, pbr } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLods } from './meshlod.js';
-import { giPatch } from './gi.js';   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
+import { giPatch } from './gi.js';
+import { addFaceShapes, faceShapeFor, applyFaceShape } from './faceshape.js';   // per-person face shape morphs (stream C1)   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -49,6 +50,7 @@ function info(kind) {
     for (let i = 0; i < n; i++) { let l = 0, c = 0, y = 0, tot = 0; for (let k = 0; k < 4; k++) { const wk = sw.getComponent(i, k), b = si.getComponent(i, k); tot += wk; if (isLeg[b]) l += wk; if (isCuff[b]) c += wk; if (isYoke[b]) y += wk; } tot = tot || 1; z[i * 3] = l / tot; z[i * 3 + 1] = c / tot; z[i * 3 + 2] = y / tot; }
     g.setAttribute('zone', new THREE.BufferAttribute(z, 3));
   });
+  if (kind !== 'suit') addFaceShapes(kind, src.scene);   // face shape targets (js/faceshape.js): before the LODs, so every LOD carries the same morph count
   const height = box.max.y - box.min.y; queueLods(kind, src.scene, height);
   return meta[kind] = { height, clips };
 }
@@ -316,10 +318,11 @@ const FUZZ_AMBIENT = `#include <lights_fragment_end>
 // glint 0: the same program with the cornea terms off. The tongue and the shoes use it that way: they used to share one program with the eyes (the same
 // plain textured skinned material), and keeping all three on one program keeps the program count where it was.
 export function eyeShader(m, eyes, glint = 1) {
-  const u = { uEyeA: { value: eyes.a.clone() }, uEyeB: { value: eyes.b.clone() }, uEyeMid: { value: eyes.mid }, uEyeFwd: { value: eyes.fwd.clone() }, uGlint: { value: glint } };
+  const u = { uEyeA: { value: eyes.a.clone() }, uEyeB: { value: eyes.b.clone() }, uEyeMid: { value: eyes.mid }, uEyeFwd: { value: eyes.fwd.clone() }, uGlint: { value: glint }, uEyeShA: { value: new THREE.Vector3() }, uEyeShB: { value: new THREE.Vector3() } };   // uEyeSh*: per-person eyeball shift (js/faceshape.js), mesh space
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec4 uEyeA, uEyeB; uniform float uEyeMid; uniform vec3 uEyeFwd; varying vec3 vEyeN; varying vec3 vEyeF;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec4 uEyeA, uEyeB; uniform float uEyeMid; uniform vec3 uEyeFwd, uEyeShA, uEyeShB; varying vec3 vEyeN; varying vec3 vEyeF;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed += position.x < uEyeMid ? uEyeShA : uEyeShB;')
       .replace('#include <defaultnormal_vertex>', `#include <defaultnormal_vertex>
         { vec4 ec = position.x < uEyeMid ? uEyeA : uEyeB; vec3 en = position - ec.xyz, ef = uEyeFwd;
           #ifdef USE_SKINNING
@@ -334,7 +337,7 @@ export function eyeShader(m, eyes, glint = 1) {
         reflectedLight.directSpecular += smoothstep( 0.989, 0.9965, dot( normalize( vEyeN ), tg ) ) * clamp( lum * 8.0, 0.1, 4.0 ) * uGlint; }`);   // ~2 px across at 960x540 in the talk close-up (it was a sub-pixel speck)
     giPatch(sh);
   };
-  m.customProgramCacheKey = () => 'eye1'; m.needsUpdate = true; return u;
+  m.customProgramCacheKey = () => 'eye1'; m.needsUpdate = true; m.userData.eyeU = u; return u;
 }
 // crown: the top centre of the hair mesh in its own (bind) space; strands are taken to run from there down and out over the scalp
 export function hairShader(m, { crown, centre }) {
@@ -486,7 +489,7 @@ export function makeHuman(opts = {}) {
   const skin = skinAlbedo(new THREE.Color(opts.skin ?? pickOf(SKINS, rnd))); if (opts.pale) skin.lerp(new THREE.Color(0xb9b3a4), opts.pale);
   const hair = opts.hair || pickOf(HAIRS, rnd); const uniform = new THREE.Color(opts.uniform ?? pickOf(DIVISIONS, rnd));
   const style = opts.style ?? pickOf(['plain', 'plain', 'duty', 'duty', 'trim', 'yoke', 'trim-duty'], rnd);   // uniform variants (see styleGarment)
-  const faces = []; const mats = {};
+  const faces = []; const mats = {}; let H_shape = null;
   inner.traverse(o => {
     if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = !opts.material;
     if (o.morphTargetDictionary) faces.push(o);
@@ -508,6 +511,9 @@ export function makeHuman(opts = {}) {
     else if (name === 'eyelashes') { m.color.copy(skin).multiplyScalar(0.18); m.roughness = 0.75; }   // the lash meshes are solid strips (no alpha card): near-black (the GLB's 0.012) they read as heavy eyeliner rings in the close-up; a deep shade of the skin keeps the lid line without the ink
     if (opts.tint) m.color.multiply(new THREE.Color(opts.tint));
   });
+  if (kind !== 'suit') {   // face shape (js/faceshape.js): from the seed, or for a seedless body from what was already drawn (no extra draw on rnd)
+    const fk = seed !== undefined ? seed >>> 0 : (Math.imul(Math.round(height * 1e4), 2654435761) ^ skin.getHex() ^ Math.round(hair[0] * 977 + hair[1] * 131)) >>> 0;
+    H_shape = applyFaceShape(inner, kind, opts.faceShape || faceShapeFor(fk, { kind, skin, rank: opts.rank ?? per?.rank })); }
   if (!opts.material && kind !== 'suit' && opts.kit !== false) addKit(kind, inner, height, uniform, opts.name ?? per?.family ?? '');
   if (opts.rank !== undefined && !opts.material && kind !== 'suit') { addPips(inner, opts.rank); g.userData.rank = RANKS[opts.rank][0]; }
   if (kind !== 'suit' && !opts.height) {   // build: lean / average / stocky, a little taller or shorter, so a crowd of four meshes does not read as four people
@@ -517,7 +523,7 @@ export function makeHuman(opts = {}) {
   const mixer = new THREE.AnimationMixer(inner); const acts = {}; let cur = null, curKey = '';
   const bones = {}; for (const n of ['Head', 'neck_01', 'spine_02', 'spine_03', 'hand_r', 'hand_l', 'lowerarm_r', 'lowerarm_l', 'upperarm_r', 'upperarm_l', 'clavicle_l', 'clavicle_r', 'thigh_l', 'thigh_r', 'foot_l', 'foot_r', 'pelvis']) bones[n] = inner.getObjectByName(n);
   const H = {
-    kind, inner, mixer, bones, mats, height, faceW: {}, lookYaw: 0, lookPitch: 0,
+    kind, inner, mixer, bones, mats, height, faceW: {}, lookYaw: 0, lookPitch: 0, shape: H_shape,
     has: (k) => !!inf.clips[k],
     play(key, { loop = true, fade = 0.25, speed = 1, restart = false } = {}) {
       const clip = inf.clips[key]; if (!clip) return;
