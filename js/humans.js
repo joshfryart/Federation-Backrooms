@@ -11,6 +11,7 @@ import { giPatch } from './gi.js';   // baked deck GI on the custom crew program
 import { addFaceShapes, faceShapeFor, applyFaceShape } from './faceshape.js';   // per-person face shape morphs (stream C1)
 import { skinFaceOf, skinDetailFor, skinDetailPatch } from './skin-detail.js';   // stream C2: face-space skin detail in the skin program (pores, blush, lips, stubble, freckles, ...)
 import { EYE_VERT_PARS, EYE_VERT_ROT, EYE_VERT_N, EYE_FRAG_PARS, EYE_ILLUM, EYE_SURFACE, EYE_DIRECT, EYE_END, eyeGlsl, eyeUniforms, eyeLook, eyeRig, EYE_LIDS } from './eyes.js';   // C3 eyes
+import { bakeHairWear, hairUniforms, hairPatch, hairStyleFor, pickHairStyle, clothUniforms, clothPatch } from './hairwear.js';   // hair strands / styles / flyaways and uniform seams / folds / wear (stream C5)
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -53,7 +54,9 @@ function info(kind) {
     g.setAttribute('zone', new THREE.BufferAttribute(z, 3));
   });
   if (kind !== 'suit') addFaceShapes(kind, src.scene);   // face shape targets (js/faceshape.js): before the LODs, so every LOD carries the same morph count
-  const height = box.max.y - box.min.y; queueLods(kind, src.scene, height);
+  const height = box.max.y - box.min.y;
+  if (kind !== 'suit') { crownOf(kind); bakeHairWear(kind, src.scene, height); }   // js/hairwear.js: hair parts + scalp offsets, garment seams / folds (before the LODs: they copy every attribute)
+  queueLods(kind, src.scene, height);
   return meta[kind] = { height, clips };
 }
 // ---- crowd LODs (js/meshlod.js, swapped per frame by js/perfcull.js): two decimated copies of the body, teeth, hair and garments of each
@@ -349,7 +352,7 @@ export function eyeShader(m, eyes, glint = 1, look = null) {
   m.customProgramCacheKey = () => 'eye2'; m.needsUpdate = true; m.userData.eyeU = u; return u;
 }
 // crown: the top centre of the hair mesh in its own (bind) space; strands are taken to run from there down and out over the scalp
-export function hairShader(m, { crown, centre }) {
+export function hairShader(m, { crown, centre }, hu = null) {   // hu: js/hairwear.js hairUniforms (strands, clumps, styles, parts)
   const u = { uCrown: { value: crown.clone() }, uHairC: { value: centre.clone() } };
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
@@ -361,9 +364,10 @@ export function hairShader(m, { crown, centre }) {
           #endif
           vHairT = normalize( mat3( modelViewMatrix ) * hd ); vHairN = normalize( mat3( modelViewMatrix ) * hn ); }`);
     sh.fragmentShader = directHook(sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vHairT; varying vec3 vHairN;'), 'Hair', HAIR_KK, HAIR_PRE).replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  reflectedLight.indirectSpecular *= 0.5;   // the IBL sheen too (scene.environment ignores a material envMapIntensity)');
+    hairPatch(sh, hu);
     giPatch(sh);
   };
-  m.customProgramCacheKey = () => 'hair2'; m.needsUpdate = true; return u;
+  m.customProgramCacheKey = () => hu ? 'hair3' : 'hair2'; m.needsUpdate = true; if (hu) Object.assign(u, hu); return u;
 }
 // the generated cloth set (assets/textures/cloth_*: plain weave normal + AO / roughness) on the uniform garments, tiled CLOTH_REPEAT times over the garment uv
 const CLOTH_REPEAT = 9; let clothMaps;
@@ -424,7 +428,7 @@ export function releaseHuman(obj) { if (!obj?.traverse) return; const seen = new
 const STYLE_MIX = { plain: [0, 0, 0], duty: [1, 0, 0], trim: [0, 1, 0], yoke: [0, 0, 1], 'trim-duty': [1, 1, 0] };
 // Every uniform garment (any style, plain included) shares ONE program: the style mix is a uniform (0,0,0 = plain), plus the cloth weave maps and the fuzz term.
 // (Before, plain garments and styled ones were two programs.) Garments without the zone attribute (none today) read zone = 0 and stay plain.
-function styleGarment(m, style, uniform) {
+function styleGarment(m, style, uniform, cu = null) {   // cu: js/hairwear.js clothUniforms (seams, stitching, folds, wear)
   const mix = STYLE_MIX[style] || STYLE_MIX.plain;
   const trim = uniform.clone().lerp(new THREE.Color(0xf2efe6), 0.62), dark = new THREE.Vector3(0.42, 0.42, 0.46), cm = clothMapsFor();
   if (cm) { m.normalMap = cm.n; m.normalScale = new THREE.Vector2(0.45, 0.45); m.roughnessMap = cm.r; m.roughness = 1.05; m.aoMap = cm.r; m.aoMapIntensity = 0.5; }   // ORM: R = AO, G = roughness
@@ -432,12 +436,13 @@ function styleGarment(m, style, uniform) {
     m.userData.styleCompiled = true;
     sh.uniforms.uStyleMix = { value: new THREE.Vector3(...mix) }; sh.uniforms.uTrim = { value: trim }; sh.uniforms.uDark = { value: dark };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 zone; varying vec3 vZone;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvZone = zone;');
+    if (cu) clothPatch(sh, cu);
     sh.fragmentShader = directHook(sh.fragmentShader, 'Cloth', CLOTH_FUZZ).replace('#include <lights_fragment_end>', FUZZ_AMBIENT)
       .replace('#include <common>', '#include <common>\nvarying vec3 vZone; uniform vec3 uStyleMix, uTrim, uDark;')
       .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.2, 0.5, vZone.x) * uStyleMix.x);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uTrim, smoothstep(0.3, 0.6, vZone.y) * uStyleMix.y);\n  diffuseColor.rgb *= mix(vec3(1.0), uDark, smoothstep(0.35, 0.65, vZone.z) * uStyleMix.z);');
     giPatch(sh);
   };
-  m.customProgramCacheKey = () => 'garstyle2'; m.needsUpdate = true;
+  m.customProgramCacheKey = () => cu ? 'garstyle3' : 'garstyle2'; m.needsUpdate = true;
 }
 // eyeball centres for eyeShader, per body kind: split the eye mesh at its middle in x, each eyeball (a closed low-poly sphere) centred in its box. The GLBs are
 // quantised (positions normalised per axis, the scale lives in the bone inverses), so only box centres are meaningful here: an affine map keeps them; the
@@ -515,9 +520,10 @@ export function makeHuman(opts = {}) {
       if (!opts.slime && !opts.material) mats.skinU = skinShader(m, { wound: Math.min(1, (opts.bloody || 0) * 0.9), seed: rnd() * 40, pale: opts.pale || 0, kind });
       if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
     else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.35; m.alphaToCoverage = true; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.7;   // alpha to coverage: soft card edges under MSAA (High's post buffer / the canvas), a plain alpha test without it
-      hairShader(m, crownOf(kind)); }
+      const hh = seed !== undefined ? Math.imul((seed >>> 0) ^ 0x5bd1e995, 0x27d4eb2d) : Math.imul(Math.round(hair[0] * 997 + hair[1] * 89 + height * 1e4) ^ 0x5bd1e995, 0x27d4eb2d);   // own hash: no draw from rnd (it would reshuffle every later pick)
+      hairShader(m, crownOf(kind), hairUniforms(kind, hairStyleFor(kind, opts.hairStyle ?? pickHairStyle(hh >>> 8), ((hh >>> 4) & 1023) / 1024))); }
     else if (name === 'brows') { m.color.setRGB(hair[0] * 0.6, hair[1] * 0.6, hair[2] * 0.6); m.alphaTest = 0.02; m.transparent = true; m.depthWrite = false; m.roughness = 0.8; o.castShadow = false; }
-    else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); if (o.geometry.attributes.zone) styleGarment(m, style, uniform); }
+    else if (name.startsWith('garment') && !name.includes('shoes')) { m.color.copy(uniform); m.roughness = 0.9; if (opts.bloody && m.map?.image) m.map = bloodyMap(m.map, 10 + opts.bloody * 40); if (o.geometry.attributes.zone) styleGarment(m, style, uniform, o.geometry.attributes.cloth && opts.clothDetail !== false ? clothUniforms(kind, 0.45 + (((seed ?? Math.round(height * 1e4)) >>> 3) % 11) / 20) : null); }
     else if (name.includes('shoes')) { m.color.set(0x2a2a2e); m.roughness = 0.5; eyeShader(m, NO_EYES, 0); }   // shares the eyes' program, glint off
     else if (name === 'tongue') eyeShader(m, eyesOf(kind), 0);   // shares the eyes' program, glint off
     else if (name === 'eyes') { m.roughness = 0.08; m.color.setScalar(0.82); const ek = eyesOf(kind), el = eyeLook(seed ?? Math.round(skin.r * 1e5 + skin.g * 1e3 + hair[0] * 7e4 + uniform.r * 3e3), skin, opts.bloody || 0), eu = eyeShader(m, ek, 1, el);   // sclera ~0.7 albedo, not paper white (it read as glowing against the face)

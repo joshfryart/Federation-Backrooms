@@ -10,6 +10,7 @@
 //   PT.renderManyAsync(people, budgetMs) -> { n, done } (the same, readback through a fence: the boarding screen draws the next batch meanwhile)
 import * as THREE from 'three';
 import { makeHuman, releaseHuman } from './humans.js';
+import { hwDetail } from './hairwear.js';
 
 import { DEPT_COL, DEPT_LETTER, deptCol } from './icons.js';
 export { DEPT_COL, DEPT_LETTER, deptCol };
@@ -92,7 +93,7 @@ export class Portraits {
         const p = list[i], k = this.key(p); if (k == null) { out.push({ p, url: null }); continue; } if (this.cache.has(k)) { out.push({ p, url: this.cache.get(k) }); continue; }
         const f0 = performance.now(); let g = null;
         try {
-          g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false }); if (!g) { this.failed.add(k); out.push({ p, url: null }); continue; }
+          g = makeHuman({ person: p, kind: p.body, rank: p.rank, uniform: p.uniform, shadow: false, clothDetail: false });   // clothDetail: the plain uniform program (seams / folds are sub-pixel here, and cost ~0.4 s of software-GL boarding) if (!g) { this.failed.add(k); out.push({ p, url: null }); continue; }
           const f1 = performance.now(); this.stats.make += f1 - f0;
           const H = g.userData.human; H.play('idle', { fade: 0 }); H.mixer.update(0.4); H.face?.({ LeftUpperLidOpen: 0.2, RightUpperLidOpen: 0.2 });
           this.scene.add(g); g.updateMatrixWorld(true);
@@ -102,7 +103,7 @@ export class Portraits {
           this.cam.position.copy(hp).addScaledVector(fwd, 0.92).add(new THREE.Vector3(0.06, 0.02, 0)); this.cam.lookAt(hp.x, hp.y - 0.03, hp.z);
           // into this face's tile of the atlas (viewport + scissor, so the clear only touches the tile)
           const n = tiles.length, x = (n % A) * s, y = Math.floor(n / A) * s; rt.viewport.set(x, y, s, s); rt.scissor.set(x, y, s, s); rt.scissorTest = true;
-          R.setRenderTarget(rt); R.clear(); R.render(this.scene, this.cam);
+          R.setRenderTarget(rt); R.clear(); hwDetail.value = 0; try { R.render(this.scene, this.cam); } finally { hwDetail.value = 1; }   // 128 px tiles: no strand / seam detail (js/hairwear.js; it cost ~1.5 s of software-GL boarding)
           this.stats.draw += performance.now() - f1; tiles.push({ p, k, x, y });
         } catch (e) { console.warn('portrait failed', e); this.failed.add(k); out.push({ p, url: null }); }
         finally { if (g) { this.scene.remove(g); releaseHuman(g); g.traverse(o => { if (o.isMesh && o.material?.dispose && !o.material.userData?.shared && !this._keep(o.material)) o.material.dispose(); }); }   /* materials are per-human clones; geometry/textures stay shared with the cache (GL keeps anything a queued draw still uses alive) */ }
