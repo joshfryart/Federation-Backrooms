@@ -13,6 +13,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toBones, sample as sampleGesture } from './movement.js';
 import { pbr } from './assets.js';
 import { giPatch } from './gi.js';
+import { clothAttr, clothUniforms, clothPatch } from './hairwear.js';   // seams / stitching / folds / wear on the duty-outfit cloth (stream C5)
 
 const PI = Math.PI;
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -118,14 +119,26 @@ class Build {
     const pos = new Float32Array(m * 3), nor = new Float32Array(m * 3), cc = new Float32Array(m * 3), si = new Uint16Array(m * 4), sw = new Float32Array(m * 4);
     remap.forEach((q, j) => { const d = typeof infl === 'function' ? infl(q) : infl; for (let k = 0; k < 3; k++) { pos[j * 3 + k] = P[q * 3 + k] + S.nrm[q * 3 + k] * d; nor[j * 3 + k] = S.nrm[q * 3 + k]; } const c = col3(colour(q, !!edge[q])); cc.set(c, j * 3); si.set(S.SI.subarray(q * 4, q * 4 + 4), j * 4); sw.set(S.SW.subarray(q * 4, q * 4 + 4), j * 4); });
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(cc, 3));
-    g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); g.setIndex(tris.map(q => used[q])); this[kind].push(g); return this;
+    g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4)); g.setIndex(tris.map(q => used[q]));
+    if (kind === 'cloth') g.setAttribute('cloth', shellCloth(this.A, S, remap, pos));   // js/hairwear.js: seams from the source garment, folds measured on this shell
+    this[kind].push(g); return this;
   }
   finish() {
     const A = this.A, out = [], mk = (list, mat) => { if (!list.length) return; const g = mergeGeometries(list, false); const m = new THREE.SkinnedMesh(g, mat); m.name = 'wear'; m.frustumCulled = false; m.castShadow = true; m.bind(new THREE.Skeleton(A.bones, A.binv), new THREE.Matrix4()); out.push(m); };
-    mk(this.cloth, MAT.cloth()); mk(this.trim, MAT.trim()); mk(this.glass, MAT.glass()); return out;
+    mk(clothFill(this.cloth), MAT.cloth()); mk(this.trim, MAT.trim()); mk(this.glass, MAT.glass()); return out;
   }
 }
 const _mat = {};
+// ---- stream C5: the `cloth` attribute (js/hairwear.js) on the duty-outfit shells: seam proximity / stitch arc copied from the source garment (the casual clothes
+// the shell is pushed out from), folds measured on the shell's own rest positions. Pieces without one (pockets, bands, the apron) get zeros: no seams, no folds.
+function shellCloth(A, S, remap, pos) {
+  const F = clothAttr(pos, remap.length, A.bp, 1, A.bp.pelvis ? A.bp.pelvis.y + 0.075 * A.u : null), ca = S.mesh?.geometry.attributes.cloth;
+  if (ca) remap.forEach((q, j) => { F[j * 4] = ca.getX(q); F[j * 4 + 2] = ca.getZ(q); });
+  return new THREE.BufferAttribute(F, 4);
+}
+const clothFill = (list) => { for (const g of list) if (!g.attributes.cloth) g.setAttribute('cloth', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 4), 4)); return list; };
+const clothU = clothUniforms(null, 0.6);
+// ---- end C5
 // Duty-outfit cloth (one shared material, so one program): the generated cloth set's weave (assets/textures/cloth_r, R = AO used as a height, G = roughness) projected
 // biplanar in bind space (the shells have no uv), scaled to metres by the mesh's own scale, turned into a bump with screen derivatives (as the skin detail in
 // js/humans.js), plus the same grazing-angle fuzz term the uniforms get. Without the texture set (viewer pages that load no textures) only the fuzz is added.
@@ -133,7 +146,7 @@ const WEAVE_PER_M = 4;   // weave tiles per metre (the tile is 128 threads: ~5 t
 function clothWeave(m) {
   const p = pbr('cloth'), tex = p ? p.r : null, u = { uWeaveTex: { value: tex }, uWeave: { value: WEAVE_PER_M } };
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, u);
+    Object.assign(sh.uniforms, u); clothPatch(sh, clothU);   // C5: seams, stitching, folds, wear (the weave below stacks on top)
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp; varying vec3 vWn;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWp = position * length( modelMatrix[ 0 ].xyz ); vWn = normal;');
     let fs = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vWp; varying vec3 vWn; uniform float uWeave;${tex ? '\nuniform sampler2D uWeaveTex;' : ''}`)
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>
@@ -156,7 +169,7 @@ void RE_Direct_Wear( const in IncidentLight directLight, const in vec3 geometryP
     vec3 grad = sign( det ) * ( hx * r1 + hy * r2 ); normal = normalize( abs( det ) * normal - grad * 0.0025 ); }`);
     sh.fragmentShader = fs; giPatch(sh);
   };
-  m.customProgramCacheKey = () => tex ? 'wear2' : 'wear2n'; m.needsUpdate = true; return m;
+  m.customProgramCacheKey = () => tex ? 'wear3' : 'wear3n'; m.needsUpdate = true; return m;
 }
 const MAT = {
   cloth: () => _mat.cloth || (_mat.cloth = clothWeave(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide }))),
@@ -343,7 +356,7 @@ function wornParts(human, key, make) {
   wearCacheStats.builds++; const A = analyse(human); let e = null; const B = A && make(A);
   if (B) {
     human.updateMatrixWorld(true); const toInner = new THREE.Matrix4().copy(H.inner.matrixWorld).invert().multiply(human.matrixWorld), back = toInner.clone().invert(), parts = [];
-    for (const [list, mat] of [[B.cloth, MAT.cloth()], [B.trim, MAT.trim()], [B.glass, MAT.glass()]]) if (list.length) { const g = mergeGeometries(list, false); g.applyMatrix4(toInner); g.computeBoundingSphere(); parts.push({ geo: g, mat }); }
+    for (const [list, mat] of [[clothFill(B.cloth), MAT.cloth()], [B.trim, MAT.trim()], [B.glass, MAT.glass()]]) if (list.length) { const g = mergeGeometries(list, false); g.applyMatrix4(toInner); g.computeBoundingSphere(); parts.push({ geo: g, mat }); }
     if (parts.length) e = { parts, binv: A.binv.map(m => m.clone().multiply(back)), tris: parts.reduce((n, p) => n + (p.geo.index ? p.geo.index.count : p.geo.attributes.position.count) / 3, 0) };
   }
   WEAR_CACHE.set(ck, e); return e;
