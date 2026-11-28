@@ -7,6 +7,7 @@ import { has, get, pbr } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLods } from './meshlod.js';
+import { rigEyes, idleFace } from './faceanim.js';   // facial animation (eye bones, blink variety, talk visemes): js/faceanim.js
 import { giPatch } from './gi.js';   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
@@ -49,6 +50,7 @@ function info(kind) {
     for (let i = 0; i < n; i++) { let l = 0, c = 0, y = 0, tot = 0; for (let k = 0; k < 4; k++) { const wk = sw.getComponent(i, k), b = si.getComponent(i, k); tot += wk; if (isLeg[b]) l += wk; if (isCuff[b]) c += wk; if (isYoke[b]) y += wk; } tot = tot || 1; z[i * 3] = l / tot; z[i * 3 + 1] = c / tot; z[i * 3 + 2] = y / tot; }
     g.setAttribute('zone', new THREE.BufferAttribute(z, 3));
   });
+  rigEyes(src.scene, THREE);   // two eye bones in the eye mesh's own skeleton (js/faceanim.js), before any clone
   const height = box.max.y - box.min.y; queueLods(kind, src.scene, height);
   return meta[kind] = { height, clips };
 }
@@ -540,10 +542,7 @@ export function makeHuman(opts = {}) {
 }
 
 // blink + small idle expression; call each frame for living, friendly humans
-export function liveFace(H, t, seed = 0) {
-  const b = (t * 0.37 + seed) % 1; const lid = b > 0.96 ? 1 : 0;
-  H.face({ LeftUpperLidClosed: lid, RightUpperLidClosed: lid });
-}
+export function liveFace(H, t, seed = 0) { idleFace(H, t, seed); }   // varied blinks + brow / lid coupling + eye darts (js/faceanim.js)
 
 // ---- ready-made NPCs (return null when the models failed to load so callers can fall back) ----
 // person (optional): a member of the ship's complement from js/crew.js — { body, rank, uniform }
