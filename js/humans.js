@@ -7,8 +7,9 @@ import { has, get, pbr } from './assets.js';
 import { RANKS, mulberry32 } from './data.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLods } from './meshlod.js';
-import { giPatch } from './gi.js';
-import { addFaceShapes, faceShapeFor, applyFaceShape } from './faceshape.js';   // per-person face shape morphs (stream C1)   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
+import { giPatch } from './gi.js';   // baked deck GI on the custom crew programs too (same programs: code added, no new cache key)
+import { addFaceShapes, faceShapeFor, applyFaceShape } from './faceshape.js';   // per-person face shape morphs (stream C1)
+import { skinFaceOf, skinDetailFor, skinDetailPatch } from './skin-detail.js';   // stream C2: face-space skin detail in the skin program (pores, blush, lips, stubble, freckles, ...)
 
 export const CREW_KINDS = ['crew_m', 'crew_f', 'crew_f2'];
 export const DIVISIONS = [0xa3231c, 0xc79a1e, 0x2456a6];
@@ -363,8 +364,9 @@ function clothMapsFor() {
   const rep = (t) => { const c = t.clone(); c.wrapS = c.wrapT = THREE.RepeatWrapping; c.repeat.set(CLOTH_REPEAT, CLOTH_REPEAT); c.needsUpdate = true; return c; };   // clones share the image: one upload
   return (clothMaps = ownRandom(() => ({ n: rep(p.n), r: rep(p.r) })));   // private random stream: see blobMat
 }
-export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
+export function skinShader(m, { wound = 0, seed = 0, pale = 0, kind = null } = {}) {
   const u = { uWound: { value: wound }, uSeed: { value: seed }, uPale: { value: pale }, uAmb: { value: new THREE.Vector2(SKIN_AMB, 1) } };
+  const sdFace = kind ? skinFaceOf(kind, restMesh) : skinFaceOf('', () => null), sdD = u.uSkinD = { value: skinDetailFor(kind, seed, m.color) };   // C2 skin detail (js/skin-detail.js)
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
@@ -372,18 +374,19 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vObj; uniform float uWound, uSeed, uPale; uniform vec2 uAmb;\n' + SKIN_GLSL + 'float gWound = 0.0, gH = 0.0;')
       .replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 q = vObj * 9.0 + uSeed;
-        float mot = sh_f(q * 0.5), pore = sh_n(vObj * 260.0 + uSeed), freck = smoothstep(0.72, 0.8, sh_n(vObj * 70.0 + uSeed * 1.7));
-        float vein = smoothstep(0.47, 0.5, sh_f(vObj * 14.0 + uSeed)) * smoothstep(0.53, 0.5, sh_f(vObj * 14.0 + uSeed));
+        float mot = sh_f(q * 0.5), pore = sh_n(vObj * 260.0 + uSeed);   // (C2: the vObj freckles are gone: they were 1-2 cm blotches that read as dirt; freckles live in js/skin-detail.js)
+        float veinN = sh_f(vObj * 14.0 + uSeed), vein = smoothstep(0.47, 0.5, veinN) * smoothstep(0.53, 0.5, veinN);   // (C2: one fbm, it was evaluated twice)
         diffuseColor.rgb *= 0.9 + 0.2 * mot;
         diffuseColor.rgb *= vec3(1.0, 1.0 - 0.06 * (mot - 0.5), 1.0 - 0.12 * (mot - 0.5));     // blotchy flush
-        diffuseColor.rgb *= 1.0 - 0.1 * pore - 0.18 * freck;
+        diffuseColor.rgb *= 1.0 - 0.1 * pore;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.86, 1.05), vein * (0.25 + uPale * 0.6));
+        if (uWound > 0.0) {   // (C2: the wound fbm only on wounded bodies: 12 noise lookups per pixel saved on everyone else)
         float w = sh_f(vObj * 6.5 + uSeed * 3.1); gWound = uWound * smoothstep(0.6, 0.68, w);
         { vec3 sp = vObj * 5.2 + uSeed;   // claw slashes: three parallel gashes in a patch, only on well-wounded bodies
           float ln = abs(fract(dot(sp.xy, vec2(0.866, 0.5)) * 1.7) - 0.5), cut = smoothstep(0.045, 0.0, ln) * smoothstep(0.58, 0.72, sh_f(vObj * 2.6 + uSeed * 7.0)) * smoothstep(0.35, 0.8, uWound);
           gWound = max(gWound, cut); }
         float bruise = uWound * smoothstep(0.52, 0.64, sh_f(vObj * 4.0 + uSeed * 5.3 + 11.0));
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.6, 0.38, 0.5), bruise * 0.6);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.6, 0.38, 0.5), bruise * 0.6); }
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.17, 0.015, 0.02), gWound);
         gH = 0.45 * pore + 0.5 * mot - 1.1 * gWound; }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor * (0.92 + 0.2 * pore_r()), 0.12, gWound);')
@@ -393,6 +396,7 @@ export function skinShader(m, { wound = 0, seed = 0, pale = 0 } = {}) {
         vec3 grad = sign(det) * (hx * r1 + hy * r2); normal = normalize(abs(det) * normal - grad * 0.0012); }`)
       .replace('float gWound = 0.0', 'float pore_r(){ return sh_n(vObj * 120.0); }\nfloat gWound = 0.0')
       .replace('#include <lights_fragment_end>', SKIN_AMBIENT);
+    skinDetailPatch(sh, sdFace, sdD.value);   // C2
     giPatch(sh);
   };
   m.customProgramCacheKey = () => 'skin2';
@@ -497,7 +501,7 @@ export function makeHuman(opts = {}) {
     if (opts.material) { o.material = opts.material; if (name === 'eyelashes' || name === 'tongue') o.visible = false; return; }
     const m = o.material = o.material.clone(); mats[name.split('_')[0]] = m;
     if (name === 'body' && kind !== 'suit') { m.color.copy(skin); m.roughness = 0.58; m.emissive = skin.clone().multiply(new THREE.Color(0.9, 0.35, 0.25)); m.emissiveIntensity = opts.slime ? 0.07 : 0.035;   // a little warmth in the shade (the wrap-light SSS in skinShader does the rest)
-      if (!opts.slime && !opts.material) mats.skinU = skinShader(m, { wound: Math.min(1, (opts.bloody || 0) * 0.9), seed: rnd() * 40, pale: opts.pale || 0 });
+      if (!opts.slime && !opts.material) mats.skinU = skinShader(m, { wound: Math.min(1, (opts.bloody || 0) * 0.9), seed: rnd() * 40, pale: opts.pale || 0, kind });
       if (opts.slime) { m.color.set(0x4f9a52); m.roughness = 0.18; m.emissive = new THREE.Color(0x0c5a1c); m.emissiveIntensity = 0.7; } }
     else if (name === 'hair') { m.color.setRGB(hair[0], hair[1], hair[2]); m.alphaTest = 0.35; m.alphaToCoverage = true; m.transparent = false; m.side = THREE.DoubleSide; m.roughness = 0.7;   // alpha to coverage: soft card edges under MSAA (High's post buffer / the canvas), a plain alpha test without it
       hairShader(m, crownOf(kind)); }
